@@ -105,8 +105,8 @@ plant('members can make themselves admin', 'access', 'src/collections/Users.ts',
 )
 plant('a new collection with no access decision', 'access', 'src/payload.config.ts', (text) =>
   text.replace(
-    'collections: [Users, Pages, Media, Messages],',
-    "collections: [Users, Pages, Media, Messages, { slug: 'planted', fields: [{ name: 'title', type: 'text' }] }],",
+    'collections: [Users, Pages, Media, Messages, DataTypes, Records],',
+    "collections: [Users, Pages, Media, Messages, DataTypes, Records, { slug: 'planted', fields: [{ name: 'title', type: 'text' }] }],",
   ),
 )
 plant('anyone can read contact messages', 'access', 'src/collections/Messages.ts', (text) =>
