@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const owned = {
   'product-architect': [/(^|\/)docs\/spec\//],
-  'ui-frontend': [/(^|\/)src\/app\/\(frontend\)\//, /(^|\/)src\/components\//, /(^|\/)public\//],
+  'ui-frontend': [/(^|\/)src\/app\/\(frontend\)\//, /(^|\/)src\/components\//, /(^|\/)src\/blocks\//, /(^|\/)public\//],
   'backend-security': [
     /(^|\/)src\/collections\//,
     /(^|\/)src\/globals\//,

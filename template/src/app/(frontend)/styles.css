@@ -701,6 +701,96 @@ details p:first-of-type {
   font-weight: 700;
 }
 
+.contact-form select {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--ink) 45%, transparent);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: inherit;
+  font: inherit;
+  font-weight: 400;
+}
+
+.contact-form .check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 400;
+}
+
+.contact-form .check input {
+  width: 22px;
+  min-height: 22px;
+  flex: none;
+}
+
+.post-date {
+  margin-bottom: 8px;
+  font-size: 15px;
+}
+
+/* Account pages */
+.account {
+  max-width: 560px;
+}
+
+.account--wide {
+  max-width: 800px;
+}
+
+.account h2 {
+  margin: 40px 0 20px;
+  font-size: clamp(24px, 3vw, 32px);
+}
+
+.account__alt {
+  margin-top: 24px;
+}
+
+.account__record {
+  margin-bottom: 20px;
+}
+
+.account__record dl {
+  margin: 0;
+}
+
+.account__record dl > div {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) 2fr;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.account__record dt {
+  font-weight: 700;
+}
+
+.account__record dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.account__delete {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+}
+
+.site-account {
+  font-size: 16px;
+  text-decoration: none;
+}
+
+.site-account:hover {
+  text-decoration: underline;
+}
+
 /* Footer */
 .site-footer {
   padding: clamp(40px, 6vw, 72px) 0;

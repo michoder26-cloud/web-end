@@ -1,6 +1,7 @@
 import * as migration_20260918_151419_initial from './20260918_151419_initial';
 import * as migration_20261101_164518_add_roles from './20261101_164518_add_roles';
 import * as migration_20261101_192316_add_site_engine from './20261101_192316_add_site_engine';
+import * as migration_20261101_193703_add_backend from './20261101_193703_add_backend';
 
 export const migrations = [
   {
@@ -16,6 +17,11 @@ export const migrations = [
   {
     up: migration_20261101_192316_add_site_engine.up,
     down: migration_20261101_192316_add_site_engine.down,
-    name: '20261101_192316_add_site_engine'
+    name: '20261101_192316_add_site_engine',
+  },
+  {
+    up: migration_20261101_193703_add_backend.up,
+    down: migration_20261101_193703_add_backend.down,
+    name: '20261101_193703_add_backend'
   },
 ];

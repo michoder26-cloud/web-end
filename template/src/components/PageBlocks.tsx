@@ -1,10 +1,22 @@
 import React from 'react'
 
+import type { Labels } from '@/lib/session'
 import { isSafeHref } from '@/lib/theme'
-import type { Media, Page } from '@/payload-types'
+import type { Media, Page, User } from '@/payload-types'
+
+import { DataForm, DataList, PageList } from './DataBlocks'
 
 type Block = NonNullable<Page['layout']>[number]
-type Props = { contactState?: 'error' | 'sent'; page: Page; pagePath: string }
+type Props = {
+  contactState?: 'error' | 'sent'
+  error?: string
+  labels: Labels
+  language: string
+  page: Page
+  pagePath: string
+  sent?: string
+  user: null | User
+}
 
 const Paragraphs = ({ text }: { text?: null | string }) =>
   text
@@ -66,9 +78,15 @@ const lines = (text?: null | string) => (text ?? '').split('\n').map((line) => l
 const render = (
   block: Block,
   isMainHeading: boolean,
-  { contactState, pagePath }: Pick<Props, 'contactState' | 'pagePath'>,
+  { contactState, error, labels, language, pagePath, sent, user }: Omit<Props, 'page'>,
 ) => {
   switch (block.blockType) {
+    case 'dataForm':
+      return <DataForm block={block} error={error} key={block.id} labels={labels} pagePath={pagePath} sent={sent} user={user} />
+    case 'dataList':
+      return <DataList block={block} key={block.id} user={user} />
+    case 'pageList':
+      return <PageList block={block} key={block.id} language={language} />
     case 'hero': {
       const Title = isMainHeading ? 'h1' : 'h2'
       const layout = block.image ? block.layout || 'split' : block.layout === 'centered' ? 'centered' : 'plain'
@@ -340,7 +358,7 @@ const render = (
   }
 }
 
-export function PageBlocks({ contactState, page, pagePath }: Props) {
+export function PageBlocks({ page, ...context }: Props) {
   const layout = page.layout ?? []
   const firstHero = layout.findIndex((block) => block.blockType === 'hero')
 
@@ -353,7 +371,7 @@ export function PageBlocks({ contactState, page, pagePath }: Props) {
           </div>
         </section>
       )}
-      {layout.map((block, index) => render(block, index === firstHero, { contactState, pagePath }))}
+      {layout.map((block, index) => render(block, index === firstHero, context))}
     </>
   )
 }

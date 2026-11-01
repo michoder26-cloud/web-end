@@ -71,6 +71,8 @@ export interface Config {
     pages: Page;
     media: Media;
     messages: Message;
+    'data-types': DataType;
+    records: Record;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -82,6 +84,8 @@ export interface Config {
     pages: PagesSelect<false> | PagesSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
     messages: MessagesSelect<false> | MessagesSelect<true>;
+    'data-types': DataTypesSelect<false> | DataTypesSelect<true>;
+    records: RecordsSelect<false> | RecordsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -166,6 +170,8 @@ export interface Page {
   slug: string;
   description: string;
   published?: boolean | null;
+  visibility: 'public' | 'members';
+  category?: string | null;
   layout?:
     | (
         | {
@@ -312,6 +318,40 @@ export interface Page {
             blockType: 'info';
           }
         | {
+            dataType: string;
+            heading?: string | null;
+            intro?: string | null;
+            buttonLabel?: string | null;
+            sentMessage?: string | null;
+            errorMessage?: string | null;
+            tone?: ('plain' | 'tint' | 'dark') | null;
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'dataForm';
+          }
+        | {
+            dataType: string;
+            heading?: string | null;
+            intro?: string | null;
+            emptyMessage?: string | null;
+            limit?: number | null;
+            tone?: ('plain' | 'tint' | 'dark') | null;
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'dataList';
+          }
+        | {
+            category: string;
+            heading?: string | null;
+            intro?: string | null;
+            emptyMessage?: string | null;
+            limit?: number | null;
+            tone?: ('plain' | 'tint' | 'dark') | null;
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'pageList';
+          }
+        | {
             heading?: string | null;
             items: {
               question: string;
@@ -385,6 +425,53 @@ export interface Message {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "data-types".
+ */
+export interface DataType {
+  id: number;
+  name: string;
+  slug: string;
+  whoCanSubmit: 'nobody' | 'anyone' | 'members';
+  whoCanSee: 'owner' | 'members' | 'public';
+  fields: {
+    name: string;
+    label: string;
+    type: 'text' | 'textarea' | 'email' | 'phone' | 'number' | 'date' | 'time' | 'select' | 'checkbox' | 'url';
+    required?: boolean | null;
+    options?: string | null;
+    public?: boolean | null;
+    id?: string | null;
+  }[];
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "records".
+ */
+export interface Record {
+  id: number;
+  dataType: number | DataType;
+  status: 'new' | 'confirmed' | 'published' | 'archived';
+  summary?: string | null;
+  owner?: (number | null) | User;
+  /**
+   * The same details as stored. You only need this to correct an entry by hand.
+   */
+  data:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -422,6 +509,14 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'messages';
         value: number | Message;
+      } | null)
+    | ({
+        relationTo: 'data-types';
+        value: number | DataType;
+      } | null)
+    | ({
+        relationTo: 'records';
+        value: number | Record;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -502,6 +597,8 @@ export interface PagesSelect<T extends boolean = true> {
   slug?: T;
   description?: T;
   published?: T;
+  visibility?: T;
+  category?: T;
   layout?:
     | T
     | {
@@ -675,6 +772,43 @@ export interface PagesSelect<T extends boolean = true> {
               id?: T;
               blockName?: T;
             };
+        dataForm?:
+          | T
+          | {
+              dataType?: T;
+              heading?: T;
+              intro?: T;
+              buttonLabel?: T;
+              sentMessage?: T;
+              errorMessage?: T;
+              tone?: T;
+              id?: T;
+              blockName?: T;
+            };
+        dataList?:
+          | T
+          | {
+              dataType?: T;
+              heading?: T;
+              intro?: T;
+              emptyMessage?: T;
+              limit?: T;
+              tone?: T;
+              id?: T;
+              blockName?: T;
+            };
+        pageList?:
+          | T
+          | {
+              category?: T;
+              heading?: T;
+              intro?: T;
+              emptyMessage?: T;
+              limit?: T;
+              tone?: T;
+              id?: T;
+              blockName?: T;
+            };
         faq?:
           | T
           | {
@@ -751,6 +885,42 @@ export interface MessagesSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "data-types_select".
+ */
+export interface DataTypesSelect<T extends boolean = true> {
+  name?: T;
+  slug?: T;
+  whoCanSubmit?: T;
+  whoCanSee?: T;
+  fields?:
+    | T
+    | {
+        name?: T;
+        label?: T;
+        type?: T;
+        required?: T;
+        options?: T;
+        public?: T;
+        id?: T;
+      };
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "records_select".
+ */
+export interface RecordsSelect<T extends boolean = true> {
+  dataType?: T;
+  status?: T;
+  summary?: T;
+  owner?: T;
+  data?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv_select".
  */
 export interface PayloadKvSelect<T extends boolean = true> {
@@ -815,6 +985,22 @@ export interface Site {
   email?: string | null;
   phone?: string | null;
   address?: string | null;
+  allowSignup?: boolean | null;
+  labels?: {
+    account?: string | null;
+    login?: string | null;
+    signup?: string | null;
+    logout?: string | null;
+    email?: string | null;
+    password?: string | null;
+    loginFirst?: string | null;
+    loginError?: string | null;
+    signupError?: string | null;
+    myRecords?: string | null;
+    noRecords?: string | null;
+    deleteAccount?: string | null;
+    deleteConfirm?: string | null;
+  };
   updatedAt?: string | null;
   createdAt?: string | null;
 }
@@ -843,6 +1029,24 @@ export interface SiteSelect<T extends boolean = true> {
   email?: T;
   phone?: T;
   address?: T;
+  allowSignup?: T;
+  labels?:
+    | T
+    | {
+        account?: T;
+        login?: T;
+        signup?: T;
+        logout?: T;
+        email?: T;
+        password?: T;
+        loginFirst?: T;
+        loginError?: T;
+        signupError?: T;
+        myRecords?: T;
+        noRecords?: T;
+        deleteAccount?: T;
+        deleteConfirm?: T;
+      };
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;

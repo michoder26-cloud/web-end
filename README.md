@@ -24,10 +24,23 @@ These are the planned steps. The deploy step doesn't exist yet.
 | `update_site` | Change the name, language, style, colours, navigation, footer and contact details |
 | `save_page`, `get_page`, `delete_page` | Create, read, change and delete pages |
 | `add_image`, `list_images` | Save images from a public link |
-| `list_messages` | Read messages from contact forms |
+| `save_data_type`, `list_data_types`, `delete_data_type` | Create the kinds of data a business needs, such as bookings, orders or products, with their fields and permissions |
+| `list_records`, `add_record`, `update_record`, `delete_record` | Read and manage entries, such as confirming a booking or publishing a review |
+| `list_members`, `list_messages` | See accounts and contact form messages |
 | `check_site` | Review the site for common problems |
 
-Pages are built from 14 blocks: hero, text, split, features, steps, stats, pricing, testimonials, team, gallery, info, FAQ, call to action and contact form.
+Pages are built from 17 blocks: hero, text, split, features, steps, stats, pricing, testimonials, team, gallery, info, FAQ, call to action, contact form, data form, data list and page list.
+
+## The back end
+
+Say "I want customers to book a table", and Claude can define a bookings data type and put a form on a page. No code or rebuild is needed, and entries appear in `/admin` and in Claude.
+
+- **Your data:** every entry is checked on the server against its definition, and anything the form didn't define is dropped.
+- **Permissions:** each data type sets who can send entries and who can see them. Public lists show only published entries and the fields marked public.
+- **Accounts:** visitors can sign up, log in, see what they've sent, and delete their account. Pages can be members-only.
+- **Blog:** pages can share a category and be listed newest first.
+
+It can't yet send email (so no password reset or notifications), stop double bookings, run calculations across entries or take card payments.
 
 Five site styles change the fonts, shapes and rhythm, not just the colours: `studio`, `editorial`, `warm`, `bold` and `calm`. All use self-hosted open-source fonts (SIL OFL) that cover Latin and Thai. The server also gives Claude a working method: plan, write, design, build, then review.
 
@@ -35,7 +48,7 @@ Five site styles change the fonts, shapes and rhythm, not just the colours: `stu
 
 Claude edits content and design, and doesn't write code on your site. Every site runs the same tested engine, so login and permissions don't have to be rewritten by AI for each person.
 
-The limit is that it does what the engine supports. It can't add new kinds of features or take card payments itself. To sell something, link to a hosted service such as Stripe Payment Links.
+The limit is that it does what the engine supports. Anything needing custom logic needs a developer or a change to the engine. To sell something, link to a hosted service such as Stripe Payment Links.
 
 ## What it costs
 
@@ -85,7 +98,7 @@ Passing the checks means common mistakes weren't found. It isn't a security audi
 
 Password hashing on Cloudflare Workers is capped at 100,000 rounds, lower than the 600,000 Payload uses elsewhere. Sites hosted there will have to use the lower number.
 
-Anyone with your API key can change your site, so treat it like a password. Contact forms have only basic spam protection so far, and there is no limit on how often the MCP endpoint can be called.
+Anyone with your API key can change your site, so treat it like a password. Forms have basic spam protection and an hourly cap only. Logins, signups and the MCP endpoint have no general rate limit yet, though accounts lock after five wrong passwords.
 
 ## License
 

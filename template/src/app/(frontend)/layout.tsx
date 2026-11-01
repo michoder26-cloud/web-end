@@ -13,6 +13,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import React from 'react'
 
+import { labelsFrom } from '@/lib/session'
 import { getSite } from '@/lib/site'
 import { contrast, defaultTheme, isHexColor, isSafeHref, isSiteStyle, readableOn } from '@/lib/theme'
 
@@ -23,7 +24,7 @@ export const dynamic = 'force-dynamic'
 export async function generateMetadata(): Promise<Metadata> {
   const site = await getSite()
   return {
-    description: site.tagline || undefined,
+    description: site.tagline || site.name,
     title: { default: site.name, template: `%s | ${site.name}` },
   }
 }
@@ -64,6 +65,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   </a>
                 ))}
               </nav>
+            )}
+            {site.allowSignup && (
+              <Link className="site-account" href="/account">
+                {labelsFrom(site.labels).account}
+              </Link>
             )}
             {site.headerButtonLabel && isSafeHref(site.headerButtonHref) && (
               <a className="button button--small" href={site.headerButtonHref}>

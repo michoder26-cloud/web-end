@@ -101,13 +101,21 @@ test.describe('Building a site through MCP', () => {
     const { tools } = await client.listTools()
     expect(tools.map((tool) => tool.name).sort()).toEqual([
       'add_image',
+      'add_record',
       'check_site',
+      'delete_data_type',
       'delete_page',
+      'delete_record',
       'get_page',
       'get_site_overview',
+      'list_data_types',
       'list_images',
+      'list_members',
       'list_messages',
+      'list_records',
+      'save_data_type',
       'save_page',
+      'update_record',
       'update_site',
     ])
     expect(client.getInstructions()).toContain('web team')

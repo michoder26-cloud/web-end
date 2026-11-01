@@ -7,11 +7,16 @@ import { fileURLToPath } from 'url'
 import { CloudflareContext, getCloudflareContext } from '@opennextjs/cloudflare'
 import { GetPlatformProxyOptions } from 'wrangler'
 import { r2Storage } from '@payloadcms/storage-r2'
+import { de } from '@payloadcms/translations/languages/de'
+import { en } from '@payloadcms/translations/languages/en'
+import { th } from '@payloadcms/translations/languages/th'
 
 import { Users } from './collections/Users'
 import { Media } from './collections/Media'
+import { DataTypes } from './collections/DataTypes'
 import { Messages } from './collections/Messages'
 import { Pages } from './collections/Pages'
+import { Records } from './collections/Records'
 import { Site } from './globals/Site'
 
 const filename = fileURLToPath(import.meta.url)
@@ -66,10 +71,11 @@ export default buildConfig({
       baseDir: path.resolve(dirname),
     },
   },
-  collections: [Users, Pages, Media, Messages],
+  collections: [Users, Pages, Media, Messages, DataTypes, Records],
   globals: [Site],
   editor: lexicalEditor(),
   graphQL: { disable: true },
+  i18n: { supportedLanguages: { de, en, th } },
   secret: process.env.PAYLOAD_SECRET || '',
   typescript: {
     outputFile: path.resolve(dirname, 'payload-types.ts'),

@@ -29,4 +29,12 @@ export const accessPolicy: Record<string, CollectionPolicy> = {
     anonymous: nothing,
     member: nothing,
   },
+  'data-types': {
+    anonymous: nothing,
+    member: nothing,
+  },
+  records: {
+    anonymous: nothing,
+    member: { ...nothing, read: 'some' },
+  },
 }

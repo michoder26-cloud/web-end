@@ -25,9 +25,12 @@ export const isAdminOrOwner: Access = ({ req: { user } }) => {
   return { owner: { equals: user.id } }
 }
 
-/** Admins see drafts too; everyone else only sees what is published. */
-export const isAdminOrPublished: Access = ({ req: { user } }) =>
-  hasRole(user, 'admin') || { published: { equals: true } }
+/** Admins see drafts too; visitors see published pages; members also see members-only pages. */
+export const isAdminOrPublished: Access = ({ req: { user } }) => {
+  if (hasRole(user, 'admin')) return true
+  if (user) return { published: { equals: true } }
+  return { and: [{ published: { equals: true } }, { visibility: { not_equals: 'members' } }] }
+}
 
 export const adminOnlyField: FieldAccess = ({ req: { user } }) => hasRole(user, 'admin')
 

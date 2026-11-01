@@ -32,8 +32,8 @@ export default defineConfig({
     },
     {
       name: 'mobile',
-      // The MCP tests build a site step by step, so they only need one run.
-      testIgnore: /mcp\.e2e/,
+      // These tests build a site step by step, so they only need one run.
+      testIgnore: /(00-first-run|fullstack|mcp)\.e2e/,
       use: { ...devices['Pixel 7'], channel: 'chromium' },
     },
   ],

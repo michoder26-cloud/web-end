@@ -31,7 +31,8 @@ const plant = (name, gate, file, change) => {
   } finally {
     writeFileSync(full, original)
   }
-  report(runGate(gate) === 0, `${name}: "${gate}" passes again after the fix`)
+  // A full build takes minutes, so the clean re-run happens once, at the end.
+  if (!gate.includes('e2e')) report(runGate(gate) === 0, `${name}: "${gate}" passes again after the fix`)
 }
 
 const hook = (data) => {
@@ -114,8 +115,20 @@ plant('anyone can read contact messages', 'access', 'src/collections/Messages.ts
 plant('drafts are public', 'access', 'src/collections/Pages.ts', (text) =>
   text.replace('read: isAdminOrPublished', 'read: () => true'),
 )
+plant('anyone can read entries', 'access', 'src/collections/Records.ts', (text) =>
+  text.replace('read: isAdminOrOwner', 'read: () => true'),
+)
 plant('members can use the MCP server', 'migrate,build,e2e', 'src/app/api/mcp/route.ts', (text) =>
   text.replace("if (!user.roles?.includes('admin')) return deny(403, 'Only the site owner can use this.')", ''),
+)
+plant('public lists show private fields', 'migrate,build,e2e', 'src/components/DataBlocks.tsx', (text) =>
+  text.replace('.filter((field) => field.public)', ''),
+)
+plant('a stranger can claim a new site', 'migrate,build,e2e', 'src/app/api/account/[action]/route.ts', (text) =>
+  text.replace('if (!site.allowSignup || owners.totalDocs === 0)', 'if (!site.allowSignup && owners.totalDocs > 0)'),
+)
+plant('forms accept other websites', 'migrate,build,e2e', 'src/app/api/data/[slug]/route.ts', (text) =>
+  text.replace("if (!isSameOrigin(request)) return new Response('Forbidden', { status: 403 })", ''),
 )
 plant('data model changed without regenerating types', 'types', 'src/collections/Media.ts', (text) =>
   text.replace("name: 'alt',", "name: 'caption', type: 'text' }, { name: 'alt',"),
@@ -123,6 +136,8 @@ plant('data model changed without regenerating types', 'types', 'src/collections
 plant('a type error', 'typecheck', 'src/app/(frontend)/[[...slug]]/page.tsx', (text) =>
   text.replace('export default async function', 'const broken: number = "text"\nexport default async function'),
 )
+
+report(runGate('migrate,build,e2e') === 0, 'browser tests pass again after every planted bug is removed')
 
 console.log(failed ? `\n${failed} problems were not handled correctly.` : '\nEvery planted problem was caught.')
 process.exit(failed ? 1 : 0)

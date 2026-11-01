@@ -203,6 +203,40 @@ export const blocks: Block[] = [
     ],
   },
   {
+    slug: 'dataForm',
+    fields: [
+      { name: 'dataType', type: 'text', maxLength: 80, required: true },
+      heading,
+      intro,
+      { name: 'buttonLabel', type: 'text', maxLength: 60 },
+      { name: 'sentMessage', type: 'text', maxLength: 200 },
+      { name: 'errorMessage', type: 'text', maxLength: 200 },
+      tone,
+    ],
+  },
+  {
+    slug: 'dataList',
+    fields: [
+      { name: 'dataType', type: 'text', maxLength: 80, required: true },
+      heading,
+      intro,
+      { name: 'emptyMessage', type: 'text', maxLength: 200 },
+      { name: 'limit', type: 'number', defaultValue: 24, max: 100, min: 1 },
+      tone,
+    ],
+  },
+  {
+    slug: 'pageList',
+    fields: [
+      { name: 'category', type: 'text', maxLength: 60, required: true },
+      heading,
+      intro,
+      { name: 'emptyMessage', type: 'text', maxLength: 200 },
+      { name: 'limit', type: 'number', defaultValue: 12, max: 50, min: 1 },
+      tone,
+    ],
+  },
+  {
     slug: 'faq',
     fields: [
       heading,
