@@ -169,11 +169,14 @@ export interface Page {
   layout?:
     | (
         | {
+            eyebrow?: string | null;
             heading: string;
             text?: string | null;
             buttonLabel?: string | null;
             buttonHref?: string | null;
             image?: (number | null) | Media;
+            layout?: ('split' | 'centered' | 'cover') | null;
+            tone?: ('plain' | 'tint' | 'dark') | null;
             id?: string | null;
             blockName?: string | null;
             blockType: 'hero';
@@ -181,20 +184,106 @@ export interface Page {
         | {
             heading?: string | null;
             body: string;
+            tone?: ('plain' | 'tint' | 'dark') | null;
             id?: string | null;
             blockName?: string | null;
             blockType: 'text';
           }
         | {
             heading?: string | null;
+            body: string;
+            image: number | Media;
+            imageSide?: ('left' | 'right') | null;
+            buttonLabel?: string | null;
+            buttonHref?: string | null;
+            tone?: ('plain' | 'tint' | 'dark') | null;
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'split';
+          }
+        | {
+            heading?: string | null;
+            intro?: string | null;
             items: {
               title: string;
               text?: string | null;
               id?: string | null;
             }[];
+            tone?: ('plain' | 'tint' | 'dark') | null;
             id?: string | null;
             blockName?: string | null;
             blockType: 'features';
+          }
+        | {
+            heading?: string | null;
+            intro?: string | null;
+            items: {
+              title: string;
+              text?: string | null;
+              id?: string | null;
+            }[];
+            tone?: ('plain' | 'tint' | 'dark') | null;
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'steps';
+          }
+        | {
+            heading?: string | null;
+            items: {
+              value: string;
+              label: string;
+              id?: string | null;
+            }[];
+            tone?: ('plain' | 'tint' | 'dark') | null;
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'stats';
+          }
+        | {
+            heading?: string | null;
+            intro?: string | null;
+            plans: {
+              name: string;
+              price: string;
+              note?: string | null;
+              features?: string | null;
+              buttonLabel?: string | null;
+              buttonHref?: string | null;
+              highlighted?: boolean | null;
+              id?: string | null;
+            }[];
+            tone?: ('plain' | 'tint' | 'dark') | null;
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'pricing';
+          }
+        | {
+            heading?: string | null;
+            items: {
+              quote: string;
+              name: string;
+              role?: string | null;
+              id?: string | null;
+            }[];
+            tone?: ('plain' | 'tint' | 'dark') | null;
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'testimonials';
+          }
+        | {
+            heading?: string | null;
+            intro?: string | null;
+            members: {
+              name: string;
+              role?: string | null;
+              text?: string | null;
+              image?: (number | null) | Media;
+              id?: string | null;
+            }[];
+            tone?: ('plain' | 'tint' | 'dark') | null;
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'team';
           }
         | {
             heading?: string | null;
@@ -203,9 +292,24 @@ export interface Page {
               caption?: string | null;
               id?: string | null;
             }[];
+            tone?: ('plain' | 'tint' | 'dark') | null;
             id?: string | null;
             blockName?: string | null;
             blockType: 'gallery';
+          }
+        | {
+            heading?: string | null;
+            items: {
+              label: string;
+              value: string;
+              id?: string | null;
+            }[];
+            buttonLabel?: string | null;
+            buttonHref?: string | null;
+            tone?: ('plain' | 'tint' | 'dark') | null;
+            id?: string | null;
+            blockName?: string | null;
+            blockType: 'info';
           }
         | {
             heading?: string | null;
@@ -214,6 +318,7 @@ export interface Page {
               answer: string;
               id?: string | null;
             }[];
+            tone?: ('plain' | 'tint' | 'dark') | null;
             id?: string | null;
             blockName?: string | null;
             blockType: 'faq';
@@ -223,6 +328,7 @@ export interface Page {
             text?: string | null;
             buttonLabel?: string | null;
             buttonHref?: string | null;
+            tone?: ('plain' | 'tint' | 'dark') | null;
             id?: string | null;
             blockName?: string | null;
             blockType: 'cta';
@@ -236,6 +342,7 @@ export interface Page {
             messageLabel?: string | null;
             sentMessage?: string | null;
             errorMessage?: string | null;
+            tone?: ('plain' | 'tint' | 'dark') | null;
             id?: string | null;
             blockName?: string | null;
             blockType: 'contact';
@@ -401,11 +508,14 @@ export interface PagesSelect<T extends boolean = true> {
         hero?:
           | T
           | {
+              eyebrow?: T;
               heading?: T;
               text?: T;
               buttonLabel?: T;
               buttonHref?: T;
               image?: T;
+              layout?: T;
+              tone?: T;
               id?: T;
               blockName?: T;
             };
@@ -414,6 +524,20 @@ export interface PagesSelect<T extends boolean = true> {
           | {
               heading?: T;
               body?: T;
+              tone?: T;
+              id?: T;
+              blockName?: T;
+            };
+        split?:
+          | T
+          | {
+              heading?: T;
+              body?: T;
+              image?: T;
+              imageSide?: T;
+              buttonLabel?: T;
+              buttonHref?: T;
+              tone?: T;
               id?: T;
               blockName?: T;
             };
@@ -421,6 +545,7 @@ export interface PagesSelect<T extends boolean = true> {
           | T
           | {
               heading?: T;
+              intro?: T;
               items?:
                 | T
                 | {
@@ -428,6 +553,93 @@ export interface PagesSelect<T extends boolean = true> {
                     text?: T;
                     id?: T;
                   };
+              tone?: T;
+              id?: T;
+              blockName?: T;
+            };
+        steps?:
+          | T
+          | {
+              heading?: T;
+              intro?: T;
+              items?:
+                | T
+                | {
+                    title?: T;
+                    text?: T;
+                    id?: T;
+                  };
+              tone?: T;
+              id?: T;
+              blockName?: T;
+            };
+        stats?:
+          | T
+          | {
+              heading?: T;
+              items?:
+                | T
+                | {
+                    value?: T;
+                    label?: T;
+                    id?: T;
+                  };
+              tone?: T;
+              id?: T;
+              blockName?: T;
+            };
+        pricing?:
+          | T
+          | {
+              heading?: T;
+              intro?: T;
+              plans?:
+                | T
+                | {
+                    name?: T;
+                    price?: T;
+                    note?: T;
+                    features?: T;
+                    buttonLabel?: T;
+                    buttonHref?: T;
+                    highlighted?: T;
+                    id?: T;
+                  };
+              tone?: T;
+              id?: T;
+              blockName?: T;
+            };
+        testimonials?:
+          | T
+          | {
+              heading?: T;
+              items?:
+                | T
+                | {
+                    quote?: T;
+                    name?: T;
+                    role?: T;
+                    id?: T;
+                  };
+              tone?: T;
+              id?: T;
+              blockName?: T;
+            };
+        team?:
+          | T
+          | {
+              heading?: T;
+              intro?: T;
+              members?:
+                | T
+                | {
+                    name?: T;
+                    role?: T;
+                    text?: T;
+                    image?: T;
+                    id?: T;
+                  };
+              tone?: T;
               id?: T;
               blockName?: T;
             };
@@ -442,6 +654,24 @@ export interface PagesSelect<T extends boolean = true> {
                     caption?: T;
                     id?: T;
                   };
+              tone?: T;
+              id?: T;
+              blockName?: T;
+            };
+        info?:
+          | T
+          | {
+              heading?: T;
+              items?:
+                | T
+                | {
+                    label?: T;
+                    value?: T;
+                    id?: T;
+                  };
+              buttonLabel?: T;
+              buttonHref?: T;
+              tone?: T;
               id?: T;
               blockName?: T;
             };
@@ -456,6 +686,7 @@ export interface PagesSelect<T extends boolean = true> {
                     answer?: T;
                     id?: T;
                   };
+              tone?: T;
               id?: T;
               blockName?: T;
             };
@@ -466,6 +697,7 @@ export interface PagesSelect<T extends boolean = true> {
               text?: T;
               buttonLabel?: T;
               buttonHref?: T;
+              tone?: T;
               id?: T;
               blockName?: T;
             };
@@ -480,6 +712,7 @@ export interface PagesSelect<T extends boolean = true> {
               messageLabel?: T;
               sentMessage?: T;
               errorMessage?: T;
+              tone?: T;
               id?: T;
               blockName?: T;
             };
@@ -565,10 +798,10 @@ export interface Site {
   name: string;
   tagline?: string | null;
   language: string;
+  style?: ('studio' | 'editorial' | 'warm' | 'bold' | 'calm') | null;
   accent?: string | null;
   background?: string | null;
   text?: string | null;
-  font?: ('modern' | 'editorial' | 'friendly') | null;
   nav?:
     | {
         label: string;
@@ -576,8 +809,12 @@ export interface Site {
         id?: string | null;
       }[]
     | null;
+  headerButtonLabel?: string | null;
+  headerButtonHref?: string | null;
   footerText?: string | null;
   email?: string | null;
+  phone?: string | null;
+  address?: string | null;
   updatedAt?: string | null;
   createdAt?: string | null;
 }
@@ -589,10 +826,10 @@ export interface SiteSelect<T extends boolean = true> {
   name?: T;
   tagline?: T;
   language?: T;
+  style?: T;
   accent?: T;
   background?: T;
   text?: T;
-  font?: T;
   nav?:
     | T
     | {
@@ -600,8 +837,12 @@ export interface SiteSelect<T extends boolean = true> {
         href?: T;
         id?: T;
       };
+  headerButtonLabel?: T;
+  headerButtonHref?: T;
   footerText?: T;
   email?: T;
+  phone?: T;
+  address?: T;
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;

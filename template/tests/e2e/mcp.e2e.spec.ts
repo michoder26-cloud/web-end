@@ -139,7 +139,7 @@ test.describe('Building a site through MCP', () => {
     const updated = await call(client, 'update_site', {
       accent: '#7a2e12',
       email: 'hello@example.test',
-      font: 'editorial',
+      style: 'editorial',
       language: 'de',
       name: 'Moonlight Coffee',
       nav: [{ href: '/menu', label: 'Menu' }],
@@ -150,9 +150,43 @@ test.describe('Building a site through MCP', () => {
     await expect(page.locator('html')).toHaveAttribute('lang', 'de')
     await expect(page.locator('.site-name')).toHaveText('Moonlight Coffee')
     await expect(page.locator('body')).toHaveAttribute('style', /--accent:#7a2e12/)
-    await page.locator('nav a', { hasText: 'Menu' }).click()
+    await page.locator('.site-header nav a', { hasText: 'Menu' }).click()
     await expect(page.locator('h1')).toHaveText('Menu')
     await expect(page).toHaveTitle('Menu | Moonlight Coffee')
+  })
+
+  test('every style shows every block without overflowing a phone screen', async ({ browser }) => {
+    const longWord = 'Donaudampfschifffahrtsgesellschaftskapitän'
+    const blocks = [
+      { type: 'hero', eyebrow: 'Wien', heading: `${longWord} grüßt`, text: 'Text', buttonLabel: 'Los', buttonHref: '/menu', layout: 'centered' },
+      { type: 'text', heading: 'Text', body: 'One.\n\nTwo.', tone: 'tint' },
+      { type: 'features', heading: longWord, intro: 'Intro', items: [{ title: longWord, text: 'A' }, { title: 'B' }] },
+      { type: 'steps', heading: 'Steps', items: [{ title: 'First', text: 'A' }, { title: 'Second' }], tone: 'dark' },
+      { type: 'stats', heading: 'Figures', items: [{ value: '1,250,000+', label: 'Things' }, { value: '98%', label: 'Others' }] },
+      { type: 'pricing', heading: 'Prices', plans: [{ name: 'Small', price: '120 €', features: 'One\nTwo', buttonLabel: 'Buy', buttonHref: '/menu' }, { name: 'Large', price: '240 €', highlighted: true }], tone: 'tint' },
+      { type: 'testimonials', heading: 'Words', items: [{ quote: 'Good.', name: 'Ana', role: 'Client' }] },
+      { type: 'team', heading: 'Team', members: [{ name: 'Ana', role: 'Owner', text: 'Hello' }], tone: 'tint' },
+      { type: 'info', heading: 'Hours', items: [{ label: 'Mon', value: '7–16\nClosed at lunch' }], buttonLabel: 'Map', buttonHref: 'https://example.test/map' },
+      { type: 'faq', heading: 'FAQ', items: [{ question: 'Q?', answer: 'A.' }] },
+      { type: 'cta', heading: 'Come by', text: 'Soon', buttonLabel: 'Go', buttonHref: '/menu' },
+      { type: 'contact', heading: 'Hello' },
+    ]
+    const saved = await call(client, 'save_page', { ...menu, slug: 'all-blocks', blocks })
+    expect(saved.text).toContain('"saved": true')
+
+    const phone = await browser.newPage({ viewport: { height: 800, width: 360 } })
+    for (const style of ['studio', 'editorial', 'warm', 'bold', 'calm']) {
+      await call(client, 'update_site', { style })
+      await phone.goto('/all-blocks')
+      await expect(phone.locator('body')).toHaveAttribute('data-style', style)
+      await expect(phone.locator('h1')).toHaveCount(1)
+      const overflow = await phone.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      )
+      expect(overflow, `${style} scrolls sideways`).toBeLessThanOrEqual(0)
+    }
+    await phone.close()
+    await call(client, 'delete_page', { slug: 'all-blocks' })
   })
 
   test('reads a page back in the same shape it was written', async () => {

@@ -7,9 +7,9 @@ import { defaultTheme } from './theme'
 
 export const fallbackSite = {
   ...defaultTheme,
-  font: 'modern',
   language: 'en',
   name: 'New website',
+  style: 'studio',
 } as Site
 
 /** The site settings, or safe defaults while the database is not set up (such as during a build). */

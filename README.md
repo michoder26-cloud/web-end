@@ -21,13 +21,15 @@ These are the planned steps. The deploy step doesn't exist yet.
 | Tool | What it does |
 | --- | --- |
 | `get_site_overview` | See the settings and every page |
-| `update_site` | Change the name, language, colours, font, navigation and footer |
+| `update_site` | Change the name, language, style, colours, navigation, footer and contact details |
 | `save_page`, `get_page`, `delete_page` | Create, read, change and delete pages |
 | `add_image`, `list_images` | Save images from a public link |
 | `list_messages` | Read messages from contact forms |
 | `check_site` | Review the site for common problems |
 
-Pages are built from seven blocks: hero, text, features, gallery, FAQ, call to action and contact form. The server also gives Claude a working method: plan, write, design, build, then review.
+Pages are built from 14 blocks: hero, text, split, features, steps, stats, pricing, testimonials, team, gallery, info, FAQ, call to action and contact form.
+
+Five site styles change the fonts, shapes and rhythm, not just the colours: `studio`, `editorial`, `warm`, `bold` and `calm`. All use self-hosted open-source fonts (SIL OFL) that cover Latin and Thai. The server also gives Claude a working method: plan, write, design, build, then review.
 
 ## Why it's built this way
 

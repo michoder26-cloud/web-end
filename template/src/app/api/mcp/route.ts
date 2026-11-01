@@ -23,7 +23,8 @@ export async function POST(request: Request) {
 
   const url = new URL(request.url)
   const forwardedHost = request.headers.get('x-forwarded-host')
-  const baseUrl = forwardedHost ? `https://${forwardedHost}` : url.origin
+  const protocol = request.headers.get('x-forwarded-proto') || url.protocol.replace(':', '')
+  const baseUrl = forwardedHost ? `${protocol}://${forwardedHost}` : url.origin
 
   const transport = new WebStandardStreamableHTTPServerTransport({
     enableJsonResponse: true,

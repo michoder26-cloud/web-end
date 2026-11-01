@@ -4,8 +4,8 @@ import { ValidationError } from 'payload'
 import { z } from 'zod'
 
 import { isValidSlug } from '../collections/Pages'
-import { contrast, defaultTheme, isHexColor, isSafeHref } from '../lib/theme'
-import type { Media, Page } from '../payload-types'
+import { contrast, defaultTheme, isHexColor, isSafeHref, siteStyles } from '../lib/theme'
+import type { Page } from '../payload-types'
 
 const maxImageBytes = 5 * 1024 * 1024
 const imageTypes = new Set(['image/avif', 'image/gif', 'image/jpeg', 'image/png', 'image/webp'])
@@ -16,8 +16,11 @@ const instructions = `You are a complete web team for someone who does not write
 Work in this order and do each role properly:
 1. Planner: ask a few plain questions about the business, its customers, what visitors should do, and which real facts, photos and contact details exist.
 2. Copywriter: write clear, specific words for those customers. Use only facts they gave you. Never invent reviews, clients, numbers, prices or awards. Where a fact is missing, ask them.
-3. Designer: choose colours and a font style that suit the business with update_site. Avoid a generic look. Keep every page focused, with one main action.
-4. Builder: create pages with save_page. Add every main page to the navigation.
+3. Designer: use update_site to choose a style and colours that suit this business, then plan each page like a designer would. Avoid a generic look.
+   Styles: studio (sharp and contemporary, for agencies and creative work), editorial (elegant serif, for restaurants, fashion and hospitality), warm (soft and friendly, for cafes, families and local shops), bold (loud and high contrast, for gyms, events and young brands), calm (clear and trustworthy, for clinics, law and finance).
+   Colours: pick one distinctive accent, not a default blue, and a background and text colour that read easily. Tinted off-whites usually feel better than pure white.
+   Composition: open with one strong hero and one main action. Vary the rhythm: alternate tone plain, tint and dark so sections don't blur together, and mix block types rather than repeating one. Use real photos where you have them: a hero with layout cover needs a strong image, and split pairs a photo with a story. Leave out anything you have no real content for.
+4. Builder: create pages with save_page. Add every main page to the navigation, and set a header button for the main action.
 5. Reviewer: run check_site, fix every problem, then give them the link and say what still needs them.
 
 Limits to explain honestly:
@@ -35,41 +38,105 @@ const href = z
 const imageId = z.number().int().positive().describe('An image id from add_image or list_images')
 const color = z.string().refine(isHexColor, 'Use a colour like #1f4d3a.')
 
+const tone = z.enum(['plain', 'tint', 'dark']).optional().describe('Section background')
+const heading = optionalText(160)
+const intro = optionalText(400)
+const button = { buttonLabel: optionalText(60), buttonHref: href.optional() }
+const titled = z.array(z.object({ title: text(120), text: optionalText(600) }))
+
 const blockSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('hero'),
+    eyebrow: optionalText(80).describe('A few words above the heading'),
     heading: text(160),
     text: optionalText(600),
-    buttonLabel: optionalText(60),
-    buttonHref: href.optional(),
+    ...button,
     imageId: imageId.optional(),
+    layout: z.enum(['split', 'centered', 'cover']).optional().describe('cover puts the words on a full-width photo'),
+    tone,
   }),
-  z.object({ type: z.literal('text'), heading: optionalText(160), body: text(8000) }),
+  z.object({ type: z.literal('text'), heading, body: text(8000), tone }),
   z.object({
-    type: z.literal('features'),
-    heading: optionalText(160),
-    items: z.array(z.object({ title: text(120), text: optionalText(600) })).min(1).max(12),
+    type: z.literal('split'),
+    heading,
+    body: text(3000),
+    imageId,
+    imageSide: z.enum(['left', 'right']).optional(),
+    ...button,
+    tone,
+  }),
+  z.object({ type: z.literal('features'), heading, intro, items: titled.min(1).max(12), tone }),
+  z.object({ type: z.literal('steps'), heading, intro, items: titled.min(1).max(8), tone }),
+  z.object({
+    type: z.literal('stats'),
+    heading,
+    items: z.array(z.object({ value: text(24), label: text(120) })).min(1).max(6),
+    tone,
+  }).describe('Only real figures the owner gave you'),
+  z.object({
+    type: z.literal('pricing'),
+    heading,
+    intro,
+    plans: z
+      .array(
+        z.object({
+          name: text(80),
+          price: text(40),
+          note: optionalText(120),
+          features: optionalText(1000).describe('One per line'),
+          ...button,
+          highlighted: z.boolean().optional(),
+        }),
+      )
+      .min(1)
+      .max(6),
+    tone,
+  }),
+  z.object({
+    type: z.literal('testimonials'),
+    heading,
+    items: z.array(z.object({ quote: text(600), name: text(80), role: optionalText(120) })).min(1).max(9),
+    tone,
+  }).describe('Only real quotes from real people, given by the owner'),
+  z.object({
+    type: z.literal('team'),
+    heading,
+    intro,
+    members: z
+      .array(z.object({ name: text(80), role: optionalText(120), text: optionalText(500), imageId: imageId.optional() }))
+      .min(1)
+      .max(24),
+    tone,
   }),
   z.object({
     type: z.literal('gallery'),
-    heading: optionalText(160),
+    heading,
     images: z.array(z.object({ imageId, caption: optionalText(200) })).min(1).max(24),
+    tone,
   }),
   z.object({
+    type: z.literal('info'),
+    heading,
+    items: z.array(z.object({ label: text(80), value: text(400) })).min(1).max(12),
+    ...button,
+    tone,
+  }).describe('Label and value rows, such as opening hours or an address'),
+  z.object({
     type: z.literal('faq'),
-    heading: optionalText(160),
+    heading,
     items: z.array(z.object({ question: text(240), answer: text(2000) })).min(1).max(30),
+    tone,
   }),
   z.object({
     type: z.literal('cta'),
     heading: text(160),
     text: optionalText(600),
-    buttonLabel: optionalText(60),
-    buttonHref: href.optional(),
+    ...button,
+    tone,
   }),
   z.object({
     type: z.literal('contact'),
-    heading: optionalText(160),
+    heading,
     text: optionalText(600),
     buttonLabel: optionalText(60),
     nameLabel: optionalText(60),
@@ -77,6 +144,7 @@ const blockSchema = z.discriminatedUnion('type', [
     messageLabel: optionalText(60),
     sentMessage: optionalText(200),
     errorMessage: optionalText(200),
+    tone,
   }),
 ])
 
@@ -104,40 +172,29 @@ const safely =
     }
   }
 
-const toStoredBlock = (block: BlockInput) => {
-  const { type, ...rest } = block
-  if (block.type === 'hero') {
-    const { imageId: image, ...hero } = rest as Extract<BlockInput, { type: 'hero' }>
-    return { blockType: type, ...hero, image }
-  }
-  if (block.type === 'gallery') {
-    return {
-      blockType: type,
-      heading: block.heading,
-      images: block.images.map(({ caption, imageId: image }) => ({ caption, image })),
-    }
-  }
-  return { blockType: type, ...rest }
+/** Renames image fields at any depth, so Claude always sees `imageId` and Payload always sees `image`. */
+const renameImages = (value: unknown, from: string, to: string): unknown => {
+  if (Array.isArray(value)) return value.map((item) => renameImages(item, from, to))
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key, item]) => key !== 'id' && key !== 'blockName' && item !== null)
+      .map(([key, item]) => [
+        key === from ? to : key,
+        key === from && typeof item === 'object' ? (item as { id: number }).id : renameImages(item, from, to),
+      ]),
+  )
 }
 
-const mediaId = (media: Media | null | number | undefined) =>
-  typeof media === 'object' ? media?.id : media
+const toStoredBlock = ({ type, ...rest }: BlockInput) => ({
+  blockType: type,
+  ...(renameImages(rest, 'imageId', 'image') as object),
+})
 
-const toBlockOutput = (block: NonNullable<Page['layout']>[number]) => {
-  const { blockName: _name, blockType, id: _id, ...rest } = block
-  if (block.blockType === 'hero') {
-    const { image, ...hero } = rest as Omit<typeof block, 'blockName' | 'blockType' | 'id'>
-    return { type: blockType, ...hero, imageId: mediaId(image) }
-  }
-  if (block.blockType === 'gallery') {
-    return {
-      type: blockType,
-      heading: block.heading,
-      images: block.images.map((item) => ({ caption: item.caption, imageId: mediaId(item.image) })),
-    }
-  }
-  return { type: blockType, ...rest }
-}
+const toBlockOutput = ({ blockType, ...rest }: NonNullable<Page['layout']>[number]) => ({
+  type: blockType,
+  ...(renameImages(rest, 'image', 'imageId') as object),
+})
 
 export function createMcpServer(payload: Payload, user: PayloadRequest['user'], baseUrl: string) {
   const server = new McpServer({ name: 'web-end', version: '0.1.0' }, { instructions })
@@ -176,18 +233,22 @@ export function createMcpServer(payload: Payload, user: PayloadRequest['user'], 
     'update_site',
     {
       title: 'Change site settings and design',
-      description: 'Changes the site name, language, colours, font style, navigation, footer or contact email. Only the given settings change.',
+      description: 'Changes the site name, language, style, colours, navigation, header button, footer or contact details. Only the given settings change.',
       inputSchema: {
         name: text(80).optional(),
         tagline: optionalText(160),
         language: z.string().regex(/^[a-zA-Z-]{2,12}$/).optional().describe('Language code of the site, such as en, de or th'),
+        style: z.enum(siteStyles).optional().describe('Sets the fonts, shapes and rhythm of the whole site'),
         accent: color.optional().describe('Colour for buttons and highlights'),
         background: color.optional(),
         text: color.optional().describe('Colour of the words'),
-        font: z.enum(['modern', 'editorial', 'friendly']).optional(),
         nav: z.array(z.object({ label: text(40), href })).max(8).optional(),
+        headerButtonLabel: optionalText(40),
+        headerButtonHref: href.optional(),
         footerText: optionalText(500),
         email: z.string().email().optional(),
+        phone: optionalText(40),
+        address: optionalText(300),
       },
     },
     safely(async (settings) => {
@@ -224,7 +285,7 @@ export function createMcpServer(payload: Payload, user: PayloadRequest['user'], 
     {
       title: 'Create or replace a page',
       description:
-        'Creates a page, or replaces the page with the same slug. The home page has the slug "home". Pages are built from blocks in order: hero (top of page, one per page), text, features, gallery, faq, cta (call to action) and contact (a form whose messages are stored for the owner). Separate paragraphs with a blank line. Write everything in the language of the site, including the labels and messages on contact forms.',
+        'Creates a page, or replaces the page with the same slug. The home page has the slug "home". Pages are built from blocks in order: hero (top of page, one per page), text, split (words beside a photo), features, steps, stats, pricing, testimonials, team, gallery, info (label and value rows such as opening hours), faq, cta (call to action) and contact (a form whose messages are stored for the owner). Separate paragraphs with a blank line. Write everything in the language of the site, including the labels and messages on contact forms.',
       inputSchema: {
         slug: z.string().refine(isValidSlug, 'Use lowercase letters, numbers and dashes, such as "about-us".'),
         title: text(120).describe('Shown in search results and the browser tab'),
@@ -363,13 +424,26 @@ export function createMcpServer(payload: Payload, user: PayloadRequest['user'], 
         if (JSON.stringify(layout).match(/lorem ipsum|placeholder|TODO|NEEDS OWNER INPUT/i)) {
           problems.push(`${where} still contains placeholder text.`)
         }
-        for (const block of layout) {
-          if (block.blockType === 'hero' || block.blockType === 'cta') {
-            checkLink(where, block.buttonHref)
-            if (Boolean(block.buttonLabel) !== Boolean(block.buttonHref)) {
-              problems.push(`${where} has a button missing its label or link.`)
-            }
+        const checkButton = (item: { buttonHref?: null | string; buttonLabel?: null | string }) => {
+          checkLink(where, item.buttonHref)
+          if (Boolean(item.buttonLabel) !== Boolean(item.buttonHref)) {
+            problems.push(`${where} has a button missing its label or link.`)
           }
+        }
+        for (const [index, block] of layout.entries()) {
+          if (block.blockType === 'hero' || block.blockType === 'cta' || block.blockType === 'split' || block.blockType === 'info') {
+            checkButton(block)
+          }
+          if (block.blockType === 'pricing') block.plans.forEach(checkButton)
+          if (block.blockType === 'hero' && block.layout === 'cover' && !block.image) {
+            problems.push(`${where} has a cover hero with no photo.`)
+          }
+          if (index > 0 && block.blockType === layout[index - 1].blockType) {
+            problems.push(`${where} has two ${block.blockType} blocks in a row. Vary the rhythm.`)
+          }
+        }
+        if (page.slug === 'home' && !layout.some((block) => block.blockType === 'hero')) {
+          problems.push(`${where} needs a hero at the top.`)
         }
         if (page.slug !== 'home' && page.published && !(site.nav ?? []).some((item) => item.href === `/${page.slug}`)) {
           problems.push(`${where} is not in the navigation. Check that visitors can reach it.`)

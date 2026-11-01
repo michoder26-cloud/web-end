@@ -1,5 +1,11 @@
 export const defaultTheme = { accent: '#1f4d3a', background: '#fbfaf6', text: '#16201b' }
 
+export const siteStyles = ['studio', 'editorial', 'warm', 'bold', 'calm'] as const
+export type SiteStyle = (typeof siteStyles)[number]
+
+export const isSiteStyle = (value: unknown): value is SiteStyle =>
+  siteStyles.includes(value as SiteStyle)
+
 export const isHexColor = (value: unknown): value is string =>
   typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)
 
@@ -21,11 +27,3 @@ export const contrast = (first: string, second: string) => {
 /** Picks whichever of black or white is easier to read on the given colour. */
 export const readableOn = (color: string) =>
   contrast(color, '#ffffff') >= contrast(color, '#111111') ? '#ffffff' : '#111111'
-
-export const fontStacks = {
-  editorial: "Georgia, 'Times New Roman', serif",
-  friendly: "'Trebuchet MS', 'Segoe UI', sans-serif",
-  modern: "ui-sans-serif, system-ui, 'Segoe UI', Roboto, 'Noto Sans', 'Noto Sans Thai', sans-serif",
-} as const
-
-export type FontStyle = keyof typeof fontStacks
