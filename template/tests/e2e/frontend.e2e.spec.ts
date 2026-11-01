@@ -1,20 +1,25 @@
-import { test, expect, Page } from '@playwright/test'
+import { test, expect } from '@playwright/test'
 
-test.describe('Frontend', () => {
-  let page: Page
+test.describe('Public site', () => {
+  test('home page loads with a title, one heading and no browser errors', async ({ page }) => {
+    const errors: string[] = []
+    page.on('pageerror', (error) => errors.push(error.message))
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text())
+    })
 
-  test.beforeAll(async ({ browser }, testInfo) => {
-    const context = await browser.newContext()
-    page = await context.newPage()
+    await page.goto('/')
+
+    await expect(page).toHaveTitle(/\S/)
+    await expect(page.locator('h1')).toHaveCount(1)
+    expect(errors).toEqual([])
   })
 
-  test('can go on homepage', async ({ page }) => {
-    await page.goto('http://localhost:3000')
-
-    await expect(page).toHaveTitle(/Payload Blank Template/)
-
-    const heading = page.locator('h1').first()
-
-    await expect(heading).toHaveText('Welcome to your new project.')
+  test('home page fits the screen without sideways scrolling', async ({ page }) => {
+    await page.goto('/')
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    )
+    expect(overflow).toBeLessThanOrEqual(0)
   })
 })

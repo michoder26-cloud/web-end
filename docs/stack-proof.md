@@ -37,3 +37,12 @@ auth: {
 - **Unreliable build:** one Cloudflare build failed while collecting page data, then the same build passed twice. It opens several remote connections at once, so the deploy step needs a retry.
 - **Windows:** the template's scripts assume pnpm and Unix shell syntax, so they need rewriting for ordinary Windows users.
 - **First admin:** an empty deployed site shows `/admin/create-first-user` to anyone. The deploy step must create the admin straight away or block that page until it does.
+- **Pinned libraries:** the template's Next.js 16.3.3 had a critical remote code execution advisory, so it now uses 16.4.3 with other library updates.
+- **Default access:** Payload lets any logged-in person do almost anything unless a collection says otherwise, so the template adds roles and an access policy that the tests enforce.
+- **Local R2 reads:** `next start` cannot read uploaded files through the local R2 proxy ([workers-sdk#6047](https://github.com/cloudflare/workers-sdk/issues/6047)), so the browser tests skip that one read.
+
+## Next steps once Payload ships the fix
+
+1. Upgrade Payload and set `passwordHashIterations`.
+2. Run the browser checks on the real Workers runtime (`wrangler dev`) instead of `next start`. That also covers image reads and the password limit. An attempt with a shared local database hit missing tables, so the database location needs sorting out first.
+3. Deploy a test site and try login on the Free plan.

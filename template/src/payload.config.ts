@@ -65,6 +65,7 @@ export default buildConfig({
   },
   collections: [Users, Media],
   editor: lexicalEditor(),
+  graphQL: { disable: true },
   secret: process.env.PAYLOAD_SECRET || '',
   typescript: {
     outputFile: path.resolve(dirname, 'payload-types.ts'),
@@ -85,6 +86,8 @@ function getCloudflareContextFromWrangler(): Promise<CloudflareContext> {
     ({ getPlatformProxy }) =>
       getPlatformProxy({
         environment: process.env.CLOUDFLARE_ENV,
+        // The gates test against their own throwaway database.
+        persist: process.env.WEBEND_DB_DIR ? { path: process.env.WEBEND_DB_DIR } : undefined,
         remoteBindings: isProduction,
       } satisfies GetPlatformProxyOptions),
   )

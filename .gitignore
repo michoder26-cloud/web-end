@@ -1,0 +1,21 @@
+node_modules/
+.next/
+.open-next/
+.wrangler/
+.gates-db/
+test-results/
+playwright-report/
+
+# Secrets never leave this computer
+.env
+.env.*
+!.env.example
+.dev.vars
+*.pem
+*.key
+
+# Real customer sites stay private. Only examples/ is published.
+/sites/
+
+# Generated on each run
+**/docs/report.md

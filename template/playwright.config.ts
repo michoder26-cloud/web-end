@@ -6,6 +6,8 @@ import { defineConfig, devices } from '@playwright/test'
  */
 import 'dotenv/config'
 
+const baseURL = process.env.BASE_URL || 'http://localhost:3000'
+
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
@@ -15,15 +17,11 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
-  /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : undefined,
-  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: 'html',
-  /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
+  /* The tests share one database, so they run one at a time. */
+  workers: 1,
+  reporter: 'list',
   use: {
-    /* Base URL to use in actions like `await page.goto('/')`. */
-    // baseURL: 'http://localhost:3000',
-
+    baseURL,
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
   },
@@ -32,10 +30,18 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'], channel: 'chromium' },
     },
+    {
+      name: 'mobile',
+      use: { ...devices['Pixel 7'], channel: 'chromium' },
+    },
   ],
-  webServer: {
-    command: 'pnpm dev',
-    reuseExistingServer: true,
-    url: 'http://localhost:3000',
-  },
+  webServer: process.env.BASE_URL
+    ? undefined
+    : {
+        command: 'npm run dev',
+        env: { WEBEND_DB_DIR: '.gates-db/e2e-dev' },
+        reuseExistingServer: false,
+        timeout: 120000,
+        url: baseURL,
+      },
 })

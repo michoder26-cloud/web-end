@@ -20,7 +20,8 @@
       "binding": "D1",
       "database_id": "DATABASE_ID",
       "database_name": "my-app",
-      "remote": true,
+      // Keep builds and tests on the local database. The deploy step uses the real one.
+      "remote": false,
     },
   ],
   "services": [
