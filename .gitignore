@@ -19,3 +19,6 @@ playwright-report/
 
 # Generated on each run
 **/docs/report.md
+
+# Local test output
+/cloud/.dev-*.log
