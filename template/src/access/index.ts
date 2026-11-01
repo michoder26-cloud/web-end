@@ -25,6 +25,10 @@ export const isAdminOrOwner: Access = ({ req: { user } }) => {
   return { owner: { equals: user.id } }
 }
 
+/** Admins see drafts too; everyone else only sees what is published. */
+export const isAdminOrPublished: Access = ({ req: { user } }) =>
+  hasRole(user, 'admin') || { published: { equals: true } }
+
 export const adminOnlyField: FieldAccess = ({ req: { user } }) => hasRole(user, 'admin')
 
 export const canUseAdminPanel = ({ req: { user } }: { req: PayloadRequest }) =>

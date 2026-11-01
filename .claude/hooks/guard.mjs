@@ -15,7 +15,7 @@ const owned = {
     /(^|\/)src\/payload-types\.ts$/,
     /(^|\/)src\/app\/\(payload\)\/admin\/importMap\.js$/,
   ],
-  integrator: [/(^|\/)src\/lib\//, /(^|\/)src\/app\/api\//, /(^|\/)src\/app\/\(frontend\)\/.*actions\.ts$/],
+  integrator: [/(^|\/)src\/lib\//, /(^|\/)src\/mcp\//, /(^|\/)src\/app\/api\//, /(^|\/)src\/app\/\(frontend\)\/.*actions\.ts$/],
   'qa-reviewer': [/(^|\/)tests\//, /(^|\/)playwright\.config\.ts$/],
   devops: [
     /(^|\/)wrangler\.jsonc$/,

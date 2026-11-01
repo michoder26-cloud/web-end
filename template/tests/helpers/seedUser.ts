@@ -1,4 +1,5 @@
 import { request } from '@playwright/test'
+import { randomUUID } from 'node:crypto'
 
 /** Only ever used against the throwaway test database. */
 export const testAdmin = {
@@ -39,6 +40,23 @@ export async function adminToken(): Promise<string> {
     }),
   )
   return logIn(testAdmin)
+}
+
+/** Turns on an API key for an account and returns it, as the owner would in the admin panel. */
+export function createApiKey(token: string, email?: string): Promise<string> {
+  return withApi(async (api) => {
+    const headers = { Authorization: `JWT ${token}` }
+    const { user: self } = await (await api.get('/api/users/me', { headers })).json()
+    const { docs } = await (await api.get('/api/users?limit=100', { headers })).json()
+    const user = email ? docs.find((doc: { email: string }) => doc.email === email) : self
+    const apiKey = randomUUID()
+    const response = await api.patch(`/api/users/${user.id}`, {
+      data: { apiKey, enableAPIKey: true },
+      headers,
+    })
+    if (!response.ok()) throw new Error(`Could not set the key: ${response.status()}`)
+    return apiKey
+  })
 }
 
 /** Creates a normal member through the API, as an admin would. */

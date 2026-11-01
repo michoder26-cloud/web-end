@@ -18,6 +18,8 @@ export const Users: CollectionConfig = {
   auth: {
     lockTime: 15 * 60 * 1000,
     maxLoginAttempts: 5,
+    // Lets the owner connect Claude with a key instead of their password.
+    useAPIKey: true,
   },
   fields: [
     // Email added by default

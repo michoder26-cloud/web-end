@@ -4,19 +4,29 @@
  *
  * yes: allowed for every document
  * no: never allowed
- * own: allowed only for documents that belong to that person
+ * some: allowed only for some documents, such as their own or published ones
  */
-export type Rule = 'yes' | 'no' | 'own'
+export type Rule = 'yes' | 'no' | 'some'
 export type Operations = { create: Rule; read: Rule; update: Rule; delete: Rule }
 export type CollectionPolicy = { anonymous: Operations; member: Operations }
 
+const nothing: Operations = { create: 'no', read: 'no', update: 'no', delete: 'no' }
+
 export const accessPolicy: Record<string, CollectionPolicy> = {
   users: {
-    anonymous: { create: 'no', read: 'no', update: 'no', delete: 'no' },
-    member: { create: 'no', read: 'own', update: 'own', delete: 'no' },
+    anonymous: nothing,
+    member: { create: 'no', read: 'some', update: 'some', delete: 'no' },
   },
   media: {
-    anonymous: { create: 'no', read: 'yes', update: 'no', delete: 'no' },
-    member: { create: 'no', read: 'yes', update: 'no', delete: 'no' },
+    anonymous: { ...nothing, read: 'yes' },
+    member: { ...nothing, read: 'yes' },
+  },
+  pages: {
+    anonymous: { ...nothing, read: 'some' },
+    member: { ...nothing, read: 'some' },
+  },
+  messages: {
+    anonymous: nothing,
+    member: nothing,
   },
 }

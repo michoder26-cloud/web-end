@@ -104,9 +104,18 @@ plant('members can make themselves admin', 'access', 'src/collections/Users.ts',
 )
 plant('a new collection with no access decision', 'access', 'src/payload.config.ts', (text) =>
   text.replace(
-    'collections: [Users, Media],',
-    "collections: [Users, Media, { slug: 'planted', fields: [{ name: 'title', type: 'text' }] }],",
+    'collections: [Users, Pages, Media, Messages],',
+    "collections: [Users, Pages, Media, Messages, { slug: 'planted', fields: [{ name: 'title', type: 'text' }] }],",
   ),
+)
+plant('anyone can read contact messages', 'access', 'src/collections/Messages.ts', (text) =>
+  text.replace('read: isAdmin', 'read: () => true'),
+)
+plant('drafts are public', 'access', 'src/collections/Pages.ts', (text) =>
+  text.replace('read: isAdminOrPublished', 'read: () => true'),
+)
+plant('members can use the MCP server', 'migrate,build,e2e', 'src/app/api/mcp/route.ts', (text) =>
+  text.replace("if (!user.roles?.includes('admin')) return deny(403, 'Only the site owner can use this.')", ''),
 )
 plant('data model changed without regenerating types', 'types', 'src/collections/Media.ts', (text) =>
   text.replace("name: 'alt',", "name: 'caption', type: 'text' }, { name: 'alt',"),

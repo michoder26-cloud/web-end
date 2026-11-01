@@ -46,3 +46,6 @@ auth: {
 1. Upgrade Payload and set `passwordHashIterations`.
 2. Run the browser checks on the real Workers runtime (`wrangler dev`) instead of `next start`. That also covers image reads and the password limit. An attempt with a shared local database hit missing tables, so the database location needs sorting out first.
 3. Deploy a test site and try login on the Free plan.
+4. Check that `/api/mcp` and the MCP SDK run on Workers. They have only run on Node so far.
+5. Connect the live site to the Claude app as a custom connector.
+6. Build the one-click deploy for site owners.

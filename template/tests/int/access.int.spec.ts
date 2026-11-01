@@ -17,7 +17,7 @@ const ruleFor = async (slug: string, operation: (typeof operations)[number], use
   const result = await access({ req: { payload, user } as unknown as PayloadRequest })
   if (result === true) return 'yes' satisfies Rule
   if (result === false) return 'no' satisfies Rule
-  return 'own' satisfies Rule
+  return 'some' satisfies Rule
 }
 
 describe('access rules', () => {
