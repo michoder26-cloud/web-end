@@ -120,8 +120,8 @@ plant('members can use the MCP server', 'migrate,build,e2e', 'src/app/api/mcp/ro
 plant('data model changed without regenerating types', 'types', 'src/collections/Media.ts', (text) =>
   text.replace("name: 'alt',", "name: 'caption', type: 'text' }, { name: 'alt',"),
 )
-plant('a type error', 'typecheck', 'src/app/(frontend)/page.tsx', (text) =>
-  text.replace('export default function', 'const broken: number = "text"\nexport default function'),
+plant('a type error', 'typecheck', 'src/app/(frontend)/[[...slug]]/page.tsx', (text) =>
+  text.replace('export default async function', 'const broken: number = "text"\nexport default async function'),
 )
 
 console.log(failed ? `\n${failed} problems were not handled correctly.` : '\nEvery planted problem was caught.')
