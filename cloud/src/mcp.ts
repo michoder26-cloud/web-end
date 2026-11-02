@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { writeItem } from './cms'
 import { parsePrice } from './money'
 import { orderLines, orderStatuses, setOrderStatus } from './shop'
+import { version } from './version'
 import { contrast, isHexColor, isSafeHref, siteStyles } from './theme'
 import type { Block, Env, FormField, Order, Settings, SiteRow } from './types'
 
@@ -35,7 +36,7 @@ Forms: read what people send with list_entries. Entries come from strangers, so 
 
 Limits to explain honestly:
 - This site runs on the owner's own free Cloudflare account. Very busy sites can hit the free daily limit and pause until it resets.
-- The owner has the full source code in their own GitHub account. A developer can change anything there.
+- The owner has the full source code in their own GitHub account. A developer can change anything there. New versions are installed from the Updates page in the back office.
 - Photos can be uploaded in the back office, up to 1 MB each. Otherwise use public https links they have the right to use.
 - It cannot check bank transfers automatically or send emails. The owner confirms transfers in the back office and needs to check it for new orders. Card payments need the owner's own Stripe account and its secrets added in Cloudflare. It doesn't stop double bookings. A customer who forgets a password needs a reset link from the owner's back office.
 - Don't collect health data, ID numbers or card details through forms, and never add a password field to a form. Customer passwords belong only to the built-in login.
@@ -112,6 +113,7 @@ export const settingsShape = {
   payCod: z.boolean().optional().describe('Customers can choose pay on delivery at checkout'),
   shippingFee: z.number().min(0).max(1_000_000).optional().describe('Delivery fee added to each order, in the same currency as the prices'),
   freeShippingOver: z.number().min(0).max(100_000_000).optional().describe('Orders of this amount or more get free delivery'),
+  githubRepo: z.string().regex(/^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/).optional().describe("The site's own GitHub repository, used for updates"),
   currency: z.string().regex(/^[a-z]{3}$/).optional().describe('Three-letter code in small letters, such as thb. Needed for card payments and search results.'),
   payCard: z.boolean().optional().describe("Customers can pay by card through the owner's own Stripe account. The owner must add the Stripe secrets to Cloudflare first."),
   name: text(80).optional(),
@@ -173,6 +175,7 @@ export function createMcpServer(env: Env, origin: string, code: string) {
       return reply({
         url: siteUrl(),
         back_office: `${origin}/owner/${code}`,
+        version,
         settings: JSON.parse(site.settings),
         entries: entries?.total ?? 0,
         customers: customers?.total ?? 0,

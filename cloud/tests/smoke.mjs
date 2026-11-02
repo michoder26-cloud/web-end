@@ -235,7 +235,7 @@ await call('delete_page', { slug: 'empty' })
 
 // Back office CMS
 const owner = `${base}/owner/${code}`
-for (const area of ['', '/pages', '/page/home', '/items', '/media', '/customers', '/settings']) {
+for (const area of ['', '/pages', '/page/home', '/items', '/media', '/customers', '/settings', '/updates']) {
   const response = await fetch(`${owner}${area}`)
   check(response.status === 200 && response.headers.get('x-robots-tag') === 'noindex', `the back office opens: ${area || 'overview'}`)
 }
@@ -592,6 +592,21 @@ if (hasStripe) {
   check((await fetch(`${base}/stripe/webhook`, { body: '{}', method: 'POST' })).status === 404, 'the payment address is off without Stripe')
   await call('update_site', { payCard: false })
 }
+
+// Updates
+const updatesBefore = await (await fetch(`${owner}/updates`)).text()
+check(updatesBefore.includes('Set up updates') && !updatesBefore.includes('/new/main'), 'the updates page asks for the repository first')
+check((await (await fetch(`${owner}/updates`, { body: new URLSearchParams({ repo: 'not a repo"><script>' }), method: 'POST' })).text()).includes('Enter it like this'), 'a bad repository name is refused')
+check((await fetch(`${owner}/updates`, { body: new URLSearchParams({ repo: 'someone/my-shop' }), method: 'POST', redirect: 'manual' })).status === 303, 'the owner can save the repository')
+const updatesPage = await (await fetch(`${owner}/updates`)).text()
+const addLink = decode(updatesPage.match(/href="(https:\/\/github\.com\/someone\/my-shop\/new\/main[^"]*)"/)?.[1] ?? '')
+const prefilled = new URL(addLink || 'https://x.test')
+check(prefilled.searchParams.get('filename') === '.github/workflows/update-web-end.yml' && prefilled.searchParams.get('value')?.includes('workflow_dispatch') && prefilled.searchParams.get('value')?.includes('--branch "v$latest"'), 'the page gives a ready-made updater that uses only releases')
+check(updatesPage.includes('https://github.com/someone/my-shop/actions/workflows/update-web-end.yml'), 'the page links to where the owner runs the update')
+const repoSettings = formValues(await (await fetch(`${owner}/settings`)).text())
+await fetch(`${owner}/settings`, { body: repoSettings, method: 'POST', redirect: 'manual' })
+check((await call('get_site')).data.settings.githubRepo === 'someone/my-shop' && /^\d+\.\d+\.\d+$/.test((await call('get_site')).data.version), 'saving settings keeps the repository, and Claude can see the version')
+check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd/updates`)).status === 404, 'a wrong link cannot open the updates page')
 
 let attempts = 0
 let limited = false

@@ -7,6 +7,8 @@ import { blockSchema, itemSchema, maxBlocksBytes, maxPagesPerSite, pageSlugSchem
 import { entryFields, shell } from './owner'
 import { orderDetails, orderLines, orderNumber, orderStatuses, paymentName, setOrderStatus } from './shop'
 import { words } from './text'
+import { isNewer, latestRelease, repoPattern, updatesBody } from './updates'
+import { version } from './version'
 import { siteStyles } from './theme'
 import type { Block, Env, FormField, Item, Order, Settings, SiteRow, Variant } from './types'
 
@@ -46,7 +48,7 @@ const catalog: Record<string, { label: string; fields: Spec[]; start: Block }> =
 const office = (site: SiteRow, code: string, title: string, body: string, notice?: { error?: string; saved?: string }) => {
   const settings = JSON.parse(site.settings) as Settings
   const base = `/owner/${escapeHtml(code)}`
-  const links: [string, string][] = [['', 'Overview'], ['/orders', 'Orders'], ['/pages', 'Pages'], ['/items', 'Products'], ['/media', 'Images'], ['/customers', 'Customers'], ['/settings', 'Settings']]
+  const links: [string, string][] = [['', 'Overview'], ['/orders', 'Orders'], ['/pages', 'Pages'], ['/items', 'Products'], ['/media', 'Images'], ['/customers', 'Customers'], ['/settings', 'Settings'], ['/updates', 'Updates']]
   return html(
     shell(
       `${settings.name}: ${title}`,
@@ -186,6 +188,8 @@ async function overview(env: Env, url: URL, site: SiteRow, code: string) {
     env.DB.prepare('SELECT slug, blocks FROM pages WHERE site_id = ?').bind(site.id).all<{ blocks: string; slug: string }>(),
     env.DB.prepare('SELECT entries.id, form, page, data, status, entries.created_at, customers.email AS customer FROM entries LEFT JOIN customers ON customers.id = entries.customer_id WHERE entries.site_id = ? ORDER BY entries.id DESC LIMIT 200').bind(site.id).all<{ created_at: string; customer: null | string; data: string; form: string; id: number; page: string; status: string }>(),
   ])
+  const latest = await latestRelease()
+  const newer = latest && isNewer(latest.version, version) ? `<p role="status">Version ${escapeHtml(latest.version)} is available. <a href="/owner/${escapeHtml(code)}/updates">See how to update</a>.</p>` : ''
   const labels = entryFields(pages)
   const rows = entries.length
     ? entries
@@ -207,7 +211,7 @@ async function overview(env: Env, url: URL, site: SiteRow, code: string) {
     site,
     code,
     'Overview',
-    `<h2>Orders, messages and bookings</h2>${rows}
+    `${newer}<h2>Messages and bookings</h2>${rows}
 <h2>Change your site with Claude</h2>
 <p>Add this link as a custom connector in Claude, with no sign-in. Keep it private.</p>
 <p><code style="overflow-wrap:anywhere">${escapeHtml(`${url.origin}/mcp/${code}`)}</code></p>`,
@@ -425,6 +429,7 @@ ${text('email', 'Email', 'email')}${text('phone', 'Phone')}<label>Address<textar
 async function saveSettings(request: Request, env: Env, url: URL, site: SiteRow, code: string) {
   const form = await request.formData()
   const draft: Record<string, unknown> = {
+    githubRepo: (JSON.parse(site.settings) as Settings).githubRepo,
     accounts: form.get('accounts') === 'on',
     cart: form.get('cart') === 'on',
     cartMembersOnly: form.get('cartMembersOnly') === 'on',
@@ -545,6 +550,17 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
       return see(url, `${owner}/customers`)
     }
     return notFound()
+  }
+
+  if (area === 'updates' && !id) {
+    const settings = JSON.parse(site.settings) as Settings
+    if (post) {
+      const repo = String((await request.formData().catch((): null => null))?.get('repo') ?? '').trim()
+      if (!repoPattern.test(repo)) return office(site, code, 'Updates', updatesBody(code, settings.githubRepo, await latestRelease()), { error: 'Enter it like this: your-name/my-website' })
+      await env.DB.prepare("UPDATE sites SET settings = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?").bind(JSON.stringify({ ...settings, githubRepo: repo }), site.id).run()
+      return see(url, `${owner}/updates?saved=1`)
+    }
+    return office(site, code, 'Updates', updatesBody(code, settings.githubRepo, await latestRelease()), saved)
   }
 
   if (area === 'settings' && !id) return post ? saveSettings(request, env, url, site, code) : settingsForm(site, code, saved)

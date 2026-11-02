@@ -58,6 +58,15 @@ Passing our tests means common mistakes weren't found. It isn't a security audit
 
 Your Claude link and back office link work like passwords. If you lose them, you can reset the site's owner from your Cloudflare account, so keep them safe.
 
+## Updating your site
+
+Open the **Updates** page in your back office. It tells you when a new version is out and walks you through installing it:
+
+1. The first time, follow the link to add the updater to your GitHub repository.
+2. Open the updater and press **Run workflow**. Cloudflare rebuilds your site in a few minutes.
+
+Your pages, products, orders, customers and private links stay as they are. If a developer changed your site's code, those changes get replaced, but they stay in your GitHub history.
+
 ## Taking cards with Stripe
 
 Card payments use your own Stripe account, and card details stay on Stripe's page. This hasn't been tried with a real Stripe account yet, so test it in Stripe's test mode first.

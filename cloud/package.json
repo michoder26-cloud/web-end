@@ -11,6 +11,7 @@
     "db:local": "wrangler d1 migrations apply DB --local",
     "typecheck": "tsc --noEmit",
     "test": "node tests/smoke.mjs",
+    "test:update": "node tests/update.mjs",
     "fonts": "node scripts/copy-fonts.mjs"
   },
   "dependencies": {

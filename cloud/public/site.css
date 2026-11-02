@@ -916,6 +916,12 @@ details p:first-of-type {
   border-bottom: 1px dashed color-mix(in srgb, var(--ink) 18%, transparent);
 }
 
+.cms-steps {
+  display: grid;
+  gap: 12px;
+  padding-left: 22px;
+}
+
 .cms-actions {
   display: flex;
   flex-wrap: wrap;

@@ -20,6 +20,7 @@ export type Settings = {
   email?: string
   footerText?: string
   freeShippingOver?: number
+  githubRepo?: string
   headerButtonHref?: string
   headerButtonLabel?: string
   language?: string
