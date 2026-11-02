@@ -4,7 +4,7 @@ export const isHexColor = (value: unknown): value is string =>
   typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)
 
 export const isSafeHref = (value: unknown): value is string =>
-  typeof value === 'string' && /^(\/(?!\/)|#|https:\/\/|mailto:|tel:)/.test(value)
+  typeof value === 'string' && /^(\/(?!\/)|#|\?|https:\/\/|mailto:|tel:)/.test(value)
 
 const luminance = (hex: string) => {
   const [r, g, b] = [1, 3, 5]

@@ -10,7 +10,7 @@
     "dev": "wrangler dev --local --port 8799",
     "db:local": "wrangler d1 migrations apply DB --local",
     "typecheck": "tsc --noEmit",
-    "test": "node test/smoke.mjs",
+    "test": "node tests/smoke.mjs",
     "fonts": "node scripts/copy-fonts.mjs"
   },
   "dependencies": {

@@ -1,0 +1,180 @@
+import { allowAttempt, checkPassword, endCookie, endSession, getCustomer, hashPassword, sha256, startSession } from './auth'
+import { escapeHtml, html, notFound, privateHeaders, see } from './http'
+import { entryFields } from './owner'
+import { renderLayout } from './render'
+import { orderDetails, orderLines, orderNumber, paymentName } from './shop'
+import { words } from './text'
+import type { Customer, Env, FormField, Order, Settings, SiteRow } from './types'
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const maxBodyBytes = 16 * 1024
+
+const safeNext = (value: unknown) => (typeof value === 'string' && /^\/[a-z0-9-]*$/.test(value) ? value : '/')
+
+const page = (site: SiteRow, url: URL, title: string, body: string, customer: Customer | null = null) =>
+  html(
+    renderLayout(site, {
+      canonical: `${url.origin}${url.pathname}`,
+      customer,
+      description: title,
+      main: `<section class="block tone-plain"><div class="wrap account">${body}</div></section>`,
+      robots: 'noindex',
+      title,
+    }),
+    200,
+    privateHeaders,
+  )
+
+const message = (text?: string, role = 'alert') => (text ? `<p role="${role}">${escapeHtml(text)}</p>` : '')
+
+function loginPage(site: SiteRow, url: URL, error?: string) {
+  const t = words((JSON.parse(site.settings) as Settings).language)
+  const next = safeNext(url.searchParams.get('next'))
+  return page(
+    site,
+    url,
+    t.logIn,
+    `<h1>${t.logIn}</h1>${message(error)}${url.searchParams.has('changed') ? message(t.passwordChanged, 'status') : ''}
+<form action="/login" class="contact-form" method="post"><input name="next" type="hidden" value="${escapeHtml(next)}">
+<label>${t.email}<input autocomplete="email" maxlength="254" name="email" required type="email"></label>
+<label>${t.password}<input autocomplete="current-password" maxlength="200" name="password" required type="password"></label>
+<button class="button" type="submit">${t.logIn}</button></form>
+<p class="account__alt">${t.noAccount} <a href="/signup?next=${encodeURIComponent(next)}">${t.signUp}</a></p>`,
+  )
+}
+
+function signupPage(site: SiteRow, url: URL, error?: string) {
+  const t = words((JSON.parse(site.settings) as Settings).language)
+  const next = safeNext(url.searchParams.get('next'))
+  return page(
+    site,
+    url,
+    t.newAccount,
+    `<h1>${t.newAccount}</h1>${message(error)}
+<form action="/signup" class="contact-form" method="post"><input name="next" type="hidden" value="${escapeHtml(next)}">
+<label>${t.name}<input autocomplete="name" maxlength="120" name="name" required></label>
+<label>${t.email}<input autocomplete="email" maxlength="254" name="email" required type="email"></label>
+<label>${t.password}<input autocomplete="new-password" maxlength="200" minlength="8" name="password" required type="password"></label>
+<label aria-hidden="true" class="trap">Leave this empty<input autocomplete="off" name="website" tabindex="-1"></label>
+<button class="button" type="submit">${t.signUp}</button></form>
+<p class="account__alt">${t.haveAccount} <a href="/login?next=${encodeURIComponent(next)}">${t.logIn}</a></p>`,
+  )
+}
+
+async function accountPage(env: Env, site: SiteRow, url: URL, customer: Customer) {
+  const t = words((JSON.parse(site.settings) as Settings).language)
+  const [{ results: entries }, { results: pages }] = await Promise.all([
+    env.DB.prepare('SELECT form, page, data, status, created_at FROM entries WHERE site_id = ? AND customer_id = ? ORDER BY id DESC LIMIT 100').bind(site.id, customer.id).all<{ created_at: string; data: string; form: string; page: string; status: string }>(),
+    env.DB.prepare('SELECT slug, blocks FROM pages WHERE site_id = ?').bind(site.id).all<{ blocks: string; slug: string }>(),
+  ])
+  const { results: orders } = await env.DB.prepare('SELECT * FROM orders WHERE site_id = ? AND customer_id = ? ORDER BY id DESC LIMIT 50').bind(site.id, customer.id).all<Order>()
+  const lines = await orderLines(env, orders.map((order) => order.id))
+  const orderRows = orders
+    .map((order) => `<article class="card account__record"><h3>${t.order} ${orderNumber(order.id)} · ${escapeHtml(t.orderState[order.status] ?? order.status)}</h3><p class="post-date">${escapeHtml(order.created_at.slice(0, 16).replace('T', ' '))} UTC · ${paymentName(t, order.payment)}</p>${orderDetails(order, lines.get(order.id) ?? [], t)}</article>`)
+    .join('')
+  const labels = entryFields(pages)
+  const rows = entries.length
+    ? entries
+        .map((entry) => {
+          const data = JSON.parse(entry.data) as Record<string, unknown>
+          const fields: FormField[] = labels.get(`${entry.page}/${entry.form}`) ?? Object.keys(data).map((name) => ({ label: name, name, type: 'text' }))
+          const list = fields
+            .filter((field) => data[field.name] !== undefined)
+            .map((field) => `<div><dt>${escapeHtml(field.label)}</dt><dd class="pre-line">${escapeHtml(data[field.name] === true ? '✓' : data[field.name] === false ? '—' : data[field.name])}</dd></div>`)
+            .join('')
+          return `<article class="card account__record"><h3>${escapeHtml(t.status[entry.status] ?? entry.status)}</h3><p class="post-date">${escapeHtml(entry.created_at.slice(0, 16).replace('T', ' '))} UTC</p><dl>${list}</dl></article>`
+        })
+        .join('')
+    : `<p>${t.historyEmpty}</p>`
+  return page(
+    site,
+    url,
+    t.account,
+    `<h1>${t.account}</h1><p>${escapeHtml(customer.name)}<br>${escapeHtml(customer.email)}</p>
+<form action="/logout" method="post"><button class="button button--small" type="submit">${t.logOut}</button></form>
+${orderRows ? `<h2>${t.orders}</h2>${orderRows}` : ''}<h2>${t.history}</h2>${rows}`,
+    customer,
+  )
+}
+
+async function receive(request: Request) {
+  if (Number(request.headers.get('content-length') || 0) > maxBodyBytes) return null
+  return request.formData().catch((): null => null)
+}
+
+async function login(request: Request, env: Env, url: URL, site: SiteRow) {
+  const t = words((JSON.parse(site.settings) as Settings).language)
+  if (!(await allowAttempt(request, env, 'login', 10, 900))) return loginPage(site, url, t.busy)
+  const form = await receive(request)
+  const email = String(form?.get('email') ?? '').trim().toLowerCase()
+  const password = String(form?.get('password') ?? '')
+  const row = await env.DB.prepare('SELECT id, password_hash, salt, iterations FROM customers WHERE site_id = ? AND email = ?').bind(site.id, email).first<{ id: number; iterations: number; password_hash: string; salt: string }>()
+  if (!password || password.length > 200 || !(await checkPassword(password, row)) || !row) return loginPage(site, url, t.badLogin)
+  return see(url, safeNext(form?.get('next')), await startSession(env, url, row.id))
+}
+
+async function signup(request: Request, env: Env, url: URL, site: SiteRow) {
+  const t = words((JSON.parse(site.settings) as Settings).language)
+  if (!(await allowAttempt(request, env, 'signup', 10, 3600))) return signupPage(site, url, t.busy)
+  const form = await receive(request)
+  // Bots fill in the hidden field. Send them away and keep nothing.
+  if (!form || form.get('website')) return see(url, '/')
+  const name = String(form.get('name') ?? '').trim().slice(0, 120)
+  const email = String(form.get('email') ?? '').trim().toLowerCase()
+  const password = String(form.get('password') ?? '')
+  if (!name || email.length > 254 || !emailPattern.test(email)) return signupPage(site, url, t.badEmail)
+  if (password.length < 8 || password.length > 200) return signupPage(site, url, t.badPassword)
+  const secret = await hashPassword(password)
+  const created = await env.DB.prepare('INSERT INTO customers (site_id, email, name, password_hash, salt, iterations) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (site_id, email) DO NOTHING RETURNING id')
+    .bind(site.id, email, name, secret.password_hash, secret.salt, secret.iterations)
+    .first<{ id: number }>()
+  if (!created) return signupPage(site, url, t.badEmail)
+  return see(url, safeNext(form.get('next')), await startSession(env, url, created.id))
+}
+
+async function resetPassword(request: Request, env: Env, url: URL, site: SiteRow, token: string) {
+  const t = words((JSON.parse(site.settings) as Settings).language)
+  const tokenHash = await sha256(token)
+  const reset = await env.DB.prepare('SELECT password_resets.customer_id AS id FROM password_resets JOIN customers ON customers.id = password_resets.customer_id WHERE password_resets.token_hash = ? AND password_resets.expires_at > ? AND customers.site_id = ?')
+    .bind(tokenHash, new Date().toISOString(), site.id)
+    .first<{ id: number }>()
+  if (!reset) return page(site, url, t.changePassword, `<h1>${t.changePassword}</h1>${message(t.invalidReset)}`)
+  const form_ = (error?: string) =>
+    page(
+      site,
+      url,
+      t.changePassword,
+      `<h1>${t.changePassword}</h1>${message(error)}<form action="/reset/${escapeHtml(token)}" class="contact-form" method="post"><label>${t.newPassword}<input autocomplete="new-password" maxlength="200" minlength="8" name="password" required type="password"></label><button class="button" type="submit">${t.changePassword}</button></form>`,
+    )
+  if (request.method !== 'POST') return form_()
+  const form = await receive(request)
+  const password = String(form?.get('password') ?? '')
+  if (password.length < 8 || password.length > 200) return form_(t.badPassword)
+  const secret = await hashPassword(password)
+  await env.DB.batch([
+    env.DB.prepare('UPDATE customers SET password_hash = ?, salt = ?, iterations = ? WHERE id = ?').bind(secret.password_hash, secret.salt, secret.iterations, reset.id),
+    env.DB.prepare('DELETE FROM sessions WHERE customer_id = ?').bind(reset.id),
+    env.DB.prepare('DELETE FROM password_resets WHERE customer_id = ?').bind(reset.id),
+  ])
+  return see(url, '/login?changed=1')
+}
+
+/** Handles the customer account pages. They exist only when the site turns accounts on. */
+export async function handleAccount(request: Request, env: Env, url: URL, site: SiteRow, parts: string[]) {
+  if (!(JSON.parse(site.settings) as Settings).accounts) return notFound()
+  const post = request.method === 'POST'
+  if (parts[0] === 'reset' && parts.length === 2 && /^[0-9a-f]{64}$/.test(parts[1])) return resetPassword(request, env, url, site, parts[1])
+  if (parts.length !== 1) return notFound()
+
+  if (parts[0] === 'logout') {
+    if (!post) return see(url, '/')
+    await endSession(request, env)
+    return see(url, '/', endCookie(url))
+  }
+  const customer = await getCustomer(request, env, site.id)
+  if (parts[0] === 'account') return customer ? accountPage(env, site, url, customer) : see(url, '/login?next=/account')
+  if (customer && !post) return see(url, '/account')
+  if (parts[0] === 'login') return post ? login(request, env, url, site) : loginPage(site, url)
+  if (parts[0] === 'signup') return post ? signup(request, env, url, site) : signupPage(site, url)
+  return notFound()
+}

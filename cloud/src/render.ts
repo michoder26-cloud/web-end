@@ -1,5 +1,8 @@
 import { contrast, isHexColor, isSafeHref, readableOn, siteStyles } from './theme'
-import type { Block, FormField, Settings, SiteRow } from './types'
+import { isAvailable } from './items'
+import { parsePrice } from './money'
+import { words } from './text'
+import type { Block, Customer, FormField, Item, Settings, SiteRow } from './types'
 
 const defaults = { accent: '#1f4d3a', background: '#fbfaf6', text: '#16201b' }
 const repository = 'https://github.com/michoder26-cloud/web-end'
@@ -23,9 +26,15 @@ const paragraphs = (text?: string) =>
 
 type Context = {
   base: string
+  blockIndex: number
+  cart: boolean
+  customer: Customer | null
   error?: string
   isMainHeading: boolean
+  items: Map<string, Item[]>
+  language?: string
   pageSlug: string
+  query?: URLSearchParams
   sent?: string
 }
 
@@ -40,9 +49,11 @@ const button = (label: unknown, href: unknown, base: string) => {
 }
 
 const picture = (url: unknown, alt: unknown, eager = false) =>
-  typeof url === 'string' && url.startsWith('https://')
+  typeof url === 'string' && (url.startsWith('https://') || /^\/media\/\d+$/.test(url))
     ? `<img alt="${escapeHtml(alt)}" decoding="async" loading="${eager ? 'eager' : 'lazy'}"${eager ? ' fetchpriority="high"' : ''} referrerpolicy="no-referrer" src="${escapeHtml(url)}">`
     : ''
+
+export const pageImage = (url: unknown, alt: unknown, eager = false) => picture(url, alt, eager)
 
 const head = (heading?: string, intro?: string) =>
   heading || intro
@@ -54,14 +65,14 @@ const section = (name: string, tone: unknown, inner: string, id?: string) =>
 
 const inputTypes: Record<string, string> = { date: 'date', email: 'email', number: 'number', phone: 'tel', text: 'text', time: 'time' }
 
-const field = (item: FormField) => {
+const field = (item: FormField, query?: URLSearchParams) => {
   const required = item.required ? ' required' : ''
   const name = escapeHtml(item.name)
   const label = escapeHtml(item.label)
   if (item.type === 'checkbox') return `<label class="check"><input name="${name}"${required} type="checkbox"> ${label}</label>`
   if (item.type === 'textarea') return `<label>${label}<textarea maxlength="5000" name="${name}"${required} rows="4"></textarea></label>`
   if (item.type === 'select') {
-    const options = (item.options ?? []).map((option) => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`).join('')
+    const options = (item.options ?? []).map((option) => `<option value="${escapeHtml(option)}"${query?.get(item.name) === option ? ' selected' : ''}>${escapeHtml(option)}</option>`).join('')
     return `<label>${label}<select name="${name}"${required}><option value="">—</option>${options}</select></label>`
   }
   return `<label>${label}<input maxlength="500" name="${name}"${required} ${item.type === 'number' ? 'step="any" ' : ''}type="${inputTypes[item.type] ?? 'text'}"></label>`
@@ -151,8 +162,46 @@ const renderers: Record<string, (block: Block, context: Context) => string> = {
       block.tone || 'dark',
       `<div class="wrap cta"><div><h2>${escapeHtml(block.heading)}</h2>${paragraphs(block.text)}</div>${button(block.buttonLabel, block.buttonHref, base)}</div>`,
     ),
-  form(block, { base, error, pageSlug, sent }) {
+  collection(block, { base, cart, items, language, query }) {
+    const t = words(language)
+    const all = items.get(block.collection) ?? []
+    const anchor = block.id ? `#${block.id}` : ''
+    const categories = [...new Set(all.map((item) => item.category).filter(Boolean))]
+    const chosen = block.filters && categories.includes(query?.get('category') ?? '') ? query?.get('category') : null
+    const list = all.filter((item) => !chosen || item.category === chosen).slice(0, Number(block.limit) || undefined)
+    if (!list.length) return ''
+    const pills = block.filters && categories.length > 1
+      ? `<nav aria-label="${t.products}" class="filter-pills"><a${chosen ? '' : ' aria-current="true"'} href="/${anchor}">${t.allCategories}</a>${categories.map((category) => `<a${category === chosen ? ' aria-current="true"' : ''} href="?category=${encodeURIComponent(category)}${anchor}">${escapeHtml(category)}</a>`).join('')}</nav>`
+      : ''
+    const cards = list
+      .map((item) => {
+        const target = item.link_href || (block.orderField && String(block.buttonHref).startsWith('#') ? `?${encodeURIComponent(block.orderField)}=${encodeURIComponent(item.title)}${block.buttonHref}` : block.buttonHref)
+        const photo = picture(item.image_url, item.image_alt || item.title)
+        const detail = `/product/${item.id}`
+        const available = isAvailable(item)
+        const options = item.variants ?? []
+        const firstPrice = options.find((option) => option.price)?.price || item.price
+        const buyable = cart && !target && parsePrice(firstPrice)
+        const action = buyable
+          ? !available
+            ? `<p class="product__sold-out">${t.soldOut}</p>`
+            : options.length
+              ? `<a class="button button--ghost" href="${detail}">${t.chooseOption}</a>`
+              : `<form action="/cart/add" class="product__buy" method="post"><input name="item" type="hidden" value="${item.id}"><button class="button" type="submit">${escapeHtml(item.link_label || block.buttonLabel || t.addToCart)}</button></form>`
+          : button(item.link_label || block.buttonLabel, target, base)
+        const badge = !available ? t.soldOut : item.compare_price ? t.sale : ''
+        return `<article class="product"><a class="product__link" href="${detail}">${photo ? `<div class="product__image">${photo}${badge ? `<span class="product__badge">${badge}</span>` : ''}</div>` : badge ? `<span class="product__badge product__badge--inline">${badge}</span>` : ''}<h3>${escapeHtml(item.title)}</h3></a><p class="product-price">${item.price ? `<strong>${escapeHtml(item.price)}</strong>` : ''}${item.compare_price ? `<s>${escapeHtml(item.compare_price)}</s>` : ''}</p>${item.body ? `<p class="product__text">${escapeHtml(item.body)}</p>` : ''}${action}</article>`
+      })
+      .join('')
+    return section('collection', block.tone, `<div class="wrap">${head(block.heading, block.intro)}${pills}<div class="products">${cards}</div></div>`, block.id)
+  },
+  form(block, { base, customer, error, language, pageSlug, query, sent }) {
     const name = String(block.name)
+    if (block.membersOnly && !customer) {
+      const path = `/${pageSlug === 'home' ? '' : pageSlug}`
+      const t = words(language)
+      return section('form', block.tone, `<div class="wrap info"><div>${block.heading ? `<h2>${escapeHtml(block.heading)}</h2>` : ''}${paragraphs(block.intro)}</div><div><p>${t.loginToUse}</p><a class="button" href="/login?next=${encodeURIComponent(path)}">${t.logIn}</a></div></div>`, `form-${name}`)
+    }
     const status =
       sent === name
         ? `<p role="status">${escapeHtml(block.sentMessage || 'Thank you. We have received this.')}</p>`
@@ -162,24 +211,41 @@ const renderers: Record<string, (block: Block, context: Context) => string> = {
     return section(
       'form',
       block.tone,
-      `<div class="wrap info"><div>${block.heading ? `<h2>${escapeHtml(block.heading)}</h2>` : ''}${paragraphs(block.intro)}</div><div>${status}<form action="${escapeHtml(`${base}/form/${pageSlug}/${name}`)}" class="contact-form" method="post">${(block.fields ?? []).map(field).join('')}<label aria-hidden="true" class="trap">Leave this empty<input autocomplete="off" name="website" tabindex="-1"></label><button class="button" type="submit">${escapeHtml(block.buttonLabel || 'Send')}</button></form></div></div>`,
+      `<div class="wrap info"><div>${block.heading ? `<h2>${escapeHtml(block.heading)}</h2>` : ''}${paragraphs(block.intro)}</div><div>${status}<form action="${escapeHtml(`${base}/form/${pageSlug}/${name}`)}" class="contact-form" method="post">${(block.fields ?? []).map((item: FormField) => field(item, query)).join('')}<label aria-hidden="true" class="trap">Leave this empty<input autocomplete="off" name="website" tabindex="-1"></label><button class="button" type="submit">${escapeHtml(block.buttonLabel || 'Send')}</button></form></div></div>`,
       `form-${name}`,
     )
   },
-  // Custom code runs in a sandbox with no access to the page or to other sites.
-  html: (block) =>
+  // Custom code loads from its own address, because a srcdoc frame would inherit this page's ban on scripts.
+  html: (block, { blockIndex, pageSlug }) =>
     section(
       'html',
       block.tone,
-      `<div class="wrap"><iframe class="custom-html" height="${Math.min(Math.max(Number(block.height) || 400, 50), 3000)}" sandbox="allow-scripts allow-forms" srcdoc="${escapeHtml(block.code)}" title="${escapeHtml(block.title || 'Custom section')}"></iframe></div>`,
+      `<div class="wrap"><iframe class="custom-html" height="${Math.min(Math.max(Number(block.height) || 400, 50), 3000)}" sandbox="allow-scripts allow-forms" src="/frame/${escapeHtml(pageSlug)}/${blockIndex}" title="${escapeHtml(block.title || 'Custom section')}"></iframe></div>`,
     ),
 }
 
-export function renderPage(
-  site: SiteRow,
-  page: { blocks: Block[]; description: string; slug: string; title: string },
-  options: { canonical: string; error?: string; sent?: string },
-) {
+const svg = (path: string) => `<svg aria-hidden="true" fill="none" height="22" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" viewBox="0 0 24 24" width="22">${path}</svg>`
+const icons = {
+  bag: svg('<path d="M6 8h12l1 12H5L6 8Z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>'),
+  grid: svg('<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>'),
+  home: svg('<path d="m4 11 8-7 8 7v9h-5v-6H9v6H4v-9Z"/>'),
+  person: svg('<circle cx="12" cy="8" r="4"/><path d="M4 21c1-5 4-7 8-7s7 2 8 7"/>'),
+}
+
+type LayoutOptions = {
+  canonical: string
+  cartCount?: number
+  customer: Customer | null
+  description: string
+  head?: string
+  isHome?: boolean
+  main: string
+  robots?: string
+  title: string
+}
+
+/** The shared frame of every public page: colours, header, navigation and footer. */
+export function renderLayout(site: SiteRow, options: LayoutOptions) {
   const settings = JSON.parse(site.settings) as Settings
   const base = ''
   const accent = isHexColor(settings.accent) ? settings.accent : defaults.accent
@@ -189,31 +255,24 @@ export function renderPage(
   const style = siteStyles.includes(settings.style as never) ? settings.style : 'studio'
   const lang = /^[a-zA-Z-]{2,12}$/.test(settings.language ?? '') ? settings.language : 'en'
   const vars = `--accent:${accent};--accent-dark:${accentOnDark};--accent-text:${contrast(accent, background) >= 5 ? accent : text};--accent-text-dark:${contrast(accent, text) >= 5 ? accent : background};--base-bg:${background};--base-ink:${text};--on-accent:${readableOn(accent)};--on-accent-dark:${readableOn(accentOnDark)}`
+  const t = words(settings.language)
 
-  const firstHero = page.blocks.findIndex((block) => block.type === 'hero')
-  const main = page.blocks
-    .map((block, index) =>
-      renderers[block.type]?.(block, { base, error: options.error, isMainHeading: index === firstHero, pageSlug: page.slug, sent: options.sent }) ?? '',
-    )
-    .join('')
-  const title = firstHero === -1 ? `<section class="block block--title tone-plain"><div class="wrap"><h1>${escapeHtml(page.title)}</h1></div></section>` : ''
-
-  const nav = (settings.nav ?? [])
+  // Menu links such as #products point at the home page, so they need its address everywhere else.
+  const fromMenu = (href: unknown) => (typeof href === 'string' && href.startsWith('#') && !options.isHome ? `/${href}` : href)
+  const links = (settings.nav ?? [])
     .map((item) => {
-      const target = link(item.href, base)
+      const target = link(fromMenu(item.href), base)
       return target ? `<a href="${escapeHtml(target)}">${escapeHtml(item.label)}</a>` : ''
     })
     .join('')
-  const headerButton = settings.headerButtonLabel ? button(settings.headerButtonLabel, settings.headerButtonHref, base).replace('class="button"', 'class="button button--small"') : ''
-  const pageTitle = page.slug === 'home' ? page.title : `${page.title} | ${settings.name}`
-  const jsonLd = JSON.stringify({
-    '@context': 'https://schema.org',
-    '@type': 'WebPage',
-    description: page.description,
-    isPartOf: { '@type': 'WebSite', name: settings.name },
-    name: page.title,
-    url: options.canonical,
-  }).replace(/</g, '\\u003c')
+  const accountLink = settings.accounts ? `<a class="site-account" href="${options.customer ? '/account' : '/login'}">${options.customer ? t.account : t.logIn}</a>` : ''
+  const cartLink = settings.cart ? `<a class="site-account" href="/cart">${t.cart}${options.cartCount ? ` (${options.cartCount})` : ''}</a>` : ''
+  const nav = links + cartLink + accountLink
+  const productsLink = (settings.nav ?? []).find((item) => /product|shop|สินค้า/i.test(`${item.href} ${item.label}`))?.href
+  const tabs = settings.cart
+    ? `<nav aria-label="${t.home}" class="tab-bar"><a href="/">${icons.home}<span>${t.home}</span></a><a href="${escapeHtml(link(fromMenu(productsLink ?? '/'), base) ?? '/')}">${icons.grid}<span>${t.products}</span></a><a href="/cart">${icons.bag}<span>${t.cart}${options.cartCount ? ` (${options.cartCount})` : ''}</span></a>${settings.accounts ? `<a href="${options.customer ? '/account' : '/login'}">${icons.person}<span>${options.customer ? t.account : t.logIn}</span></a>` : ''}</nav>`
+    : ''
+  const headerButton = settings.headerButtonLabel ? button(settings.headerButtonLabel, fromMenu(settings.headerButtonHref), base).replace('class="button"', 'class="button button--small"') : ''
   // CSS never needs a raw "<", and removing it means the text cannot close the style tag.
   const customCss = settings.customCss ? `<style>${settings.customCss.replaceAll('<', '\\3C ')}</style>` : ''
 
@@ -222,23 +281,57 @@ export function renderPage(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(pageTitle)}</title>
-<meta name="description" content="${escapeHtml(page.description)}">
+<title>${escapeHtml(options.title)}</title>
+<meta name="description" content="${escapeHtml(options.description)}">
+${options.robots ? `<meta name="robots" content="${escapeHtml(options.robots)}">` : ''}
 <link rel="canonical" href="${escapeHtml(options.canonical)}">
-<meta property="og:title" content="${escapeHtml(page.title)}">
-<meta property="og:description" content="${escapeHtml(page.description)}">
+<meta property="og:title" content="${escapeHtml(options.title)}">
+<meta property="og:description" content="${escapeHtml(options.description)}">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="${escapeHtml(settings.name)}">
 <link rel="stylesheet" href="/fonts/fonts.css">
 <link rel="stylesheet" href="/site.css">
 ${customCss}
-<script type="application/ld+json">${jsonLd}</script>
+${options.head ?? ''}
 </head>
-<body data-style="${style}" style="${vars}">
+<body class="${tabs ? 'has-tabs' : ''}" data-style="${style}" style="${vars}">
 <header class="site-header"><div class="wrap site-header__inner"><a class="site-name" href="/">${escapeHtml(settings.name)}</a>${nav ? `<nav aria-label="Main">${nav}</nav>` : ''}${headerButton}</div></header>
-<main>${title}${main}</main>
-<footer class="site-footer"><div class="wrap"><div class="site-footer__grid"><div><p class="site-footer__name">${escapeHtml(settings.name)}</p>${settings.tagline ? `<p>${escapeHtml(settings.tagline)}</p>` : ''}${settings.footerText ? `<p class="pre-line">${escapeHtml(settings.footerText)}</p>` : ''}</div>${nav ? `<nav aria-label="Footer">${nav}</nav>` : ''}${settings.email || settings.phone || settings.address ? `<address>${settings.address ? `<p class="pre-line">${escapeHtml(settings.address)}</p>` : ''}${settings.phone ? `<a href="tel:${escapeHtml(settings.phone.replace(/[^\d+]/g, ''))}">${escapeHtml(settings.phone)}</a>` : ''}${settings.email ? `<a href="mailto:${escapeHtml(settings.email)}">${escapeHtml(settings.email)}</a>` : ''}</address>` : ''}</div><p class="site-credit">Made with <a href="${repository}">web-end</a>, free and open source.</p></div></footer>
+<main>${options.main}</main>
+<footer class="site-footer"><div class="wrap"><div class="site-footer__grid"><div><p class="site-footer__name">${escapeHtml(settings.name)}</p>${settings.tagline ? `<p>${escapeHtml(settings.tagline)}</p>` : ''}${settings.footerText ? `<p class="pre-line">${escapeHtml(settings.footerText)}</p>` : ''}</div>${links ? `<nav aria-label="Footer">${links}</nav>` : ''}${settings.email || settings.phone || settings.address ? `<address>${settings.address ? `<p class="pre-line">${escapeHtml(settings.address)}</p>` : ''}${settings.phone ? `<a href="tel:${escapeHtml(settings.phone.replace(/[^\d+]/g, ''))}">${escapeHtml(settings.phone)}</a>` : ''}${settings.email ? `<a href="mailto:${escapeHtml(settings.email)}">${escapeHtml(settings.email)}</a>` : ''}</address>` : ''}</div><p class="site-credit">Made with <a href="${repository}">web-end</a>, free and open source.</p></div></footer>
+${tabs}
 </body>
 </html>`
 }
 
+export function renderPage(
+  site: SiteRow,
+  page: { blocks: Block[]; description: string; slug: string; title: string },
+  options: { canonical: string; cartCount?: number; customer: Customer | null; error?: string; items: Map<string, Item[]>; query?: URLSearchParams; sent?: string },
+) {
+  const settings = JSON.parse(site.settings) as Settings
+  const firstHero = page.blocks.findIndex((block) => block.type === 'hero')
+  const blocks = page.blocks
+    .map((block, index) =>
+      renderers[block.type]?.(block, { base: '', blockIndex: index, cart: Boolean(settings.cart), customer: options.customer, error: options.error, isMainHeading: index === firstHero, items: options.items, language: settings.language, pageSlug: page.slug, query: options.query, sent: options.sent }) ?? '',
+    )
+    .join('')
+  const title = firstHero === -1 ? `<section class="block block--title tone-plain"><div class="wrap"><h1>${escapeHtml(page.title)}</h1></div></section>` : ''
+  const jsonLd = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    description: page.description,
+    isPartOf: { '@type': 'WebSite', name: settings.name },
+    name: page.title,
+    url: options.canonical,
+  }).replace(/</g, '\\u003c')
+  return renderLayout(site, {
+    canonical: options.canonical,
+    cartCount: options.cartCount,
+    customer: options.customer,
+    description: page.description,
+    head: `<script type="application/ld+json">${jsonLd}</script>`,
+    isHome: page.slug === 'home',
+    main: `${title}${blocks}`,
+    title: page.slug === 'home' ? page.title : `${page.title} | ${settings.name}`,
+  })
+}
