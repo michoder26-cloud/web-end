@@ -1,4 +1,4 @@
-import { allowAttempt, checkPassword, endCookie, endSession, getCustomer, hashPassword, sha256, startSession } from './auth'
+import { allowAttempt, endCookie, endSession, getCustomer, hashPassword, registerCustomer, sha256, startSession, verifyLogin } from './auth'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { entryFields } from './owner'
 import { renderLayout } from './render'
@@ -6,7 +6,6 @@ import { orderDetails, orderLines, orderNumber, paymentName } from './shop'
 import { words } from './text'
 import type { Customer, Env, FormField, Order, Settings, SiteRow } from './types'
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const maxBodyBytes = 16 * 1024
 
 const safeNext = (value: unknown) => (typeof value === 'string' && /^\/[a-z0-9-]*$/.test(value) ? value : '/')
@@ -106,11 +105,9 @@ async function login(request: Request, env: Env, url: URL, site: SiteRow) {
   const t = words((JSON.parse(site.settings) as Settings).language)
   if (!(await allowAttempt(request, env, 'login', 10, 900))) return loginPage(site, url, t.busy)
   const form = await receive(request)
-  const email = String(form?.get('email') ?? '').trim().toLowerCase()
-  const password = String(form?.get('password') ?? '')
-  const row = await env.DB.prepare('SELECT id, password_hash, salt, iterations FROM customers WHERE site_id = ? AND email = ?').bind(site.id, email).first<{ id: number; iterations: number; password_hash: string; salt: string }>()
-  if (!password || password.length > 200 || !(await checkPassword(password, row)) || !row) return loginPage(site, url, t.badLogin)
-  return see(url, safeNext(form?.get('next')), await startSession(env, url, row.id))
+  const id = await verifyLogin(env, site.id, String(form?.get('email') ?? ''), String(form?.get('password') ?? ''))
+  if (!id) return loginPage(site, url, t.badLogin)
+  return see(url, safeNext(form?.get('next')), await startSession(env, url, id))
 }
 
 async function signup(request: Request, env: Env, url: URL, site: SiteRow) {
@@ -119,16 +116,8 @@ async function signup(request: Request, env: Env, url: URL, site: SiteRow) {
   const form = await receive(request)
   // Bots fill in the hidden field. Send them away and keep nothing.
   if (!form || form.get('website')) return see(url, '/')
-  const name = String(form.get('name') ?? '').trim().slice(0, 120)
-  const email = String(form.get('email') ?? '').trim().toLowerCase()
-  const password = String(form.get('password') ?? '')
-  if (!name || email.length > 254 || !emailPattern.test(email)) return signupPage(site, url, t.badEmail)
-  if (password.length < 8 || password.length > 200) return signupPage(site, url, t.badPassword)
-  const secret = await hashPassword(password)
-  const created = await env.DB.prepare('INSERT INTO customers (site_id, email, name, password_hash, salt, iterations) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (site_id, email) DO NOTHING RETURNING id')
-    .bind(site.id, email, name, secret.password_hash, secret.salt, secret.iterations)
-    .first<{ id: number }>()
-  if (!created) return signupPage(site, url, t.badEmail)
+  const created = await registerCustomer(env, site.id, { email: String(form.get('email') ?? ''), name: String(form.get('name') ?? ''), password: String(form.get('password') ?? '') })
+  if (!created.id) return signupPage(site, url, created.problem === 'password' ? t.badPassword : t.badEmail)
   return see(url, safeNext(form.get('next')), await startSession(env, url, created.id))
 }
 

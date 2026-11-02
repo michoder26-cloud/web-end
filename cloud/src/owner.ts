@@ -10,7 +10,7 @@ const newCode = () => {
   return code.match(/.{1,8}/g)!.join('-')
 }
 
-export const getSite = (env: Env) => env.DB.prepare('SELECT id, slug, settings FROM sites LIMIT 1').first<SiteRow>()
+export const getSite = (env: Env) => env.DB.prepare('SELECT sites.id, sites.slug, sites.settings, sites.live_version, versions.settings AS live_settings FROM sites LEFT JOIN versions ON versions.id = sites.live_version LIMIT 1').first<SiteRow>()
 
 export const isOwner = async (env: Env, code: string | undefined) => {
   if (!code || !/^[a-z0-9-]{20,60}$/.test(code)) return false

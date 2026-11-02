@@ -916,6 +916,30 @@ details p:first-of-type {
   border-bottom: 1px dashed color-mix(in srgb, var(--ink) 18%, transparent);
 }
 
+.records {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+}
+
+.records img {
+  border-radius: 8px;
+  margin-bottom: 12px;
+  width: 100%;
+}
+
+.preview-banner {
+  background: #16201b;
+  color: #fbfaf6;
+  margin: 0;
+  padding: 10px 16px;
+  text-align: center;
+}
+
+.preview-banner a {
+  color: inherit;
+}
+
 .cms-steps {
   display: grid;
   gap: 12px;

@@ -6,6 +6,7 @@ import { pageImage, renderLayout } from './render'
 import { startCardPayment } from './stripe'
 import { words } from './text'
 import type { Customer, Env, Item, Order, OrderLine, Settings, SiteRow, Variant } from './types'
+import { fireEvent } from './webhooks'
 
 const cookieName = 'cart'
 const cookieSeconds = 30 * 24 * 3600
@@ -185,27 +186,21 @@ const takeStock = (env: Env, itemId: number, variantId: null | number, quantity:
     ? env.DB.prepare('UPDATE item_variants SET stock = stock - ? WHERE id = ? AND stock IS NOT NULL').bind(quantity, variantId)
     : env.DB.prepare('UPDATE items SET stock = stock - ? WHERE id = ? AND stock IS NOT NULL').bind(quantity, itemId)
 
-async function placeOrder(request: Request, env: Env, url: URL, site: SiteRow, customer: Customer | null) {
-  const settings = JSON.parse(site.settings) as Settings
-  const t = words(settings.language)
-  if (Number(request.headers.get('content-length') || 0) > maxBodyBytes) return see(url, '/checkout')
-  const form = await request.formData().catch((): null => null)
-  if (!form) return see(url, '/checkout')
-  // Bots fill in the hidden field. Send them away and keep nothing.
-  if (form.get('website')) return see(url, '/')
-  const values = Object.fromEntries(['name', 'phone', 'address', 'note', 'payment'].map((key) => [key, String(form.get(key) ?? '').trim()]))
-  const again = (error: string) => checkoutPage(request, env, url, site, customer, error, values)
+export type OrderValues = { address: string; name: string; note: string; payment: string; phone: string }
 
-  if (!values.name || values.name.length > 120 || !values.address || values.address.length > 1000 || values.note.length > 1000 || !/^[+\d][\d\s()-]{4,29}$/.test(values.phone)) return again(t.checkDetails)
-  if (!paymentChoices(env, settings).includes(values.payment)) return again(t.checkDetails)
-  if (!(await allowAttempt(request, env, 'order', 20, 3600))) return again(t.busy)
+/** Checks and records an order. The checkout page and the API both come through here, so prices and stock follow one set of rules. */
+export async function submitOrder(request: Request, env: Env, site: SiteRow, cart: Map<string, number>, values: OrderValues, customer: Customer | null) {
+  const settings = JSON.parse(site.settings) as Settings
+  if (!values.name || values.name.length > 120 || !values.address || values.address.length > 1000 || values.note.length > 1000 || !/^[+\d][\d\s()-]{4,29}$/.test(values.phone)) return { problem: 'details' as const }
+  if (!paymentChoices(env, settings).includes(values.payment)) return { problem: 'details' as const }
+  if (!(await allowAttempt(request, env, 'order', 20, 3600))) return { problem: 'busy' as const }
   const since = new Date(Date.now() - 3_600_000).toISOString()
   const recent = await env.DB.prepare('SELECT COUNT(*) AS total FROM orders WHERE site_id = ? AND created_at > ?').bind(site.id, since).first<{ total: number }>()
-  if ((recent?.total ?? 0) >= maxOrdersPerHour) return again(t.busy)
+  if ((recent?.total ?? 0) >= maxOrdersPerHour) return { problem: 'busy' as const }
 
-  const priced = await priceCart(env, site, readCart(request))
-  if (priced.changed) return see(url, '/cart?changed=1', cleanCookie(url, priced.lines))
-  if (!priced.lines.length) return see(url, '/cart')
+  const priced = await priceCart(env, site, cart)
+  if (priced.changed) return { lines: priced.lines, problem: 'changed' as const }
+  if (!priced.lines.length) return { problem: 'empty' as const }
   const token = newToken()
   const tokenHash = await sha256(token)
   const orderId = '(SELECT id FROM orders WHERE token_hash = ?)'
@@ -220,14 +215,39 @@ async function placeOrder(request: Request, env: Env, url: URL, site: SiteRow, c
     ])
   } catch (error) {
     if (!String(error).includes('CHECK constraint')) throw error
-    return see(url, '/cart?changed=1')
+    return { problem: 'stock' as const }
   }
-  const orderPath = `/order/${token}`
-  const empty = cartCookie(url, new Map())
-  if (values.payment !== 'card') return see(url, `${orderPath}?new=1`, empty)
   const order = await env.DB.prepare('SELECT * FROM orders WHERE token_hash = ?').bind(tokenHash).first<Order>()
   const lines = (await orderLines(env, [order!.id])).get(order!.id) ?? []
-  const payUrl = await startCardPayment(env, url, settings, order!, lines, orderPath)
+  await fireEvent(env, site.id, 'order.created', orderForApi(order!, lines))
+  return { lines, order: order!, token }
+}
+
+/** An order as other systems see it. Its secret link hash stays in the database. */
+export function orderForApi(order: Order, lines: OrderLine[]) {
+  const { site_id: _site, token_hash: _hash, ...shown } = order as Order & { token_hash?: string }
+  return { ...shown, lines: lines.map(({ order_id: _order, ...line }) => line) }
+}
+
+async function placeOrder(request: Request, env: Env, url: URL, site: SiteRow, customer: Customer | null) {
+  const settings = JSON.parse(site.settings) as Settings
+  const t = words(settings.language)
+  if (Number(request.headers.get('content-length') || 0) > maxBodyBytes) return see(url, '/checkout')
+  const form = await request.formData().catch((): null => null)
+  if (!form) return see(url, '/checkout')
+  // Bots fill in the hidden field. Send them away and keep nothing.
+  if (form.get('website')) return see(url, '/')
+  const values = Object.fromEntries(['name', 'phone', 'address', 'note', 'payment'].map((key) => [key, String(form.get(key) ?? '').trim()])) as OrderValues
+  const placed = await submitOrder(request, env, site, readCart(request), values, customer)
+  if (placed.problem === 'details') return checkoutPage(request, env, url, site, customer, t.checkDetails, values)
+  if (placed.problem === 'busy') return checkoutPage(request, env, url, site, customer, t.busy, values)
+  if (placed.problem === 'changed') return see(url, '/cart?changed=1', cleanCookie(url, placed.lines as Line[]))
+  if (placed.problem === 'stock') return see(url, '/cart?changed=1')
+  if (!placed.order) return see(url, '/cart')
+  const orderPath = `/order/${placed.token}`
+  const empty = cartCookie(url, new Map())
+  if (values.payment !== 'card') return see(url, `${orderPath}?new=1`, empty)
+  const payUrl = await startCardPayment(env, url, settings, placed.order, placed.lines as OrderLine[], orderPath)
   return payUrl ? new Response(null, { headers: { 'Cache-Control': 'no-store', Location: payUrl, 'Set-Cookie': empty }, status: 303 }) : see(url, `${orderPath}?payfail=1`, empty)
 }
 
@@ -246,6 +266,7 @@ export async function setOrderStatus(env: Env, siteId: number, id: number, statu
     if (String(error).includes('CHECK constraint')) return 'no-stock'
     throw error
   }
+  await fireEvent(env, siteId, 'order.updated', { id, status })
   return 'ok'
 }
 

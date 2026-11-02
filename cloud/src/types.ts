@@ -1,9 +1,11 @@
 export type Env = {
   ASSETS: Fetcher
   DB: D1Database
+  defer?: (work: Promise<unknown>) => void
   STRIPE_API_BASE?: string
   STRIPE_SECRET_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
+  WEBHOOK_ALLOW_HTTP?: string
 }
 
 export type Nav = { href: string; label: string }
@@ -12,6 +14,7 @@ export type Settings = {
   accent?: string
   accounts?: boolean
   address?: string
+  allowedOrigins?: string[]
   background?: string
   cart?: boolean
   cartMembersOnly?: boolean
@@ -48,7 +51,7 @@ export type FormField = {
 
 export type Block = Record<string, any> & { type: string }
 
-export type Customer = { email: string; id: number; name: string }
+export type Customer = { email: string; id: number; name: string; role?: string }
 
 export type Variant = {
   compare_price: string
@@ -108,7 +111,7 @@ export type OrderLine = {
   variant_id: null | number
 }
 
-export type SiteRow = { id: number; settings: string; slug: string }
+export type SiteRow = { id: number; live_settings?: null | string; live_version?: null | number; settings: string; slug: string }
 export type PageRow = {
   blocks: string
   description: string

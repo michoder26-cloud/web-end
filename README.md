@@ -1,6 +1,6 @@
 # web-end
 
-Build a full-stack website by talking to Claude: design, database, customer login, a shop with a cart, a back office to edit everything, and a live site. It's free and open source, and you don't need to write code.
+Build and run a full-stack site or simple app by talking to Claude: your own database tables, customer login, a shop with a cart, an API, publishing with version history, a back office for everything, and hosting on your own account. Use its pages, or keep a front end you already have, such as Wix. It's free and open source, and you don't need to write code.
 
 **Status: early test.** The install button and the connection to Claude have worked from start to finish once. Nobody outside the project has tried it yet.
 
@@ -22,9 +22,15 @@ Claude asks about your business, then writes the pages, chooses the design, and 
 
 ## What you get
 
-- **Design:** 16 kinds of sections, five design styles, phone-friendly layouts, and fonts that cover Latin and Thai
-- **Database:** products and other lists, orders, bookings and messages, checked on the server
-- **Customer accounts:** sign up, log in, log out, and a page where customers see their own orders. Turn it on when you need it.
+- **Design:** 18 kinds of sections, five design styles, phone-friendly layouts, and fonts that cover Latin and Thai
+- **Database:** your own tables with text, numbers, dates, choices, images and links between tables, plus products, orders and messages. Up to 50 tables of 50,000 records each. Download any table as a spreadsheet file.
+- **Access rules:** for each table, choose who can read and add: anyone, logged-in customers, customers' own records only, staff, or only you. Fields can be staff-only, and every rule is enforced on the server.
+- **Customer accounts:** sign up, log in, log out, staff roles, and a page where customers see their own orders. Turn it on when you need it.
+- **API:** other systems and front ends can use your data, logins and orders, with secret keys and an OpenAPI description at `/api/v1/openapi.json`
+- **Publishing:** after your first publish, changes stay private with a preview link until you publish them. Go back to any of the last 20 versions. Version history covers pages and settings, while data changes at once.
+- **Webhooks:** signed messages to other services on new records, orders and customers
+- **Build guides for Claude:** planning, data design, access rules, screens, design, copy, shop, publishing, Wix and launch checks, built in, so there's nothing extra to install
+- **System page:** hosting, version, publishing, database use, login, payments and connections in one place
 - **Shop:** product pages, categories, sale prices, sizes and colours, stock that can't oversell, a cart, free delivery thresholds, private order links and order status. Prices are always set on the server.
 - **Payments:** bank transfer and pay on delivery, plus cards through your own Stripe account
 - **Phone-first shopping:** a bottom tab bar and two-column product grid on phones, with no scripts on your pages
@@ -50,8 +56,9 @@ Nobody hosts your site but you. There's no central server, and web-end never see
 - Send email. There are no notifications when a form is sent. If a customer forgets a password, you make a reset link in the back office and send it yourself.
 - Check bank transfers automatically or take payment slips. You check each transfer and confirm it in the back office.
 - Create product photos. Upload your own, or use images you have the right to use.
-- Stop double bookings, or show customer reviews
-- Run custom server code. For that, a developer can change the source.
+- Stop double bookings, or show customer reviews as a ready-made feature
+- Add any feature you can describe. Claude builds with tables, rules, pages, webhooks and sandboxed custom code. Custom server logic still means a developer changing the source, and an update replaces such changes.
+- Log in with Google or other accounts
 - Show the back office in other languages. It's in English for now.
 
 Passing our tests means common mistakes weren't found. It isn't a security audit or legal advice. Customer passwords use PBKDF2 with 100,000 rounds, the most Cloudflare Workers allow, which is below the 600,000 that security guides recommend. You're responsible for the customer data your site holds. Don't collect health data, ID numbers or card details through forms, and have legal pages checked for your country.
@@ -66,6 +73,12 @@ Open the **Updates** page in your back office. It tells you when a new version i
 2. Open the updater and press **Run workflow**. Cloudflare rebuilds your site in a few minutes.
 
 Your pages, products, orders, customers and private links stay as they are. If a developer changed your site's code, those changes get replaced, but they stay in your GitHub history.
+
+## Using it as the backend for Wix or another front end
+
+Keep your pages where they are, and let web-end hold the data, logins and orders. Open **Connect** in your back office to create a secret key, then ask Claude to read its `connect_wix` guide and write the code for you. A key only works from server code, such as Wix backend code. A browser that sends one is refused, so never put one in a page.
+
+This has been tested against the API, but not yet inside a real Wix site, so try it on a copy first.
 
 ## Taking cards with Stripe
 

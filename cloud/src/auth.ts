@@ -1,4 +1,5 @@
 import type { Customer, Env } from './types'
+import { fireEvent } from './webhooks'
 
 // Workers allow at most 100,000 PBKDF2 rounds. Each row keeps its count, so it can rise later.
 const passwordRounds = 100_000
@@ -35,11 +36,39 @@ export async function checkPassword(password: string, row: { iterations: number;
   return row ? sameText(hash, row.password_hash) : false
 }
 
-export async function startSession(env: Env, url: URL, customerId: number) {
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** Creates an account. The website and the API both come through here, so their rules can't drift apart. */
+export async function registerCustomer(env: Env, siteId: number, details: { email: string; name: string; password: string }) {
+  const name = details.name.trim().slice(0, 120)
+  const email = details.email.trim().toLowerCase()
+  if (!name || email.length > 254 || !emailPattern.test(email)) return { problem: 'email' as const }
+  if (details.password.length < 8 || details.password.length > 200) return { problem: 'password' as const }
+  const secret = await hashPassword(details.password)
+  const created = await env.DB.prepare('INSERT INTO customers (site_id, email, name, password_hash, salt, iterations) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (site_id, email) DO NOTHING RETURNING id')
+    .bind(siteId, email, name, secret.password_hash, secret.salt, secret.iterations)
+    .first<{ id: number }>()
+  if (!created) return { problem: 'email' as const }
+  await fireEvent(env, siteId, 'customer.created', { email, id: created.id, name })
+  return { id: created.id }
+}
+
+export async function verifyLogin(env: Env, siteId: number, email: string, password: string) {
+  const row = await env.DB.prepare('SELECT id, password_hash, salt, iterations FROM customers WHERE site_id = ? AND email = ?').bind(siteId, email.trim().toLowerCase()).first<{ id: number; iterations: number; password_hash: string; salt: string }>()
+  if (!password || password.length > 200 || !(await checkPassword(password, row)) || !row) return null
+  return row.id
+}
+
+export async function openSession(env: Env, customerId: number) {
   const token = newToken()
   const expires = new Date(Date.now() + sessionSeconds * 1000).toISOString()
   await env.DB.prepare('INSERT INTO sessions (token_hash, customer_id, expires_at) VALUES (?, ?, ?)').bind(await sha256(token), customerId, expires).run()
   await env.DB.prepare('DELETE FROM sessions WHERE customer_id = ? AND expires_at < ?').bind(customerId, new Date().toISOString()).run()
+  return { expires, token }
+}
+
+export async function startSession(env: Env, url: URL, customerId: number) {
+  const { token } = await openSession(env, customerId)
   return `${cookieName}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${sessionSeconds}${url.protocol === 'https:' ? '; Secure' : ''}`
 }
 
@@ -53,13 +82,17 @@ const sessionToken = (request: Request) => {
   return null
 }
 
-export async function getCustomer(request: Request, env: Env, siteId: number) {
-  const token = sessionToken(request)
-  if (!token) return null
-  return env.DB.prepare('SELECT customers.id, customers.email, customers.name FROM sessions JOIN customers ON customers.id = sessions.customer_id WHERE sessions.token_hash = ? AND sessions.expires_at > ? AND customers.site_id = ?')
+export const customerFromToken = async (env: Env, token: string, siteId: number) =>
+  env.DB.prepare('SELECT customers.id, customers.email, customers.name, customers.role FROM sessions JOIN customers ON customers.id = sessions.customer_id WHERE sessions.token_hash = ? AND sessions.expires_at > ? AND customers.site_id = ?')
     .bind(await sha256(token), new Date().toISOString(), siteId)
     .first<Customer>()
+
+export async function getCustomer(request: Request, env: Env, siteId: number) {
+  const token = sessionToken(request)
+  return token ? customerFromToken(env, token, siteId) : null
 }
+
+export const endToken = async (env: Env, token: string) => env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256(token)).run()
 
 export async function endSession(request: Request, env: Env) {
   const token = sessionToken(request)

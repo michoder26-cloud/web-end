@@ -1,4 +1,5 @@
 import type { Env, Order, OrderLine, Settings, SiteRow } from './types'
+import { fireEvent } from './webhooks'
 
 const signatureAgeSeconds = 300
 
@@ -59,8 +60,9 @@ export async function stripeWebhook(request: Request, env: Env, site: SiteRow) {
   const event = JSON.parse(payload) as { data?: { object?: { amount_total?: number; currency?: string; metadata?: { order_id?: string }; payment_status?: string } }; type?: string }
   const session = event.data?.object
   if (!event.type?.startsWith('checkout.session.') || session?.payment_status !== 'paid') return new Response('Ignored')
-  await env.DB.prepare("UPDATE orders SET status = 'paid', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND site_id = ? AND status = 'pending' AND payment = 'card' AND total = ? AND ? = ?")
+  const paid = await env.DB.prepare("UPDATE orders SET status = 'paid', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND site_id = ? AND status = 'pending' AND payment = 'card' AND total = ? AND ? = ?")
     .bind(Number(session.metadata?.order_id), site.id, session.amount_total ?? -1, session.currency ?? '', settings.currency ?? '')
     .run()
+  if (paid.meta.changes) await fireEvent(env, site.id, 'order.updated', { id: Number(session.metadata?.order_id), status: 'paid' })
   return new Response('OK')
 }

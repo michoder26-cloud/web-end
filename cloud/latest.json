@@ -1,4 +1,4 @@
 {
-  "version": "0.2.0",
-  "notes": "Customer accounts, a back office, a shop with stock and cart, card payments and updates."
+  "version": "0.3.0",
+  "notes": "Your own database tables with access rules, an API for front ends such as Wix, draft and publish with version history, webhooks, staff roles, and build guides for Claude."
 }

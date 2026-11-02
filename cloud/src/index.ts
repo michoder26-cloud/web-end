@@ -1,17 +1,20 @@
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 
 import { handleAccount } from './account'
+import { handleApi } from './api'
 import { getCustomer } from './auth'
 import { handleOffice } from './cms'
+import { loadPageRecords, receiveRecord } from './data'
 import { validateEntry } from './forms'
-import { html, notFound, privateHeaders, see } from './http'
+import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { loadItems, showImage } from './items'
 import { createMcpServer } from './mcp'
 import { claimedPage, claimSite, getSite, isOwner, setupPage, shell } from './owner'
 import { renderPage } from './render'
 import { cartCount, handleShop } from './shop'
 import { stripeWebhook } from './stripe'
-import type { Block, Env, FormField, PageRow, Settings, SiteRow } from './types'
+import type { Block, Env, FormField, Settings, SiteRow } from './types'
+import { findLivePage, findWorkingPage, liveSite, liveSlugs } from './versions'
 
 const maxEntriesPerHour = 200
 const maxBodyBytes = 32 * 1024
@@ -24,11 +27,6 @@ const frameHeaders = {
   'X-Robots-Tag': 'noindex',
 }
 
-const findPage = (env: Env, siteId: number, slug: string) =>
-  env.DB.prepare('SELECT slug, title, description, published, blocks FROM pages WHERE site_id = ? AND slug = ? AND published = 1')
-    .bind(siteId, slug)
-    .first<PageRow>()
-
 const customerFor = (request: Request, env: Env, site: SiteRow) => ((JSON.parse(site.settings) as Settings).accounts ? getCustomer(request, env, site.id) : Promise.resolve(null))
 
 const buildingPage = () =>
@@ -40,13 +38,14 @@ const buildingPage = () =>
   )
 
 async function showPage(request: Request, env: Env, url: URL, site: SiteRow, slug: string) {
-  const page = await findPage(env, site.id, slug)
+  const page = await findLivePage(env, site, slug)
   if (!page) {
     if (slug !== 'home') return notFound()
     return html(buildingPage())
   }
   const blocks = JSON.parse(page.blocks) as Block[]
   const [items, customer] = await Promise.all([loadItems(env, site.id, blocks), customerFor(request, env, site)])
+  const records = await loadPageRecords(env, site.id, blocks, { admin: false, customer: customer ?? null })
   return html(
     renderPage(
       site,
@@ -58,20 +57,43 @@ async function showPage(request: Request, env: Env, url: URL, site: SiteRow, slu
         error: url.searchParams.get('error') ?? undefined,
         items,
         query: url.searchParams,
+        records,
         sent: url.searchParams.get('sent') ?? undefined,
       },
     ),
   )
 }
 
+/** Shows the owner the unpublished copy of a page, with its menu links staying inside the preview. */
+async function showPreview(env: Env, url: URL, site: SiteRow, code: string, slug: string) {
+  const page = await findWorkingPage(env, site, slug)
+  if (!page) return html(shell('Preview', `<h1>This page doesn't exist yet.</h1><p><a href="/owner/${escapeHtml(code)}/pages">See your pages</a></p>`), 404, privateHeaders)
+  const blocks = JSON.parse(page.blocks) as Block[]
+  const [items, records, { results }] = await Promise.all([
+    loadItems(env, site.id, blocks),
+    loadPageRecords(env, site.id, blocks, { admin: false, customer: null }),
+    env.DB.prepare('SELECT slug FROM pages WHERE site_id = ?').bind(site.id).all<{ slug: string }>(),
+  ])
+  const base = `/owner/${code}/preview`
+  const slugs = new Set(results.map((row) => row.slug))
+  const rendered = renderPage(site, { ...page, blocks }, { canonical: `${url.origin}/`, customer: null, items, query: url.searchParams, records })
+  const banner = `<p class="preview-banner" role="status">Private preview of unpublished changes. Forms, login and buying use the live site. <a href="/owner/${escapeHtml(code)}/publish">Publish</a></p>`
+  const body = rendered
+    .replace(/href="\/([a-z0-9-]*)((?:[?#][^"]*)?)"/g, (match, target: string, rest: string) => (!target || slugs.has(target) ? `href="${base}${target ? `/${target}` : ''}${rest}"` : match))
+    // A frame could read its own address, and this address holds the owner's secret.
+    .replace(/<iframe class="custom-html"[^>]*><\/iframe>/g, '<p role="status">Custom code runs after you publish.</p>')
+    .replace(/(<body[^>]*>)/, `$1${banner}`)
+  return html(body, 200, privateHeaders)
+}
+
 async function showFrame(env: Env, site: SiteRow, slug: string, index: string) {
-  const page = await findPage(env, site.id, slug)
+  const page = await findLivePage(env, site, slug)
   const block = page && (JSON.parse(page.blocks) as Block[])[Number(index)]
   return block?.type === 'html' ? html(block.code, 200, frameHeaders) : notFound()
 }
 
 async function receiveForm(request: Request, env: Env, url: URL, site: SiteRow, pageSlug: string, formName: string) {
-  const page = await findPage(env, site.id, pageSlug)
+  const page = await findLivePage(env, site, pageSlug)
   const blocks = page ? (JSON.parse(page.blocks) as Block[]) : []
   const block = blocks.find((item) => item.type === 'form' && item.name === formName)
   if (!block) return notFound()
@@ -128,22 +150,23 @@ async function handleMcp(request: Request, env: Env, url: URL, code: string) {
 }
 
 async function sitemap(env: Env, url: URL, site: SiteRow) {
-  const { results } = await env.DB.prepare('SELECT slug FROM pages WHERE site_id = ? AND published = 1').bind(site.id).all<{ slug: string }>()
+  const slugs = await liveSlugs(env, site)
   const { results: products } = await env.DB.prepare('SELECT id FROM items WHERE site_id = ? AND published = 1 LIMIT 500').bind(site.id).all<{ id: number }>()
-  const urls = [...results.map(({ slug }) => `/${slug === 'home' ? '' : slug}`), ...products.map(({ id }) => `/product/${id}`)].map((path) => `<url><loc>${url.origin}${path}</loc></url>`).join('')
+  const urls = [...slugs.map((slug) => `/${slug === 'home' ? '' : slug}`), ...products.map(({ id }) => `/product/${id}`)].map((path) => `<url><loc>${url.origin}${path}</loc></url>`).join('')
   return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`, {
     headers: { 'Content-Type': 'application/xml' },
   })
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, plainEnv: Env, context: ExecutionContext): Promise<Response> {
+    const env: Env = { ...plainEnv, defer: (work) => context.waitUntil(work) }
     const url = new URL(request.url)
     const parts = url.pathname.split('/').filter(Boolean)
     try {
-      const site = await getSite(env)
+      const working = await getSite(env)
 
-      if (!site) {
+      if (!working) {
         if (url.pathname === '/setup' && request.method === 'POST') {
           const code = await claimSite(env)
           return code ? html(claimedPage(url.origin, code), 200, privateHeaders) : see(url, '/')
@@ -151,9 +174,11 @@ export default {
         return url.pathname === '/' ? html(setupPage(), 200, privateHeaders) : notFound()
       }
 
+      // Visitors get the published copy. Only the owner's routes below see the working copy.
+      const site = liveSite(working)
       if (url.pathname === '/setup') return see(url, '/')
       if (url.pathname === '/robots.txt') {
-        return new Response(`User-agent: *\nDisallow: /owner/\nDisallow: /mcp/\nDisallow: /frame/\nDisallow: /account\nDisallow: /cart\nDisallow: /checkout\nDisallow: /order/\nDisallow: /login\nDisallow: /signup\nDisallow: /reset/\nSitemap: ${url.origin}/sitemap.xml\n`, { headers: { 'Content-Type': 'text/plain' } })
+        return new Response(`User-agent: *\nDisallow: /owner/\nDisallow: /mcp/\nDisallow: /api/\nDisallow: /data/\nDisallow: /frame/\nDisallow: /account\nDisallow: /cart\nDisallow: /checkout\nDisallow: /order/\nDisallow: /login\nDisallow: /signup\nDisallow: /reset/\nSitemap: ${url.origin}/sitemap.xml\n`, { headers: { 'Content-Type': 'text/plain' } })
       }
       if (url.pathname === '/sitemap.xml') return await sitemap(env, url, site)
 
@@ -161,7 +186,14 @@ export default {
         // A wrong code looks the same as a page that doesn't exist.
         if (!(await isOwner(env, parts[1]))) return notFound()
         if (parts[0] === 'mcp') return parts.length === 2 ? await handleMcp(request, env, url, parts[1]) : notFound()
-        return await handleOffice(request, env, url, site, parts[1], parts)
+        if (parts[2] === 'preview' && parts.length <= 4 && request.method === 'GET') return await showPreview(env, url, working, parts[1], parts[3] ?? 'home')
+        return await handleOffice(request, env, url, working, parts[1], parts)
+      }
+
+      if (parts[0] === 'api') return await handleApi(request, env, url, site, parts)
+      if (parts[0] === 'data' && request.method === 'POST' && (parts.length === 2 || (parts.length === 4 && parts[3] === 'delete' && /^\d{1,12}$/.test(parts[2])))) {
+        const customer = await customerFor(request, env, site)
+        return await receiveRecord(request, env, url, site, { admin: false, customer: customer ?? null }, parts[1], parts[2] ? Number(parts[2]) : undefined)
       }
 
       if (['account', 'login', 'logout', 'reset', 'signup'].includes(parts[0])) return await handleAccount(request, env, url, site, parts)

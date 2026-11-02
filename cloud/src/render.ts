@@ -1,3 +1,5 @@
+import { canChange, canCreate, showRecord } from './data'
+import type { DataField, PageRecords } from './data'
 import { contrast, isHexColor, isSafeHref, readableOn, siteStyles } from './theme'
 import { isAvailable } from './items'
 import { parsePrice } from './money'
@@ -35,7 +37,29 @@ type Context = {
   language?: string
   pageSlug: string
   query?: URLSearchParams
+  records?: Map<number, PageRecords>
   sent?: string
+}
+
+const recordValue = (field: DataField, value: unknown, loaded: PageRecords) => {
+  if (field.type === 'image') return picture(value, field.label)
+  if (field.type === 'boolean') return value ? '✓' : '—'
+  if (field.type === 'reference') return escapeHtml(loaded.labels.get(`${field.name}:${value}`) ?? `#${value}`)
+  if (field.type === 'url' && isSafeHref(value)) return `<a href="${escapeHtml(value)}" rel="noopener noreferrer">${escapeHtml(value)}</a>`
+  return escapeHtml(value)
+}
+
+const recordInput = (field: DataField, loaded: PageRecords) => {
+  const name = escapeHtml(field.name)
+  const label = escapeHtml(field.label)
+  const required = field.required ? ' required' : ''
+  const start = field.default === undefined ? '' : escapeHtml(field.default)
+  if (field.type === 'boolean') return `<label class="check"><input${field.default === true ? ' checked' : ''} name="${name}" type="checkbox"> ${label}</label>`
+  if (field.type === 'textarea') return `<label>${label}<textarea maxlength="10000" name="${name}"${required} rows="4">${start}</textarea></label>`
+  const choices = field.type === 'select' ? (field.options ?? []).map((option) => ({ label: option, value: option })) : field.type === 'reference' ? (loaded.options.get(field.name)?.map((option) => ({ label: option.label, value: String(option.id) })) ?? null) : null
+  if (choices) return `<label>${label}<select name="${name}"${required}><option value="">—</option>${choices.map((choice) => `<option${choice.value === start ? ' selected' : ''} value="${escapeHtml(choice.value)}">${escapeHtml(choice.label)}</option>`).join('')}</select></label>`
+  const types: Record<string, string> = { date: 'date', email: 'email', number: 'number', phone: 'tel', reference: 'number', time: 'time', url: 'url' }
+  return `<label>${label}<input maxlength="500" name="${name}"${required}${field.type === 'number' ? ' step="any"' : ''} type="${types[field.type] ?? 'text'}" value="${start}"></label>`
 }
 
 const link = (href: unknown, base: string) => {
@@ -215,6 +239,47 @@ const renderers: Record<string, (block: Block, context: Context) => string> = {
       `form-${name}`,
     )
   },
+  records(block, { blockIndex, customer, language, pageSlug, records }) {
+    const t = words(language)
+    const loaded = records?.get(blockIndex)
+    if (!loaded) return ''
+    const path = `/${pageSlug === 'home' ? '' : pageSlug}`
+    const anchor = block.id || `record-${loaded.table.name}`
+    if (!loaded.scope) {
+      if (customer || ['owner', 'staff'].includes(loaded.table.read_access)) return ''
+      return section('records', block.tone, `<div class="wrap">${head(block.heading, block.intro)}<p>${t.loginToSee}</p><a class="button" href="/login?next=${encodeURIComponent(path)}">${t.logIn}</a></div>`, anchor)
+    }
+    const actor = { admin: false, customer }
+    const chosen = block.fields as string[] | undefined
+    const fields = loaded.table.fields.filter((field) => !chosen || chosen.includes(field.name))
+    const cards = loaded.rows
+      .map((row) => {
+        const shown = showRecord(loaded.table, row, actor) as Record<string, unknown>
+        const present = fields.filter((field) => shown[field.name] !== undefined)
+        const images = present.filter((field) => field.type === 'image').map((field) => recordValue(field, shown[field.name], loaded)).join('')
+        const rows = present.filter((field) => field.type !== 'image').map((field) => `<div><dt>${escapeHtml(field.label)}</dt><dd class="pre-line">${recordValue(field, shown[field.name], loaded)}</dd></div>`).join('')
+        const remove = block.allowDelete && canChange(loaded.table, actor, row) ? `<form action="/data/${escapeHtml(loaded.table.name)}/${row.id}/delete" method="post"><input name="next" type="hidden" value="${escapeHtml(path)}"><button class="link-button" type="submit">${t.remove}</button></form>` : ''
+        return `<article class="card account__record">${images}<dl>${rows}</dl>${remove}</article>`
+      })
+      .join('')
+    return section('records', block.tone, `<div class="wrap">${head(block.heading, block.intro)}${cards ? `<div class="records">${cards}</div>` : `<p>${t.recordsEmpty}</p>`}</div>`, anchor)
+  },
+  'record-form'(block, { blockIndex, customer, error, language, pageSlug, records, sent }) {
+    const t = words(language)
+    const loaded = records?.get(blockIndex)
+    if (!loaded) return ''
+    const path = `/${pageSlug === 'home' ? '' : pageSlug}`
+    const anchor = `record-${loaded.table.name}`
+    const copy = `<div>${block.heading ? `<h2>${escapeHtml(block.heading)}</h2>` : ''}${paragraphs(block.intro)}</div>`
+    if (!canCreate(loaded.table, { admin: false, customer })) {
+      if (customer || ['owner', 'staff'].includes(loaded.table.write_access)) return ''
+      return section('form', block.tone, `<div class="wrap info">${copy}<div><p>${t.loginToUse}</p><a class="button" href="/login?next=${encodeURIComponent(path)}">${t.logIn}</a></div></div>`, anchor)
+    }
+    const chosen = block.fields as string[] | undefined
+    const inputs = loaded.table.fields.filter((field) => !field.staffOnly && (!chosen || chosen.includes(field.name))).map((field) => recordInput(field, loaded)).join('')
+    const status = sent === anchor ? `<p role="status">${escapeHtml(block.sentMessage || t.recordSent)}</p>` : error === anchor ? `<p role="alert">${escapeHtml(block.errorMessage || t.recordFailed)}</p>` : ''
+    return section('form', block.tone, `<div class="wrap info">${copy}<div>${status}<form action="/data/${escapeHtml(loaded.table.name)}" class="contact-form" method="post"><input name="next" type="hidden" value="${escapeHtml(path)}">${inputs}<label aria-hidden="true" class="trap">Leave this empty<input autocomplete="off" name="website" tabindex="-1"></label><button class="button" type="submit">${escapeHtml(block.buttonLabel || t.recordSend)}</button></form></div></div>`, anchor)
+  },
   // Custom code loads from its own address, because a srcdoc frame would inherit this page's ban on scripts.
   html: (block, { blockIndex, pageSlug }) =>
     section(
@@ -306,13 +371,13 @@ ${tabs}
 export function renderPage(
   site: SiteRow,
   page: { blocks: Block[]; description: string; slug: string; title: string },
-  options: { canonical: string; cartCount?: number; customer: Customer | null; error?: string; items: Map<string, Item[]>; query?: URLSearchParams; sent?: string },
+  options: { canonical: string; cartCount?: number; customer: Customer | null; error?: string; items: Map<string, Item[]>; query?: URLSearchParams; records?: Map<number, PageRecords>; sent?: string },
 ) {
   const settings = JSON.parse(site.settings) as Settings
   const firstHero = page.blocks.findIndex((block) => block.type === 'hero')
   const blocks = page.blocks
     .map((block, index) =>
-      renderers[block.type]?.(block, { base: '', blockIndex: index, cart: Boolean(settings.cart), customer: options.customer, error: options.error, isMainHeading: index === firstHero, items: options.items, language: settings.language, pageSlug: page.slug, query: options.query, sent: options.sent }) ?? '',
+      renderers[block.type]?.(block, { base: '', blockIndex: index, cart: Boolean(settings.cart), customer: options.customer, error: options.error, isMainHeading: index === firstHero, items: options.items, language: settings.language, pageSlug: page.slug, query: options.query, records: options.records, sent: options.sent }) ?? '',
     )
     .join('')
   const title = firstHero === -1 ? `<section class="block block--title tone-plain"><div class="wrap"><h1>${escapeHtml(page.title)}</h1></div></section>` : ''

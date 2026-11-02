@@ -53,7 +53,7 @@ check((await rpc('/mcp/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd')).status === 404, 'M
 check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd`)).status === 404, 'the back office with a wrong link is refused')
 
 const { tools } = await client.listTools()
-check(tools.length === 14, 'lists the tools', tools.map((tool) => tool.name).join(','))
+check(tools.length === 29, 'lists the tools', tools.map((tool) => tool.name).join(','))
 check(client.getInstructions()?.includes('web team'), 'gives Claude its working method')
 check(client.getInstructions()?.includes('2 to 4 short choices') && client.getInstructions()?.includes('Only offer choices these tools can really deliver'), 'tells Claude to ask with choices and only offer what works')
 
@@ -607,6 +607,271 @@ const repoSettings = formValues(await (await fetch(`${owner}/settings`)).text())
 await fetch(`${owner}/settings`, { body: repoSettings, method: 'POST', redirect: 'manual' })
 check((await call('get_site')).data.settings.githubRepo === 'someone/my-shop' && /^\d+\.\d+\.\d+$/.test((await call('get_site')).data.version), 'saving settings keeps the repository, and Claude can see the version')
 check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd/updates`)).status === 404, 'a wrong link cannot open the updates page')
+
+// Tables and access
+const api = (path, options = {}) => fetch(`${base}/api/v1${path}`, { ...options, headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}), ...options.headers } })
+const apiJson = async (path, options) => {
+  const response = await api(path, options)
+  return { body: await response.json().catch(() => null), headers: response.headers, status: response.status }
+}
+const asJson = (body) => JSON.stringify(body)
+await call('update_site', { accounts: true, cart: true, payCod: true })
+const classesTable = { name: 'classes', label: 'Classes', readAccess: 'public', writeAccess: 'owner', fields: [{ name: 'title', label: 'Title', type: 'text', required: true }, { name: 'seats', label: 'Seats', type: 'number' }, { name: 'room_code', label: 'Room code', type: 'text', staffOnly: true }] }
+check(!(await call('save_table', classesTable)).isError, 'creates a table')
+check((await call('save_table', { ...classesTable, name: 'bad', fields: [{ name: 'id', label: 'Id', type: 'text' }] })).isError, 'refuses reserved field names')
+check((await call('save_table', { ...classesTable, name: 'bad', fields: [{ name: 'a', label: 'A', type: 'text' }, { name: 'a', label: 'B', type: 'text' }] })).isError, 'refuses a field name used twice')
+check((await call('save_table', { ...classesTable, name: 'bad', fields: [{ name: 'a', label: 'A', type: 'select' }] })).isError, 'refuses a select with no options')
+check((await call('save_table', { ...classesTable, name: 'bad', fields: [{ name: 'a', label: 'A', type: 'reference', table: 'nothing' }] })).isError, 'refuses a reference to a missing table')
+check(!(await call('save_table', { name: 'bookings', label: 'Bookings', readAccess: 'own', writeAccess: 'members', fields: [{ name: 'class_id', label: 'Class', type: 'reference', table: 'classes', required: true }, { name: 'contact', label: 'Email', type: 'email', required: true }, { name: 'status', label: 'Status', type: 'select', options: ['new', 'confirmed'], staffOnly: true, default: 'new' }] })).isError, 'creates a table that points to another')
+check(!(await call('save_table', { name: 'messages', label: 'Messages', readAccess: 'owner', writeAccess: 'public', fields: [{ name: 'body', label: 'Message', type: 'textarea', required: true }, { name: 'contact', label: 'Email', type: 'email' }] })).isError, 'creates a private inbox table')
+const yoga = await call('save_record', { table: 'classes', values: { title: 'Yoga <script>alert(1)</script>', seats: 10, room_code: 'R-SECRET' } })
+check(yoga.data.saved?.room_code === 'R-SECRET' && !yoga.isError, 'Claude can add records and sees staff fields')
+const yogaId = yoga.data.saved.id
+const pilatesId = (await call('save_record', { table: 'classes', values: { title: 'Pilates', seats: '5' } })).data.saved.id
+check((await call('save_record', { table: 'classes', values: { seats: 1 } })).isError, 'a required field is enforced')
+check((await call('save_record', { table: 'classes', id: pilatesId, values: { seats: 6 } })).data.saved.title === 'Pilates' && (await call('list_records', { table: 'classes', filters: { seats: '6' } })).data.records.length === 1, 'changing one field keeps the rest, and filters work')
+
+// The API
+const root = await apiJson('')
+check(root.status === 200 && root.body.tables.some((table) => table.name === 'classes') && !root.body.tables.some((table) => table.name === 'bookings'), 'the API lists only the tables this caller may use')
+const openApiDoc = await apiJson('/openapi.json')
+check(openApiDoc.body.openapi && openApiDoc.body.paths['/data/classes'] && !openApiDoc.body.paths['/data/bookings'] && !JSON.stringify(openApiDoc.body).includes('room_code'), 'the API description hides private tables and staff fields')
+const publicClasses = await apiJson('/data/classes')
+check(publicClasses.status === 200 && publicClasses.body.records.length === 2 && !JSON.stringify(publicClasses.body).includes('R-SECRET') && !JSON.stringify(publicClasses.body).includes('customer_id'), 'anyone can read a public table, without its private fields')
+check((await apiJson('/data/classes?filter.room_code=R-SECRET')).status === 400, 'a private field cannot be guessed with filters')
+check((await apiJson('/data/classes', { body: asJson({ title: 'Hack' }), method: 'POST' })).status === 401, 'a table only the owner can add to refuses visitors')
+check((await apiJson(`/data/classes/${yogaId}`, { method: 'DELETE' })).status === 403, 'visitors cannot delete from a public table')
+check((await apiJson('/data/nothing')).status === 404 && (await apiJson('/data/bookings')).status === 404, 'tables a visitor may not use look like they do not exist')
+check((await apiJson('/data/messages')).status === 403, 'a private inbox cannot be read')
+const message = await apiJson('/data/messages', { body: asJson({ body: 'Hello', extra: 'dropped' }), method: 'POST' })
+check(message.status === 201 && message.body.record.extra === undefined, 'visitors can send to a private inbox, and unknown fields are dropped')
+check((await apiJson(`/data/messages/${message.body.record.id}`)).status === 404, 'a visitor cannot read back a private message')
+check((await apiJson('/data/messages', { body: asJson({ body: 'x', contact: 'not an email' }), method: 'POST' })).body.error.field === 'contact', 'the API says which field is wrong')
+check((await apiJson('/data/messages', { body: '{oops', method: 'POST' })).status === 400, 'broken JSON is refused')
+check((await apiJson('/data/messages', { body: asJson({ body: 'x'.repeat(70000) }), method: 'POST' })).status === 400, 'an oversized body is refused')
+
+// Customers through the API
+const signUp = (name) => apiJson('/auth/signup', { body: asJson({ email: `${name}@example.test`, name, password: 'a-good-password' }), method: 'POST' })
+const alice = await signUp('alice')
+const bob = await signUp('bob')
+check(alice.status === 201 && /^[0-9a-f]{64}$/.test(alice.body.token) && !JSON.stringify(alice.body).includes('password_hash'), 'signing up returns a token and no password data')
+check((await apiJson('/auth/signup', { body: asJson({ email: 'x@example.test', name: 'x', password: 'short' }), method: 'POST' })).status === 400, 'a short password is refused')
+check((await apiJson('/auth/me', { token: alice.body.token })).body.customer.email === 'alice@example.test', 'a token identifies the customer')
+check((await apiJson('/auth/me', { token: 'f'.repeat(64) })).status === 401, 'a wrong token is refused')
+check((await apiJson('/auth/login', { body: asJson({ email: 'alice@example.test', password: 'wrong-password' }), method: 'POST' })).status === 401, 'a wrong password is refused')
+const aliceLogin = await apiJson('/auth/login', { body: asJson({ email: 'alice@example.test', password: 'a-good-password' }), method: 'POST' })
+check(aliceLogin.status === 200 && aliceLogin.body.token, 'the right password logs in')
+const aliceToken = aliceLogin.body.token
+const bobToken = bob.body.token
+const aliceBooking = await apiJson('/data/bookings', { body: asJson({ class_id: yogaId, contact: 'alice@example.test', status: 'confirmed' }), method: 'POST', token: aliceToken })
+check(aliceBooking.status === 201 && aliceBooking.body.record.status === undefined && aliceBooking.body.record.mine === true, 'a customer can add their own record but not set a staff field')
+const bookingId = aliceBooking.body.record.id
+check((await call('list_records', { table: 'bookings' })).data.records[0].status === 'new', 'the staff field keeps its starting value')
+check((await apiJson('/data/bookings', { body: asJson({ class_id: 999999, contact: 'a@example.test' }), method: 'POST', token: aliceToken })).body.error?.field === 'class_id', 'a reference to a missing record is refused')
+check((await apiJson('/data/bookings', { token: aliceToken })).body.records.length === 1, 'a customer sees their own records')
+check((await apiJson('/data/bookings', { token: bobToken })).body.records.length === 0, "a customer doesn't see someone else's records")
+check((await apiJson(`/data/bookings/${bookingId}`, { token: bobToken })).status === 404 && (await apiJson(`/data/bookings/${bookingId}`, { body: asJson({ contact: 'b@example.test' }), method: 'PATCH', token: bobToken })).status === 404 && (await apiJson(`/data/bookings/${bookingId}`, { method: 'DELETE', token: bobToken })).status === 404, "a customer can't read, change or delete someone else's record")
+const edited = await apiJson(`/data/bookings/${bookingId}`, { body: asJson({ contact: 'new@example.test', status: 'confirmed' }), method: 'PATCH', token: aliceToken })
+check(edited.status === 200 && edited.body.record.contact === 'new@example.test' && (await call('list_records', { table: 'bookings' })).data.records[0].status === 'new', 'a customer can change their own record, but not its staff field')
+const bobCustomer = (await call('list_customers', {})).data.find((row) => row.email === 'bob@example.test')
+await call('set_customer_role', { id: bobCustomer.id, role: 'staff' })
+const staffView = await apiJson(`/data/bookings/${bookingId}`, { token: bobToken })
+check(staffView.body.record?.status === 'new' && staffView.body.record.customer_id > 0, 'staff can see every record and its staff fields')
+check((await apiJson(`/data/bookings/${bookingId}`, { body: asJson({ status: 'confirmed' }), method: 'PATCH', token: bobToken })).body.record?.status === 'confirmed', 'staff can change a staff field')
+check((await apiJson('/data/messages', { token: bobToken })).status === 403, "staff can't read owner-only tables")
+await call('set_customer_role', { id: bobCustomer.id, role: 'member' })
+check((await apiJson(`/data/bookings/${bookingId}`, { token: bobToken })).status === 404, 'removing the staff role takes effect at once')
+const aliceCookie = `session=${aliceToken}`
+const bobCookie = `session=${bobToken}`
+
+// Secret keys
+const makeKey = async (name, scope = 'full') => (await (await fetch(`${owner}/connect/key`, { body: new URLSearchParams({ name, scope }), method: 'POST' })).text()).match(/wek_[0-9a-f]{64}/)?.[0]
+const fullKey = await makeKey('Wix')
+const readKey = await makeKey('Reports', 'read')
+check(Boolean(fullKey && readKey), 'the owner can create secret keys')
+check(!(await (await fetch(`${owner}/connect`)).text()).includes(fullKey), 'a key is shown only once')
+check((await apiJson('/data/messages', { token: fullKey })).body.records?.length >= 1, 'a key can read owner-only tables')
+check((await apiJson('/data/messages', { token: 'wek_' + '0'.repeat(64) })).status === 401, 'a wrong key is refused')
+check((await apiJson('/data/messages', { headers: { Origin: 'https://www.example.com' }, token: fullKey })).body.error?.code === 'key_in_browser', 'a key sent from a browser is refused')
+check((await apiJson('/data/classes', { body: asJson({ title: 'x' }), method: 'POST', token: readKey })).status === 403 && (await apiJson('/data/messages', { token: readKey })).status === 200, 'a read-only key can read but not write')
+const keyRecord = await apiJson('/data/classes', { body: asJson({ title: 'From Wix' }), method: 'POST', token: fullKey })
+check(keyRecord.status === 201 && (await apiJson(`/data/classes/${keyRecord.body.record.id}`, { body: asJson({ seats: 3 }), method: 'PATCH', token: fullKey })).body.record.seats === 3 && (await apiJson(`/data/classes/${keyRecord.body.record.id}`, { method: 'DELETE', token: fullKey })).status === 200, 'a key can add, change and delete')
+
+// Browser access from other sites
+const cors = async (origin, method = 'GET') => (await fetch(`${base}/api/v1/data/classes`, { headers: { Origin: origin, ...(method === 'OPTIONS' ? { 'Access-Control-Request-Method': 'POST' } : {}) }, method })).headers
+check((await cors('https://www.mywix.test')).get('access-control-allow-origin') === null, 'other sites cannot call from a browser by default')
+check(!(await call('update_site', { allowedOrigins: ['https://www.mywix.test', 'https://*.editorx.test'] })).isError, 'the owner can allow other sites')
+check((await call('update_site', { allowedOrigins: ['not a site'] })).isError, 'a bad site address is refused')
+check((await cors('https://www.mywix.test')).get('access-control-allow-origin') === 'https://www.mywix.test' && (await cors('https://www.mywix.test', 'OPTIONS')).get('access-control-allow-methods')?.includes('PATCH'), 'an allowed site can call, including the browser pre-check')
+check((await cors('https://a.editorx.test')).get('access-control-allow-origin') === 'https://a.editorx.test', 'a wildcard covers subdomains')
+check((await cors('https://evileditorx.test')).get('access-control-allow-origin') === null && (await cors('https://www.evil.test')).get('access-control-allow-origin') === null, 'other sites stay blocked')
+check((await cors('https://www.mywix.test')).get('access-control-allow-credentials') === null, 'browser calls never carry cookies')
+check((await apiJson('/auth/me', { headers: { Cookie: aliceCookie } })).status === 401, 'the API ignores cookies, so other sites cannot act for a visitor')
+
+// Shop through the API
+await call('save_item', { collection: 'catalog', title: 'API Mug', price: '฿100', stock: 2 })
+const p_mug = (await apiJson('/products?collection=catalog')).body.products.find((item) => item.title === 'API Mug')
+check(p_mug?.price_cents === 10000 && p_mug.available === true && p_mug.stock === undefined, 'products are public, without exact stock')
+check((await apiJson(`/products/${p_mug.id}`)).body.product.title === 'API Mug' && (await apiJson(`/products/${p_mug.id}`, { token: fullKey })).body.product.stock === 2, 'one product can be read, and a key sees the stock')
+const apiOrder = (lines, token) => apiJson('/orders', { body: asJson({ address: '1 Test Road', lines, name: 'Alice', payment: 'cod', phone: '0812345678', price: 1, total: 1 }), method: 'POST', token })
+const placedOrder = await apiOrder([{ item: p_mug.id, quantity: 1, price: 1 }], aliceToken)
+check(placedOrder.status === 201 && placedOrder.body.order.subtotal === 10000 && !JSON.stringify(placedOrder.body.order).includes('token_hash'), 'an order takes its price from the database, whatever is sent')
+check((await (await fetch(placedOrder.body.order_url)).text()).includes('API Mug'), 'the order has its own page')
+check((await apiOrder([{ item: p_mug.id, quantity: 5 }], aliceToken)).status === 409, 'an order cannot oversell')
+check((await apiOrder([{ item: p_mug.id, quantity: -1 }], aliceToken)).status === 400 && (await apiOrder([], aliceToken)).status === 400, 'bad order lines are refused')
+const p_orderId = placedOrder.body.order.id
+check((await apiJson('/orders', { token: aliceToken })).body.orders.some((row) => row.id === p_orderId) && !(await apiJson('/orders', { token: bobToken })).body.orders.some((row) => row.id === p_orderId), "customers see only their own orders")
+check((await apiJson('/orders')).status === 401 && (await apiJson(`/orders/${p_orderId}`, { token: bobToken })).status === 404, "others can't read an order")
+check((await apiJson(`/orders/${p_orderId}`, { body: asJson({ status: 'paid' }), method: 'PATCH', token: aliceToken })).status === 403 && (await apiJson(`/orders/${p_orderId}`, { body: asJson({ status: 'paid' }), method: 'PATCH', token: readKey })).status === 403, "a customer can't mark their own order paid")
+check((await apiJson(`/orders/${p_orderId}`, { body: asJson({ status: 'nope' }), method: 'PATCH', token: fullKey })).status === 400 && (await apiJson(`/orders/${p_orderId}`, { body: asJson({ status: 'cancelled' }), method: 'PATCH', token: fullKey })).status === 200 && (await apiJson(`/products/${p_mug.id}`, { token: fullKey })).body.product.stock === 2, 'a key can change an order, and cancelling restores stock')
+
+// Pages built from tables
+check((await call('save_page', { slug: 'classes', title: 'Classes', description: 'See the classes on offer, then book a place and follow your own bookings here.', published: true, blocks: [{ type: 'hero', heading: 'Classes' }, { type: 'records', table: 'classes', heading: 'Our classes' }, { type: 'record-form', table: 'bookings', heading: 'Book a place', sentMessage: 'Booking saved' }, { type: 'records', table: 'bookings', heading: 'My bookings', allowDelete: true, tone: 'tint' }, { type: 'record-form', table: 'messages', heading: 'Ask us', tone: 'plain' }] })).isError === false, 'a page can use tables')
+const classesAnon = await (await fetch(`${base}/classes`)).text()
+check(classesAnon.includes('Pilates') && !classesAnon.includes('R-SECRET') && !classesAnon.includes('<script>alert(1)') && classesAnon.includes('&lt;script&gt;'), 'a page lists records safely, without private fields')
+check(classesAnon.includes('/login?next=%2Fclasses') && !classesAnon.includes('action="/data/bookings"') && classesAnon.includes('action="/data/messages"'), 'a form asks visitors to log in only when the table requires it')
+const classesAlice = await (await fetch(`${base}/classes`, { headers: { Cookie: aliceCookie } })).text()
+check(classesAlice.includes('new@example.test') && classesAlice.includes('action="/data/bookings"') && !classesAlice.includes('name="status"') && classesAlice.includes(`<option value="${pilatesId}">Pilates</option>`), 'a logged-in customer sees their records and a form, with no staff fields')
+check(!(await (await fetch(`${base}/classes`, { headers: { Cookie: bobCookie } })).text()).includes('new@example.test'), "another customer doesn't see them")
+const webForm = await fetch(`${base}/data/bookings`, { body: new URLSearchParams({ class_id: String(pilatesId), contact: 'alice2@example.test', next: '/classes', status: 'confirmed' }), headers: { Cookie: aliceCookie }, method: 'POST', redirect: 'manual' })
+check(webForm.status === 303 && webForm.headers.get('location').includes('/classes?sent=record-bookings'), 'the page form saves a record')
+const webRecords = (await call('list_records', { table: 'bookings' })).data.records
+check(webRecords[0].contact === 'alice2@example.test' && webRecords[0].status === 'new', "the page form can't set a staff field")
+check((await fetch(`${base}/data/bookings`, { body: new URLSearchParams({ class_id: 'nope', contact: 'x@example.test', next: '/classes' }), headers: { Cookie: aliceCookie }, method: 'POST', redirect: 'manual' })).headers.get('location').includes('error=record-bookings'), 'a bad entry returns to the form with an error')
+check((await fetch(`${base}/data/bookings`, { body: new URLSearchParams({ class_id: String(pilatesId), contact: 'x@example.test', next: 'https://evil.test/' }), method: 'POST', redirect: 'manual' })).headers.get('location').includes('/login'), 'a visitor is sent to log in, and never to another site')
+const countBefore = (await call('list_records', { table: 'messages', limit: 100 })).data.records.length
+check((await fetch(`${base}/data/messages`, { body: new URLSearchParams({ body: 'spam', next: '/classes', website: 'bot' }), method: 'POST', redirect: 'manual' })).headers.get('location').includes('sent=') && (await call('list_records', { table: 'messages', limit: 100 })).data.records.length === countBefore, 'bots that fill the hidden field get nothing saved')
+const removeId = webRecords[0].id
+await fetch(`${base}/data/bookings/${removeId}/delete`, { body: new URLSearchParams({ next: '/classes' }), headers: { Cookie: bobCookie }, method: 'POST', redirect: 'manual' })
+check((await call('list_records', { table: 'bookings' })).data.records.some((row) => row.id === removeId), "a customer can't delete someone else's record from a page")
+await fetch(`${base}/data/bookings/${removeId}/delete`, { body: new URLSearchParams({ next: '/classes' }), headers: { Cookie: aliceCookie }, method: 'POST', redirect: 'manual' })
+check(!(await call('list_records', { table: 'bookings' })).data.records.some((row) => row.id === removeId), 'a customer can delete their own record from a page')
+await call('save_page', { slug: 'broken', title: 'Broken', description: 'A page used to check that the review finds a table that does not exist.', published: false, blocks: [{ type: 'hero', heading: 'Broken' }, { type: 'records', table: 'missing_table' }] })
+check((await call('check_site', {})).data.problems.some((problem) => problem.includes('missing_table')), 'the review finds a page that uses a missing table')
+await call('delete_page', { slug: 'broken' })
+
+// Back office for tables
+const dataPage = await (await fetch(`${owner}/data`)).text()
+check(dataPage.includes('Classes') && dataPage.includes('Bookings'), 'the back office lists the tables')
+const tablePageHtml = await (await fetch(`${owner}/data/classes`)).text()
+check(tablePageHtml.includes('R-SECRET') && tablePageHtml.includes('export.csv'), 'the back office shows records with their staff fields')
+const officeTable = new URLSearchParams({ name: 'notes', label: 'Notes', readAccess: 'owner', writeAccess: 'owner', op: 'schema', 'fields.count': '2', 'fields.0.name': 'title', 'fields.0.label': 'Title', 'fields.0.type': 'text', 'fields.0.required': 'on', 'fields.1.type': 'text' })
+check((await fetch(`${owner}/data`, { body: officeTable, method: 'POST', redirect: 'manual' })).status === 303 && (await call('list_tables', {})).data.some((table) => table.name === 'notes'), 'the back office can create a table')
+const addNote = await fetch(`${owner}/data/notes`, { body: new URLSearchParams({ op: 'add', title: '=HYPERLINK("https://evil.test")' }), method: 'POST', redirect: 'manual' })
+check(addNote.status === 303, 'the back office can add a record')
+const csv = await (await fetch(`${owner}/data/notes/export.csv`)).text()
+check(csv.includes(`"'=HYPERLINK`), 'a spreadsheet export disarms formulas')
+const noteId = (await call('list_records', { table: 'notes' })).data.records[0].id
+check((await fetch(`${owner}/data/notes/${noteId}`, { body: new URLSearchParams({ title: 'Changed' }), method: 'POST', redirect: 'manual' })).status === 303 && (await call('list_records', { table: 'notes' })).data.records[0].title === 'Changed', 'the back office can change a record')
+await fetch(`${owner}/data/notes/${noteId}/delete`, { body: new URLSearchParams({}), method: 'POST', redirect: 'manual' })
+check((await call('list_records', { table: 'notes' })).data.records.length === 1, 'deleting a record needs a tick')
+await fetch(`${owner}/data/notes/delete`, { body: new URLSearchParams({ confirm: 'on' }), method: 'POST', redirect: 'manual' })
+check(!(await call('list_tables', {})).data.some((table) => table.name === 'notes'), 'the back office can delete a table')
+check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd/data`)).status === 404 && (await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd/connect`)).status === 404 && (await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd/publish`)).status === 404 && (await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd/system`)).status === 404, 'a wrong link cannot open the new back office pages')
+const staffButton = await fetch(`${owner}/customers/${bobCustomer.id}/role`, { body: new URLSearchParams({ role: 'staff' }), method: 'POST', redirect: 'manual' })
+check(staffButton.status === 303 && (await (await fetch(`${owner}/customers`)).text()).includes('bob · staff'), 'the back office can make someone staff')
+await call('set_customer_role', { id: bobCustomer.id, role: 'member' })
+const editorHtml = await (await fetch(`${owner}/page/classes`)).text()
+const editorValues = formValues(editorHtml)
+editorValues.set('op', 'save')
+check((await fetch(`${owner}/page/classes`, { body: editorValues, method: 'POST', redirect: 'manual' })).status === 303, 'the page editor can edit pages that use tables')
+const afterEditor = (await call('get_page', { slug: 'classes' })).data.blocks
+check(afterEditor[1].type === 'records' && afterEditor[1].table === 'classes' && afterEditor[3].allowDelete === true && afterEditor[2].type === 'record-form' && afterEditor[2].sentMessage === 'Booking saved', 'the page editor keeps their settings')
+
+// Webhooks, tested against a local receiver
+const hasWebhookTest = process.env.WEBHOOK_TEST === '1'
+check((await call('save_webhook', { url: 'http://insecure.test/hook', events: ['order.created'] })).isError === !hasWebhookTest, hasWebhookTest ? 'plain addresses work only in this test' : 'webhooks need https')
+if (hasWebhookTest) {
+  await call('delete_webhook', { id: (await call('list_webhooks', {})).data.at(-1).id })
+  const { createServer } = await import('node:http')
+  const { createHmac } = await import('node:crypto')
+  const received = []
+  const receiver = createServer((request, response) => {
+    let body = ''
+    request.on('data', (chunk) => (body += chunk))
+    request.on('end', () => {
+      received.push({ body, event: request.headers['x-web-end-event'], signature: request.headers['x-web-end-signature'] })
+      response.end('ok')
+    })
+  })
+  await new Promise((done) => receiver.listen(8796, done))
+  await call('save_webhook', { url: 'http://localhost:8796/hook', events: ['record.created', 'order.created'] })
+  await apiJson('/data/messages', { body: asJson({ body: 'Hook me' }), method: 'POST' })
+  await apiOrder([{ item: p_mug.id, quantity: 1 }], aliceToken)
+  await new Promise((done) => setTimeout(done, 800))
+  const [, time, digest] = /t=(\d+),v1=([0-9a-f]+)/.exec(received[0]?.signature ?? '') ?? []
+  const connectHtml = await (await fetch(`${owner}/connect`)).text()
+  const signing = connectHtml.match(/<summary>Signing secret<\/summary><code[^>]*>([0-9a-f]{64})/)?.[1]
+  check(received.some((item) => item.event === 'record.created' && item.body.includes('Hook me')), 'a new record reaches the webhook')
+  check(received.some((item) => item.event === 'order.created' && !item.body.includes('token_hash')), 'a new order reaches the webhook without its secret')
+  check(Boolean(signing) && digest === createHmac('sha256', signing).update(`${time}.${received[0].body}`).digest('hex'), 'webhook messages are signed')
+  check((await call('list_webhooks', {})).data[0].last_status === 200 && !JSON.stringify((await call('list_webhooks', {})).data).includes(signing), 'the result is recorded, and Claude never sees the secret')
+  await new Promise((done) => receiver.close(done))
+  await call('delete_webhook', { id: (await call('list_webhooks', {})).data[0].id })
+} else {
+  check(!(await call('save_webhook', { url: 'https://hooks.example.test/in', events: ['order.created'] })).isError, 'an https webhook can be added')
+  await call('delete_webhook', { id: (await call('list_webhooks', {})).data[0].id })
+}
+
+// Guides and system status
+check((await call('get_guide', { topic: 'connect_wix' })).text.includes('wix-secrets-backend') && (await call('get_guide', { topic: 'design' })).text.includes('Real photos'), 'Claude can read the build guides')
+check((await client.listPrompts()).prompts.some((item) => item.name === 'connect_my_wix_site'), 'there is a ready prompt for connecting Wix')
+const status = await call('get_status', {})
+check(status.data.database.tables === 3 && status.data.connections.apiKeys === 2 && !status.text.includes(fullKey), 'one status view covers the system without showing secrets')
+const systemHtml = await (await fetch(`${owner}/system`)).text()
+check(systemHtml.includes('Stripe secrets in Cloudflare') && systemHtml.includes('Tables') && !systemHtml.includes('wek_'), 'the system page shows everything in one place')
+
+// Publishing
+const allowedBefore = (await call('get_site')).data.settings.allowedOrigins
+const firstName = (await call('get_site')).data.settings.name
+check((await call('get_site')).data.publishing.live_version === null, 'nothing is published on a new site')
+const homeBefore = (await call('get_page', { slug: 'home' })).data
+await call('save_page', { ...homeBefore, title: 'Version one', published: false })
+check((await call('publish_site', { note: 'no home' })).isError, 'publishing needs a published home page')
+await call('save_page', { ...homeBefore, title: 'Version one', published: true })
+const v1 = await call('publish_site', { note: 'First' })
+check(v1.data.published === true && v1.data.version > 0, 'the site can be published')
+const v1Id = v1.data.version
+const saveDraft = await call('save_page', { ...homeBefore, title: 'Version two', published: true })
+check(saveDraft.data.live === false && saveDraft.data.preview.includes('/preview'), 'after publishing, a saved page is a private change')
+await call('save_page', { slug: 'draft-only', title: 'Draft only', description: 'A page that exists only in the working copy, to test that drafts stay private.', published: true, blocks: [{ type: 'hero', heading: 'Draft heading' }, { type: 'html', code: '<p>Draft code</p>' }] })
+await call('update_site', { name: 'New name' })
+check(!(await (await fetch(base)).text()).includes('Version two') && (await (await fetch(base)).text()).includes('Version one'), 'visitors keep the published page')
+check(!(await (await fetch(base)).text()).includes('New name'), 'visitors keep the published settings')
+check((await fetch(`${base}/draft-only`)).status === 404 && !(await (await fetch(`${base}/sitemap.xml`)).text()).includes('draft-only'), 'a new page stays hidden until published')
+const waitingNow = (await call('list_versions', {})).data.waiting
+check(waitingNow.settings === true && waitingNow.pages.includes('home') && waitingNow.pages.includes('draft-only'), 'the owner can see what is waiting')
+const previewHome = await fetch(`${owner}/preview`)
+const previewHomeBody = await previewHome.text()
+check(previewHome.headers.get('referrer-policy') === 'no-referrer' && previewHome.headers.get('x-robots-tag') === 'noindex' && previewHomeBody.includes('Version two') && previewHomeBody.includes('New name') && previewHomeBody.includes('preview-banner'), 'the private preview shows the waiting changes')
+const previewDraft = await (await fetch(`${owner}/preview/draft-only`)).text()
+check(previewDraft.includes('Draft heading') && !previewDraft.includes('/frame/draft-only') && !previewDraft.includes('Draft code'), 'custom code stays out of the preview, where it could read the secret address')
+check(previewHomeBody.includes(`href="/owner/${code}/preview"`) && previewHomeBody.includes(`href="/site.css"`), 'preview links stay inside the preview')
+check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd/preview`)).status === 404, 'a wrong link cannot open the preview')
+check((await fetch(`${base}/frame/draft-only/1`)).status === 404, 'a draft custom code block has no public address')
+check((await (await fetch(`${owner}/publish`)).text()).includes('Waiting to be published'), 'the publish page lists the waiting changes')
+check((await (await fetch(`${base}/classes`)).text()).includes('Pilates') && (await apiJson('/data/classes')).status === 200, 'published pages and the API keep working')
+await call('save_record', { table: 'classes', values: { title: 'Added after publishing' } })
+check((await (await fetch(`${base}/classes`)).text()).includes('Added after publishing'), 'records are live at once, not part of publishing')
+const v2Response = await fetch(`${owner}/publish`, { body: new URLSearchParams({ note: 'Second <b>' }), method: 'POST', redirect: 'manual' })
+check(v2Response.status === 303 && (await (await fetch(base)).text()).includes('Version two') && (await (await fetch(base)).text()).includes('New name') && (await fetch(`${base}/draft-only`)).status === 200, 'publishing shows every waiting change at once')
+const versionsNow = (await call('list_versions', {})).data
+check(versionsNow.versions.length === 2 && versionsNow.waiting.pages.length === 0 && versionsNow.waiting.settings === false, 'nothing is waiting after publishing')
+check((await (await fetch(`${owner}/publish`)).text()).includes('Second &lt;b&gt;'), 'version notes are shown safely')
+const frameAfter = await fetch(`${base}/frame/draft-only/1`)
+check(frameAfter.status === 200 && (await frameAfter.text()).includes('Draft code'), 'custom code runs once published')
+await call('update_site', { name: 'Unpublished name' })
+check((await call('restore_version', { version: 999999 })).isError, 'a missing version is refused')
+check(!(await call('restore_version', { version: v1Id })).isError && (await (await fetch(base)).text()).includes('Version one') && (await fetch(`${base}/draft-only`)).status === 404, 'going back restores the older pages')
+const restored = (await call('get_site')).data
+check(restored.settings.name === firstName && restored.publishing.live_version === v1Id && (await call('get_page', { slug: 'home' })).data.title === 'Version one', 'going back restores settings and the working copy')
+check(JSON.stringify(restored.settings.allowedOrigins) === JSON.stringify(allowedBefore) && (await cors('https://www.mywix.test')).get('access-control-allow-origin') === 'https://www.mywix.test', 'going back keeps the connections to other systems')
+check((await (await fetch(`${base}/classes`)).text()).includes('Added after publishing') && (await apiJson('/orders', { token: aliceToken })).body.orders.length > 0, 'going back leaves records and orders alone')
+await fetch(`${owner}/publish/${versionsNow.versions[0].id}/restore`, { body: new URLSearchParams({}), method: 'POST', redirect: 'manual' })
+check((await call('get_site')).data.publishing.live_version === v1Id, 'going back in the back office needs a tick')
+await fetch(`${owner}/publish/${versionsNow.versions[0].id}/restore`, { body: new URLSearchParams({ confirm: 'on' }), method: 'POST', redirect: 'manual' })
+check((await call('get_site')).data.publishing.live_version === versionsNow.versions[0].id && (await (await fetch(base)).text()).includes('Version two'), 'the back office can go back to any kept version')
+check((await apiJson('/auth/logout', { method: 'POST', token: bobToken })).status === 200 && (await apiJson('/auth/me', { token: bobToken })).status === 401, 'logging out ends the token')
 
 let attempts = 0
 let limited = false

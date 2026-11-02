@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { newToken, sha256 } from './auth'
+import { handlePlatform } from './cms-platform'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { saveImage } from './items'
 import { blockSchema, itemSchema, maxBlocksBytes, maxPagesPerSite, pageSlugSchema, settingsShape } from './mcp'
@@ -18,7 +19,9 @@ const statuses = ['new', 'confirmed', 'done']
 type Kind = 'bool' | 'image' | 'lines' | 'list' | 'long' | 'number' | 'select' | 'text'
 type Spec = { fields?: Spec[]; key: string; kind: Kind; label: string; options?: string[] }
 
-const spec = (key: string, label: string, kind: Kind = 'text', extra: Partial<Spec> = {}): Spec => ({ key, kind, label, ...extra })
+export type Notice = { error?: string; saved?: string }
+
+export const spec = (key: string, label: string, kind: Kind = 'text', extra: Partial<Spec> = {}): Spec => ({ key, kind, label, ...extra })
 const tone = spec('tone', 'Background', 'select', { options: ['', 'plain', 'tint', 'dark'] })
 const heading = spec('heading', 'Heading')
 const intro = spec('intro', 'Intro', 'long')
@@ -42,13 +45,15 @@ const catalog: Record<string, { label: string; fields: Spec[]; start: Block }> =
   cta: { label: 'Call to action', start: { heading: 'New heading', type: 'cta' }, fields: [heading, spec('text', 'Text', 'long'), ...buttons, tone] },
   form: { label: 'Form', start: { fields: [{ label: 'Name', name: 'name', type: 'text' }, { label: 'Email', name: 'email', type: 'email' }], name: 'contact', type: 'form' }, fields: [spec('name', 'Form name, English letters'), heading, spec('intro', 'Intro', 'long'), spec('buttonLabel', 'Button text'), spec('sentMessage', 'Message after sending'), spec('errorMessage', 'Message on error'), spec('membersOnly', 'Members only', 'bool'), list('fields', 'Fields', [spec('name', 'Field name, English letters'), spec('label', 'Label'), spec('type', 'Type', 'select', { options: ['text', 'textarea', 'email', 'phone', 'number', 'date', 'time', 'select', 'checkbox'] }), spec('required', 'Required', 'bool'), spec('options', 'Choices, one per line', 'lines'), spec('optionsFrom', 'Choices from collection')]), tone] },
   collection: { label: 'Products or list', start: { collection: 'products', type: 'collection' }, fields: [spec('id', 'Link name, such as products'), spec('collection', 'Collection name'), heading, intro, ...buttons, spec('orderField', 'Form field to fill in'), spec('limit', 'How many to show', 'number'), spec('filters', 'Show category filters', 'bool'), tone] },
+  records: { label: 'Records from a table', start: { table: 'bookings', type: 'records' }, fields: [spec('id', 'Link name, such as bookings'), spec('table', 'Table name'), heading, intro, spec('fields', 'Fields to show, one per line. Leave empty for all', 'lines'), spec('limit', 'How many to show', 'number'), spec('newestFirst', 'Newest first', 'bool'), spec('allowDelete', 'People can delete what they may change', 'bool'), tone] },
+  'record-form': { label: 'Add record form', start: { table: 'bookings', type: 'record-form' }, fields: [spec('table', 'Table name'), heading, spec('intro', 'Intro', 'long'), spec('fields', 'Fields to ask for, one per line. Leave empty for all', 'lines'), spec('buttonLabel', 'Button text'), spec('sentMessage', 'Message after sending'), spec('errorMessage', 'Message on error'), tone] },
   html: { label: 'Custom code', start: { code: '<p>New section</p>', type: 'html' }, fields: [spec('code', 'HTML, CSS and JavaScript', 'long'), spec('height', 'Height in pixels', 'number'), spec('title', 'Title'), tone] },
 }
 
-const office = (site: SiteRow, code: string, title: string, body: string, notice?: { error?: string; saved?: string }) => {
+export const office = (site: SiteRow, code: string, title: string, body: string, notice?: Notice) => {
   const settings = JSON.parse(site.settings) as Settings
   const base = `/owner/${escapeHtml(code)}`
-  const links: [string, string][] = [['', 'Overview'], ['/orders', 'Orders'], ['/pages', 'Pages'], ['/items', 'Products'], ['/media', 'Images'], ['/customers', 'Customers'], ['/settings', 'Settings'], ['/updates', 'Updates']]
+  const links: [string, string][] = [['', 'Overview'], ['/orders', 'Orders'], ['/pages', 'Pages'], ['/items', 'Products'], ['/data', 'Data'], ['/media', 'Images'], ['/customers', 'Customers'], ['/publish', 'Publish'], ['/connect', 'Connect'], ['/settings', 'Settings'], ['/system', 'System'], ['/updates', 'Updates']]
   return html(
     shell(
       `${settings.name}: ${title}`,
@@ -62,7 +67,7 @@ ${notice?.error ? `<p role="alert">${escapeHtml(notice.error)}</p>` : ''}${notic
   )
 }
 
-const input = (name: string, field: Spec, value: unknown): string => {
+export const input = (name: string, field: Spec, value: unknown): string => {
   const label = escapeHtml(field.label)
   const key = escapeHtml(name)
   if (field.kind === 'bool') return `<label class="check"><input name="${key}" type="checkbox"${value ? ' checked' : ''}> ${label}</label>`
@@ -82,7 +87,7 @@ const input = (name: string, field: Spec, value: unknown): string => {
   return `<label>${label}<input name="${key}" value="${escapeHtml(value)}"></label>`
 }
 
-const readField = (form: FormData, name: string, field: Spec): unknown => {
+export const readField = (form: FormData, name: string, field: Spec): unknown => {
   const raw = form.get(name)
   const value = typeof raw === 'string' ? raw.trim() : ''
   if (field.kind === 'bool') return raw === 'on' ? true : undefined
@@ -107,7 +112,7 @@ const readField = (form: FormData, name: string, field: Spec): unknown => {
   return value || undefined
 }
 
-const firstProblem = (error: z.ZodError) => {
+export const firstProblem = (error: z.ZodError) => {
   const issue = error.issues[0]
   return `${issue.path.join(' › ')}: ${issue.message}`
 }
@@ -212,6 +217,7 @@ async function overview(env: Env, url: URL, site: SiteRow, code: string) {
     code,
     'Overview',
     `${newer}<h2>Messages and bookings</h2>${rows}
+${site.live_version ? `<p><a href="/owner/${escapeHtml(code)}/publish">See what is waiting to be published</a>. Changes stay private until you publish them.</p>` : ''}
 <h2>Change your site with Claude</h2>
 <p>Add this link as a custom connector in Claude, with no sign-in. Keep it private.</p>
 <p><code style="overflow-wrap:anywhere">${escapeHtml(`${url.origin}/mcp/${code}`)}</code></p>`,
@@ -377,10 +383,10 @@ async function mediaPage(env: Env, site: SiteRow, code: string, notice?: { error
 
 async function customersPage(env: Env, url: URL, site: SiteRow, code: string, notice?: { error?: string; saved?: string }, resetLink?: string) {
   const settings = JSON.parse(site.settings) as Settings
-  const { results } = await env.DB.prepare('SELECT id, email, name, created_at FROM customers WHERE site_id = ? ORDER BY id DESC LIMIT 500').bind(site.id).all<{ created_at: string; email: string; id: number; name: string }>()
+  const { results } = await env.DB.prepare('SELECT id, email, name, role, created_at FROM customers WHERE site_id = ? ORDER BY id DESC LIMIT 500').bind(site.id).all<{ created_at: string; email: string; id: number; name: string; role: string }>()
   const rows = results
     .map(
-      (customer) => `<article class="card account__record"><h3>${escapeHtml(customer.name)}</h3><p>${escapeHtml(customer.email)}<br><small>Joined ${escapeHtml(customer.created_at.slice(0, 10))}</small></p><form action="/owner/${escapeHtml(code)}/customers/${customer.id}/reset" method="post"><button class="button button--small" type="submit">Make a password reset link</button></form><form action="/owner/${escapeHtml(code)}/customers/${customer.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> Yes, delete this account</label><button class="button button--small" type="submit">Delete account</button></form></article>`,
+      (customer) => `<article class="card account__record"><h3>${escapeHtml(customer.name)}${customer.role === 'staff' ? ' · staff' : ''}</h3><p>${escapeHtml(customer.email)}<br><small>Joined ${escapeHtml(customer.created_at.slice(0, 10))}</small></p><form action="/owner/${escapeHtml(code)}/customers/${customer.id}/reset" method="post"><button class="button button--small" type="submit">Make a password reset link</button></form><form action="/owner/${escapeHtml(code)}/customers/${customer.id}/role" method="post"><button class="button button--small" name="role" type="submit" value="${customer.role === 'staff' ? 'member' : 'staff'}">${customer.role === 'staff' ? 'Remove staff access' : 'Make staff'}</button></form><form action="/owner/${escapeHtml(code)}/customers/${customer.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> Yes, delete this account</label><button class="button button--small" type="submit">Delete account</button></form></article>`,
     )
     .join('')
   return office(
@@ -429,6 +435,7 @@ ${text('email', 'Email', 'email')}${text('phone', 'Phone')}<label>Address<textar
 async function saveSettings(request: Request, env: Env, url: URL, site: SiteRow, code: string) {
   const form = await request.formData()
   const draft: Record<string, unknown> = {
+    allowedOrigins: (JSON.parse(site.settings) as Settings).allowedOrigins,
     githubRepo: (JSON.parse(site.settings) as Settings).githubRepo,
     accounts: form.get('accounts') === 'on',
     cart: form.get('cart') === 'on',
@@ -462,10 +469,13 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
   if (!post && request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405 })
   if (Number(request.headers.get('content-length') || 0) > maxOfficeBytes) return new Response('That is too large.', { status: 413 })
   const saved = url.searchParams.has('saved') ? { saved: 'Saved.' } : undefined
-  const [area, id, action] = parts.slice(2)
+  const [area, id, action, extra] = parts.slice(2)
   const owner = `/owner/${code}`
 
   if (!area) return post ? notFound() : overview(env, url, site, code)
+
+  const platform = handlePlatform(request, env, url, site, code, area, id, action, extra, saved)
+  if (platform) return platform
 
   if (area === 'entry' && post && /^\d+$/.test(id ?? '') && !action) {
     const form = await request.formData().catch((): null => null)
@@ -543,6 +553,11 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
         env.DB.prepare('INSERT INTO password_resets (token_hash, customer_id, expires_at) VALUES (?, ?, ?)').bind(await sha256(token), customer.id, new Date(Date.now() + 86_400_000).toISOString()),
       ])
       return customersPage(env, url, site, code, undefined, `/reset/${token}`)
+    }
+    if (action === 'role') {
+      const role = (await request.formData()).get('role')
+      if (role === 'staff' || role === 'member') await env.DB.prepare('UPDATE customers SET role = ? WHERE id = ?').bind(role, customer.id).run()
+      return see(url, `${owner}/customers`)
     }
     if (action === 'delete') {
       const form = await request.formData()
