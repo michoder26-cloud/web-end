@@ -873,6 +873,78 @@ await fetch(`${owner}/publish/${versionsNow.versions[0].id}/restore`, { body: ne
 check((await call('get_site')).data.publishing.live_version === versionsNow.versions[0].id && (await (await fetch(base)).text()).includes('Version two'), 'the back office can go back to any kept version')
 check((await apiJson('/auth/logout', { method: 'POST', token: bobToken })).status === 200 && (await apiJson('/auth/me', { token: bobToken })).status === 401, 'logging out ends the token')
 
+// Limits the database enforces
+check(!(await call('save_table', { name: 'sessions_on', label: 'Sessions', readAccess: 'public', writeAccess: 'owner', fields: [{ name: 'title', label: 'Title', type: 'text', required: true }, { name: 'session_date', label: 'Date', type: 'date' }, { name: 'seats', label: 'Seats', type: 'number', required: true }] })).isError, 'creates a table with a seat count')
+check((await call('save_table', { name: 'seat_bad', label: 'Bad', readAccess: 'own', writeAccess: 'members', fields: [{ name: 'on_id', label: 'Session', type: 'reference', table: 'sessions_on', capacityField: 'title' }] })).isError, 'a limit must come from a number field')
+check((await call('save_table', { name: 'seat_bad', label: 'Bad', readAccess: 'own', writeAccess: 'members', fields: [{ name: 'a', label: 'A', type: 'text', capacityField: 'seats' }] })).isError, 'only a reference can have a limit')
+check((await call('save_table', { name: 'seat_bad', label: 'Bad', readAccess: 'own', writeAccess: 'members', fields: [{ name: 'a', label: 'A', type: 'text', staffOnly: true, readOnly: true }] })).isError, 'a field cannot be both hidden and read only')
+check((await call('save_table', { name: 'seat_bad', label: 'Bad', readAccess: 'own', writeAccess: 'members', fields: [{ name: 'a', label: 'A', type: 'text', ignoreField: 'nothing', ignoreValues: ['x'] }] })).isError, 'an ignore rule needs a real field')
+check(!(await call('save_table', { name: 'seat_bookings', label: 'Seat bookings', readAccess: 'own', writeAccess: 'members', fields: [{ name: 'on_id', label: 'Session', type: 'reference', table: 'sessions_on', required: true, capacityField: 'seats', unique: 'customer', ignoreField: 'status', ignoreValues: ['cancelled'] }, { name: 'status', label: 'Status', type: 'select', options: ['waiting', 'confirmed', 'cancelled'], default: 'waiting', readOnly: true }, { name: 'private_note', label: 'Private note', type: 'text', staffOnly: true }] })).isError, 'creates a booking table with a limit')
+const small = (await call('save_record', { table: 'sessions_on', values: { title: 'Small session', seats: 2, session_date: '2030-03-15' } })).data.saved.id
+const spare = (await call('save_record', { table: 'sessions_on', values: { title: 'Spare session', seats: 50 } })).data.saved.id
+// Each person signs up from their own address, as real customers do, so the limit per visitor doesn't apply.
+const seatUser = async (name) => (await apiJson('/auth/signup', { body: asJson({ email: `${name}@seats.test`, name, password: 'a-good-password' }), headers: { 'CF-Connecting-IP': `203.0.113.${name.charCodeAt(1)}${name.charCodeAt(0) % 10}` }, method: 'POST' })).body.token
+const seatA = await seatUser('sa')
+const seatB = await seatUser('sb')
+const seatC = await seatUser('sc')
+const seatD = await seatUser('sd')
+const takeSeat = (token, on = small) => apiJson('/data/seat_bookings', { body: asJson({ on_id: on, status: 'confirmed' }), method: 'POST', token })
+const seatAFirst = await takeSeat(seatA)
+check(seatAFirst.status === 201 && seatAFirst.body.record.status === 'waiting', 'a customer can see a read-only field but not set it')
+check((await takeSeat(seatA)).body.error?.code === 'duplicate', 'one customer cannot book the same thing twice')
+check((await apiJson(`/data/seat_bookings/${seatAFirst.body.record.id}`, { body: asJson({ status: 'confirmed' }), method: 'PATCH', token: seatA })).body.record.status === 'waiting', 'a customer cannot change a read-only field')
+check((await apiJson('/data/seat_bookings?filter.private_note=x', { token: seatA })).status === 400 && (await apiJson('/data/seat_bookings?filter.status=waiting', { token: seatA })).body.records.length === 1, 'read-only fields can be filtered, hidden ones cannot')
+check((await takeSeat(seatB)).status === 201, 'the last seat can be booked')
+const fullBooking = await takeSeat(seatC)
+check(fullBooking.status === 409 && fullBooking.body.error.code === 'full' && fullBooking.body.error.field === 'on_id', 'a full session refuses another booking and says why')
+check((await apiJson('/data/sessions_on')).body.records.find((row) => row.id === small).spots_left === 0 && (await apiJson('/data/sessions_on')).body.records.find((row) => row.id === spare).spots_left === 50, 'the API reports the places left')
+const raceSession = (await call('save_record', { table: 'sessions_on', values: { title: 'Race session', seats: 3 } })).data.saved.id
+const raceUsers = await Promise.all(['r1', 'r2', 'r3', 'r4', 'r5', 'r6'].map(seatUser))
+const race = await Promise.all(raceUsers.map((token) => takeSeat(token, raceSession)))
+const raceOk = race.filter((row) => row.status === 201).length
+check(raceOk === 3 && race.filter((row) => row.status === 409).length === 3, 'six people at the same moment cannot take more than three seats', race.map((row) => row.status).join(','))
+const countAfterRace = (await call('list_tables', {})).data.find((table) => table.name === 'seat_bookings').records
+const seatsPageSaved = await call('save_page', { slug: 'seats', title: 'Seats', description: 'See the sessions on offer with the places left, then book a place and follow your bookings.', published: true, blocks: [{ type: 'hero', heading: 'Seats' }, { type: 'records', table: 'sessions_on', heading: 'Sessions', newestFirst: false }, { type: 'record-form', table: 'seat_bookings', heading: 'Book', tone: 'tint' }, { type: 'records', table: 'seat_bookings', heading: 'Mine', allowDelete: true }] })
+check(!seatsPageSaved.isError, 'a page can show limited places')
+await call('publish_site', { note: 'Seats page' })
+const seatsHtml = await (await fetch(`${base}/seats`, { headers: { Cookie: `session=${seatC}` } })).text()
+check(seatsHtml.includes('Spots left') && seatsHtml.includes('>Full<') && seatsHtml.includes('>50<'), 'the page shows the places left and what is full')
+check(new RegExp(`<option disabled value="${small}">Small session \\(Full\\)</option>`).test(seatsHtml) && seatsHtml.includes(`<option value="${spare}">Spare session</option>`), 'a full choice cannot be picked in the form')
+check(seatsHtml.includes('March 15, 2030') && !seatsHtml.includes('2030-03-15'), 'dates are written for people')
+check(!seatsHtml.includes('name="status"') && !seatsHtml.includes('name="private_note"'), 'the form leaves out fields customers cannot set')
+const seatsA = await (await fetch(`${base}/seats`, { headers: { Cookie: `session=${seatA}` } })).text()
+check(seatsA.includes('waiting') && seatsA.includes('Small session') && !seatsA.includes('name="status"'), 'a customer sees the status and name of what they booked')
+const webFull = await fetch(`${base}/data/seat_bookings`, { body: new URLSearchParams({ next: '/seats', on_id: String(small) }), headers: { Cookie: `session=${seatC}` }, method: 'POST', redirect: 'manual' })
+check(webFull.headers.get('location').includes('why=full') && (await (await fetch(webFull.headers.get('location'), { headers: { Cookie: `session=${seatC}` } })).text()).includes('just filled up'), 'the page says when something just filled up')
+const webTwice = await fetch(`${base}/data/seat_bookings`, { body: new URLSearchParams({ next: '/seats', on_id: String(small) }), headers: { Cookie: `session=${seatA}` }, method: 'POST', redirect: 'manual' })
+check(webTwice.headers.get('location').includes('why=duplicate') && (await (await fetch(webTwice.headers.get('location'), { headers: { Cookie: `session=${seatA}` } })).text()).includes('already have'), 'the page says when someone already booked')
+check(!(await apiJson(`/data/seat_bookings/${seatAFirst.body.record.id}`, { body: asJson({ status: 'cancelled' }), method: 'PATCH', token: fullKey })).body.error, 'staff can cancel a booking')
+check((await apiJson('/data/sessions_on')).body.records.find((row) => row.id === small).spots_left === 1, 'a cancelled booking frees its place')
+const seatTaken = await takeSeat(seatC)
+check(seatTaken.status === 201, 'someone else can then take it')
+check((await apiJson(`/data/seat_bookings/${seatAFirst.body.record.id}`, { body: asJson({ status: 'waiting' }), method: 'PATCH', token: fullKey })).body.error?.code === 'full', 'a cancelled booking cannot be revived into a full session')
+check(!(await apiJson(`/data/seat_bookings/${seatTaken.body.record.id}`, { body: asJson({ status: 'confirmed' }), method: 'PATCH', token: fullKey })).body.error, 'changing another field of a counted booking still works')
+check((await takeSeat(seatA)).body.error?.code === 'full', 'a customer whose booking was cancelled can only rebook if there is room')
+await call('save_record', { table: 'sessions_on', id: small, values: { seats: 1 } })
+check(!(await apiJson(`/data/seat_bookings/${seatTaken.body.record.id}`, { body: asJson({ status: 'waiting' }), method: 'PATCH', token: fullKey })).body.error, 'lowering a limit does not block edits to existing bookings')
+check((await apiJson(`/data/seat_bookings/${seatTaken.body.record.id}`, { method: 'DELETE', token: seatC })).status === 200 && (await call('list_tables', {})).data.find((table) => table.name === 'seat_bookings').records === countAfterRace, 'deleting a booking keeps the count right')
+check(!(await call('save_table', { name: 'newsletter', label: 'Newsletter', readAccess: 'owner', writeAccess: 'public', fields: [{ name: 'email', label: 'Email', type: 'email', required: true, unique: 'table' }] })).isError, 'a field can be unique across a table')
+check((await apiJson('/data/newsletter', { body: asJson({ email: 'one@example.test' }), method: 'POST' })).status === 201 && (await apiJson('/data/newsletter', { body: asJson({ email: 'one@example.test' }), method: 'POST' })).body.error?.code === 'duplicate', 'the same value cannot be used twice')
+
+// Taking everything with you
+const exportResponse = await fetch(`${owner}/export.json`)
+const exported = await exportResponse.json()
+const exportText = JSON.stringify(exported)
+check(exportResponse.headers.get('content-disposition')?.includes('attachment') && exported.format === 'web-end-export-1' && exported.pages.some((row) => row.slug === 'seats') && exported.records.sessions_on.length >= 3 && exported.customers.length > 0 && exported.orders.length > 0 && exported.items.length > 0, 'the owner can download everything in one file')
+check(!exportText.includes('password_hash') && !exportText.includes('token_hash') && !exportText.includes('key_hash') && !exportText.includes('wek_') && !exportText.includes('edit_hash'), 'the download leaves out passwords and secrets')
+check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd/export.json`)).status === 404, 'a wrong link cannot download anything')
+check((await (await fetch(`${owner}/system`)).text()).includes('Download everything'), 'the system page offers the download')
+check((await call('save_webhook', { url: 'https://discord.com/api/webhooks/123/secret', events: ['order.created'] })).isError, 'chat addresses stay out of the conversation')
+const chatAdded = await fetch(`${owner}/connect/webhook`, { body: new URLSearchParams({ events: 'order.created', url: 'https://discord.com/api/webhooks/123/secret-part' }), method: 'POST', redirect: 'manual' })
+const hooksNow = (await call('list_webhooks', {})).data
+check(chatAdded.status === 303 && hooksNow.some((hook) => hook.url === 'https://discord.com/…') && !JSON.stringify(hooksNow).includes('secret-part'), 'the owner can add a chat address, and Claude never sees its secret')
+for (const hook of hooksNow) await call('delete_webhook', { id: hook.id })
+
 let attempts = 0
 let limited = false
 while (attempts < 15 && !limited) {

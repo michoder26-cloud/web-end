@@ -28,7 +28,9 @@ Claude asks about your business, then writes the pages, chooses the design, and 
 - **Customer accounts:** sign up, log in, log out, staff roles, and a page where customers see their own orders. Turn it on when you need it.
 - **API:** other systems and front ends can use your data, logins and orders, with secret keys and an OpenAPI description at `/api/v1/openapi.json`
 - **Publishing:** after your first publish, changes stay private with a preview link until you publish them. Go back to any of the last 20 versions. Version history covers pages and settings, while data changes at once.
-- **Webhooks:** signed messages to other services on new records, orders and customers
+- **Limits nothing can get around:** seats and other places can't be overbooked, even by two people at the same moment, and one customer can't book the same thing twice
+- **Your data can leave with you:** download all your content and data in one file at any time
+- **Notifications:** get new orders and bookings in Discord, Slack or Telegram for free, or send signed webhooks to other services
 - **Build guides for Claude:** planning, data design, access rules, screens, design, copy, shop, publishing, Wix and launch checks, built in, so there's nothing extra to install
 - **System page:** hosting, version, publishing, database use, login, payments and connections in one place
 - **Shop:** product pages, categories, sale prices, sizes and colours, stock that can't oversell, a cart, free delivery thresholds, private order links and order status. Prices are always set on the server.
@@ -56,7 +58,7 @@ Nobody hosts your site but you. There's no central server, and web-end never see
 - Send email. There are no notifications when a form is sent. If a customer forgets a password, you make a reset link in the back office and send it yourself.
 - Check bank transfers automatically or take payment slips. You check each transfer and confirm it in the back office.
 - Create product photos. Upload your own, or use images you have the right to use.
-- Stop double bookings, or show customer reviews as a ready-made feature
+- Show customer reviews as a ready-made feature
 - Add any feature you can describe. Claude builds with tables, rules, pages, webhooks and sandboxed custom code. Custom server logic still means a developer changing the source, and an update replaces such changes.
 - Log in with Google or other accounts
 - Show the back office in other languages. It's in English for now.

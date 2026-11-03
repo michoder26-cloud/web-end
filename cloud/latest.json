@@ -1,4 +1,4 @@
 {
-  "version": "0.3.0",
-  "notes": "Your own database tables with access rules, an API for front ends such as Wix, draft and publish with version history, webhooks, staff roles, and build guides for Claude."
+  "version": "0.4.0",
+  "notes": "Limits the database enforces so nothing gets overbooked, fields customers can see but not change, places left on pages, free chat notifications, and one-click download of all your data."
 }

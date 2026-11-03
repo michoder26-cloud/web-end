@@ -11,7 +11,7 @@ import { getSite as findSite } from './owner'
 import { orderLines, orderStatuses, setOrderStatus } from './shop'
 import { listVersions, publishVersion, restoreVersion, unpublishedChanges } from './versions'
 import { version } from './version'
-import { eventNames, validWebhookUrl } from './webhooks'
+import { eventNames, hiddenUrl, isChatUrl, validWebhookUrl } from './webhooks'
 import { contrast, isHexColor, isSafeHref, siteStyles } from './theme'
 import type { Block, Env, FormField, Order, Settings, SiteRow } from './types'
 
@@ -49,7 +49,7 @@ Limits to explain honestly:
 - The owner has the full source code in their own GitHub account. A developer can change anything there. New versions are installed from the Updates page in the back office.
 - Photos can be uploaded in the back office, up to 1 MB each. Otherwise use public https links they have the right to use.
 - Secret API keys are created only by the owner on the Connect page of the back office. Never ask for one in chat.
-- It cannot check bank transfers automatically or send emails, though a webhook can trigger the owner's own automation. The owner confirms transfers in the back office and needs to check it for new orders. Card payments need the owner's own Stripe account and its secrets added in Cloudflare. It doesn't stop double bookings. A customer who forgets a password needs a reset link from the owner's back office.
+- It cannot check bank transfers automatically or send emails, though a webhook can trigger the owner's own automation. The owner confirms transfers in the back office and needs to check it for new orders. Card payments need the owner's own Stripe account and its secrets added in Cloudflare. Bookings can't be overbooked or doubled when the table uses capacityField and unique, as the screens guide shows. A customer who forgets a password needs a reset link from the owner's back office.
 - Don't collect health data, ID numbers or card details through forms, and never add a password field to a form. Customer passwords belong only to the built-in login.
 - Don't build sites that imitate another business or trick people.
 - Many countries require legal pages such as a privacy notice or imprint. Tell them to have legal text checked.`
@@ -667,6 +667,7 @@ export function createMcpServer(env: Env, origin: string, code: string) {
     },
     safely(async ({ events, url }) => {
       if (!validWebhookUrl(env, url)) return refuse('Use an https address.')
+      if (isChatUrl(url)) return refuse('A chat address holds a secret, so the owner should add it themselves on the Connect page of the back office. Do not ask them to paste it in this conversation.')
       const site = await getSite()
       const count = await db.prepare('SELECT COUNT(*) AS total FROM webhooks WHERE site_id = ?').bind(site.id).first<{ total: number }>()
       if ((count?.total ?? 0) >= 10) return refuse('A site can have up to 10 webhooks.')
@@ -684,8 +685,8 @@ export function createMcpServer(env: Env, origin: string, code: string) {
     },
     safely(async () => {
       const site = await getSite()
-      const { results } = await db.prepare('SELECT id, url, events, last_status, last_at FROM webhooks WHERE site_id = ? ORDER BY id').bind(site.id).all<{ events: string }>()
-      return reply(results.map((hook) => ({ ...hook, events: JSON.parse(hook.events) })))
+      const { results } = await db.prepare('SELECT id, url, events, last_status, last_at FROM webhooks WHERE site_id = ? ORDER BY id').bind(site.id).all<{ events: string; url: string }>()
+      return reply(results.map((hook) => ({ ...hook, events: JSON.parse(hook.events), url: hiddenUrl(hook.url) })))
     }),
   )
 

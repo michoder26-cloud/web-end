@@ -20,10 +20,15 @@ const fieldSpec = () =>
       spec('label', 'Label'),
       spec('type', 'Type', 'select', { options: [...fieldTypes] }),
       spec('required', 'Required', 'bool'),
-      spec('staffOnly', 'Staff only', 'bool'),
+      spec('staffOnly', 'Hidden from customers', 'bool'),
+      spec('readOnly', 'Customers can see it but not change it', 'bool'),
       spec('options', 'Choices, one per line', 'lines'),
       spec('table', 'Table it points to, for a reference'),
       spec('default', 'Starting value'),
+      spec('capacityField', 'Limit from this number field of the other table, such as seats'),
+      spec('unique', 'No repeats', 'select', { options: ['', 'table', 'customer'] }),
+      spec('ignoreField', 'Do not count records when this field'),
+      spec('ignoreValues', 'has one of these values, one per line', 'lines'),
     ],
   })
 
@@ -131,6 +136,26 @@ async function handleData(request: Request, env: Env, url: URL, site: SiteRow, c
   return changed.row ? see(url, `${path}?saved=1`) : tablePage(env, site, code, table, { error: changed.error })
 }
 
+/** Everything the owner needs to leave: their content and data in one file. Password data and secrets stay out. */
+async function exportEverything(env: Env, site: SiteRow) {
+  const all = async (sql: string) => (await env.DB.prepare(sql).bind(site.id).all()).results
+  const tables = await listTables(env, site.id)
+  const records: Record<string, unknown[]> = {}
+  for (const table of tables) records[table.name] = (await env.DB.prepare('SELECT id, customer_id, data, created_at, updated_at FROM data_records WHERE table_id = ? ORDER BY id LIMIT 50000').bind(table.id).all<{ data: string }>()).results.map((row) => ({ ...row, data: JSON.parse(row.data) as unknown }))
+  const [pages, items, variants, customers, orders, lines, entries, images] = await Promise.all([
+    all('SELECT slug, title, description, published, blocks FROM pages WHERE site_id = ?'),
+    all('SELECT * FROM items WHERE site_id = ?'),
+    all('SELECT item_variants.* FROM item_variants JOIN items ON items.id = item_variants.item_id WHERE items.site_id = ?'),
+    all('SELECT id, email, name, role, created_at FROM customers WHERE site_id = ?'),
+    all('SELECT id, customer_id, name, phone, address, note, payment, status, subtotal, shipping, total, money_prefix, money_suffix, created_at, updated_at FROM orders WHERE site_id = ?'),
+    all('SELECT order_lines.* FROM order_lines JOIN orders ON orders.id = order_lines.order_id WHERE orders.site_id = ?'),
+    all('SELECT id, form, page, data, status, created_at, customer_id FROM entries WHERE site_id = ?'),
+    all('SELECT id, name, type, size, created_at FROM media WHERE site_id = ?'),
+  ])
+  const body = JSON.stringify({ customers, entries, exported_at: new Date().toISOString(), format: 'web-end-export-1', images_note: 'Image files stay in your database. Each one can be downloaded from /media/<id>.', images, items, order_lines: lines, orders, pages, records, settings: JSON.parse(site.settings) as unknown, tables, variants, version }, null, 1)
+  return new Response(body, { headers: { 'Cache-Control': 'no-store', 'Content-Disposition': 'attachment; filename="web-end-export.json"', 'Content-Type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff', 'X-Robots-Tag': 'noindex' } })
+}
+
 const wixExample = (origin: string) => `// In Wix: Secrets Manager, add WEB_END_KEY. Then in backend/webend.web.js:
 import { Permissions, webMethod } from 'wix-web-module'
 import { fetch } from 'wix-fetch'
@@ -161,6 +186,7 @@ ${keys.map((key) => `<article class="card account__record"><h3>${escapeHtml(key.
 <h2>Websites that may call from a browser</h2><p>Only needed when a page calls the API directly, for public data or logged-in customers. Server code doesn't need this.</p>
 <form action="${base}/origins" class="contact-form" method="post"><label>One per line, such as https://www.example.com<textarea name="origins" rows="3">${escapeHtml((settings.allowedOrigins ?? []).join('\n'))}</textarea></label><button class="button button--small" type="submit">Save</button></form>
 <h2>Connect with Wix</h2><p>Keep your Wix pages and use this as the backend. This example hasn't been tested inside a real Wix site yet, so try it on a copy first. Claude can write the rest for you: ask it to read the connect_wix guide.</p><pre style="overflow:auto"><code>${escapeHtml(wixExample(url.origin))}</code></pre>
+<h2>Get told about new orders for free</h2><p>Paste a Discord, Slack or Telegram address below, and new orders and bookings arrive in that chat. Treat that address like a password. This hasn't been tried with real chat accounts yet, so check it with a test order.</p>
 <h2>Webhooks</h2><p>Sends a signed message to another service when something happens. Each message is sent once with no retry.</p>
 ${hooks.map((hook) => `<article class="card account__record"><h3 style="overflow-wrap:anywhere">${escapeHtml(hook.url)}</h3><p>${escapeHtml((JSON.parse(hook.events) as string[]).join(', '))}<br><small>${hook.last_at ? `Last message ${escapeHtml(hook.last_at.slice(0, 16).replace('T', ' '))} UTC: ${hook.last_status ? `answered ${hook.last_status}` : 'could not be reached'}` : 'Nothing sent yet'}</small></p><details><summary>Signing secret</summary><code style="overflow-wrap:anywhere">${escapeHtml(hook.secret)}</code></details><form action="${base}/webhook/${hook.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> Yes, remove this webhook</label><button class="button button--small" type="submit">Remove</button></form></article>`).join('')}
 <form action="${base}/webhook" class="contact-form" method="post"><label>Address<input maxlength="500" name="url" required type="url"></label><fieldset class="cms-block"><legend>Send when</legend>${eventNames.map((event) => `<label class="check"><input name="events" type="checkbox" value="${event}"> ${event}</label>`).join('')}</fieldset><button class="button button--small" type="submit">Add webhook</button></form>`,
@@ -285,6 +311,7 @@ async function systemPage(env: Env, url: URL, site: SiteRow, code: string) {
 <article class="card account__record"><h2>Publishing</h2><dl>${row('Live version', status.publishing.liveVersion ?? 'Not published yet, so changes show at once', '/publish')}${row('Waiting to publish', waiting ? waiting.pages.length + (waiting.settings ? 1 : 0) : 0)}</dl></article>
 <article class="card account__record"><h2>Database</h2><dl>${row('Pages', status.database.pages, '/pages')}${row('Tables', status.database.tables, '/data')}${row('Records', status.database.records)}${row('Customers', status.database.customers, '/customers')}${row('Orders', status.database.orders, '/orders')}${row('Images', `${(status.database.imageBytes / 1_000_000).toFixed(1)} MB of 200 MB`, '/media')}</dl></article>
 <article class="card account__record"><h2>Login and payments</h2><dl>${row('Customer accounts', on(status.login.customerAccounts), '/settings')}${row('Cart', on(status.payments.cart))}${row('Bank transfer', on(status.payments.bankTransfer))}${row('Pay on delivery', on(status.payments.payOnDelivery))}${row('Cards', on(status.payments.card))}${row('Stripe secrets in Cloudflare', status.payments.cardSecretsSet ? 'Set' : 'Not set')}</dl></article>
+<article class="card account__record"><h2>Your data is yours</h2><p>Your code is in your GitHub, and your database is in your Cloudflare account. You can also download all your content and data in one file at any time.</p><p><a class="button button--small" href="${base}/export.json">Download everything</a></p></article>
 <article class="card account__record"><h2>Connections</h2><dl>${row('Secret keys', status.connections.apiKeys, '/connect')}${row('Webhooks', status.connections.webhooks)}${row('Websites allowed to call from a browser', status.connections.browserSites.join(', ') || 'None')}</dl></article>`,
   )
 }
@@ -295,5 +322,6 @@ export function handlePlatform(request: Request, env: Env, url: URL, site: SiteR
   if (area === 'connect') return handleConnect(request, env, url, site, code, id, action, extra, saved)
   if (area === 'publish') return handlePublish(request, env, url, site, code, id, action, saved)
   if (area === 'system' && !id && request.method !== 'POST') return systemPage(env, url, site, code)
+  if (area === 'export.json' && !id && request.method === 'GET') return exportEverything(env, site)
   return null
 }

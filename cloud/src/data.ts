@@ -12,19 +12,24 @@ export const maxTablesPerSite = 50
 export const maxRecordsPerTable = 50_000
 
 const maxRecordBytes = 20_000
-const reservedFields = ['id', 'created_at', 'updated_at', 'customer_id', 'mine', 'website', 'next', 'op', 'confirm']
+const reservedFields = ['id', 'created_at', 'updated_at', 'customer_id', 'mine', 'website', 'next', 'op', 'confirm', 'spots_left']
 const namePattern = /^[a-z][a-z0-9_]{0,39}$/
 
 export type Access = (typeof accessLevels)[number]
 export type DataField = {
+  capacityField?: string
   default?: boolean | number | string
+  ignoreField?: string
+  ignoreValues?: string[]
   label: string
   name: string
   options?: string[]
+  readOnly?: boolean
   required?: boolean
   staffOnly?: boolean
   table?: string
   type: (typeof fieldTypes)[number]
+  unique?: '' | 'customer' | 'table'
 }
 export type DataTable = { fields: DataField[]; id: number; label: string; name: string; read_access: Access; record_count: number; write_access: Access }
 export type DataRow = { created_at: string; customer_id: null | number; data: string; id: number; updated_at: string }
@@ -44,7 +49,12 @@ export const tableBase = z.object({
           required: z.boolean().optional(),
           options: z.array(z.string().trim().min(1).max(80)).max(100).optional().describe('The choices of a select field'),
           table: z.string().regex(namePattern).optional().describe('The table a reference field points to'),
-          staffOnly: z.boolean().optional().describe('Only staff and the owner can see or change this field, such as a status or a private note'),
+          staffOnly: z.boolean().optional().describe('Only staff and the owner can see or change this field, such as a private note'),
+          readOnly: z.boolean().optional().describe('Everyone who can read the record can see this field, but only staff and the owner can change it, such as a booking status'),
+          capacityField: z.string().regex(namePattern).optional().describe('On a reference field: the number field of the record it points to that limits how many records can point to it, such as seats. Enforced by the database, so it cannot be overbooked.'),
+          unique: z.enum(['', 'table', 'customer']).optional().describe('table: no two records can have the same value. customer: one customer cannot use the same value twice, such as booking the same class twice.'),
+          ignoreField: z.string().regex(namePattern).optional().describe('With capacityField or unique: records are not counted when this field has one of ignoreValues, such as a status of cancelled'),
+          ignoreValues: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
           default: z.union([z.string().max(500), z.number(), z.boolean()]).optional().describe('The value of a new record when none is given'),
         }),
       )
@@ -63,6 +73,10 @@ export const tableSchema = tableBase.superRefine((table, context) => {
       if (field.type === 'select' && !field.options?.length) problem(`The field "${field.name}" needs a list of options.`)
       if (field.type === 'reference' && !field.table) problem(`The field "${field.name}" needs the table it points to.`)
       if (field.default !== undefined && !('value' in coerce(field as DataField, field.default))) problem(`The default of "${field.name}" isn't valid for its type.`)
+      if (field.capacityField && field.type !== 'reference') problem(`The field "${field.name}" can only have a capacity if it is a reference.`)
+      if (field.staffOnly && field.readOnly) problem(`The field "${field.name}" can't be both staff only and read only.`)
+      if (field.ignoreField && !table.fields.some((other) => other.name === field.ignoreField)) problem(`The field "${field.name}" ignores records by "${field.ignoreField}", which this table doesn't have.`)
+      if (field.ignoreField && !field.ignoreValues?.length) problem(`The field "${field.name}" needs the values to ignore.`)
     })
 })
 
@@ -114,7 +128,10 @@ export async function saveTable(env: Env, siteId: number, table: z.infer<typeof 
     if ((count?.total ?? 0) >= maxTablesPerSite) return `A site can have up to ${maxTablesPerSite} tables.`
   }
   for (const field of table.fields) {
-    if (field.type === 'reference' && field.table !== table.name && !(await getTable(env, siteId, field.table!))) return `The field "${field.name}" points to a table that doesn't exist yet: ${field.table}. Create that table first.`
+    if (field.type !== 'reference') continue
+    const target = field.table === table.name ? null : await getTable(env, siteId, field.table!)
+    if (field.table !== table.name && !target) return `The field "${field.name}" points to a table that doesn't exist yet: ${field.table}. Create that table first.`
+    if (field.capacityField && (field.table === table.name ? table.fields : target!.fields).find((other) => other.name === field.capacityField)?.type !== 'number') return `The field "${field.name}" takes its capacity from "${field.capacityField}", which must be a number field of the table ${field.table}.`
   }
   await env.DB.prepare(`INSERT INTO data_tables (site_id, name, label, fields, read_access, write_access) VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT (site_id, name) DO UPDATE SET label = excluded.label, fields = excluded.fields, read_access = excluded.read_access, write_access = excluded.write_access, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`)
@@ -151,7 +168,7 @@ async function readInput(env: Env, siteId: number, table: DataTable, input: Reco
   const data: Record<string, unknown> = {}
   for (const field of table.fields) {
     const held = existing?.[field.name]
-    const allowed = !field.staffOnly || isStaff(actor)
+    const allowed = !(field.staffOnly || field.readOnly) || isStaff(actor)
     const raw = allowed ? input[field.name] : undefined
     if (raw === undefined && existing) {
       if (held !== undefined) data[field.name] = held
@@ -215,17 +232,54 @@ export async function listRecords(env: Env, table: DataTable, actor: Actor, opti
 
 export const getRecord = (env: Env, table: DataTable, id: number) => env.DB.prepare('SELECT id, customer_id, data, created_at, updated_at FROM data_records WHERE id = ? AND table_id = ?').bind(id, table.id).first<DataRow>()
 
-type Saved = { error?: string; field?: string; row?: DataRow }
+type Saved = { code?: 'duplicate' | 'full'; error?: string; field?: string; row?: DataRow }
+
+const isIgnored = (field: DataField, data: Record<string, unknown>) => Boolean(field.ignoreField && field.ignoreValues?.includes(String(data[field.ignoreField] ?? '')))
+
+const counted = (field: DataField, alias: string) => (field.ignoreField && field.ignoreValues?.length ? { sql: ` AND COALESCE(json_extract(${alias}.data, '$.${field.ignoreField}'), '') NOT IN (${field.ignoreValues.map(() => '?').join(', ')})`, values: field.ignoreValues as unknown[] } : { sql: '', values: [] as unknown[] })
+
+type Guard = { code: 'duplicate' | 'full'; field: DataField; sql: string; values: unknown[] }
+
+/** Conditions the database checks in the same step as a write, so two people can't take the last seat at once. Field names were checked when the table was saved. */
+function writeGuards(table: DataTable, data: Record<string, unknown>, customerId: null | number, self?: DataRow) {
+  const before = self ? (JSON.parse(self.data) as Record<string, unknown>) : null
+  const guards: Guard[] = []
+  for (const field of table.fields) {
+    const value = data[field.name]
+    if (value === undefined || isIgnored(field, data)) continue
+    // A change that doesn't add to the count is always fine, even if a limit was lowered later.
+    if (before && before[field.name] === value && !isIgnored(field, before)) continue
+    const live = counted(field, 'r')
+    const others = self ? ' AND r.id != ?' : ''
+    const otherValues = self ? [self.id] : []
+    const same = `r.table_id = ? AND json_extract(r.data, '$.${field.name}') = ?${live.sql}${others}`
+    const sameValues = [table.id, value, ...live.values, ...otherValues]
+    if (field.unique === 'table') guards.push({ code: 'duplicate', field, sql: `NOT EXISTS (SELECT 1 FROM data_records r WHERE ${same})`, values: sameValues })
+    // Someone who already has a place should hear that, not that the session is full.
+    if (field.unique === 'customer' && customerId !== null) guards.push({ code: 'duplicate', field, sql: `NOT EXISTS (SELECT 1 FROM data_records r WHERE r.customer_id = ? AND ${same})`, values: [customerId, ...sameValues] })
+    if (field.capacityField) guards.push({ code: 'full', field, sql: `(SELECT COUNT(*) FROM data_records r WHERE ${same}) < COALESCE((SELECT json_extract(p.data, '$.${field.capacityField}') FROM data_records p WHERE p.id = ?), 1000000000)`, values: [...sameValues, value] })
+  }
+  return guards
+}
+
+async function refused(env: Env, guards: Guard[]): Promise<Saved> {
+  for (const guard of guards) {
+    const check = await env.DB.prepare(`SELECT (${guard.sql}) AS ok`).bind(...guard.values).first<{ ok: number }>()
+    if (!check?.ok) return { code: guard.code, error: guard.code === 'full' ? `"${guard.field.label}" is full.` : `"${guard.field.label}" is already taken.`, field: guard.field.name }
+  }
+  return { error: 'That could not be saved. Please try again.' }
+}
 
 export async function createRecord(env: Env, siteId: number, table: DataTable, input: Record<string, unknown>, actor: Actor): Promise<Saved> {
   if (table.record_count >= maxRecordsPerTable) return { error: `This table is full. It can hold up to ${maxRecordsPerTable} records.` }
   const read = await readInput(env, siteId, table, input, actor)
   if (!read.data) return { error: read.error, field: read.field }
-  const [inserted] = await env.DB.batch<DataRow>([
-    env.DB.prepare('INSERT INTO data_records (table_id, customer_id, data) VALUES (?, ?, ?) RETURNING id, customer_id, data, created_at, updated_at').bind(table.id, actor.customer?.id ?? null, JSON.stringify(read.data)),
-    env.DB.prepare('UPDATE data_tables SET record_count = record_count + 1 WHERE id = ?').bind(table.id),
-  ])
-  const row = inserted.results[0]
+  const guards = writeGuards(table, read.data, actor.customer?.id ?? null)
+  const row = await env.DB.prepare(`INSERT INTO data_records (table_id, customer_id, data) SELECT ?, ?, ? WHERE ${guards.map((guard) => guard.sql).join(' AND ') || '1'} RETURNING id, customer_id, data, created_at, updated_at`)
+    .bind(table.id, actor.customer?.id ?? null, JSON.stringify(read.data), ...guards.flatMap((guard) => guard.values))
+    .first<DataRow>()
+  if (!row) return refused(env, guards)
+  await env.DB.prepare('UPDATE data_tables SET record_count = record_count + 1 WHERE id = ?').bind(table.id).run()
   await fireEvent(env, siteId, 'record.created', { table: table.name, record: showRecord(table, row, ownerActor) })
   return { row }
 }
@@ -233,9 +287,13 @@ export async function createRecord(env: Env, siteId: number, table: DataTable, i
 export async function updateRecord(env: Env, siteId: number, table: DataTable, row: DataRow, input: Record<string, unknown>, actor: Actor): Promise<Saved> {
   const read = await readInput(env, siteId, table, input, actor, JSON.parse(row.data))
   if (!read.data) return { error: read.error, field: read.field }
-  const updated = await env.DB.prepare("UPDATE data_records SET data = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND table_id = ? RETURNING id, customer_id, data, created_at, updated_at").bind(JSON.stringify(read.data), row.id, table.id).first<DataRow>()
-  await fireEvent(env, siteId, 'record.updated', { table: table.name, record: showRecord(table, updated!, ownerActor) })
-  return { row: updated! }
+  const guards = writeGuards(table, read.data, row.customer_id, row)
+  const updated = await env.DB.prepare(`UPDATE data_records SET data = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND table_id = ?${guards.map((guard) => ` AND ${guard.sql}`).join('')} RETURNING id, customer_id, data, created_at, updated_at`)
+    .bind(JSON.stringify(read.data), row.id, table.id, ...guards.flatMap((guard) => guard.values))
+    .first<DataRow>()
+  if (!updated) return refused(env, guards)
+  await fireEvent(env, siteId, 'record.updated', { table: table.name, record: showRecord(table, updated, ownerActor) })
+  return { row: updated }
 }
 
 export async function deleteRecord(env: Env, siteId: number, table: DataTable, row: DataRow) {
@@ -268,9 +326,29 @@ const labelOf = (table: DataTable, row: DataRow) => {
   return typeof value === 'string' && value ? value : `#${row.id}`
 }
 
+/** How many places are left on each record, for tables that other tables book against. */
+export async function spotsLeft(env: Env, siteId: number, parent: DataTable, rows: DataRow[]) {
+  const left = new Map<number, number>()
+  if (!rows.length) return left
+  for (const child of await listTables(env, siteId)) {
+    for (const field of child.fields) {
+      if (field.type !== 'reference' || field.table !== parent.name || !field.capacityField) continue
+      const live = counted(field, 'data_records')
+      const { results } = await env.DB.prepare(`SELECT json_extract(data, '$.${field.name}') AS target, COUNT(*) AS used FROM data_records WHERE table_id = ?${live.sql} GROUP BY target`).bind(child.id, ...live.values).all<{ target: number; used: number }>()
+      const used = new Map(results.map((row) => [row.target, row.used]))
+      for (const row of rows) {
+        const capacity = (JSON.parse(row.data) as Record<string, unknown>)[field.capacityField]
+        if (typeof capacity === 'number') left.set(row.id, Math.max(capacity - (used.get(row.id) ?? 0), 0))
+      }
+    }
+  }
+  return left
+}
+
 export type PageRecords = {
   labels: Map<string, string>
-  options: Map<string, { id: number; label: string }[]>
+  left: Map<number, number>
+  options: Map<string, { full: boolean; id: number; label: string }[]>
   rows: DataRow[]
   scope: 'all' | 'mine' | null
   table: DataTable
@@ -284,18 +362,22 @@ export async function loadPageRecords(env: Env, siteId: number, blocks: Block[],
     const table = await getTable(env, siteId, block.table)
     if (!table) continue
     const scope = readScope(table, actor)
-    const page: PageRecords = { labels: new Map(), options: new Map(), rows: [], scope, table }
+    const page: PageRecords = { labels: new Map(), left: new Map(), options: new Map(), rows: [], scope, table }
     const references = table.fields.filter((field) => field.type === 'reference')
     if (block.type === 'records' && scope) {
       const list = await listRecords(env, table, actor, { limit: Number(block.limit) || 24, newestFirst: block.newestFirst !== false })
       page.rows = list.rows ?? []
+      page.left = await spotsLeft(env, siteId, table, page.rows)
     }
     for (const field of references) {
       const target = await getTable(env, siteId, field.table!)
       if (!target || readScope(target, actor) !== 'all') continue
       const list = await listRecords(env, target, actor, { limit: 100 })
       for (const row of list.rows ?? []) page.labels.set(`${field.name}:${row.id}`, labelOf(target, row))
-      if (block.type === 'record-form') page.options.set(field.name, (list.rows ?? []).map((row) => ({ id: row.id, label: labelOf(target, row) })))
+      if (block.type === 'record-form') {
+        const left = await spotsLeft(env, siteId, target, list.rows ?? [])
+        page.options.set(field.name, (list.rows ?? []).map((row) => ({ full: left.get(row.id) === 0, id: row.id, label: labelOf(target, row) })))
+      }
     }
     loaded.set(index, page)
   }
@@ -308,7 +390,7 @@ const safePath = (value: unknown) => (typeof value === 'string' && /^\/[a-z0-9-]
 export async function receiveRecord(request: Request, env: Env, url: URL, site: SiteRow, actor: Actor, name: string, id?: number) {
   const form = await request.formData().catch((): null => null)
   const path = safePath(form?.get('next'))
-  const back = (state: 'error' | 'sent') => see(url, `${path}?${state}=record-${name}#record-${name}`)
+  const back = (state: 'error' | 'sent', why?: string) => see(url, `${path}?${state}=record-${name}${why ? `&why=${why}` : ''}#record-${name}`)
   const table = await getTable(env, site.id, name)
   if (!form || !table) return see(url, path)
   if (id) {
@@ -326,5 +408,5 @@ export async function receiveRecord(request: Request, env: Env, url: URL, site: 
     else if (form.has(field.name)) input[field.name] = String(form.get(field.name))
   }
   const saved = await createRecord(env, site.id, table, input, actor)
-  return back(saved.row ? 'sent' : 'error')
+  return saved.row ? back('sent') : back('error', saved.code)
 }

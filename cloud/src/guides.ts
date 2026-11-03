@@ -11,7 +11,7 @@ export const guides = {
 - Names: short English in snake_case, such as start_date. Labels are in the site's language.
 - Field types: text, textarea, number, boolean, date, time, email, phone, url, select, image, reference.
 - Use select for a closed list, such as a status. Changing a label later is safe, but records keep the old value, so choose values with care.
-- Give a status field staffOnly true and a default, so customers can't approve their own booking. Also use staffOnly for private notes.
+- Give a status field readOnly true and a default, so customers can see it but can't approve their own booking. Use staffOnly for what customers must not see, such as private notes.
 - Put a person's contact details behind staffOnly if the table can be read publicly.
 - Money in custom tables is a number in normal units. Real selling belongs in the shop, which handles stock and totals.
 - Changing fields is safe. Existing records keep their values, and removed fields just stop showing. Deleting a table deletes its records, so ask first.`,
@@ -23,7 +23,7 @@ Customers with the staff role can read and change everything except owner tables
 Common recipes:
 - Listings anyone can read, only you edit: read public, write owner.
 - Contact or request form whose answers stay private: read owner, write public.
-- Bookings: read own, write members, with status staffOnly.
+- Bookings: read own, write members, with status readOnly.
 - Member directory: read members, write staff.
 - Public reviews by members: read public, write members, with email staffOnly. Only publish real reviews from real people.
 
@@ -34,6 +34,7 @@ Members, own and login prompts need update_site accounts true. Default to the ti
 - Keep one main job per page. Put the form beside or above the list it feeds.
 - Add every page people need to the navigation. Give the page a clear title and a 50 to 165 character description.
 - A page's id on a block lets links jump to it, such as #bookings.
+- Anything with limited places must use the database's limits, never a note on the page. On the bookings table's reference field set capacityField to the number field of the other table, such as seats, unique to customer so nobody books twice, and ignoreField with ignoreValues so cancelled bookings free their place. The database checks this in the same step as the write, so the last seat can't be sold twice. Pages then show the places left and mark full choices.
 - Empty states matter: add one or two clearly labelled samples only if the owner agrees, and remove them before launch.`,
   design: `# Design
 - Pick one style that suits the business: studio, editorial, warm, bold, or calm. Choose a distinctive accent colour, not a default blue.
@@ -101,7 +102,8 @@ Tell the owner this hasn't been tested inside a real Wix site by the web-end pro
 - REST API: /api/v1, described at /api/v1/openapi.json. Send no token for public access, a customer's token for their own access, or a secret key from server code only. A secret key sent from a browser is refused.
 - Browser calls from another site need that exact address in allowedOrigins.
 - Webhooks: save_webhook sends signed messages on record.created, record.updated, record.deleted, order.created, order.updated and customer.created. They go once with no retry, so don't rely on them alone for anything critical. The signature header is X-Web-End-Signature: t=<time>,v1=<HMAC-SHA256 of "<time>.<body>" with the signing secret>. The owner finds the secret on the Connect page.
-- This is also the way to send email or notifications today: point a webhook at the owner's own automation account.`,
+- Free notifications: the owner can paste a Discord, Slack or Telegram address on the Connect page, and new orders and bookings arrive in that chat. Those addresses hold a secret, so never ask for them in chat.
+- For email, point a webhook at the owner's own automation account.`,
   test_before_launch: `# Before launch
 - Run check_site and fix everything.
 - Try each role through the preview or the live site: visitor, new customer, second customer, staff, owner. The second customer must not see the first one's "own" records.
@@ -113,6 +115,7 @@ Tell the owner plainly what you could not test, such as real card payments or he
   limits: `# Honest limits
 - It runs on the owner's Cloudflare account. The free plan allows 100,000 requests and 5 million database rows read a day, 100,000 rows written a day, and 10 ms of processor time per request. At the limit it pauses until 00:00 UTC. Workers Paid starts at $5 a month.
 - 50 tables per site, 50,000 records per table, 20 KB per record. Filtering large tables reads many rows, so show short lists.
+- The owner can download all content and data from the System page. Their code is in their GitHub and their database in their Cloudflare account.
 - No built-in email, so a forgotten password needs a reset link from the back office. No automatic bank transfer checks. No built-in logic beyond tables, rules, webhooks and sandboxed custom code. Anything else means a developer changing the code in the owner's GitHub repository, and an update replaces such changes, though they stay in GitHub history.
 - No Google or social login yet.
 - Claude can't create secret keys, change Cloudflare secrets, or connect a domain. The owner does those.`,

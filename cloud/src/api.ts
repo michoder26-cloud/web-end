@@ -1,5 +1,5 @@
 import { allowAttempt, customerFromToken, endToken, newToken, openSession, registerCustomer, sha256, verifyLogin } from './auth'
-import { canChange, canCreate, createRecord, deleteRecord, getRecord, getTable, listRecords, listTables, readScope, showRecord, updateRecord } from './data'
+import { canChange, canCreate, createRecord, deleteRecord, getRecord, getTable, listRecords, listTables, readScope, showRecord, spotsLeft, updateRecord } from './data'
 import type { Actor, DataField, DataTable } from './data'
 import { getProduct, isAvailable } from './items'
 import { parsePrice } from './money'
@@ -146,14 +146,15 @@ async function handleData(request: Request, env: Env, url: URL, site: SiteRow, a
       const list = await listRecords(env, table, actor, { after: Number(url.searchParams.get('after')) || undefined, filters, limit: Number(url.searchParams.get('limit')) || undefined, newestFirst: url.searchParams.get('order') === 'newest' })
       if (list.error === 'forbidden') return forbidden()
       if (list.error) return fail(400, 'bad_filter', "You can't filter by that field.", list.field)
-      return json({ next: list.next, records: (list.rows ?? []).map((row) => showRecord(table, row, actor)) })
+      const left = await spotsLeft(env, site.id, table, list.rows ?? [])
+      return json({ next: list.next, records: (list.rows ?? []).map((row) => ({ ...showRecord(table, row, actor), ...(left.has(row.id) ? { spots_left: left.get(row.id) } : {}) })) })
     }
     if (request.method !== 'POST') return fail(405, 'bad_method', 'Use GET or POST.')
     if (!canCreate(table, actor)) return actor.customer || actor.admin ? forbidden() : fail(401, 'not_logged_in', 'Please log in.')
     const body = await readBody(request)
     if (!body) return fail(400, 'bad_body', 'Send a JSON object of up to 64 KB.')
     const saved = await createRecord(env, site.id, table, body, actor)
-    return saved.row ? json({ record: showRecord(table, saved.row, actor) }, 201) : fail(400, 'invalid', saved.error ?? 'That is not valid.', saved.field)
+    return saved.row ? json({ record: showRecord(table, saved.row, actor) }, 201) : fail(saved.code ? 409 : 400, saved.code ?? 'invalid', saved.error ?? 'That is not valid.', saved.field)
   }
 
   if (!/^\d{1,12}$/.test(id)) return notFound()
@@ -171,7 +172,7 @@ async function handleData(request: Request, env: Env, url: URL, site: SiteRow, a
   const body = await readBody(request)
   if (!body) return fail(400, 'bad_body', 'Send a JSON object of up to 64 KB.')
   const saved = await updateRecord(env, site.id, table, row, body, actor)
-  return saved.row ? json({ record: showRecord(table, saved.row, actor) }) : fail(400, 'invalid', saved.error ?? 'That is not valid.', saved.field)
+  return saved.row ? json({ record: showRecord(table, saved.row, actor) }) : fail(saved.code ? 409 : 400, saved.code ?? 'invalid', saved.error ?? 'That is not valid.', saved.field)
 }
 
 async function handleOrders(request: Request, env: Env, url: URL, site: SiteRow, settings: Settings, actor: Actor, id?: string) {
@@ -251,7 +252,7 @@ function openApi(url: URL, settings: Settings, tables: DataTable[], actor: Actor
   const schemas: Record<string, object> = {}
   for (const table of tables) {
     const fields = table.fields.filter((field) => !field.staffOnly || staff)
-    schemas[table.name] = { properties: Object.fromEntries(fields.map((field) => [field.name, { ...(jsonTypes[field.type] ?? { type: 'string' }), description: field.label, ...(field.options ? { enum: field.options } : {}) }])), required: fields.filter((field) => field.required).map((field) => field.name), type: 'object' }
+    schemas[table.name] = { properties: Object.fromEntries(fields.map((field) => [field.name, { ...(jsonTypes[field.type] ?? { type: 'string' }), description: field.label, ...(field.options ? { enum: field.options } : {}), ...(field.readOnly && !staff ? { readOnly: true } : {}) }])), required: fields.filter((field) => field.required).map((field) => field.name), type: 'object' }
     const reference = { $ref: `#/components/schemas/${table.name}` }
     const body = { content: { 'application/json': { schema: reference } }, required: true }
     paths[`/data/${table.name}`] = { get: { summary: `List ${table.label}. Options: limit, after, order=newest, filter.<field>=<value>` }, post: { requestBody: body, summary: `Add to ${table.label}` } }
