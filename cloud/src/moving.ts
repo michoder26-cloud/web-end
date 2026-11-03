@@ -370,7 +370,7 @@ export function parseCsv(input: string) {
   return rows
 }
 
-type ImportedVariant = { compare: string; name: string; price: string; stock: null | number }
+type ImportedVariant = { amount: number; compare: string; name: string; price: string; stock: null | number }
 export type ImportedProduct = { alt: string; body: string; category: string; compare: string; image: string; price: string; published: boolean; stock: null | number; title: string; variants: ImportedVariant[] }
 
 const stockFrom = (value: string) => {
@@ -434,7 +434,7 @@ export function parseWixProducts(csv: string, sign: string) {
       if (!name || product.variants.some((variant) => variant.name === name) || product.variants.length >= 30) continue
       const surcharge = Number(get(row, 'surcharge')) || 0
       const price = get(row, 'price') || (surcharge ? String(product.base + surcharge) : '')
-      product.variants.push({ compare: money(get(row, 'strikethroughprice')), name, price: money(price), stock: stockFrom(get(row, 'inventory')) })
+      product.variants.push({ amount: Number(price) || 0, compare: money(get(row, 'strikethroughprice')), name, price: money(price), stock: stockFrom(get(row, 'inventory')) })
     } else if (kind === 'MEDIA') {
       const product = products.get(handle)
       const media = get(row, 'media')
@@ -445,7 +445,13 @@ export function parseWixProducts(csv: string, sign: string) {
   }
   const list = [...products.values()].filter((product) => product.title)
   for (const product of list) {
-    if (!product.variants.length && product.list.length === 1) product.variants = product.list[0].slice(0, 30).map((name) => ({ compare: '', name: name.slice(0, 60), price: '', stock: product.stock }))
+    if (!product.variants.length && product.list.length === 1) product.variants = product.list[0].slice(0, 30).map((name) => ({ amount: 0, compare: '', name: name.slice(0, 60), price: '', stock: product.stock }))
+    // Wix leaves the price off the product row when a product has options, so the cards show the lowest option price.
+    const lowest = product.price ? undefined : product.variants.filter((variant) => variant.amount > 0).sort((a, b) => a.amount - b.amount)[0]
+    if (lowest) {
+      product.price = lowest.price
+      product.compare = lowest.compare
+    }
   }
   return { extraImages, products: list as ImportedProduct[] }
 }

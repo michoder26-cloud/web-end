@@ -1,4 +1,4 @@
 {
-  "version": "0.6.3",
-  "notes": "A page title that already has your site name no longer repeats it, which matters for moved pages. A moved site keeps its button labels, and the move check runs by itself when Claude checks or publishes your site."
+  "version": "0.6.4",
+  "notes": "Products with options from a Wix file now show a price on their cards, and the site check warns when product photos still load from Wix."
 }

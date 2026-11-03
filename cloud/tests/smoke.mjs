@@ -980,6 +980,20 @@ const movedShirt = await (await fetch(`${base}/product/${movedItems.find((row) =
 check(movedShirt.includes('Small') && movedShirt.includes('Large') && movedShirt.includes('35'), 'keeps options with their own prices')
 check((await (await fetch(`${base}/product/${movedItems.find((row) => row.title === 'Colour Sock').id}`)).text()).includes('Grey'), 'reads colour options')
 check((await call('import_products', { csv: newWixFile, collection: 'moved' })).data.skippedAlreadyThere === 4, 'importing twice adds nothing new')
+check((await call('check_site')).data.problems.some((problem) => problem.includes('load their photos from Wix')), 'warns about product photos still on Wix')
+// Shaped like a real Wix export: a product with options has no price on its own row, and its photo is on a MEDIA row.
+const exportedWixFile = [
+  'handle,fieldType,name,visible,plainDescription,media,price,strikethroughPrice,inventory,productOptionName1,productOptionType1,productOptionChoices1',
+  'Product_a,PRODUCT,"เสื้อ ""Test"", รุ่นหนึ่ง",true,<p>Sample</p>,,,,Size,TEXT_CHOICES,S;M',
+  'Product_a,VARIANT,,true,,,1399,1599,OUT_OF_STOCK,Size,TEXT_CHOICES,M',
+  'Product_a,VARIANT,,true,,,1299.5,1599,3,Size,TEXT_CHOICES,S',
+  'Product_a,MEDIA,,,,c837a6_f83b~mv2.jpg,,,,,,',
+].join('\n')
+check((await call('import_products', { csv: exportedWixFile, collection: 'moved-real' })).data.imported === 1, 'reads a real Wix export')
+const exportedItem = (await call('list_items', { collection: 'moved-real' })).data[0]
+check(exportedItem.title === 'เสื้อ "Test", รุ่นหนึ่ง' && exportedItem.price.includes('1,299.50') && exportedItem.compare_price.includes('1,599') && exportedItem.body === 'Sample' && exportedItem.image_url === 'https://static.wixstatic.com/media/c837a6_f83b~mv2.jpg', 'a product with options shows its lowest option price', JSON.stringify(exportedItem))
+const exportedPage = await (await fetch(`${base}/product/${exportedItem.id}`)).text()
+check(/S · [^<]*1,299\.50/.test(exportedPage) && /M · [^<]*1,399 \([^)]+\)/.test(exportedPage), 'each option keeps its own price and sold out state')
 const oldWixFile = 'handleId,fieldType,name,description,productImageUrl,collection,price,surcharge,visible,discountMode,discountValue,inventory,productOptionName1,productOptionType1,productOptionDescription1\nold1,Product,Old Style Lamp,<p>Warm <b>light</b></p>,lamp_a~mv2.jpg;lamp_b~mv2.jpg,Home;Sale,100,,true,PERCENT,10,InStock,Size,DROP_DOWN,S;M\nold1,Variant,,,,,,5,,,,7,,,M\n'
 check(!(await call('import_products', { csv: oldWixFile, collection: 'moved-old' })).isError, 'also reads the older Wix layout')
 const oldLamp = (await call('list_items', { collection: 'moved-old' })).data[0]

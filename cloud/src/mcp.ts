@@ -169,6 +169,8 @@ export async function findProblems(env: Env, site: SiteRow) {
   const { results: stored } = await env.DB.prepare('SELECT collection FROM items WHERE site_id = ? AND published = 1').bind(site.id).all<{ collection: string }>()
   const collections = new Set(stored.map((item) => item.collection))
   const problems: string[] = []
+  const onOldHost = await env.DB.prepare("SELECT COUNT(*) AS total FROM items WHERE site_id = ? AND published = 1 AND image_url LIKE '%static.wixstatic.com/%'").bind(site.id).first<{ total: number }>()
+  if (onOldHost?.total) problems.push(`${onOldHost.total} products still load their photos from Wix, so they may stop working when the old site closes. Copy them with copy_image, then save each product with save_item.`)
   const tables = new Map((await listTables(env, site.id)).map((table) => [table.name, table]))
   for (const table of tables.values()) {
     if ([table.read_access, table.write_access].some((level) => ['members', 'own'].includes(level)) && !settings.accounts) problems.push(`The table "${table.name}" is for logged-in customers, but customer accounts are off.`)
