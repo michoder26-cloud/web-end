@@ -15,7 +15,7 @@ Rebuild:
 7. Copy the owner's own photos with copy_image, one at a time, and use the /media address. It handles up to 200 MB in total, so prefer the photos that matter. Ask the owner about anything that looks like a template photo. Photos over 1 MB after resizing need to be made smaller by the owner.
 
 Check the rebuild:
-8. Run check_move for every page, comparing the old address with the new page. Add what's missing, then run it again until it's clean or every remaining item is a deliberate choice. Navigation and footer lines count, so set the site's menu and footer. Don't say everything moved unless check_move shows it. Your own memory of the work isn't evidence.
+8. Keep each page's exact title, then run check_site. It compares every old page you read with the page rebuilt from it, and lists the text, button labels and photos that didn't come across. publish_site stops once if it finds differences. Add what's missing and check again, until it's clean or every remaining item is a deliberate choice you tell the owner about. Menu and footer words count, so use the site's menu and footerText, with update_site. Don't use custom code for menus, footers or buttons, because links in it can't reach this site's pages. Don't say everything moved unless the check shows it. Your memory of the work isn't evidence.
 
 Shop:
 9. Ask the owner to export products from Wix: Store Products, More Actions, Import, Export Products. They upload the file on the Move page of the back office, which suits a large file better than pasting it here. Then run list_items, copy each product's photo, and update it with save_item. Check a few prices against the old site.
@@ -28,7 +28,7 @@ Customers:
 12. Contacts can be exported from Wix, but passwords can't move, and customers will need to sign up again. Orders, reviews, memberships, bookings, blog comments and forms aren't moved by these tools. List whatever the old site used, so the owner can decide. Customer data must only be moved in line with the owner's privacy notice.
 
 Finish:
-13. Run check_site. Make sure every page from scan_website has a check_move result, then give the owner a list: moved, changed, not moved, using those results. Point them to the Move page, where they can read the checks themselves.
+13. Make sure every page from scan_website was read, then give the owner a list: moved, changed, not moved, using the check's results. Point them to the Move page, where they can read the results themselves.
 14. Tell them to check the preview on a phone, publish, then move the domain and only then close the old site. If the domain was bought from Wix, it can stay there and point here, or be transferred out.
 
 Features Wix apps provide, such as bookings or members, can often be rebuilt with tables. Read plan_app before promising that. Don't claim the move is complete unless you checked it.`,

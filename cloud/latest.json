@@ -1,4 +1,4 @@
 {
-  "version": "0.6.0",
-  "notes": "A check that compares each moved page with your old page and lists what did not come across, so you can see the result yourself. Copied photos are no longer stored twice."
+  "version": "0.6.1",
+  "notes": "The move check now runs by itself when Claude checks or publishes your site, and publishing stops once if anything did not come across. It also warns about links inside custom code."
 }

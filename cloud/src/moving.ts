@@ -1,3 +1,4 @@
+import { sha256 } from './auth'
 import { loadPageRecords } from './data'
 import { loadItems, saveImage } from './items'
 import { renderPage } from './render'
@@ -234,16 +235,28 @@ const pageText = (html: string) => comparable(html.replace(/<(script|style)\b[\s
 
 const maxReported = 60
 
-/** Compares a rebuilt page with its old page, using what the two actually contain and not what anyone says was moved. */
-export async function checkMove(env: Env, site: SiteRow, target: URL, slug: string) {
-  const page = await findWorkingPage(env, site, slug)
-  if (!page) return { error: `There is no page called "${slug}".` }
-  const old = await readWebPage(target)
-  if ('error' in old) return { error: old.error }
+type Reading = { description: string; headings: { level: number; text: string }[]; images: { url: string }[]; links: { text: string }[]; text: string[]; title: string; truncated: boolean; url: string }
+type WorkingPage = { blocks: string; description: string; published: number; slug: string; title: string }
+
+const sourcesKeptDays = 30
+
+/** Keeps what an old page contained, so the move can be checked later by any tool, without reading the page again. */
+export async function rememberReading(env: Env, siteId: number, reading: Reading, slug: null | string = null) {
+  const kept = { description: reading.description, headings: reading.headings.map((heading) => ({ level: heading.level, text: heading.text })), images: reading.images.map((image) => ({ url: image.url })), links: reading.links.map((link) => ({ text: link.text })), text: reading.text, title: reading.title, truncated: reading.truncated, url: reading.url }
+  await env.DB.prepare(`INSERT INTO move_sources (site_id, url, page_slug, reading) VALUES (?, ?, ?, ?)
+    ON CONFLICT (site_id, url) DO UPDATE SET page_slug = COALESCE(excluded.page_slug, page_slug), reading = excluded.reading, read_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`)
+    .bind(siteId, reading.url, slug, JSON.stringify(kept))
+    .run()
+}
+
+/** Compares a rebuilt page with a saved reading of its old page, using what the two contain and not what anyone says was moved. */
+async function comparePage(env: Env, site: SiteRow, old: Reading, page: WorkingPage) {
   const blocks = JSON.parse(page.blocks) as Block[]
   const [items, records] = await Promise.all([loadItems(env, site.id, blocks), loadPageRecords(env, site.id, blocks, { admin: false, customer: null })])
-  const html = renderPage(site, { ...page, blocks }, { canonical: `${new URL(old.url).origin}/`, customer: null, items, records })
-  const text = pageText(html)
+  const html = renderPage(site, { ...page, blocks }, { canonical: 'https://site.invalid/', customer: null, items, records })
+  // Custom code shows in its own frame, so its words are checked from the source.
+  const customCode = blocks.filter((block) => block.type === 'html').map((block) => String(block.code)).join(' ')
+  const text = pageText(`${html} ${customCode}`)
   const uses = (line: string) => text.includes(comparable(line))
   const lines = [...new Set([...old.headings.map((heading) => heading.text), ...old.text])].filter((line) => comparable(line).length > 1)
   const textMissing = lines.filter((line) => !uses(line))
@@ -253,15 +266,15 @@ export async function checkMove(env: Env, site: SiteRow, target: URL, slug: stri
     ? await env.DB.prepare(`SELECT id, source FROM media WHERE site_id = ? AND source IN (${sources.map(() => '?').join(',')})`).bind(site.id, ...sources).all<{ id: number; source: string }>()
     : { results: [] as { id: number; source: string }[] }
   const copied = new Map(copies.map((row) => [row.source, row.id]))
-  const usedOnPage = (id: number) => new RegExp(`/media/${id}(?![0-9])`).test(html)
+  const shows = `${html} ${customCode}`
+  const usedOnPage = (id: number) => new RegExp(`/media/${id}(?![0-9])`).test(shows)
   const imagesNotCopied = sources.filter((source) => !copied.has(source))
   const imagesCopiedNotUsed = sources.filter((source) => copied.has(source) && !usedOnPage(copied.get(source)!))
-  const imagesStillOnOldHost = [...new Set([...html.matchAll(/(?:src|href)="(https:\/\/static\.wixstatic\.com\/[^"]+)"/g)].map((match) => match[1]))]
+  const imagesStillOnOldHost = [...new Set([...shows.matchAll(/(?:src|href)="(https:\/\/static\.wixstatic\.com\/[^"]+)"/g)].map((match) => match[1]))]
   const titleKept = comparable(page.title) === comparable(old.title) || comparable(old.title).includes(comparable(page.title)) || comparable(page.title).includes(comparable(old.title))
   const descriptionKept = !old.description || comparable(page.description) === comparable(old.description)
   const counts = { imagesCopiedNotUsed: imagesCopiedNotUsed.length, imagesNotCopied: imagesNotCopied.length, imagesOnOldHost: imagesStillOnOldHost.length, linkTextMissing: linkTextMissing.length, textMissing: textMissing.length }
-  const problems = Object.values(counts).reduce((sum, count) => sum + count, 0) + (titleKept ? 0 : 1) + (descriptionKept ? 0 : 1)
-  const report = {
+  return {
     counts,
     descriptionKept,
     imagesCopiedNotUsed: imagesCopiedNotUsed.slice(0, maxReported),
@@ -270,21 +283,57 @@ export async function checkMove(env: Env, site: SiteRow, target: URL, slug: stri
     imagesStillOnOldHost: imagesStillOnOldHost.slice(0, maxReported),
     linesOnOldPage: lines.length,
     linkTextMissing: linkTextMissing.slice(0, maxReported),
-    newPage: slug,
+    newPage: page.slug,
     oldPageWasCut: old.truncated,
     oldUrl: old.url,
-    problems,
+    problems: Object.values(counts).reduce((sum, count) => sum + count, 0) + (titleKept ? 0 : 1) + (descriptionKept ? 0 : 1),
     textMissing: textMissing.slice(0, maxReported),
     titleKept,
   }
-  await env.DB.prepare(`INSERT INTO move_checks (site_id, page_slug, old_url, problems, report) VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT (site_id, page_slug) DO UPDATE SET old_url = excluded.old_url, problems = excluded.problems, report = excluded.report, checked_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`)
-    .bind(site.id, slug, old.url, problems, JSON.stringify(report))
-    .run()
-  return { report }
 }
 
-export type MoveReport = Extract<Awaited<ReturnType<typeof checkMove>>, { report: unknown }>['report']
+export type MoveReport = Awaited<ReturnType<typeof comparePage>>
+
+/** Reads an old page now and compares a chosen page with it. */
+export async function checkMove(env: Env, site: SiteRow, target: URL, slug: string) {
+  const page = await findWorkingPage(env, site, slug)
+  if (!page) return { error: `There is no page called "${slug}".` }
+  const old = await readWebPage(target)
+  if ('error' in old) return { error: old.error }
+  await rememberReading(env, site.id, old, slug)
+  return { report: await comparePage(env, site, old, page as WorkingPage) }
+}
+
+/** The state of a whole move: each old page that was read, matched with the page rebuilt from it. */
+export async function moveStatus(env: Env, site: SiteRow) {
+  const since = new Date(Date.now() - sourcesKeptDays * 86_400_000).toISOString()
+  const { results: sources } = await env.DB.prepare('SELECT url, page_slug, reading FROM move_sources WHERE site_id = ? AND read_at > ? ORDER BY url LIMIT 60').bind(site.id, since).all<{ page_slug: null | string; reading: string; url: string }>()
+  if (!sources.length) return { notRebuilt: [] as string[], pages: [] as MoveReport[], problems: 0 }
+  const { results: pages } = await env.DB.prepare('SELECT slug, title, description, published, blocks FROM pages WHERE site_id = ?').bind(site.id).all<WorkingPage>()
+  const reports: MoveReport[] = []
+  const notRebuilt: string[] = []
+  for (const source of sources) {
+    const old = JSON.parse(source.reading) as Reading
+    const wanted = comparable(old.title)
+    const page = pages.find((item) => item.slug === source.page_slug) ?? pages.find((item) => comparable(item.title) === wanted) ?? pages.find((item) => wanted && wanted.includes(comparable(item.title)) && item.title.length > 3)
+    if (page) reports.push(await comparePage(env, site, old, page))
+    else notRebuilt.push(source.url)
+  }
+  return { notRebuilt, pages: reports, problems: reports.reduce((sum, report) => sum + report.problems, 0) + notRebuilt.length }
+}
+
+/** A move's differences stop a publish once, so they get seen. If nothing changes after that, going ahead is the owner's call. */
+export async function moveGate(env: Env, site: SiteRow) {
+  const status = await moveStatus(env, site)
+  if (!status.problems) return { status, stop: false }
+  const fingerprint = await sha256(JSON.stringify([status.notRebuilt, status.pages.map((page) => [page.newPage, page.problems, page.textMissing, page.linkTextMissing])]))
+  const row = await env.DB.prepare('SELECT move_differences_shown AS shown FROM sites WHERE id = ?').bind(site.id).first<{ shown: null | string }>()
+  if (row?.shown === fingerprint) return { status, stop: false }
+  await env.DB.prepare('UPDATE sites SET move_differences_shown = ? WHERE id = ?').bind(fingerprint, site.id).run()
+  return { status, stop: true }
+}
+
+export const finishMove = (env: Env, siteId: number) => env.DB.prepare('DELETE FROM move_sources WHERE site_id = ?').bind(siteId).run()
 
 export function parseCsv(input: string) {
   const text = input.replace(/^﻿/, '')

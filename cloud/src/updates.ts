@@ -66,7 +66,8 @@ export function updatesBody(code: string, repo: string | undefined, latest: Awai
 <ol class="cms-steps">
 <li><strong>First time only:</strong> <a href="${escapeHtml(addUrl)}" rel="noopener noreferrer" target="_blank">add the updater to GitHub</a>, then press <em>Commit changes</em>.</li>
 <li><a href="${escapeHtml(runUrl)}" rel="noopener noreferrer" target="_blank">Open the updater</a>, press <em>Run workflow</em>, then <em>Run workflow</em> again.</li>
-<li>Wait a few minutes while Cloudflare rebuilds your site. Refresh this page and the version number changes.</li>
+<li>Wait while Cloudflare rebuilds your site. It usually takes a few minutes, and it can wait in a queue for 10 minutes or more. Refresh this page and the version number changes.</li>
+<li>Start a new chat with Claude. New abilities can take a while to appear there. If one is missing, turn the connector off and on in Claude's settings.</li>
 </ol>
 <p>Your pages, products, orders, customers and private links stay as they are. If a developer changed your site's code, those changes get replaced, but they stay in your GitHub history.</p>
 <h2>Repository</h2>${repoForm}`

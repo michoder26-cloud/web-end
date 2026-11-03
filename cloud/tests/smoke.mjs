@@ -1068,15 +1068,30 @@ check(!reading.text.includes('SCRIPT-TEXT') && !reading.text.includes('color:red
   check((await moveCheck('old-cafe')).data.imagesStillOnOldHost.includes('https://static.wixstatic.com/media/cafe_a~mv2.jpg'), 'warns about photos still loading from the old site')
   const officeCheck = await fetch(`${owner}/move/check`, { body: new URLSearchParams({ page: 'old-cafe', url: 'http://localhost:8795/' }), method: 'POST', redirect: 'manual' })
   check(officeCheck.status === 303, 'the owner can run the check from the back office')
-  const publishedWithDifferences = await call('publish_site', { note: 'With differences' })
-  check(publishedWithDifferences.data.movedPagesWithDifferences?.some((row) => row.page_slug === 'old-cafe'), 'publishing warns about moved pages with differences')
+  const stoppedPublish = await call('publish_site', { note: 'With differences' })
+  check(stoppedPublish.data.published === false && stoppedPublish.data.differences.pages.some((row) => row.newPage === 'old-cafe' && row.textMissing.includes('Open late')), 'publishing stops once and lists what did not come across', stoppedPublish.text.slice(0, 300))
+  const secondPublish = await call('publish_site', { note: 'With differences' })
+  check(secondPublish.data.published === true && secondPublish.data.movedPagesWithDifferences?.some((row) => row.page === 'old-cafe'), 'publishing again goes ahead and still reports the differences')
+  await call('save_page', { slug: 'old-cafe', title: 'Old & Gold Cafe', description: 'The best coffee.', published: true, blocks: [{ type: 'hero', heading: 'Welcome home' }, { type: 'text', body: 'Open late' }] })
+  check((await call('publish_site', { note: 'Changed again' })).data.published === false, 'new differences stop publishing again')
+  await call('publish_site', { note: 'Changed again' })
+  const siteCheck = (await call('check_site', {})).data
+  check(siteCheck.ok === false && siteCheck.move.pages.some((row) => row.newPage === 'old-cafe' && row.textMissing.includes('We roast every day.')), 'check_site compares moved pages by itself, matching them by title')
+  await call('save_page', { slug: 'old-cafe', title: 'Old & Gold Cafe', description: 'The best coffee.', published: true, blocks: [{ type: 'hero', heading: 'Welcome home' }, { type: 'html', code: '<p>We roast every day.</p><a href="/seats">Open late</a>' }] })
+  const inCode = (await call('check_site', {})).data
+  check(!inCode.move.pages.find((row) => row.newPage === 'old-cafe').textMissing.includes('We roast every day.') && inCode.problems.some((problem) => problem.includes('links inside custom code')), 'custom code counts as text, and its links are warned about')
+  await fetch(`${owner}/move/finish`, { body: new URLSearchParams({}), method: 'POST', redirect: 'manual' })
+  check((await call('check_site', {})).data.move, 'finishing a move needs a tick')
+  check((await (await fetch(`${owner}/move`)).text()).includes('Finish the move'), 'the Move page offers to finish')
+  await fetch(`${owner}/move/finish`, { body: new URLSearchParams({ confirm: 'on' }), method: 'POST', redirect: 'manual' })
+  check(!(await call('check_site', {})).data.move && (await call('publish_site', { note: 'After the move' })).data.published === true, 'after finishing, the old site is no longer compared')
   check((await (await fetch(`${owner}/move/check`, { body: new URLSearchParams({ page: 'old-cafe', url: 'ftp://x.test/' }), method: 'POST' })).text()).includes('public https'), 'the back office refuses bad addresses')
   await call('delete_page', { slug: 'old-cafe' })
   await new Promise((done) => oldSite.close(done))
 } else {
   check((await call('scan_website', { url: 'http://localhost:8795/', ownerConfirmed: true })).isError && (await call('copy_image', { url: 'https://localhost/x.png', ownerConfirmed: true })).isError && (await call('read_website_page', { url: 'https://10.0.0.1/', ownerConfirmed: true })).isError, 'plain and private addresses are refused')
 }
-check((await call('get_guide', { topic: 'move_from_wix' })).text.includes('check_move') && (await call('get_guide', { topic: 'move_from_wix' })).text.includes('rebuild') && (await client.listPrompts()).prompts.some((item) => item.name === 'move_my_site'), 'Claude has a move guide and a ready prompt')
+check((await call('get_guide', { topic: 'move_from_wix' })).text.includes('check_site') && (await call('get_guide', { topic: 'move_from_wix' })).text.includes('rebuild') && (await client.listPrompts()).prompts.some((item) => item.name === 'move_my_site'), 'Claude has a move guide and a ready prompt')
 
 let attempts = 0
 let limited = false
