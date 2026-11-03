@@ -109,7 +109,7 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
       element(element: Element) {
         buffer = ''
         // An element can only be read while its own handler runs, so its link is kept for the end tag.
-        const href = element.getAttribute('href') ?? ''
+        const href = decode(element.getAttribute('href') ?? '')
         element.onEndTag(() => {
           const text = clean(buffer)
           if (text) done(text, href)
@@ -135,16 +135,18 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
     .on('meta', {
       element(element) {
         const name = (element.getAttribute('name') ?? element.getAttribute('property') ?? '').toLowerCase()
-        const content = element.getAttribute('content') ?? ''
+        const content = decode(element.getAttribute('content') ?? '')
         if (name === 'description' || (name === 'og:description' && !page.description)) page.description = clean(content)
         if (name === 'og:image') addImage(content, 'Main image')
       },
     })
-    .on('img', { element: (element) => addImage(element.getAttribute('src') ?? element.getAttribute('data-src'), element.getAttribute('alt')) })
+    .on('img', { element: (element) => addImage(decode(element.getAttribute('src') ?? element.getAttribute('data-src') ?? ''), element.getAttribute('alt')) })
     .on('wow-image', {
       element(element) {
-        const uri = /"uri"\s*:\s*"([^"]+)"/.exec(element.getAttribute('data-image-info') ?? '')?.[1]
-        const alt = /"alt"\s*:\s*"([^"]*)"/.exec(element.getAttribute('data-image-info') ?? '')?.[1]
+        // The parser hands over attributes as written, and Wix writes this JSON with its quotes encoded.
+        const info = decode(element.getAttribute('data-image-info') ?? '')
+        const uri = /"uri"\s*:\s*"([^"]+)"/.exec(info)?.[1]
+        const alt = /"alt"\s*:\s*"([^"]+)"/.exec(info)?.[1] ?? /"name"\s*:\s*"([^"]+)"/.exec(info)?.[1]
         if (uri) addImage(uri, alt)
       },
     })
