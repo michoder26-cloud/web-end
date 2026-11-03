@@ -1,4 +1,4 @@
 {
-  "version": "0.5.1",
-  "notes": "Move your own site here from Wix: Claude reads and rebuilds your pages, copies your photos, imports your product file, and keeps old links working. Also adds fields customers can fill in once."
+  "version": "0.6.0",
+  "notes": "A check that compares each moved page with your old page and lists what did not come across, so you can see the result yourself. Copied photos are no longer stored twice."
 }

@@ -60,15 +60,15 @@ const maxImageBytes = 1_000_000
 const maxSiteImageBytes = 200_000_000
 
 /** Stores a photo in the database, trusting its bytes and not the name or type the browser sent. */
-export async function saveImage(env: Env, siteId: number, file: File) {
+export async function saveImage(env: Env, siteId: number, file: File, source: null | string = null) {
   if (file.size > maxImageBytes) return { error: 'That image is larger than 1 MB. Please make it smaller.' }
   const bytes = new Uint8Array(await file.arrayBuffer())
   const type = signatures.find(([, matches]) => matches(bytes))?.[0]
   if (!type) return { error: 'Use a PNG, JPEG, WebP or GIF image.' }
   const used = await env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS total FROM media WHERE site_id = ?').bind(siteId).first<{ total: number }>()
   if ((used?.total ?? 0) + bytes.length > maxSiteImageBytes) return { error: 'The image storage is full. Delete some images first.' }
-  const row = await env.DB.prepare('INSERT INTO media (site_id, name, type, size, bytes) VALUES (?, ?, ?, ?, ?) RETURNING id')
-    .bind(siteId, file.name.slice(0, 120) || 'image', type, bytes.length, bytes.buffer)
+  const row = await env.DB.prepare('INSERT INTO media (site_id, name, type, size, bytes, source) VALUES (?, ?, ?, ?, ?, ?) RETURNING id')
+    .bind(siteId, file.name.slice(0, 120) || 'image', type, bytes.length, bytes.buffer, source)
     .first<{ id: number }>()
   return { url: `/media/${row!.id}` }
 }

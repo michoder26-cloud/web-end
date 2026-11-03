@@ -1,5 +1,8 @@
-import { saveImage } from './items'
-import type { Env, Settings, SiteRow } from './types'
+import { loadPageRecords } from './data'
+import { loadItems, saveImage } from './items'
+import { renderPage } from './render'
+import type { Block, Env, Settings, SiteRow } from './types'
+import { findWorkingPage } from './versions'
 
 const maxPageBytes = 3_000_000
 const maxTextChars = 60_000
@@ -203,6 +206,9 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
 
 /** Copies a photo into the owner's own database, so it keeps working after they leave the old host. */
 export async function copyImage(env: Env, siteId: number, target: URL): Promise<{ error?: string; url?: string }> {
+  const source = originalImage(target.href)
+  const held = await env.DB.prepare('SELECT id FROM media WHERE site_id = ? AND source = ?').bind(siteId, source).first<{ id: number }>()
+  if (held) return { url: `/media/${held.id}` }
   const original = /static\.wixstatic\.com\/media\/([^/?#]+)/.exec(target.href)?.[1]
   // A smaller copy fits the 1 MB limit far more often than the original upload does.
   const attempts = original ? [`https://static.wixstatic.com/media/${original}/v1/fit/w_1600,h_1600,q_80/${original.replace(/\.[a-z]+$/i, '.jpg')}`, target.href] : [target.href]
@@ -215,12 +221,70 @@ export async function copyImage(env: Env, siteId: number, target: URL): Promise<
       continue
     }
     const blob = await response.blob()
-    const stored = await saveImage(env, siteId, new File([blob], decodeURIComponent(target.pathname.split('/').pop() || 'image').slice(0, 120)))
+    const stored = await saveImage(env, siteId, new File([blob], decodeURIComponent(target.pathname.split('/').pop() || 'image').slice(0, 120)), source)
     if (stored.url) return stored
     problem = stored.error ?? problem
   }
   return { error: problem }
 }
+
+const comparable = (value: string) => clean(value).normalize('NFC').replace(/[’‘]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-').toLowerCase()
+
+const pageText = (html: string) => comparable(html.replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' '))
+
+const maxReported = 60
+
+/** Compares a rebuilt page with its old page, using what the two actually contain and not what anyone says was moved. */
+export async function checkMove(env: Env, site: SiteRow, target: URL, slug: string) {
+  const page = await findWorkingPage(env, site, slug)
+  if (!page) return { error: `There is no page called "${slug}".` }
+  const old = await readWebPage(target)
+  if ('error' in old) return { error: old.error }
+  const blocks = JSON.parse(page.blocks) as Block[]
+  const [items, records] = await Promise.all([loadItems(env, site.id, blocks), loadPageRecords(env, site.id, blocks, { admin: false, customer: null })])
+  const html = renderPage(site, { ...page, blocks }, { canonical: `${new URL(old.url).origin}/`, customer: null, items, records })
+  const text = pageText(html)
+  const uses = (line: string) => text.includes(comparable(line))
+  const lines = [...new Set([...old.headings.map((heading) => heading.text), ...old.text])].filter((line) => comparable(line).length > 1)
+  const textMissing = lines.filter((line) => !uses(line))
+  const linkTextMissing = [...new Set(old.links.map((link) => link.text))].filter((line) => comparable(line).length > 1 && !uses(line) && !textMissing.includes(line))
+  const sources = old.images.map((image) => image.url)
+  const { results: copies } = sources.length
+    ? await env.DB.prepare(`SELECT id, source FROM media WHERE site_id = ? AND source IN (${sources.map(() => '?').join(',')})`).bind(site.id, ...sources).all<{ id: number; source: string }>()
+    : { results: [] as { id: number; source: string }[] }
+  const copied = new Map(copies.map((row) => [row.source, row.id]))
+  const usedOnPage = (id: number) => new RegExp(`/media/${id}(?![0-9])`).test(html)
+  const imagesNotCopied = sources.filter((source) => !copied.has(source))
+  const imagesCopiedNotUsed = sources.filter((source) => copied.has(source) && !usedOnPage(copied.get(source)!))
+  const imagesStillOnOldHost = [...new Set([...html.matchAll(/(?:src|href)="(https:\/\/static\.wixstatic\.com\/[^"]+)"/g)].map((match) => match[1]))]
+  const titleKept = comparable(page.title) === comparable(old.title) || comparable(old.title).includes(comparable(page.title)) || comparable(page.title).includes(comparable(old.title))
+  const descriptionKept = !old.description || comparable(page.description) === comparable(old.description)
+  const counts = { imagesCopiedNotUsed: imagesCopiedNotUsed.length, imagesNotCopied: imagesNotCopied.length, imagesOnOldHost: imagesStillOnOldHost.length, linkTextMissing: linkTextMissing.length, textMissing: textMissing.length }
+  const problems = Object.values(counts).reduce((sum, count) => sum + count, 0) + (titleKept ? 0 : 1) + (descriptionKept ? 0 : 1)
+  const report = {
+    counts,
+    descriptionKept,
+    imagesCopiedNotUsed: imagesCopiedNotUsed.slice(0, maxReported),
+    imagesFoundOnOldPage: sources.length,
+    imagesNotCopied: imagesNotCopied.slice(0, maxReported),
+    imagesStillOnOldHost: imagesStillOnOldHost.slice(0, maxReported),
+    linesOnOldPage: lines.length,
+    linkTextMissing: linkTextMissing.slice(0, maxReported),
+    newPage: slug,
+    oldPageWasCut: old.truncated,
+    oldUrl: old.url,
+    problems,
+    textMissing: textMissing.slice(0, maxReported),
+    titleKept,
+  }
+  await env.DB.prepare(`INSERT INTO move_checks (site_id, page_slug, old_url, problems, report) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT (site_id, page_slug) DO UPDATE SET old_url = excluded.old_url, problems = excluded.problems, report = excluded.report, checked_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`)
+    .bind(site.id, slug, old.url, problems, JSON.stringify(report))
+    .run()
+  return { report }
+}
+
+export type MoveReport = Extract<Awaited<ReturnType<typeof checkMove>>, { report: unknown }>['report']
 
 export function parseCsv(input: string) {
   const text = input.replace(/^﻿/, '')

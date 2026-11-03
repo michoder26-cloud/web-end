@@ -5,7 +5,8 @@ import type { Notice } from './cms'
 import { accessLevels, createRecord, deleteRecord, fieldTypes, getRecord, getTable, listRecords, listTables, ownerActor, recordsCsv, saveTable, tableSchema, updateRecord } from './data'
 import type { DataField, DataTable } from './data'
 import { escapeHtml, notFound, see } from './http'
-import { cleanPath, importProducts, saveRedirects } from './moving'
+import { checkMove, cleanPath, importProducts, safeWebUrl, saveRedirects } from './moving'
+import type { MoveReport } from './moving'
 import { latestRelease } from './updates'
 import { listVersions, publishVersion, restoreVersion, unpublishedChanges } from './versions'
 import { version } from './version'
@@ -138,14 +139,28 @@ async function handleData(request: Request, env: Env, url: URL, site: SiteRow, c
   return changed.row ? see(url, `${path}?saved=1`) : tablePage(env, site, code, table, { error: changed.error })
 }
 
+const checkCard = (row: { checked_at: string; old_url: string; page_slug: string; problems: number; report: string }) => {
+  const report = JSON.parse(row.report) as MoveReport
+  const group = (title: string, lines: string[]) => (lines.length ? `<h4>${escapeHtml(title)} (${lines.length})</h4><ul>${lines.map((line) => `<li style="overflow-wrap:anywhere">${escapeHtml(line)}</li>`).join('')}</ul>` : '')
+  const facts = [...(report.titleKept ? [] : ['The page title changed.']), ...(report.descriptionKept ? [] : ['The search description changed.']), ...(report.oldPageWasCut ? ['The old page was too long to read in full.'] : [])]
+  return `<article class="card account__record"><h3>${row.problems ? `${row.problems} differences` : 'No differences found'} · /${escapeHtml(row.page_slug)}</h3><p style="overflow-wrap:anywhere"><small>Compared with ${escapeHtml(row.old_url)}, ${escapeHtml(row.checked_at.slice(0, 16).replace('T', ' '))} UTC. ${report.linesOnOldPage} lines of text and ${report.imagesFoundOnOldPage} photos on the old page.</small></p>${facts.map((fact) => `<p>${escapeHtml(fact)}</p>`).join('')}${group('Text not found', report.textMissing)}${group('Link or button text not found', report.linkTextMissing)}${group('Photos not copied', report.imagesNotCopied)}${group('Photos copied but not used here', report.imagesCopiedNotUsed)}${group('Photos still loading from the old site', report.imagesStillOnOldHost)}</article>`
+}
+
 async function movePage(env: Env, site: SiteRow, code: string, notice?: Notice) {
   const base = `/owner/${escapeHtml(code)}/move`
+  const [{ results: checks }, { results: pages }] = await Promise.all([
+    env.DB.prepare('SELECT page_slug, old_url, problems, report, checked_at FROM move_checks WHERE site_id = ? ORDER BY problems DESC, page_slug').bind(site.id).all<{ checked_at: string; old_url: string; page_slug: string; problems: number; report: string }>(),
+    env.DB.prepare('SELECT slug FROM pages WHERE site_id = ? ORDER BY slug').bind(site.id).all<{ slug: string }>(),
+  ])
   const { results } = await env.DB.prepare('SELECT from_path, to_path FROM redirects WHERE site_id = ? ORDER BY from_path LIMIT 2000').bind(site.id).all<{ from_path: string; to_path: string }>()
   return office(
     site,
     code,
     'Move your site here',
     `<p>Moving from Wix or another host? Start a chat with Claude and say "Move my website here". It rebuilds your pages from your own content. Keep your old site running until the new one is checked.</p>
+<h2>Check the move yourself</h2><p>This compares a page here with your old page and lists what didn't come across. It reads what's on the two pages, so it doesn't depend on anything Claude said. It can't judge how a page looks, or whether a difference was a good choice.</p>
+<form action="${base}/check" class="contact-form" method="post"><label>Old page address<input maxlength="500" name="url" placeholder="https://" required type="url"></label><label>Page here<select name="page">${pages.map((page) => `<option>${escapeHtml(page.slug)}</option>`).join('')}</select></label><button class="button button--small" type="submit">Compare</button></form>
+${checks.map(checkCard).join('')}
 <h2>Products from Wix</h2><p>In Wix, open Store Products, then More Actions, Import, Export Products. Upload that file here. Products already here by name are skipped, so it's safe to do this twice. Photos stay on the old site until Claude copies them.</p>
 <form action="${base}/products" class="contact-form" enctype="multipart/form-data" method="post"><label>Product file (CSV)<input accept=".csv,text/csv" name="file" required type="file"></label><button class="button button--small" type="submit">Import products</button></form>
 <h2>Old links</h2><p>Each line sends an old address to its new page, so links and search results keep working once your domain points here. Example: /product-page/blue-mug | /product/12</p>
@@ -159,6 +174,12 @@ async function handleMove(request: Request, env: Env, url: URL, site: SiteRow, c
   if (request.method !== 'POST') return notFound()
   const form = await request.formData().catch((): null => null)
   if (!form) return see(url, `/owner/${code}/move`)
+  if (kind === 'check') {
+    const target = safeWebUrl(env, String(form.get('url') ?? '').trim())
+    if (!target) return movePage(env, site, code, { error: 'Use a public https address.' })
+    const result = await checkMove(env, site, target, String(form.get('page') ?? ''))
+    return result.error ? movePage(env, site, code, { error: result.error }) : see(url, `/owner/${code}/move?saved=1`)
+  }
   if (kind === 'products') {
     const file = form.get('file')
     if (!(file instanceof File) || !file.size) return movePage(env, site, code, { error: 'Choose the file first.' })

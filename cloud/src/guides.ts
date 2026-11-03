@@ -14,19 +14,22 @@ Rebuild:
 6. Save pages with save_page, using the old titles and descriptions. Don't invent or improve facts.
 7. Copy the owner's own photos with copy_image, one at a time, and use the /media address. It handles up to 200 MB in total, so prefer the photos that matter. Ask the owner about anything that looks like a template photo. Photos over 1 MB after resizing need to be made smaller by the owner.
 
+Check the rebuild:
+8. Run check_move for every page, comparing the old address with the new page. Add what's missing, then run it again until it's clean or every remaining item is a deliberate choice. Navigation and footer lines count, so set the site's menu and footer. Don't say everything moved unless check_move shows it. Your own memory of the work isn't evidence.
+
 Shop:
-8. Ask the owner to export products from Wix: Store Products, More Actions, Import, Export Products. They upload the file on the Move page of the back office, which suits a large file better than pasting it here. Then run list_items, copy each product's photo, and update it with save_item. Check a few prices against the old site.
-9. Turn on the cart and choose payments. Payment accounts don't move, so the owner has to connect Stripe or add transfer details.
+9. Ask the owner to export products from Wix: Store Products, More Actions, Import, Export Products. They upload the file on the Move page of the back office, which suits a large file better than pasting it here. Then run list_items, copy each product's photo, and update it with save_item. Check a few prices against the old site.
+10. Turn on the cart and choose payments. Payment accounts don't move, so the owner has to connect Stripe or add transfer details.
 
 Keeping search results:
-10. Use save_redirects to map each old address to its new page, such as /product-page/blue-mug to /product/12. Wix sites on a free address have paths starting with the site name, which matters only if that address was what people used. A redirect only runs once the domain points here. A free wixsite.com address can't be redirected.
+11. Use save_redirects to map each old address to its new page, such as /product-page/blue-mug to /product/12. Wix sites on a free address have paths starting with the site name, which matters only if that address was what people used. A redirect only runs once the domain points here. A free wixsite.com address can't be redirected.
 
 Customers:
-11. Contacts can be exported from Wix, but passwords can't move, and customers will need to sign up again. Orders, reviews, memberships, bookings, blog comments and forms aren't moved by these tools. List whatever the old site used, so the owner can decide. Customer data must only be moved in line with the owner's privacy notice.
+12. Contacts can be exported from Wix, but passwords can't move, and customers will need to sign up again. Orders, reviews, memberships, bookings, blog comments and forms aren't moved by these tools. List whatever the old site used, so the owner can decide. Customer data must only be moved in line with the owner's privacy notice.
 
 Finish:
-12. Run check_site. Compare every page from scan_website against what you built, and give the owner a list: moved, changed, not moved.
-13. Tell them to check the preview on a phone, publish, then move the domain and only then close the old site. If the domain was bought from Wix, it can stay there and point here, or be transferred out.
+13. Run check_site. Make sure every page from scan_website has a check_move result, then give the owner a list: moved, changed, not moved, using those results. Point them to the Move page, where they can read the checks themselves.
+14. Tell them to check the preview on a phone, publish, then move the domain and only then close the old site. If the domain was bought from Wix, it can stay there and point here, or be transferred out.
 
 Features Wix apps provide, such as bookings or members, can often be rebuilt with tables. Read plan_app before promising that. Don't claim the move is complete unless you checked it.`,
   plan_app: `# Planning an app or feature

@@ -83,7 +83,8 @@ Wix sites can't run anywhere else, so web-end rebuilds your own content instead 
 1. Publish your Wix site on its free address, if it isn't already. You don't need to buy a domain.
 2. Install web-end, connect Claude, and say: "Move my website here." Claude lists your pages, rebuilds them, copies your photos and tells you what moved and what didn't.
 3. If you have a shop, export your products from Wix and upload the file on the **Move here** page of your back office.
-4. Check the new site on your phone, publish it, then point your domain to it. Old links keep working through the redirects Claude saves.
+4. Read the results on the **Move here** page. An automatic check compares each new page with its old page and lists any text, button labels and photos that didn't come across, so you don't have to take Claude's word for it. It can't judge how a page looks.
+5. Check the new site on your phone, publish it, then point your domain to it. Old links keep working through the redirects Claude saves.
 
 What doesn't move: customer passwords, payment accounts, orders, reviews, and features from Wix apps. Tables can often replace bookings or members. The design will be new, because a Wix template's design and stock photos may not be yours to take. Only move sites you own.
 
