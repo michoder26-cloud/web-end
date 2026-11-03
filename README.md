@@ -76,6 +76,29 @@ Open the **Updates** page in your back office. It tells you when a new version i
 
 Your pages, products, orders, customers and private links stay as they are. If a developer changed your site's code, those changes get replaced, but they stay in your GitHub history.
 
+## Moving from Wix
+
+Wix sites can't run anywhere else, so web-end rebuilds your own content instead of copying the site. Keep your old site running until you've checked the new one.
+
+1. Publish your Wix site on its free address, if it isn't already. You don't need to buy a domain.
+2. Install web-end, connect Claude, and say: "Move my website here." Claude lists your pages, rebuilds them, copies your photos and tells you what moved and what didn't.
+3. If you have a shop, export your products from Wix and upload the file on the **Move here** page of your back office.
+4. Check the new site on your phone, publish it, then point your domain to it. Old links keep working through the redirects Claude saves.
+
+What doesn't move: customer passwords, payment accounts, orders, reviews, and features from Wix apps. Tables can often replace bookings or members. The design will be new, because a Wix template's design and stock photos may not be yours to take. Only move sites you own.
+
+## Keeping your database in the EU
+
+Cloudflare can restrict a database so it only runs and stores data in the EU. This has to be chosen when the database is created and can't be changed later. The install button can't choose it, so do this right after installing, before you add anything:
+
+1. In Cloudflare, open **D1 SQL Database** and create a database. Under **Data location**, choose **Specify jurisdiction**, then **EU**.
+2. In your site's GitHub repository, open `wrangler.jsonc` and replace `database_id` and `database_name` with the new database's.
+3. Wait for Cloudflare to rebuild your site. Then open it and click **Get my Claude link**.
+
+We ran web-end's full test suite against a real EU database, and it passed. We haven't yet tried these exact steps on a new install, so check that your site opens before you rely on them.
+
+This covers where your database lives, including uploaded photos. Requests can still be handled by Cloudflare's servers near each visitor, and Claude and any services you connect have their own rules. It doesn't make your site GDPR compliant by itself, so have that checked for your business.
+
 ## Using it as the backend for Wix or another front end
 
 Keep your pages where they are, and let web-end hold the data, logins and orders. Open **Connect** in your back office to create a secret key, then ask Claude to read its `connect_wix` guide and write the code for you. A key only works from server code, such as Wix backend code. A browser that sends one is refused, so never put one in a page.

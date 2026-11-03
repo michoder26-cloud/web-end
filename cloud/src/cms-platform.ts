@@ -5,6 +5,7 @@ import type { Notice } from './cms'
 import { accessLevels, createRecord, deleteRecord, fieldTypes, getRecord, getTable, listRecords, listTables, ownerActor, recordsCsv, saveTable, tableSchema, updateRecord } from './data'
 import type { DataField, DataTable } from './data'
 import { escapeHtml, notFound, see } from './http'
+import { cleanPath, importProducts, saveRedirects } from './moving'
 import { latestRelease } from './updates'
 import { listVersions, publishVersion, restoreVersion, unpublishedChanges } from './versions'
 import { version } from './version'
@@ -22,6 +23,7 @@ const fieldSpec = () =>
       spec('required', 'Required', 'bool'),
       spec('staffOnly', 'Hidden from customers', 'bool'),
       spec('readOnly', 'Customers can see it but not change it', 'bool'),
+      spec('setOnce', 'Customers can fill it in once, then not change it', 'bool'),
       spec('options', 'Choices, one per line', 'lines'),
       spec('table', 'Table it points to, for a reference'),
       spec('default', 'Starting value'),
@@ -134,6 +136,47 @@ async function handleData(request: Request, env: Env, url: URL, site: SiteRow, c
   if (action) return notFound()
   const changed = await updateRecord(env, site.id, table, row, formRecord(table, form), ownerActor)
   return changed.row ? see(url, `${path}?saved=1`) : tablePage(env, site, code, table, { error: changed.error })
+}
+
+async function movePage(env: Env, site: SiteRow, code: string, notice?: Notice) {
+  const base = `/owner/${escapeHtml(code)}/move`
+  const { results } = await env.DB.prepare('SELECT from_path, to_path FROM redirects WHERE site_id = ? ORDER BY from_path LIMIT 2000').bind(site.id).all<{ from_path: string; to_path: string }>()
+  return office(
+    site,
+    code,
+    'Move your site here',
+    `<p>Moving from Wix or another host? Start a chat with Claude and say "Move my website here". It rebuilds your pages from your own content. Keep your old site running until the new one is checked.</p>
+<h2>Products from Wix</h2><p>In Wix, open Store Products, then More Actions, Import, Export Products. Upload that file here. Products already here by name are skipped, so it's safe to do this twice. Photos stay on the old site until Claude copies them.</p>
+<form action="${base}/products" class="contact-form" enctype="multipart/form-data" method="post"><label>Product file (CSV)<input accept=".csv,text/csv" name="file" required type="file"></label><button class="button button--small" type="submit">Import products</button></form>
+<h2>Old links</h2><p>Each line sends an old address to its new page, so links and search results keep working once your domain points here. Example: /product-page/blue-mug | /product/12</p>
+<form action="${base}/redirects" class="contact-form" method="post"><label>Old address | new address, one per line<textarea name="redirects" rows="8">${escapeHtml(results.map((row) => `${row.from_path} | ${row.to_path}`).join('\n'))}</textarea></label><button class="button button--small" type="submit">Save old links</button></form>`,
+    notice,
+  )
+}
+
+async function handleMove(request: Request, env: Env, url: URL, site: SiteRow, code: string, kind: string | undefined, saved?: Notice) {
+  if (!kind) return request.method === 'POST' ? notFound() : movePage(env, site, code, saved)
+  if (request.method !== 'POST') return notFound()
+  const form = await request.formData().catch((): null => null)
+  if (!form) return see(url, `/owner/${code}/move`)
+  if (kind === 'products') {
+    const file = form.get('file')
+    if (!(file instanceof File) || !file.size) return movePage(env, site, code, { error: 'Choose the file first.' })
+    if (file.size > 2_000_000) return movePage(env, site, code, { error: 'That file is larger than 2 MB. Please split it.' })
+    const result = await importProducts(env, site, await file.text())
+    if (result.error) return movePage(env, site, code, { error: result.error })
+    const notes = [`Imported ${result.imported} products.`, result.skippedAlreadyThere ? `${result.skippedAlreadyThere} were already here.` : '', result.skippedNoRoom ? `${result.skippedNoRoom} didn't fit, because a site can have up to 500 products.` : '', result.notImportedExtraImages ? `${result.notImportedExtraImages} extra photos weren't imported, because each product has one photo here.` : '', result.imagesStillOnOldHost ? 'Photos still load from the old site, so ask Claude to copy them before you close it.' : '']
+    return movePage(env, site, code, { saved: notes.filter(Boolean).join(' ') })
+  }
+  if (kind === 'redirects') {
+    const pairs = String(form.get('redirects') ?? '').split('\n').map((line) => line.split('|').map((part) => part.trim())).filter(([from]) => from).map(([from, to]) => ({ from, to: to ?? '' }))
+    const result = await saveRedirects(env, site.id, pairs)
+    if (result.error) return movePage(env, site, code, { error: result.error })
+    if (result.problems?.length) return movePage(env, site, code, { error: `Saved ${result.saved}. These couldn't be used, because the new address must start with / and can't be the same as the old one: ${result.problems.slice(0, 5).join(', ')}` })
+    await env.DB.prepare(`DELETE FROM redirects WHERE site_id = ?${pairs.length ? ` AND from_path NOT IN (${pairs.map(() => '?').join(',')})` : ''}`).bind(site.id, ...pairs.map((pair) => cleanPath(pair.from) ?? '')).run()
+    return see(url, `/owner/${code}/move?saved=1`)
+  }
+  return notFound()
 }
 
 /** Everything the owner needs to leave: their content and data in one file. Password data and secrets stay out. */
@@ -323,5 +366,6 @@ export function handlePlatform(request: Request, env: Env, url: URL, site: SiteR
   if (area === 'publish') return handlePublish(request, env, url, site, code, id, action, saved)
   if (area === 'system' && !id && request.method !== 'POST') return systemPage(env, url, site, code)
   if (area === 'export.json' && !id && request.method === 'GET') return exportEverything(env, site)
+  if (area === 'move' && !action) return handleMove(request, env, url, site, code, id, saved)
   return null
 }

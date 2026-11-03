@@ -26,6 +26,7 @@ export type DataField = {
   options?: string[]
   readOnly?: boolean
   required?: boolean
+  setOnce?: boolean
   staffOnly?: boolean
   table?: string
   type: (typeof fieldTypes)[number]
@@ -51,6 +52,7 @@ export const tableBase = z.object({
           table: z.string().regex(namePattern).optional().describe('The table a reference field points to'),
           staffOnly: z.boolean().optional().describe('Only staff and the owner can see or change this field, such as a private note'),
           readOnly: z.boolean().optional().describe('Everyone who can read the record can see this field, but only staff and the owner can change it, such as a booking status'),
+          setOnce: z.boolean().optional().describe('Customers can fill this in when adding a record, but only staff and the owner can change it afterwards, such as the session they booked'),
           capacityField: z.string().regex(namePattern).optional().describe('On a reference field: the number field of the record it points to that limits how many records can point to it, such as seats. Enforced by the database, so it cannot be overbooked.'),
           unique: z.enum(['', 'table', 'customer']).optional().describe('table: no two records can have the same value. customer: one customer cannot use the same value twice, such as booking the same class twice.'),
           ignoreField: z.string().regex(namePattern).optional().describe('With capacityField or unique: records are not counted when this field has one of ignoreValues, such as a status of cancelled'),
@@ -74,6 +76,7 @@ export const tableSchema = tableBase.superRefine((table, context) => {
       if (field.type === 'reference' && !field.table) problem(`The field "${field.name}" needs the table it points to.`)
       if (field.default !== undefined && !('value' in coerce(field as DataField, field.default))) problem(`The default of "${field.name}" isn't valid for its type.`)
       if (field.capacityField && field.type !== 'reference') problem(`The field "${field.name}" can only have a capacity if it is a reference.`)
+      if (field.setOnce && (field.staffOnly || field.readOnly)) problem(`The field "${field.name}" can't be set once if customers can't set it at all.`)
       if (field.staffOnly && field.readOnly) problem(`The field "${field.name}" can't be both staff only and read only.`)
       if (field.ignoreField && !table.fields.some((other) => other.name === field.ignoreField)) problem(`The field "${field.name}" ignores records by "${field.ignoreField}", which this table doesn't have.`)
       if (field.ignoreField && !field.ignoreValues?.length) problem(`The field "${field.name}" needs the values to ignore.`)
@@ -168,7 +171,7 @@ async function readInput(env: Env, siteId: number, table: DataTable, input: Reco
   const data: Record<string, unknown> = {}
   for (const field of table.fields) {
     const held = existing?.[field.name]
-    const allowed = !(field.staffOnly || field.readOnly) || isStaff(actor)
+    const allowed = !(field.staffOnly || field.readOnly || (existing && field.setOnce)) || isStaff(actor)
     const raw = allowed ? input[field.name] : undefined
     if (raw === undefined && existing) {
       if (held !== undefined) data[field.name] = held

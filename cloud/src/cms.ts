@@ -53,7 +53,7 @@ const catalog: Record<string, { label: string; fields: Spec[]; start: Block }> =
 export const office = (site: SiteRow, code: string, title: string, body: string, notice?: Notice) => {
   const settings = JSON.parse(site.settings) as Settings
   const base = `/owner/${escapeHtml(code)}`
-  const links: [string, string][] = [['', 'Overview'], ['/orders', 'Orders'], ['/pages', 'Pages'], ['/items', 'Products'], ['/data', 'Data'], ['/media', 'Images'], ['/customers', 'Customers'], ['/publish', 'Publish'], ['/connect', 'Connect'], ['/settings', 'Settings'], ['/system', 'System'], ['/updates', 'Updates']]
+  const links: [string, string][] = [['', 'Overview'], ['/orders', 'Orders'], ['/pages', 'Pages'], ['/items', 'Products'], ['/data', 'Data'], ['/media', 'Images'], ['/customers', 'Customers'], ['/publish', 'Publish'], ['/connect', 'Connect'], ['/move', 'Move here'], ['/settings', 'Settings'], ['/system', 'System'], ['/updates', 'Updates']]
   return html(
     shell(
       `${settings.name}: ${title}`,

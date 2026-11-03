@@ -9,6 +9,7 @@ import { validateEntry } from './forms'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { loadItems, showImage } from './items'
 import { createMcpServer } from './mcp'
+import { followRedirect } from './moving'
 import { claimedPage, claimSite, getSite, isOwner, setupPage, shell } from './owner'
 import { renderPage } from './render'
 import { cartCount, handleShop } from './shop'
@@ -158,59 +159,67 @@ async function sitemap(env: Env, url: URL, site: SiteRow) {
   })
 }
 
+async function answer(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url)
+  const parts = url.pathname.split('/').filter(Boolean)
+  try {
+    const working = await getSite(env)
+
+    if (!working) {
+      if (url.pathname === '/setup' && request.method === 'POST') {
+        const code = await claimSite(env)
+        return code ? html(claimedPage(url.origin, code), 200, privateHeaders) : see(url, '/')
+      }
+      return url.pathname === '/' ? html(setupPage(), 200, privateHeaders) : notFound()
+    }
+
+    // Visitors get the published copy. Only the owner's routes below see the working copy.
+    const site = liveSite(working)
+    if (url.pathname === '/setup') return see(url, '/')
+    if (url.pathname === '/robots.txt') {
+      return new Response(`User-agent: *\nDisallow: /owner/\nDisallow: /mcp/\nDisallow: /api/\nDisallow: /data/\nDisallow: /frame/\nDisallow: /account\nDisallow: /cart\nDisallow: /checkout\nDisallow: /order/\nDisallow: /login\nDisallow: /signup\nDisallow: /reset/\nSitemap: ${url.origin}/sitemap.xml\n`, { headers: { 'Content-Type': 'text/plain' } })
+    }
+    if (url.pathname === '/sitemap.xml') return await sitemap(env, url, site)
+
+    if (parts[0] === 'mcp' || parts[0] === 'owner') {
+      // A wrong code looks the same as a page that doesn't exist.
+      if (!(await isOwner(env, parts[1]))) return notFound()
+      if (parts[0] === 'mcp') return parts.length === 2 ? await handleMcp(request, env, url, parts[1]) : notFound()
+      if (parts[2] === 'preview' && parts.length <= 4 && request.method === 'GET') return await showPreview(env, url, working, parts[1], parts[3] ?? 'home')
+      return await handleOffice(request, env, url, working, parts[1], parts)
+    }
+
+    if (parts[0] === 'api') return await handleApi(request, env, url, site, parts)
+    if (parts[0] === 'data' && request.method === 'POST' && (parts.length === 2 || (parts.length === 4 && parts[3] === 'delete' && /^\d{1,12}$/.test(parts[2])))) {
+      const customer = await customerFor(request, env, site)
+      return await receiveRecord(request, env, url, site, { admin: false, customer: customer ?? null }, parts[1], parts[2] ? Number(parts[2]) : undefined)
+    }
+
+    if (['account', 'login', 'logout', 'reset', 'signup'].includes(parts[0])) return await handleAccount(request, env, url, site, parts)
+    if (['cart', 'checkout', 'order', 'product'].includes(parts[0])) return await handleShop(request, env, url, site, parts)
+    if (url.pathname === '/stripe/webhook' && request.method === 'POST') return await stripeWebhook(request, env, site)
+
+    if (parts[0] === 'form' && request.method === 'POST' && parts.length === 3) {
+      return await receiveForm(request, env, url, site, parts[1], parts[2])
+    }
+    if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405 })
+    if (parts[0] === 'media' && parts.length === 2 && /^\d+$/.test(parts[1])) return (await showImage(env, site.id, parts[1])) ?? notFound()
+    if (parts[0] === 'frame' && parts.length === 3 && /^\d+$/.test(parts[2])) return await showFrame(env, site, parts[1], parts[2])
+    if (parts.length > 1) return notFound()
+    return await showPage(request, env, url, site, parts[0] ?? 'home')
+  } catch (error) {
+    console.error(error)
+    return html('<!doctype html><meta charset="utf-8"><title>Error</title><h1>Something went wrong</h1><p>Please try again.</p>', 500)
+  }
+}
+
 export default {
   async fetch(request: Request, plainEnv: Env, context: ExecutionContext): Promise<Response> {
     const env: Env = { ...plainEnv, defer: (work) => context.waitUntil(work) }
+    const response = await answer(request, env)
+    if (response.status !== 404 || (request.method !== 'GET' && request.method !== 'HEAD')) return response
     const url = new URL(request.url)
-    const parts = url.pathname.split('/').filter(Boolean)
-    try {
-      const working = await getSite(env)
-
-      if (!working) {
-        if (url.pathname === '/setup' && request.method === 'POST') {
-          const code = await claimSite(env)
-          return code ? html(claimedPage(url.origin, code), 200, privateHeaders) : see(url, '/')
-        }
-        return url.pathname === '/' ? html(setupPage(), 200, privateHeaders) : notFound()
-      }
-
-      // Visitors get the published copy. Only the owner's routes below see the working copy.
-      const site = liveSite(working)
-      if (url.pathname === '/setup') return see(url, '/')
-      if (url.pathname === '/robots.txt') {
-        return new Response(`User-agent: *\nDisallow: /owner/\nDisallow: /mcp/\nDisallow: /api/\nDisallow: /data/\nDisallow: /frame/\nDisallow: /account\nDisallow: /cart\nDisallow: /checkout\nDisallow: /order/\nDisallow: /login\nDisallow: /signup\nDisallow: /reset/\nSitemap: ${url.origin}/sitemap.xml\n`, { headers: { 'Content-Type': 'text/plain' } })
-      }
-      if (url.pathname === '/sitemap.xml') return await sitemap(env, url, site)
-
-      if (parts[0] === 'mcp' || parts[0] === 'owner') {
-        // A wrong code looks the same as a page that doesn't exist.
-        if (!(await isOwner(env, parts[1]))) return notFound()
-        if (parts[0] === 'mcp') return parts.length === 2 ? await handleMcp(request, env, url, parts[1]) : notFound()
-        if (parts[2] === 'preview' && parts.length <= 4 && request.method === 'GET') return await showPreview(env, url, working, parts[1], parts[3] ?? 'home')
-        return await handleOffice(request, env, url, working, parts[1], parts)
-      }
-
-      if (parts[0] === 'api') return await handleApi(request, env, url, site, parts)
-      if (parts[0] === 'data' && request.method === 'POST' && (parts.length === 2 || (parts.length === 4 && parts[3] === 'delete' && /^\d{1,12}$/.test(parts[2])))) {
-        const customer = await customerFor(request, env, site)
-        return await receiveRecord(request, env, url, site, { admin: false, customer: customer ?? null }, parts[1], parts[2] ? Number(parts[2]) : undefined)
-      }
-
-      if (['account', 'login', 'logout', 'reset', 'signup'].includes(parts[0])) return await handleAccount(request, env, url, site, parts)
-      if (['cart', 'checkout', 'order', 'product'].includes(parts[0])) return await handleShop(request, env, url, site, parts)
-      if (url.pathname === '/stripe/webhook' && request.method === 'POST') return await stripeWebhook(request, env, site)
-
-      if (parts[0] === 'form' && request.method === 'POST' && parts.length === 3) {
-        return await receiveForm(request, env, url, site, parts[1], parts[2])
-      }
-      if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405 })
-      if (parts[0] === 'media' && parts.length === 2 && /^\d+$/.test(parts[1])) return (await showImage(env, site.id, parts[1])) ?? notFound()
-      if (parts[0] === 'frame' && parts.length === 3 && /^\d+$/.test(parts[2])) return await showFrame(env, site, parts[1], parts[2])
-      if (parts.length > 1) return notFound()
-      return await showPage(request, env, url, site, parts[0] ?? 'home')
-    } catch (error) {
-      console.error(error)
-      return html('<!doctype html><meta charset="utf-8"><title>Error</title><h1>Something went wrong</h1><p>Please try again.</p>', 500)
-    }
+    if (/^\/(owner|mcp|api)(\/|$)/.test(url.pathname)) return response
+    return (await followRedirect(env, url).catch((): null => null)) ?? response
   },
 } satisfies ExportedHandler<Env>
