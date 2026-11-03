@@ -80,7 +80,7 @@ export async function scanWebsite(env: Env, start: URL) {
 
 const usefulData = new Set(['BreadcrumbList', 'LocalBusiness', 'Offer', 'Organization', 'Product', 'Service', 'Store'])
 
-type PageReading = { data: unknown[]; description: string; headings: { level: number; text: string }[]; images: { alt: string; url: string }[]; links: { href: string; text: string }[]; text: string[]; title: string; truncated: boolean; url: string }
+type PageReading = { buttons: string[]; data: unknown[]; description: string; headings: { level: number; text: string }[]; images: { alt: string; url: string }[]; links: { href: string; text: string }[]; text: string[]; title: string; truncated: boolean; url: string }
 
 /** Reads one page with the runtime's streaming HTML parser, keeping what a person would see and leaving out scripts. */
 export async function readWebPage(target: URL): Promise<PageReading | { error: string }> {
@@ -90,7 +90,7 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
   if (!(response.headers.get('content-type') ?? '').includes('html')) return { error: "That address isn't a web page." }
   if (Number(response.headers.get('content-length') || 0) > maxPageBytes) return { error: 'That page is too large to read here.' }
 
-  const page: PageReading = { data: [], description: '', headings: [], images: [], links: [], text: [], title: '', truncated: false, url: response.url || target.href }
+  const page: PageReading = { buttons: [], data: [], description: '', headings: [], images: [], links: [], text: [], title: '', truncated: false, url: response.url || target.href }
   const seenText = new Set<string>()
   const seenImages = new Set<string>()
   const seenLinks = new Set<string>()
@@ -188,6 +188,10 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
       if (script.length < 20_000) script += chunk.text
     },
   })
+  // Wix buttons often have no link in the page, so they don't show up among the links.
+  rewriter.on('button', collect((text) => {
+    if (!page.buttons.includes(text) && page.buttons.length < maxListed) page.buttons.push(text)
+  }))
   rewriter.on('p', collect(addText)).on('li', collect(addText)).on('blockquote', collect(addText))
   const transformed = rewriter.transform(response)
   const reader = transformed.body?.getReader()
@@ -235,14 +239,14 @@ const pageText = (html: string) => comparable(html.replace(/<(script|style)\b[\s
 
 const maxReported = 60
 
-type Reading = { description: string; headings: { level: number; text: string }[]; images: { url: string }[]; links: { text: string }[]; text: string[]; title: string; truncated: boolean; url: string }
+type Reading = { buttons?: string[]; description: string; headings: { level: number; text: string }[]; images: { url: string }[]; links: { text: string }[]; text: string[]; title: string; truncated: boolean; url: string }
 type WorkingPage = { blocks: string; description: string; published: number; slug: string; title: string }
 
 const sourcesKeptDays = 30
 
 /** Keeps what an old page contained, so the move can be checked later by any tool, without reading the page again. */
 export async function rememberReading(env: Env, siteId: number, reading: Reading, slug: null | string = null) {
-  const kept = { description: reading.description, headings: reading.headings.map((heading) => ({ level: heading.level, text: heading.text })), images: reading.images.map((image) => ({ url: image.url })), links: reading.links.map((link) => ({ text: link.text })), text: reading.text, title: reading.title, truncated: reading.truncated, url: reading.url }
+  const kept = { buttons: reading.buttons, description: reading.description, headings: reading.headings.map((heading) => ({ level: heading.level, text: heading.text })), images: reading.images.map((image) => ({ url: image.url })), links: reading.links.map((link) => ({ text: link.text })), text: reading.text, title: reading.title, truncated: reading.truncated, url: reading.url }
   await env.DB.prepare(`INSERT INTO move_sources (site_id, url, page_slug, reading) VALUES (?, ?, ?, ?)
     ON CONFLICT (site_id, url) DO UPDATE SET page_slug = COALESCE(excluded.page_slug, page_slug), reading = excluded.reading, read_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`)
     .bind(siteId, reading.url, slug, JSON.stringify(kept))
@@ -260,7 +264,7 @@ async function comparePage(env: Env, site: SiteRow, old: Reading, page: WorkingP
   const uses = (line: string) => text.includes(comparable(line))
   const lines = [...new Set([...old.headings.map((heading) => heading.text), ...old.text])].filter((line) => comparable(line).length > 1)
   const textMissing = lines.filter((line) => !uses(line))
-  const linkTextMissing = [...new Set(old.links.map((link) => link.text))].filter((line) => comparable(line).length > 1 && !uses(line) && !textMissing.includes(line))
+  const linkTextMissing = [...new Set([...old.links.map((link) => link.text), ...(old.buttons ?? [])])].filter((line) => comparable(line).length > 1 && !uses(line) && !textMissing.includes(line))
   const sources = old.images.map((image) => image.url)
   const { results: copies } = sources.length
     ? await env.DB.prepare(`SELECT id, source FROM media WHERE site_id = ? AND source IN (${sources.map(() => '?').join(',')})`).bind(site.id, ...sources).all<{ id: number; source: string }>()

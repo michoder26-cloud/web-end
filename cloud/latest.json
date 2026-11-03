@@ -1,4 +1,4 @@
 {
-  "version": "0.6.1",
-  "notes": "The move check now runs by itself when Claude checks or publishes your site, and publishing stops once if anything did not come across. It also warns about links inside custom code."
+  "version": "0.6.2",
+  "notes": "A moved site now keeps its button labels. The move check runs by itself when Claude checks or publishes your site, stops a publish once if anything did not come across, and warns about links inside custom code."
 }
