@@ -1,4 +1,4 @@
 {
-  "version": "0.6.4",
-  "notes": "Products with options from a Wix file now show a price on their cards, and the site check warns when product photos still load from Wix."
+  "version": "0.6.5",
+  "notes": "The move check no longer reports lines as missing when the old page split them with a line break, or when only commas and other punctuation differ."
 }

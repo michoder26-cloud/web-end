@@ -107,20 +107,25 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
     seenImages.add(full)
     page.images.push({ alt: clean(alt ?? ''), url: full })
   }
+  // Wix splits lines with <br>, which has no text of its own, so each open element is told about it.
+  const reading = new Set<{ value: string }>()
   const collect = (done: (text: string, href: string) => void) => {
-    let buffer = ''
+    let buffer = { value: '' }
     return {
       element(element: Element) {
-        buffer = ''
+        buffer = { value: '' }
+        const own = buffer
+        reading.add(own)
         // An element can only be read while its own handler runs, so its link is kept for the end tag.
         const href = decode(element.getAttribute('href') ?? '')
         element.onEndTag(() => {
-          const text = clean(buffer)
+          reading.delete(own)
+          const text = clean(own.value)
           if (text) done(text, href)
         })
       },
       text(chunk: Text) {
-        if (buffer.length < 8000) buffer += chunk.text
+        if (buffer.value.length < 8000) buffer.value += chunk.text
       },
     }
   }
@@ -135,6 +140,7 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
     page.text.push(text)
   }
   const rewriter = new HTMLRewriter()
+    .on('br', { element: () => reading.forEach((open) => (open.value += '\n')) })
     .on('title', collect((text) => (page.title ||= text)))
     .on('meta', {
       element(element) {
@@ -233,7 +239,8 @@ export async function copyImage(env: Env, siteId: number, target: URL): Promise<
   return { error: problem }
 }
 
-const comparable = (value: string) => clean(value).normalize('NFC').replace(/[’‘]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-').toLowerCase()
+// Compares words only, so "Way<br>San Francisco" and "Way, San Francisco" count as the same line.
+const comparable = (value: string) => clean(value).normalize('NFC').toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ').trim()
 
 const pageText = (html: string) => comparable(html.replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' '))
 
