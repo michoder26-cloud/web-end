@@ -93,6 +93,12 @@ const book = await call('save_page', {
 })
 check(!book.isError, 'saves a page with a form', book.text)
 await call('update_site', { name: 'Smoke Test Cafe', style: 'warm', nav: [{ label: 'Book', href: '/book' }], accent: '#a4471a', customCss: '.site-name{letter-spacing:1px}</style><script>bad()</script>' })
+await call('save_page', { slug: 'title-named', title: 'About | Smoke Test Cafe', description: 'A page whose title already has the site name, to test the browser title.', published: true, blocks: [{ type: 'hero', heading: 'About' }] })
+await call('save_page', { slug: 'title-plain', title: 'About', description: 'A page whose title does not have the site name, to test the browser title.', published: true, blocks: [{ type: 'hero', heading: 'About' }] })
+check((await (await fetch(`${base}/title-named`)).text()).includes('<title>About | Smoke Test Cafe</title>'), 'a title that already has the site name does not repeat it')
+check((await (await fetch(`${base}/title-plain`)).text()).includes('<title>About | Smoke Test Cafe</title>'), 'a title without the site name gets it added')
+await call('delete_page', { slug: 'title-named' })
+await call('delete_page', { slug: 'title-plain' })
 
 const home = await fetch(base)
 const body = await home.text()

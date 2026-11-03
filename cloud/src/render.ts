@@ -406,6 +406,6 @@ export function renderPage(
     head: `<script type="application/ld+json">${jsonLd}</script>`,
     isHome: page.slug === 'home',
     main: `${title}${blocks}`,
-    title: page.slug === 'home' ? page.title : `${page.title} | ${settings.name}`,
+    title: page.slug === 'home' || page.title.includes(settings.name) ? page.title : `${page.title} | ${settings.name}`,
   })
 }
