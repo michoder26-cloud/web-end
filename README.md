@@ -22,7 +22,7 @@ Claude asks about your business, then writes the pages, chooses the design, and 
 
 ## What you get
 
-- **Design:** 18 kinds of sections, five design styles, phone-friendly layouts, and fonts that cover Latin and Thai
+- **Design:** 19 kinds of sections, including link lists for sub-menus and resources, five design styles, phone-friendly layouts, and fonts that cover Latin and Thai
 - **Database:** your own tables with text, numbers, dates, choices, images and links between tables, plus products, orders and messages. Up to 50 tables of 50,000 records each. Download any table as a spreadsheet file.
 - **Access rules:** for each table, choose who can read and add: anyone, logged-in customers, customers' own records only, staff, or only you. Fields can be staff-only, and every rule is enforced on the server.
 - **Customer accounts:** sign up, log in, log out, staff roles, and a page where customers see their own orders. Turn it on when you need it.

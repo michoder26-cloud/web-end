@@ -187,6 +187,14 @@ const renderers: Record<string, (block: Block, context: Context) => string> = {
       block.tone,
       `<div class="wrap info">${block.heading ? `<h2>${escapeHtml(block.heading)}</h2>` : ''}<div>${(block.items ?? []).map((item: any) => `<details><summary>${escapeHtml(item.question)}</summary>${paragraphs(item.answer)}</details>`).join('')}</div></div>`,
     ),
+  links(block, { base }) {
+    const items = ((block.items ?? []) as { href?: string; label?: string; text?: string }[]).filter((item) => item.label && link(item.href, base))
+    const cards = items.some((item) => item.text)
+    const list = cards
+      ? `<div class="grid">${items.map((item) => `<a class="card link-card" href="${escapeHtml(item.href)}"><h3>${escapeHtml(item.label)}</h3>${paragraphs(item.text)}</a>`).join('')}</div>`
+      : `<ul class="link-row">${items.map((item) => `<li><a href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a></li>`).join('')}</ul>`
+    return section('links', block.tone, `<div class="wrap">${head(block.heading, block.intro)}${list}</div>`)
+  },
   cta: (block, { base }) =>
     section(
       'cta',

@@ -99,6 +99,22 @@ check((await (await fetch(`${base}/title-named`)).text()).includes('<title>About
 check((await (await fetch(`${base}/title-plain`)).text()).includes('<title>About | Smoke Test Cafe</title>'), 'a title without the site name gets it added')
 await call('delete_page', { slug: 'title-named' })
 await call('delete_page', { slug: 'title-plain' })
+// Links and reaching pages
+const linkDescription = 'A page used to test links between pages and whether visitors can reach it.'
+await call('save_page', { slug: 'hub', title: 'Hub', description: linkDescription, published: true, blocks: [{ type: 'hero', heading: 'Hub' }, { type: 'links', heading: 'More', items: [{ label: 'Guide <b>', href: '/guide' }] }, { type: 'links', items: [{ label: 'Card link', href: '/guide', text: 'Read the guide.' }] }] })
+await call('save_page', { slug: 'guide', title: 'Guide', description: linkDescription, published: true, blocks: [{ type: 'hero', heading: 'Guide' }] })
+await call('save_page', { slug: 'lost', title: 'Lost', description: linkDescription, published: true, blocks: [{ type: 'hero', heading: 'Lost' }] })
+check((await call('save_page', { slug: 'hub', title: 'Hub', description: linkDescription, published: true, blocks: [{ type: 'links', items: [{ label: 'Bad', href: 'javascript:alert(1)' }] }] })).isError, 'a links block refuses unsafe links')
+const hubHtml = await (await fetch(`${base}/hub`)).text()
+check(hubHtml.includes('<ul class="link-row"><li><a href="/guide">Guide &lt;b&gt;</a></li></ul>') && hubHtml.includes('<a class="card link-card" href="/guide"><h3>Card link</h3>'), 'a links block shows a row of links, or cards when the links have text', hubHtml.slice(hubHtml.indexOf('block--links'), hubHtml.indexOf('block--links') + 300))
+const unreachable = (problems, slug) => problems.some((problem) => problem.startsWith(`Page "${slug}" can't be reached`))
+const beforeMenu = (await call('check_site')).data.problems
+check(unreachable(beforeMenu, 'hub') && unreachable(beforeMenu, 'guide') && unreachable(beforeMenu, 'lost'), 'pages nobody links to are reported')
+await call('update_site', { nav: [{ label: 'Book', href: '/book' }, { label: 'Hub', href: '/hub' }] })
+const afterMenu = (await call('check_site')).data.problems
+check(!unreachable(afterMenu, 'hub') && !unreachable(afterMenu, 'guide') && unreachable(afterMenu, 'lost'), 'a page linked from a reachable page counts as reachable', JSON.stringify(afterMenu))
+await call('update_site', { nav: [{ label: 'Book', href: '/book' }] })
+for (const slug of ['hub', 'guide', 'lost']) await call('delete_page', { slug })
 
 const home = await fetch(base)
 const body = await home.text()

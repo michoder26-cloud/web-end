@@ -99,6 +99,7 @@ export const blockSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('gallery'), heading, images: z.array(z.object({ imageUrl, imageAlt: text(200), caption: optional(200) })).min(1).max(24), tone }),
   z.object({ type: z.literal('info'), id: z.string().regex(/^[a-z0-9-]{1,40}$/).optional().describe('Lets links jump here, such as /#hours'), heading, items: z.array(z.object({ label: text(80), value: text(400) })).min(1).max(12), ...button, tone }),
   z.object({ type: z.literal('faq'), heading, items: z.array(z.object({ question: text(240), answer: text(2000) })).min(1).max(30), tone }),
+  z.object({ type: z.literal('links'), heading, intro, items: z.array(z.object({ label: text(80), href, text: optional(300) })).min(1).max(24), tone }).describe('A list of links, such as a sub-menu, a footer row, resources or downloads. With text on an item it shows as cards, otherwise as one row of links.'),
   z.object({ type: z.literal('cta'), heading: text(160), text: optional(600), ...button, tone }),
   z.object({
     type: z.literal('form'),
@@ -195,6 +196,23 @@ export async function findProblems(env: Env, site: SiteRow) {
   if (isHexColor(settings.text) && isHexColor(settings.background) && contrast(settings.text, settings.background) < 4.5) problems.push('The text colour is hard to read on the background.')
   if (isHexColor(settings.accent) && isHexColor(settings.background) && contrast(settings.accent, settings.background) < 3) problems.push('The accent colour barely stands out from the background.')
   for (const item of settings.nav ?? []) checkLink(`Navigation item "${item.label}"`, item.href)
+  // A page counts as reachable through the menu or through any button or link on a page visitors can already reach.
+  const slugOf = (target: unknown) => (typeof target === 'string' && target.startsWith('/') && !target.startsWith('//') ? target.split(/[?#]/)[0].slice(1).replace(/\/$/, '') || 'home' : null)
+  const linksIn = (value: unknown): string[] => {
+    if (Array.isArray(value)) return value.flatMap(linksIn)
+    if (!value || typeof value !== 'object') return []
+    return Object.entries(value).flatMap(([key, inner]) => (/^(href|buttonHref|linkHref)$/.test(key) ? [slugOf(inner)].filter((slug): slug is string => Boolean(slug)) : linksIn(inner)))
+  }
+  const pageLinks = new Map(pages.filter((page) => page.published).map((page) => [page.slug, linksIn(JSON.parse(page.blocks))]))
+  const reachable = new Set(['home', ...(settings.nav ?? []).map((item) => slugOf(item.href)).filter((slug): slug is string => Boolean(slug))])
+  const queue = [...reachable]
+  while (queue.length) {
+    for (const next of pageLinks.get(queue.shift()!) ?? []) {
+      if (reachable.has(next)) continue
+      reachable.add(next)
+      queue.push(next)
+    }
+  }
   for (const page of pages) {
     const where = `Page "${page.slug}"`
     const blocks = JSON.parse(page.blocks) as Block[]
@@ -229,7 +247,7 @@ export async function findProblems(env: Env, site: SiteRow) {
         if (!contact) problems.push(`${where} has a form with no way to contact the person who sends it.`)
       }
     })
-    if (page.slug !== 'home' && page.published && !(settings.nav ?? []).some((item) => item.href === `/${page.slug}`)) problems.push(`${where} is not in the navigation. Check that visitors can reach it.`)
+    if (page.published && !reachable.has(page.slug)) problems.push(`${where} can't be reached from the menu or from a link on another page. Add it to the menu or link to it.`)
   }
   return problems
 }
