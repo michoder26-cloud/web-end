@@ -29,6 +29,27 @@ check(claimed.headers.get('referrer-policy') === 'no-referrer', 'the private pag
 const stranger = await fetch(`${base}/setup`, { method: 'POST', redirect: 'manual' })
 check(stranger.status === 303 && !(await stranger.text()).includes('/mcp/'), 'nobody else can claim the site afterwards')
 
+// The guided start, shown once right after claiming
+const claimedPolicy = claimed.headers.get('content-security-policy') ?? ''
+const claimedNonce = claimedPolicy.match(/script-src 'nonce-([0-9a-f]{64})'/)?.[1]
+check(claimedBody.includes('role="alert">Save these two links now. They are shown only once') && claimed.headers.get('x-robots-tag') === 'noindex' && claimed.headers.get('cache-control') === 'no-store', 'the guided start keeps the warning, and is never cached or indexed')
+check(Boolean(claimedNonce) && claimedPolicy.includes(`script-src 'nonce-${claimedNonce}';`) && claimedBody.includes(`<script nonce="${claimedNonce}">`) && (claimedBody.match(/<script/g) ?? []).length === 1, 'only the copy buttons\' own script may run, by a nonce made for this page')
+check(claimedBody.includes(`value="${base}/mcp/${code}"`) && claimedBody.includes(`value="${base}/owner/${code}"`) && claimedBody.includes('data-copy="claude-link"') && claimedBody.includes(' hidden type="button"'), 'both links are in fields to copy, with copy buttons that appear only when the script runs')
+check(claimedBody.includes('https://claude.ai/settings/connectors') && claimedBody.includes('Add custom connector') && claimedBody.includes('id="first-message"') && claimedBody.includes('ask me a few short questions about my business'), 'the guided start shows where to paste the link in Claude, and a first message to send')
+check(['cafe', 'shop', 'classes', 'services', 'portfolio'].every((id) => claimedBody.includes(`<input name="starter" type="hidden" value="${id}">`)) && claimedBody.includes(`action="/owner/${code}/starters"`) && claimedBody.includes('target="_blank"'), 'the guided start offers every starter, opening in a new tab so the links stay on screen')
+const setupAgain = await fetch(`${base}/setup`, { redirect: 'manual' })
+check(setupAgain.status === 303 && !(await (await fetch(base)).text()).includes(code), 'the guided start and its links are never shown again')
+check((await (await fetch(base)).text()).includes('pick a starter'), 'the empty site tells its owner about starters')
+
+// The first steps checklist ticks itself from what really happened
+const stepDone = (html, step) => html.match(new RegExp(`data-done="([01])" data-step="${step}"`))?.[1]
+const firstOverview = await (await fetch(`${base}/owner/${code}`)).text()
+check(['claude', 'build', 'phone', 'publish'].every((step) => stepDone(firstOverview, step) === '0'), 'a brand-new site shows its first steps, none done yet', ['claude', 'build', 'phone', 'publish'].map((step) => stepDone(firstOverview, step)).join())
+check(firstOverview.includes(`href="/owner/${code}/starters"`) && firstOverview.includes('Add custom connector') && firstOverview.includes(`value="${base}/mcp/${code}"`), 'the overview of an empty site links to the starters and shows how to connect Claude')
+const startersPage = await (await fetch(`${base}/owner/${code}/starters`)).text()
+check(startersPage.includes('>Starters</h1>') && (startersPage.match(/class="card starter contact-form"/g) ?? []).length === 5 && !startersPage.includes('name="confirm"'), 'the starters page lists every starter, with no question to answer on an empty site')
+check((await (await fetch(`${base}/owner/${code}/starters?lang=th`)).text()).includes('ร้านกาแฟหรือร้านอาหาร'), 'the starters page has the Thai starters')
+
 const client = new Client({ name: 'web-end-smoke', version: '1.0.0' })
 await client.connect(new StreamableHTTPClientTransport(new URL(`/mcp/${code}`, base)))
 const call = async (name, args = {}) => {
@@ -55,7 +76,9 @@ check((await rpc('/mcp/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd')).status === 404, 'M
 check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd`)).status === 404, 'the back office with a wrong link is refused')
 
 const { tools } = await client.listTools()
-check(tools.length === 41, 'lists the tools', tools.map((tool) => tool.name).join(','))
+check(tools.length === 42, 'lists the tools', tools.map((tool) => tool.name).join(','))
+check(stepDone(await (await fetch(`${base}/owner/${code}`)).text(), 'claude') === '1', 'connecting Claude ticks its step')
+check(client.getInstructions()?.includes('apply_starter') && tools.find((tool) => tool.name === 'apply_starter')?.description.includes('replacePages'), 'Claude knows about starters and when it may replace pages')
 check(client.getInstructions()?.includes('web team'), 'gives Claude its working method')
 check(client.getInstructions()?.includes('2 to 4 short choices') && client.getInstructions()?.includes('Only offer choices these tools can really deliver'), 'tells Claude to ask with choices and only offer what works')
 
@@ -72,6 +95,7 @@ const page = {
   ],
 }
 check(!(await call('save_page', page)).isError, 'saves a page')
+check(stepDone(await (await fetch(`${base}/owner/${code}`)).text(), 'build') === '1', 'a home page ticks the step to build the site')
 const book = await call('save_page', {
   slug: 'book',
   title: 'Book a table',
@@ -816,7 +840,7 @@ check(!['/staff/pages', '/staff/data', '/staff/customers', '/staff/publish', '/s
 check(staffHome.headers.get('x-robots-tag') === 'noindex' && staffHome.headers.get('cache-control') === 'no-store', 'the staff back office stays private')
 const staffOrders = await (await staffGet('/staff/orders')).text()
 check(staffOrders.includes('Guest &lt;b&gt;Buyer&lt;/b&gt;') && staffOrders.includes(`action="/staff/orders/${orderId}"`), 'staff with orders see the orders')
-const ownerOnlyGets = ['/staff/pages', '/staff/page/home', '/staff/preview', '/staff/data', '/staff/data/classes', '/staff/data/classes/export.csv', '/staff/customers', '/staff/publish', '/staff/settings', '/staff/connect', '/staff/system', '/staff/updates', '/staff/move', '/staff/wordpress', '/staff/wordpress/site.xml', '/staff/export.json']
+const ownerOnlyGets = ['/staff/starters', '/staff/pages', '/staff/page/home', '/staff/preview', '/staff/data', '/staff/data/classes', '/staff/data/classes/export.csv', '/staff/customers', '/staff/publish', '/staff/settings', '/staff/connect', '/staff/system', '/staff/updates', '/staff/move', '/staff/wordpress', '/staff/wordpress/site.xml', '/staff/export.json']
 const openedGets = []
 for (const path of ownerOnlyGets) if ((await staffGet(path)).status !== 403) openedGets.push(path)
 check(!openedGets.length, 'every area staff were not given is refused when typed in directly', openedGets.join(', '))
@@ -839,6 +863,7 @@ const ownerOnlyPosts = [
   ['/staff/data/classes', { op: 'add', title: 'Staff class' }],
   ['/staff/data/classes/delete', { confirm: 'on' }],
   ['/staff/move/check', {}],
+  ['/staff/starters', { starter: 'cafe', language: 'en', confirm: 'on' }],
 ]
 const openedPosts = []
 for (const [path, values] of ownerOnlyPosts) if ((await staffPost(path, values)).status !== 403) openedPosts.push(path)
@@ -1935,6 +1960,86 @@ while (attempts < 15 && !limited) {
   attempts++
 }
 check(limited, 'repeated login attempts are slowed down', `after ${attempts}`)
+
+// Starters
+const ownerPage = async (area = '', headers = {}) => (await fetch(`${owner}${area}`, { headers })).text()
+const beforeStarter = await ownerPage()
+const published = Boolean((await call('get_site')).data.publishing.live_version)
+check(published && stepDone(beforeStarter, 'phone') === '0' && ['claude', 'build', 'publish'].every((step) => stepDone(beforeStarter, step) === '1'), 'publishing ticks its step', ['claude', 'build', 'phone', 'publish'].map((step) => stepDone(beforeStarter, step)).join())
+await ownerPage('', { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' })
+check(!(await ownerPage()).includes('class="first-steps"'), 'opening the back office on a phone ticks the last step, and the finished checklist goes away')
+
+// A site with content is never replaced without the owner's say-so
+const contentBefore = async () => {
+  const siteNow = (await call('get_site')).data
+  return { customers: siteNow.customers, entries: siteNow.entries, orders: (await call('list_orders', { limit: 100 })).data.length, pages: siteNow.pages.map((one) => one.slug).sort().join(), tables: JSON.stringify(siteNow.tables), items: (await call('list_items')).data.length }
+}
+const kept = await contentBefore()
+const notEmpty = await call('apply_starter', { starter: 'cafe' })
+check(notEmpty.isError && notEmpty.text.includes('replacePages true') && JSON.stringify(await contentBefore()) === JSON.stringify(kept), 'Claude cannot put a starter on a site with content unless the owner agreed', notEmpty.text)
+const fullStarters = await ownerPage('/starters')
+check(fullStarters.includes('name="confirm" required type="checkbox"') && fullStarters.includes('role="alert">Your site already has'), 'the starters page asks before replacing anything')
+const unconfirmed = await fetch(`${owner}/starters`, { body: new URLSearchParams({ starter: 'cafe', language: 'en' }), method: 'POST', redirect: 'manual' })
+check(unconfirmed.status === 409 && (await unconfirmed.text()).includes('Nothing changed') && JSON.stringify(await contentBefore()) === JSON.stringify(kept), 'the back office refuses a starter on a site with content without the tick')
+check((await fetch(`${owner}/starters`, { body: new URLSearchParams({ starter: 'nope', language: 'en', confirm: 'on' }), method: 'POST', redirect: 'manual' })).status === 404, 'only real starters can be chosen')
+const confirmed = await fetch(`${owner}/starters`, { body: new URLSearchParams({ starter: 'cafe', language: 'en', confirm: 'on' }), method: 'POST', redirect: 'manual' })
+const replaced = await contentBefore()
+check(confirmed.status === 303 && (confirmed.headers.get('location') ?? '').endsWith(`/owner/${code}?started=cafe`) && replaced.pages === 'contact,home', 'with the tick, a starter replaces the pages', `${confirmed.status} ${replaced.pages}`)
+check(replaced.orders === kept.orders && replaced.customers === kept.customers && replaced.entries === kept.entries && replaced.tables === kept.tables && replaced.items === kept.items + 6, 'orders, customers, messages, tables, records and products are kept, and the samples are added', JSON.stringify([kept, replaced]))
+check((await ownerPage('?started=cafe')).includes('Visitors still see your published site until you'), 'a published site keeps showing its published version until the owner publishes the starter')
+check((await call('get_site')).data.settings.name !== 'Sample Café', "a starter keeps the name the owner chose")
+
+// Each starter on an empty site, in both languages, passes check_site with nothing to fix
+const emptySite = async () => {
+  for (const one of (await call('get_site')).data.pages) await call('delete_page', { slug: one.slug })
+  for (const one of (await call('list_items')).data) await call('delete_item', { id: one.id })
+  for (const one of (await call('list_automations')).data) await call('delete_automation', { id: one.id })
+  for (const one of (await call('list_tables')).data) await call('delete_table', { name: one.name })
+}
+await emptySite()
+// Settings earlier tests left half set up, which check_site would rightly report.
+await call('update_site', { payCard: false, cartMembersOnly: false })
+const clearEmail = formValues(await ownerPage('/settings'))
+clearEmail.set('emailFrom', '')
+clearEmail.set('notifyEmail', '')
+await fetch(`${owner}/settings`, { body: clearEmail, method: 'POST', redirect: 'manual' })
+const emailPattern = /[\w.+-]+@[\w-]+\.[a-z]{2,}/i
+const phonePattern = /\+?\d[\d -]{7,}\d/
+const placePattern = /\b(street|road|avenue|suite)\b|ถนน|ซอย|แขวง|เขต /i
+for (const language of ['en', 'th']) {
+  for (const starter of ['cafe', 'shop', 'classes', 'services', 'portfolio']) {
+    await emptySite()
+    const applied = await call('apply_starter', { starter, language })
+    const problems = (await call('check_site')).data.problems
+    check(!applied.isError && problems.length === 0, `the ${starter} starter in ${language} applies on an empty site and check_site finds nothing to fix`, applied.isError ? applied.text : JSON.stringify(problems))
+    const siteNow = (await call('get_site')).data
+    const pages = await Promise.all(siteNow.pages.map(async (one) => (await call('get_page', { slug: one.slug })).data))
+    const items = (await call('list_items')).data
+    const records = await Promise.all(siteNow.tables.map(async (table) => (await call('list_records', { table: table.name, limit: 100 })).data.records))
+    // Only what the starter wrote: dates the database adds would look like numbers.
+    // Bank details are the owner's own unless this starter wrote them, so other starters keep what earlier tests set.
+    const { footerText, nav, tagline, transferDetails } = siteNow.settings
+    const everything = JSON.stringify([footerText, nav, tagline, starter === 'shop' ? transferDetails : '', pages, items.map(({ body, category, price, title }) => [body, category, price, title]), records.map((rows) => rows.map(({ created_at, updated_at, ...values }) => values))])
+    const sampleWord = language === 'th' ? 'ตัวอย่าง' : /sample/i
+    check(siteNow.settings.language === language && pages.every((one) => (typeof sampleWord === 'string' ? JSON.stringify(one).includes(sampleWord) : sampleWord.test(JSON.stringify(one)))) && items.every((one) => (language === 'th' ? one.body.includes('ตัวอย่าง') : /sample/i.test(one.body))), `every page and item of the ${starter} starter in ${language} says it is a sample`)
+    check(!emailPattern.test(everything) && !phonePattern.test(everything) && !placePattern.test(everything) && !pages.some((one) => one.blocks.some((block) => ['testimonials', 'stats', 'team'].includes(block.type))), `the ${starter} starter in ${language} has no emails, phone numbers, addresses, reviews or figures that could look real`, everything.match(emailPattern)?.[0] ?? everything.match(phonePattern)?.[0] ?? everything.match(placePattern)?.[0] ?? '')
+    const resaved = await Promise.all(pages.map((one) => call('save_page', { slug: one.slug, title: one.title, description: one.description, published: true, blocks: one.blocks })))
+    check(resaved.every((result) => !result.isError), `the ${starter} starter's pages in ${language} can be edited and saved like any page`, resaved.find((result) => result.isError)?.text)
+    const home = await fetch(`${base}/owner/${code}/preview`)
+    check(home.status === 200 && (await home.text()).includes(language === 'th' ? 'นี่คือเว็บตัวอย่าง' : 'This is a sample site'), `the ${starter} starter in ${language} shows that it is a sample site`)
+    if (starter === 'shop') check(siteNow.settings.cart && siteNow.settings.payTransfer && siteNow.settings.payCod && items.length === 6 && items.some((one) => one.title.includes(language === 'th' ? 'เสื้อยืด' : 'T-shirt')), `the ${language} shop has a cart, bank transfer, pay on delivery and samples with sizes`)
+    if (starter === 'classes') {
+      const classes = records[siteNow.tables.findIndex((table) => table.name === 'classes')]
+      const automations = (await call('list_automations')).data
+      check(classes.length === 3 && automations.length === 1 && automations[0].enabled, `the ${language} classes starter has sample classes and a booking number automation`)
+      const tried = await call('test_automation', { id: automations[0].id, sample: { class: classes[0].id, name: 'Test', email: 'test@example.test' } })
+      check(!tried.isError && JSON.stringify(tried.data).includes('BK-'), `the ${language} booking number automation works`, tried.text.slice(0, 300))
+    }
+  }
+  check((await ownerPage('/starters')).includes(language === 'th' ? '>เว็บตั้งต้น</h1>' : '>Starters</h1>'), `the starters page follows the site's language: ${language}`)
+}
+check((await call('apply_starter', {})).data.starters.length === 5, 'Claude can list the starters')
+await call('update_site', { language: 'en' })
 
 
 if (loadCount) {

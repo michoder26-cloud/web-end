@@ -4,6 +4,7 @@ import { createResetLink, getCustomer } from './auth'
 import { handleAutomationsOffice } from './automations-office'
 import { handlePlatform } from './cms-platform'
 import { canSendEmail } from './email'
+import { checklist, claudeLinkField, connectGuide, firstSteps, handleStarters, isStarter } from './first-steps'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { saveImage } from './items'
 import { blockSchema, itemSchema, maxBlocksBytes, maxPagesPerSite, pageSlugSchema, settingsShape } from './mcp'
@@ -251,17 +252,21 @@ async function overview(env: Env, url: URL, site: SiteRow, desk: Desk) {
     const intro = desk.staff.permissions.length ? `<p>${t.staffIntro}</p>` : `<p role="status">${t.staffNoAreas}</p>`
     return office(site, desk, t.nav.overview, `${intro}${allows(desk, 'messages') ? `<h2>${t.messagesHeading}</h2>${await messageList(env, site, desk)}` : ''}`)
   }
-  const latest = await latestRelease()
+  const [latest, steps] = await Promise.all([latestRelease(), firstSteps(env, site)])
   const newer = latest && isNewer(latest.version, version) ? `<p role="status">${t.versionAvailable(escapeHtml(latest.version), `${escapeHtml(desk.base)}/updates`)}</p>` : ''
+  const started = isStarter(url.searchParams.get('started')) ? `<p role="status">${site.live_version ? t.start.startedLive(`${escapeHtml(desk.base)}/publish`) : t.start.started}</p>` : ''
+  // A new site gets its first steps on top, until every one of them is done.
+  const firstTime = steps && !Object.values(steps).every(Boolean) ? checklist(steps, escapeHtml(desk.base), t) : ''
+  const mcpUrl = `${url.origin}/mcp/${desk.code}`
   return office(
     site,
     desk,
     t.nav.overview,
-    `${newer}<h2>${t.messagesHeading}</h2>${await messageList(env, site, desk)}
+    `${started}${newer}${firstTime}<h2>${t.messagesHeading}</h2>${await messageList(env, site, desk)}
 ${site.live_version ? `<p>${t.seeWaiting(`${escapeHtml(desk.base)}/publish`)}</p>` : ''}
-<h2>${t.claudeHeading}</h2>
+<h2 id="claude">${t.claudeHeading}</h2>
 <p>${t.claudeHelp}</p>
-<p><code style="overflow-wrap:anywhere">${escapeHtml(`${url.origin}/mcp/${desk.code}`)}</code></p>`,
+${steps && !steps.claude ? `<div class="contact-form">${claudeLinkField(mcpUrl, t)}${connectGuide(t)}</div>` : `<p><code style="overflow-wrap:anywhere">${escapeHtml(mcpUrl)}</code></p>`}`,
   )
 }
 
@@ -681,5 +686,6 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
   }
 
   if (area === 'settings' && !id) return post ? saveSettings(request, env, url, site, desk) : settingsForm(site, desk, saved)
+  if (area === 'starters' && !id) return handleStarters(request, env, url, site, desk)
   return notFound()
 }

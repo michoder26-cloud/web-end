@@ -1,7 +1,7 @@
 import { sha256 } from './auth'
 import { escapeHtml } from './http'
 import { officeWords } from './office-words'
-import type { OfficeWords } from './office-words'
+import type { OfficeLanguage, OfficeWords } from './office-words'
 import type { Block, Env, FormField, Settings, SiteRow } from './types'
 
 export const hashCode = sha256
@@ -20,17 +20,20 @@ export const isOwner = async (env: Env, code: string | undefined) => {
   return Boolean(site)
 }
 
-/** The first person to finish setup becomes the owner. Later attempts change nothing. */
-export async function claimSite(env: Env) {
+/** The names a new site starts with. A starter may replace these, but never a name the owner chose. */
+export const defaultSiteNames = ['My website', 'เว็บไซต์ของฉัน']
+
+/** The first person to finish setup becomes the owner. Later attempts change nothing. Their browser's language becomes the site's, so the back office speaks it from the start. */
+export async function claimSite(env: Env, language: OfficeLanguage = 'en') {
   const code = newCode()
-  const settings: Settings = { language: 'en', name: 'My website', style: 'studio' }
+  const settings: Settings = { language, name: defaultSiteNames[language === 'th' ? 1 : 0], style: 'studio' }
   const result = await env.DB.prepare('INSERT INTO sites (id, slug, edit_hash, settings) VALUES (1, ?, ?, ?) ON CONFLICT DO NOTHING')
     .bind('site', await hashCode(code), JSON.stringify(settings))
     .run()
   return result.meta.changes ? code : null
 }
 
-export const shell = (title: string, body: string, wide = false, lang = 'en') => `<!doctype html>
+export const shell = (title: string, body: string, wide = false, lang = 'en', end = '') => `<!doctype html>
 <html lang="${escapeHtml(lang)}">
 <head>
 <meta charset="utf-8">
@@ -42,7 +45,7 @@ export const shell = (title: string, body: string, wide = false, lang = 'en') =>
 </head>
 <body data-style="calm" style="--accent:#1f4d3a;--accent-dark:#fbfaf6;--accent-text:#1f4d3a;--accent-text-dark:#fbfaf6;--base-bg:#fbfaf6;--base-ink:#16201b;--on-accent:#ffffff;--on-accent-dark:#111111">
 <main><section class="block tone-plain"><div class="wrap account ${wide ? 'cms' : 'account--wide'}">${body}</div></section></main>
-</body>
+${end}</body>
 </html>`
 
 export const setupPage = (t: OfficeWords = officeWords()) =>
@@ -52,23 +55,6 @@ export const setupPage = (t: OfficeWords = officeWords()) =>
 <p class="lead">${t.oneStepLeft}</p>
 <p role="alert">${t.shownOnce}</p>
 <form action="/setup" method="post"><button class="button" type="submit">${t.getLink}</button></form>`,
-    false,
-    t.lang,
-  )
-
-export const claimedPage = (origin: string, code: string, t: OfficeWords = officeWords()) =>
-  shell(
-    t.claimedTitle,
-    `<h1>${t.youOwnIt}</h1>
-<p role="alert">${t.saveLinks}</p>
-<h2>${t.connectClaude}</h2>
-<p>${t.connectClaudeHelp}</p>
-<p><code style="overflow-wrap:anywhere">${escapeHtml(`${origin}/mcp/${code}`)}</code></p>
-<h2>${t.sayWhatYouWant}</h2>
-<p>${t.sayWhatYouWantHelp}</p>
-<h2>${t.yourBackOffice}</h2>
-<p>${t.yourBackOfficeHelp}</p>
-<p><a href="/owner/${escapeHtml(code)}" style="overflow-wrap:anywhere">${escapeHtml(`${origin}/owner/${code}`)}</a></p>`,
     false,
     t.lang,
   )

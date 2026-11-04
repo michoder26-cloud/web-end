@@ -6,19 +6,20 @@ Build and run a full-stack site or simple app by talking to Claude: your own dat
 
 ## How it works
 
-Before you start, you need free [Cloudflare](https://dash.cloudflare.com/sign-up) and [GitHub](https://github.com/signup) accounts, and a Claude account.
+You need three free accounts: [Cloudflare](https://dash.cloudflare.com/sign-up), [GitHub](https://github.com/signup) and [Claude](https://claude.ai).
 
-1. **Install.** Click the button and follow Cloudflare's steps. It copies web-end to your own GitHub account and puts your website online on your own free Cloudflare account. You only do this once, and it took about 3 minutes in our test.
+1. **Install.** Click this button and follow Cloudflare's steps. It puts your own copy of web-end in your GitHub account and your website on your own Cloudflare account. It took about 3 minutes in our test.
 
    [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/michoder26-cloud/web-end/tree/main/cloud)
 
-   The first time, GitHub asks you to let Cloudflare read and change your code. Choose **Only select repositories** so your other projects stay out of it. If you land on a different page afterwards, click the button above again.
+   When GitHub asks, choose **Only select repositories**, so your other projects stay out of it. If you land on a different page afterwards, click the button again.
 
-2. **Get your link.** Open your new website and click **Get my Claude link**. Do this straight away, because the first person to click becomes the owner. Save the links it shows you, because they appear only once.
-3. **Connect Claude.** In Claude's connector settings, add a custom connector with your link and choose no sign-in.
-4. **Say what you want.** "Build a website for my coffee shop."
+2. **Claim your site straight away.** Open your new website and click **Get my Claude link**. The first person to click becomes the owner.
+3. **Save your two links.** The next page shows your Claude link and your back office link only once. They work like passwords: anyone who has them can change your site. It has copy buttons.
+4. **Connect Claude.** The same page shows each step: in Claude, open **Settings**, then **Connectors**, click **Add custom connector**, and paste your Claude link. Then send the first message it gives you. [More help](docs/connect-claude.md).
+5. **Or start from a starter.** Want a working site right now, without Claude? Pick a café, shop, classes and bookings, services or portfolio starter, in English or Thai. Every word and price in it is a clearly marked sample you change later.
 
-Claude asks about your business, then writes the pages, chooses the design, and gives you the link. Come back any time to change something.
+Claude asks a few short questions about your business, builds the pages and design, and gives you the link. Your back office shows what's left to do, such as checking the site on your phone and publishing, and ticks each step by itself. Come back any time to change something.
 
 ## What you get
 
@@ -33,6 +34,7 @@ Claude asks about your business, then writes the pages, chooses the design, and 
 - **Notifications:** get an email for each new order, form entry and booking through your own Resend account, get them in Discord, Slack or Telegram for free, or send signed webhooks to other services
 - **Automations:** "when this happens, do that" rules that run on your server without code, such as a booking confirmation email, a booking number, a seat taken from a class, a status workflow or a low-stock alert. Claude sets them up from what you say, and you can see them, switch them off and read what they did in the back office.
 - **Email:** order confirmations with the customer's private order link, an email when an order is paid, shipped, done or cancelled, and password reset emails, in your site's language when it's English or Thai
+- **Starters:** five complete sample sites in English and Thai, ready in one click from the back office or through Claude: a café or restaurant, an online shop, classes and bookings with booking numbers, services or coaching, and a portfolio. Samples are labelled as samples, with no made-up reviews, figures, addresses or phone numbers.
 - **Build guides for Claude:** planning, data design, access rules, screens, design, copy, shop, publishing, Wix, staff, automations and launch checks, built in, so there's nothing extra to install
 - **System page:** hosting, version, publishing, database use, login, payments, email and connections in one place
 - **Shop:** product pages, categories, sale prices, sizes and colours, stock that can't oversell, a cart, free delivery thresholds, private order links and order status. Prices are always set on the server.

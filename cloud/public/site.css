@@ -1024,6 +1024,120 @@ details p:first-of-type {
   object-fit: cover;
 }
 
+/* First steps: the guided start, the checklist and starters */
+.copy-field {
+  display: grid;
+  gap: 6px;
+}
+
+.copy-field label {
+  font-weight: 700;
+}
+
+/* Copy buttons appear only where the page's own script can make them work. */
+.copy-field [hidden] {
+  display: none;
+}
+
+.copy-field__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.copy-field__row input,
+.copy-field__row textarea {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+}
+
+.contact-form .copy-field__row .button {
+  flex: none;
+  margin-top: 6px;
+}
+
+.cms-steps .copy-field {
+  margin-top: 10px;
+}
+
+.starters {
+  gap: 20px;
+  margin-bottom: 16px;
+}
+
+.starters .card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 22px;
+  border: 1px solid color-mix(in srgb, var(--ink) 16%, transparent);
+  border-radius: 12px;
+}
+
+.starters h2,
+.starters h3,
+.starters p,
+.starters ul {
+  margin: 0;
+}
+
+.starters h2 {
+  font-size: 24px;
+}
+
+.starters .button {
+  justify-self: start;
+}
+
+.first-steps {
+  margin-bottom: 36px;
+  padding: 22px;
+  border: 2px solid var(--action);
+  border-radius: 12px;
+}
+
+.first-steps h2 {
+  margin-top: 0;
+}
+
+.checklist {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checklist li {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 12px;
+}
+
+.checklist p {
+  margin: 4px 0 0;
+}
+
+.checklist__mark {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 2px solid var(--action);
+  border-radius: 50%;
+  font-weight: 700;
+}
+
+.checklist [data-done='1'] .checklist__mark {
+  background: var(--action);
+  color: var(--on-action);
+}
+
+.checklist__state {
+  opacity: 0.75;
+}
+
 /* Cart and checkout */
 .cart {
   max-width: 720px;

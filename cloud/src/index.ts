@@ -9,12 +9,13 @@ import type { Desk } from './cms'
 import { loadPageRecords, receiveRecord } from './data'
 import { tellOwnerAboutEntry } from './email'
 import { validateEntry } from './forms'
+import { guidedStart, noteClaude, notePhone } from './first-steps'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { loadItems, showImage } from './items'
 import { createMcpServer } from './mcp'
 import { followRedirect } from './moving'
 import { browserWords, officeText } from './office-words'
-import { claimedPage, claimSite, getSite, isOwner, setupPage, shell } from './owner'
+import { claimSite, getSite, isOwner, setupPage, shell } from './owner'
 import { renderPage } from './render'
 import { cartCount, handleShop } from './shop'
 import { stripeWebhook } from './stripe'
@@ -38,8 +39,8 @@ const buildingPage = () =>
   shell(
     'Coming soon',
     `<h1>This website is being built.</h1>
-<p>Are you the owner? Open Claude, start a new chat with your connector on, and say what you want. For example: "Build a website for my coffee shop."</p>
-<p lang="th">เว็บนี้กำลังสร้างอยู่ ถ้าคุณเป็นเจ้าของ ให้เปิด Claude เริ่มแชตใหม่โดยเปิด connector ไว้ แล้วบอกว่าอยากได้เว็บแบบไหน</p>`,
+<p>Are you the owner? Open your back office link and pick a starter for a working site in one click. Or open Claude, start a new chat with your connector on, and say what you want. For example: "Build a website for my coffee shop."</p>
+<p lang="th">เว็บนี้กำลังสร้างอยู่ ถ้าคุณเป็นเจ้าของ ให้เปิดลิงก์หลังบ้านแล้วเลือกเว็บตั้งต้น ได้เว็บที่ใช้งานได้ในคลิกเดียว หรือเปิด Claude เริ่มแชตใหม่โดยเปิด connector ไว้ แล้วบอกว่าอยากได้เว็บแบบไหน</p>`,
   )
 
 async function showPage(request: Request, env: Env, url: URL, site: SiteRow, slug: string) {
@@ -174,8 +175,9 @@ async function answer(request: Request, env: Env): Promise<Response> {
 
     if (!working) {
       if (url.pathname === '/setup' && request.method === 'POST') {
-        const code = await claimSite(env)
-        return code ? html(claimedPage(url.origin, code, browserWords(request)), 200, privateHeaders) : see(url, '/')
+        const words = browserWords(request)
+        const code = await claimSite(env, words.lang)
+        return code ? guidedStart(url.origin, code, words) : see(url, '/')
       }
       return url.pathname === '/' ? html(setupPage(browserWords(request)), 200, privateHeaders) : notFound()
     }
@@ -191,7 +193,14 @@ async function answer(request: Request, env: Env): Promise<Response> {
     if (parts[0] === 'mcp' || parts[0] === 'owner') {
       // A wrong code looks the same as a page that doesn't exist.
       if (!(await isOwner(env, parts[1]))) return notFound()
-      if (parts[0] === 'mcp') return parts.length === 2 ? await handleMcp(request, env, url, parts[1]) : notFound()
+      if (parts[0] === 'mcp') {
+        if (parts.length !== 2) return notFound()
+        // Ticks "Connect Claude" on the owner's checklist.
+        if (request.method === 'POST') await noteClaude(env)
+        return await handleMcp(request, env, url, parts[1])
+      }
+      // Ticks "Check on your phone" on the owner's checklist.
+      await notePhone(request, env)
       const desk = ownerDesk(parts[1])
       if (parts[2] === 'preview' && parts.length <= 4 && request.method === 'GET') return await showPreview(env, url, working, desk, parts[3] ?? 'home')
       return await handleOffice(request, env, url, working, desk, parts.slice(2))

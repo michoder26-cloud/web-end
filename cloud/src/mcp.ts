@@ -7,6 +7,7 @@ import { writeItem } from './cms'
 import { systemStatus } from './cms-platform'
 import { createRecord, deleteRecord, getRecord, getTable, listRecords, listTables, ownerActor, saveTable, showRecord, tableBase, tableSchema, updateRecord } from './data'
 import { emailProblems } from './email'
+import { applyStarter, siteStarterLanguage } from './first-steps'
 import { googleProblems } from './google'
 import { guides, guideTopics } from './guides'
 import { parsePrice } from './money'
@@ -15,6 +16,7 @@ import { officeWords } from './office-words'
 import { getSite as findSite } from './owner'
 import { orderLines, orderStatuses, setOrderStatus } from './shop'
 import { readPermissions, setStaff, staffAreas } from './staff'
+import { starterIds, starterLanguages, starterSites } from './starters'
 import { listVersions, liveSite, publishVersion, restoreVersion, unpublishedChanges } from './versions'
 import { version } from './version'
 import { eventNames, hiddenUrl, isChatUrl, validWebhookUrl } from './webhooks'
@@ -37,6 +39,8 @@ Checklist:
 - Which real details exist: photos, prices, contact details and opening hours.
 
 Only offer choices these tools can really deliver.
+
+Starters: when the owner wants something working quickly, wants to see an example first, or has no details yet, offer apply_starter. It builds a complete sample site in one step, in English or Thai: a café or restaurant, an online shop, classes and bookings, services or coaching, or a portfolio. Every sample is labelled as one. Then replace the samples with their real name, details, prices and photos, and remove the sample labels as you do. It only works on an empty site. If the site already has pages, ask the owner first, and only set replacePages after they agree.
 2. Architect: decide what the site needs. Custom kinds of data, such as bookings, classes or members, go in tables with save_table, shown by records and record-form blocks. Products, menus, listings and similar things go in the database with save_item, shown by a collection block. Login goes on with update_site accounts true. A shop uses update_site cart true, with payTransfer and transferDetails and/or payCod, and a collection block with an id, filters true and no button link. Give products categories, real sale prices with comparePrice, stock, and variants for sizes or colours. Every product has its own page at /product/id. Use the shopping features the owner needs, and leave out the rest. Bookings and simple requests use a form block, with membersOnly true if only logged-in customers may send them.
 3. Copywriter: write clear, specific words for those customers. Use only facts they gave you. Never invent reviews, clients, numbers, prices or awards.
 4. Designer: choose a style and colours that suit the business. Styles: studio (sharp, creative work), editorial (elegant serif, restaurants, fashion), warm (friendly, cafes, local shops), bold (loud, gyms, events), calm (trustworthy, clinics, law). Pick a distinctive accent colour, not a default blue. Vary the rhythm: alternate tone plain, tint and dark, and mix block types. Design for phones first. Leave out anything you have no real content for.
@@ -965,6 +969,37 @@ export function createMcpServer(env: Env, origin: string, code: string) {
       const site = await getSite()
       const result = await db.prepare('DELETE FROM automations WHERE id = ? AND site_id = ?').bind(id, site.id).run()
       return result.meta.changes ? reply({ deleted: id }) : refuse('There is no automation with that id on this site.')
+    }),
+  )
+
+  server.registerTool(
+    'apply_starter',
+    {
+      title: 'Start from a ready-made sample site',
+      description: `Builds a complete sample site in one step: pages, design, menu and samples clearly labelled as samples, in English or Thai. Use it when the owner wants something working quickly or wants to see an example first, then replace the samples with their real details. Call it without starter to list the starters. Starters: ${starterIds.map((id) => `${id} (${starterSites[id].en.label}: ${starterSites[id].en.description})`).join('; ')}. It only works on an empty site. On a site with pages, products or tables, ask the owner first and set replacePages true only after they agree: it replaces every page and the design. Products, tables, records, automations, orders, customers and messages are kept, and the starter's samples are added beside them.`,
+      inputSchema: {
+        starter: z.enum(starterIds).optional().describe('Leave out to list the starters'),
+        language: z.enum(starterLanguages).optional().describe("en or th. Leave out to follow the site's language."),
+        replacePages: z.boolean().optional().describe('Replace every existing page and the design. Only after the owner agreed.'),
+      },
+    },
+    safely(async ({ language, replacePages, starter }) => {
+      const site = await getSite()
+      const chosen = language ?? siteStarterLanguage(JSON.parse(site.settings) as Settings)
+      if (!starter) return reply({ language: chosen, starters: starterIds.map((id) => ({ starter: id, name: starterSites[id][chosen].label, description: starterSites[id][chosen].description, includes: starterSites[id][chosen].includes })) })
+      const result = await applyStarter(env, site, starter, chosen, replacePages === true)
+      if (result.error) return refuse(`Nothing changed. This site already has ${result.before.pages} pages, ${result.before.items} products or items and ${result.before.tables} tables. A starter replaces every page and the design. Ask the owner first. If they agree, call apply_starter again with replacePages true. Their products, tables, records, orders, customers and messages are kept.`)
+      return reply({
+        applied: starter,
+        language: chosen,
+        url: siteUrl(),
+        back_office: `${origin}/owner/${code}`,
+        pages: result.pages.map((slug) => ({ slug, url: pageUrl(slug) })),
+        added: result.added,
+        kept: 'Orders, customers, records, messages and any products and tables that were already here.',
+        next: 'Run check_site. Tell the owner every word, price and time is a sample. Then ask for their real business name, details, prices and photos, replace the samples with save_item, save_page and update_site, and remove the sample labels as you go.',
+        ...waiting(site),
+      })
     }),
   )
 
