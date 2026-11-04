@@ -527,7 +527,7 @@ export function createMcpServer(env: Env, origin: string, code: string) {
     'get_guide',
     {
       title: 'Read a build guide',
-      description: "Reads the team's working guide on a topic: plan_app, data_model, access_rules, screens, design, copy, shop, publish, connect_wix, connect_other, automations, test_before_launch or limits. Read the ones that fit before you build.",
+      description: "Reads the team's working guide on a topic: move_from_wix, move_to_wordpress, plan_app, data_model, access_rules, screens, design, copy, shop, publish, connect_wix, connect_other, staff, automations, test_before_launch or limits. Read the ones that fit before you build.",
       inputSchema: { topic: z.enum(guideTopics) },
       annotations: { readOnlyHint: true },
     },

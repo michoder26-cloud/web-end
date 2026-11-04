@@ -1822,6 +1822,8 @@ if (process.env.GOOGLE_TEST === '1') {
     const { createHmac } = await import('node:crypto')
     check(hook && JSON.parse(hook.body).data.number === `#${String(autoOrder.id).padStart(4, '0')}` && JSON.parse(hook.body).data.items === 'Auto mug × 1', 'a new order reaches the webhook step', hook?.body.slice(0, 200))
     check(Boolean(secret) && digest === createHmac('sha256', secret).update(`${time}.${hook.body}`).digest('hex') && !JSON.stringify((await call('list_automations')).data).includes(secret), 'webhook steps are signed, and Claude never sees the secret')
+    const exportedRules = await (await fetch(`${owner}/export.json`)).json()
+    check(exportedRules.automations?.length > 0 && exportedRules.automations.every((row) => row.name && row.rule?.trigger?.on && !('secret' in row)) && !JSON.stringify(exportedRules).includes(secret), 'Download everything includes the automations, without their secrets')
     const shipped = mailTo('buyer@auto.test').find((row) => row.subject.startsWith('Order #'))
     check(shipped?.subject === `Order #${String(autoOrder.id).padStart(4, '0')} is on its way` && shipped.text.includes('Auto mug × 1'), 'an order status change emails the customer', JSON.stringify(mailTo('buyer@auto.test').map((row) => row.subject)))
     check(mailTo('newbie@auto.test').some((row) => row.subject === 'Welcome, Newbie'), 'a new customer gets a welcome email')
