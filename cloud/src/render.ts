@@ -2,6 +2,7 @@ import { canChange, canCreate, showRecord } from './data'
 import type { DataField, PageRecords } from './data'
 import { contrast, isHexColor, isSafeHref, readableOn, siteStyles } from './theme'
 import { isAvailable } from './items'
+import { alternates, languageName, languagePrefix } from './languages'
 import { parsePrice } from './money'
 import { words } from './text'
 import type { Block, Customer, FormField, Item, Settings, SiteRow } from './types'
@@ -346,6 +347,18 @@ export function renderLayout(site: SiteRow, options: LayoutOptions) {
   const lang = /^[a-zA-Z-]{2,12}$/.test(settings.language ?? '') ? settings.language : 'en'
   const vars = `--accent:${accent};--accent-dark:${accentOnDark};--accent-text:${contrast(accent, background) >= 5 ? accent : text};--accent-text-dark:${contrast(accent, text) >= 5 ? accent : background};--base-bg:${background};--base-ink:${text};--on-accent:${readableOn(accent)};--on-accent-dark:${readableOn(accentOnDark)}`
   const t = words(settings.language)
+  // Pages are made with their address in the main language. Visitors of an extra language get it under its prefix, with links to the others.
+  const where = (() => {
+    try {
+      return new URL(options.canonical)
+    } catch {
+      return null
+    }
+  })()
+  const canonical = where ? `${where.origin}${languagePrefix(settings)}${where.pathname}${where.search}` : options.canonical
+  const others = where ? alternates(settings, where.origin, where.pathname) : []
+  const hreflang = others.length && !options.robots ? [...others.map((one) => `<link rel="alternate" hreflang="${escapeHtml(one.code)}" href="${escapeHtml(one.href)}">`), `<link rel="alternate" hreflang="x-default" href="${escapeHtml(others[0].href)}">`].join('\n') : ''
+  const switcher = others.filter((one) => one.code !== settings.language).map((one) => `<a class="site-lang" href="${escapeHtml(one.href)}" hreflang="${escapeHtml(one.code)}" lang="${escapeHtml(one.code)}">${escapeHtml(languageName(one.code))}</a>`).join('')
 
   // Menu links such as #products point at the home page, so they need its address everywhere else.
   const fromMenu = (href: unknown) => (typeof href === 'string' && href.startsWith('#') && !options.isHome ? `/${href}` : href)
@@ -374,7 +387,8 @@ export function renderLayout(site: SiteRow, options: LayoutOptions) {
 <title>${escapeHtml(options.title)}</title>
 <meta name="description" content="${escapeHtml(options.description)}">
 ${options.robots ? `<meta name="robots" content="${escapeHtml(options.robots)}">` : ''}
-<link rel="canonical" href="${escapeHtml(options.canonical)}">
+<link rel="canonical" href="${escapeHtml(canonical)}">
+${hreflang}
 <meta property="og:title" content="${escapeHtml(options.title)}">
 <meta property="og:description" content="${escapeHtml(options.description)}">
 <meta property="og:type" content="website">
@@ -385,7 +399,7 @@ ${customCss}
 ${options.head ?? ''}
 </head>
 <body class="${tabs ? 'has-tabs' : ''}" data-style="${style}" style="${vars}">
-<header class="site-header"><div class="wrap site-header__inner"><a class="site-name" href="/">${escapeHtml(settings.name)}</a>${nav ? `<nav aria-label="Main">${nav}</nav>` : ''}${headerButton}</div></header>
+<header class="site-header"><div class="wrap site-header__inner"><a class="site-name" href="/">${escapeHtml(settings.name)}</a>${nav ? `<nav aria-label="Main">${nav}</nav>` : ''}${switcher}${headerButton}</div></header>
 <main>${options.main}</main>
 <footer class="site-footer"><div class="wrap"><div class="site-footer__grid"><div><p class="site-footer__name">${escapeHtml(settings.name)}</p>${settings.tagline ? `<p>${escapeHtml(settings.tagline)}</p>` : ''}${settings.footerText ? `<p class="pre-line">${escapeHtml(settings.footerText)}</p>` : ''}</div>${links ? `<nav aria-label="Footer">${links}</nav>` : ''}${settings.email || settings.phone || settings.address ? `<address>${settings.address ? `<p class="pre-line">${escapeHtml(settings.address)}</p>` : ''}${settings.phone ? `<a href="tel:${escapeHtml(settings.phone.replace(/[^\d+]/g, ''))}">${escapeHtml(settings.phone)}</a>` : ''}${settings.email ? `<a href="mailto:${escapeHtml(settings.email)}">${escapeHtml(settings.email)}</a>` : ''}</address>` : ''}</div><p class="site-credit">Made with <a href="${repository}">web-end</a>, free and open source.</p></div></footer>
 ${tabs}
@@ -396,14 +410,16 @@ ${tabs}
 export function renderPage(
   site: SiteRow,
   page: { blocks: Block[]; description: string; slug: string; title: string },
-  options: { canonical: string; cartCount?: number; customer: Customer | null; error?: string; items: Map<string, Item[]>; query?: URLSearchParams; records?: Map<number, PageRecords>; sent?: string },
+  options: { canonical: string; cartCount?: number; customer: Customer | null; error?: string; items: Map<string, Item[]>; query?: URLSearchParams; records?: Map<number, PageRecords>; sent?: string; untranslated?: { blocks: Set<number>; label: string } },
 ) {
   const settings = JSON.parse(site.settings) as Settings
   const firstHero = page.blocks.findIndex((block) => block.type === 'hero')
   const blocks = page.blocks
-    .map((block, index) =>
-      renderers[block.type]?.(block, { base: '', blockIndex: index, cart: Boolean(settings.cart), customer: options.customer, error: options.error, isMainHeading: index === firstHero, items: options.items, language: settings.language, pageSlug: page.slug, query: options.query, records: options.records, sent: options.sent }) ?? '',
-    )
+    .map((block, index) => {
+      const shown = renderers[block.type]?.(block, { base: '', blockIndex: index, cart: Boolean(settings.cart), customer: options.customer, error: options.error, isMainHeading: index === firstHero, items: options.items, language: settings.language, pageSlug: page.slug, query: options.query, records: options.records, sent: options.sent }) ?? ''
+      // Only the owner's preview passes these, to mark sections still in the main language.
+      return options.untranslated?.blocks.has(index) ? shown.replace('<section ', `<section data-untranslated="${escapeHtml(options.untranslated.label)}" `) : shown
+    })
     .join('')
   const title = firstHero === -1 ? `<section class="block block--title tone-plain"><div class="wrap"><h1>${escapeHtml(page.title)}</h1></div></section>` : ''
   const jsonLd = JSON.stringify({
@@ -412,7 +428,15 @@ export function renderPage(
     description: page.description,
     isPartOf: { '@type': 'WebSite', name: settings.name },
     name: page.title,
-    url: options.canonical,
+    ...(settings.viewLanguage ? { inLanguage: settings.viewLanguage } : {}),
+    url: (() => {
+      try {
+        const where = new URL(options.canonical)
+        return `${where.origin}${languagePrefix(settings)}${where.pathname}`
+      } catch {
+        return options.canonical
+      }
+    })(),
   }).replace(/</g, '\\u003c')
   return renderLayout(site, {
     canonical: options.canonical,

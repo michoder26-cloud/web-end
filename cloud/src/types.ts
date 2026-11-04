@@ -36,6 +36,8 @@ export type Settings = {
   headerButtonHref?: string
   headerButtonLabel?: string
   language?: string
+  /** The main language first, then extra ones, such as ['th', 'en']. One or none means a single-language site. */
+  languages?: string[]
   name: string
   nav?: Nav[]
   newsDailyLimit?: number
@@ -56,7 +58,13 @@ export type Settings = {
   text?: string
   timeZone?: string
   transferDetails?: string
+  translations?: Record<string, SiteTranslation>
+  /** Set only on the copy made for visitors of an extra language, never stored. */
+  viewLanguage?: string
 }
+
+/** The words of the menu, tagline, footer and similar settings in one extra language. Menu labels are keyed by their link. */
+export type SiteTranslation = { footerText?: string; headerButtonLabel?: string; name?: string; nav?: Record<string, string>; tagline?: string; transferDetails?: string }
 
 export type FormField = {
   label: string
@@ -97,6 +105,9 @@ export type Item = {
   sort: number
   stock: null | number
   title: string
+  translations?: string
+  /** Set when shown in an extra language and something of it isn't translated yet. */
+  untranslated?: boolean
   variants?: Variant[]
 }
 
@@ -116,6 +127,7 @@ export type Order = {
   site_id: number
   status: string
   subtotal: number
+  language?: string
   total: number
 }
 
@@ -137,4 +149,5 @@ export type PageRow = {
   published: number
   slug: string
   title: string
+  translations?: string
 }

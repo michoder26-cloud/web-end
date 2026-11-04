@@ -2,6 +2,7 @@ import { allowAttempt, createResetLink, endCookie, endSession, getCustomer, hash
 import { canSendEmail, isEmail, later, sendEmail } from './email'
 import { canUseGoogle, endGoogleCookie, finishGoogle, startGoogle } from './google'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
+import { languagePrefix } from './languages'
 import { entryFields } from './owner'
 import { addSubscriber } from './news'
 import { renderLayout } from './render'
@@ -180,7 +181,7 @@ export async function emailResetLink(env: Env, site: SiteRow, origin: string, ad
         after: [t.resetEmailIgnore],
         heading: t.changePassword,
         lines: [t.resetEmailBody.replace('{site}', settings.name)],
-        link: { href: `${origin}${await createResetLink(env, customer.id)}`, label: t.changePassword },
+        link: { href: `${origin}${languagePrefix(settings)}${await createResetLink(env, customer.id)}`, label: t.changePassword },
         replyTo: settings.email,
         subject: t.resetEmailSubject,
       })

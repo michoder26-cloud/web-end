@@ -7,6 +7,7 @@ import type { Actor, DataField, DataTable } from './data'
 import { emailProblems, emailStatus, sendEmail } from './email'
 import { googleProblems, googleStatus } from './google'
 import { escapeHtml, notFound, see } from './http'
+import { extraLanguages, languageName, mainLanguage } from './languages'
 import { checkMove, cleanPath, finishMove, importProducts, moveStatus, safeWebUrl, saveRedirects } from './moving'
 import type { MoveReport } from './moving'
 import { officeText } from './office-words'
@@ -239,11 +240,11 @@ async function exportEverything(env: Env, site: SiteRow) {
   const records: Record<string, unknown[]> = {}
   for (const table of tables) records[table.name] = (await env.DB.prepare('SELECT id, customer_id, data, created_at, updated_at FROM data_records WHERE table_id = ? ORDER BY id LIMIT 50000').bind(table.id).all<{ data: string }>()).results.map((row) => ({ ...row, data: JSON.parse(row.data) as unknown }))
   const [pages, items, variants, customers, orders, lines, entries, images, automations, subscribers, campaigns] = await Promise.all([
-    all('SELECT slug, title, description, published, blocks FROM pages WHERE site_id = ?'),
+    all('SELECT slug, title, description, published, blocks, translations FROM pages WHERE site_id = ?'),
     all('SELECT * FROM items WHERE site_id = ?'),
     all('SELECT item_variants.* FROM item_variants JOIN items ON items.id = item_variants.item_id WHERE items.site_id = ?'),
     all('SELECT id, email, name, role, created_at FROM customers WHERE site_id = ?'),
-    all('SELECT id, customer_id, name, phone, email, address, note, payment, status, subtotal, shipping, total, money_prefix, money_suffix, created_at, updated_at FROM orders WHERE site_id = ?'),
+    all('SELECT id, customer_id, name, phone, email, address, note, payment, status, subtotal, shipping, total, money_prefix, money_suffix, language, created_at, updated_at FROM orders WHERE site_id = ?'),
     all('SELECT order_lines.* FROM order_lines JOIN orders ON orders.id = order_lines.order_id WHERE orders.site_id = ?'),
     all('SELECT id, form, page, data, status, created_at, customer_id FROM entries WHERE site_id = ?'),
     all('SELECT id, name, type, size, created_at FROM media WHERE site_id = ?'),
@@ -455,6 +456,7 @@ async function wordpressPage(env: Env, url: URL, site: SiteRow, code: string) {
     code,
     t.moveToWordpress,
     `<p>${t.wordpressIntro(`/owner/${escapeHtml(code)}/move`)}</p>
+${extraLanguages(JSON.parse(site.settings) as Settings).length ? `<p role="note">${escapeHtml(t.wordpressMainOnly(languageName(mainLanguage(JSON.parse(site.settings) as Settings), t.lang)))}</p>` : ''}
 <article class="card account__record"><h2>${t.downloadFiles}</h2>
 ${file('site.xml', t.wordpressFile, t.wordpressFileNote(plan.pages.length))}
 ${plan.products.length ? file('products.csv', t.woocommerceFile, t.woocommerceFileNote(plan.products.length)) : ''}

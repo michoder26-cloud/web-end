@@ -165,6 +165,18 @@ Keep your pages where they are, and let web-end hold the data, logins and orders
 
 This has been tested against the API, but not yet inside a real Wix site, so try it on a copy first.
 
+## Your site in two languages
+
+Many Thai shops serve tourists too. Your site can be in Thai and English, or other languages, at the same time. Ask Claude, for example: "Add English for tourists." Claude reads its `languages` guide, turns on `languages` (your main language first, such as `th, en`) and translates your pages, products, menu and footer.
+
+- Your main language stays at the same addresses. English gets its own, such as `/en/`, `/en/about` and `/en/product/12`.
+- Each page has a plain link at the top to the other language. Search engines are told about both versions, and the sitemap lists both.
+- Cart, checkout, order pages and order emails follow the visitor's language. Orders keep the product names the customer saw.
+- Anything not translated yet shows your main language's words, so nothing breaks. Your preview, such as `/owner/.../preview/en/about`, marks those places, and Claude's site check lists them.
+- In the back office, each page and product has a tab for each language, and Settings has a page for the menu and footer.
+- Translations of pages and the menu are published with the rest of your changes, and versions keep them. Product translations work at once, like products.
+- **Download everything** includes your translations. The WordPress files hold your main language only.
+
 ## PromptPay QR codes
 
 For shops that price in Thai baht. After checkout, the customer's order page shows a PromptPay QR code with the exact amount of the order. They scan it with any Thai banking app and pay. The confirmation email links to that page.

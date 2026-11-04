@@ -2,6 +2,7 @@ import { allowAttempt, getCustomer, newToken, sha256 } from './auth'
 import { canSendEmail, isEmail, later, sendEmail, tellOwner } from './email'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { getProduct, getProducts, isAvailable } from './items'
+import { languagePrefix, localizeSettings } from './languages'
 import { formatMoney, parsePrice } from './money'
 import { addSubscriber } from './news'
 import { getSite } from './owner'
@@ -57,7 +58,7 @@ type Line = { item: Item; key: string; price: NonNullable<ReturnType<typeof pars
 /** Prices the cart from the database, leaving out anything no longer on sale and limiting quantities to the stock. */
 async function priceCart(env: Env, site: SiteRow, cart: Map<string, number>) {
   const settings = JSON.parse(site.settings) as Settings
-  const products = await getProducts(env, site.id, [...new Set([...cart.keys()].map((key) => Number(key.split('_')[0])))])
+  const products = await getProducts(env, site.id, [...new Set([...cart.keys()].map((key) => Number(key.split('_')[0])))], settings.viewLanguage)
   const byId = new Map(products.map((item) => [item.id, item]))
   const lines: Line[] = []
   let changed = false
@@ -229,7 +230,7 @@ export async function submitOrder(request: Request, env: Env, site: SiteRow, car
   // One batch, so a line that would oversell cancels the whole order.
   try {
     await env.DB.batch([
-      env.DB.prepare('INSERT INTO orders (site_id, customer_id, token_hash, name, phone, email, address, note, payment, subtotal, shipping, total, money_prefix, money_suffix) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(site.id, customer?.id ?? null, tokenHash, values.name, values.phone, email, values.address, values.note, values.payment, priced.subtotal, priced.shipping, priced.total, priced.prefix, priced.suffix),
+      env.DB.prepare('INSERT INTO orders (site_id, customer_id, token_hash, name, phone, email, address, note, payment, subtotal, shipping, total, money_prefix, money_suffix, language) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(site.id, customer?.id ?? null, tokenHash, values.name, values.phone, email, values.address, values.note, values.payment, priced.subtotal, priced.shipping, priced.total, priced.prefix, priced.suffix, settings.viewLanguage ?? ''),
       ...priced.lines.flatMap((line) => [
         env.DB.prepare(`INSERT INTO order_lines (order_id, item_id, variant_id, title, variant, unit_price, quantity) VALUES (${orderId}, ?, ?, ?, ?, ?, ?)`).bind(tokenHash, line.item.id, line.variant?.id ?? null, line.item.title, line.variant?.name ?? '', line.price.amount, line.quantity),
         takeStock(env, line.item.id, line.variant?.id ?? null, line.quantity),
@@ -274,7 +275,7 @@ async function emailOrder(env: Env, settings: Settings, origin: string, order: O
         facts: orderFacts(order, lines, t),
         heading: `${t.order} ${number}`,
         lines: [t.orderPlaced],
-        link: { href: `${origin}/order/${token}`, label: t.orderEmailLink },
+        link: { href: `${origin}${languagePrefix(settings)}/order/${token}`, label: t.orderEmailLink },
         replyTo: settings.email,
         subject: t.orderEmailSubject.replace('{number}', number),
       }),
@@ -313,7 +314,8 @@ async function placeOrder(request: Request, env: Env, url: URL, site: SiteRow, c
   if (!placed.order) return see(url, '/cart')
   // Only when they ticked the box themselves. It starts unticked, and they still confirm by email.
   if (newsletter && placed.order.email) await addSubscriber(env, site, url.origin, { customerId: customer?.id ?? null, email: placed.order.email, name: placed.order.name, source: 'checkout' })
-  const orderPath = `/order/${placed.token}`
+  // A visitor of an extra language comes back from paying to the order in their language.
+  const orderPath = `${languagePrefix(settings)}/order/${placed.token}`
   const empty = cartCookie(url, new Map())
   if (values.payment !== 'card') return see(url, `${orderPath}?new=1`, empty)
   const payUrl = await startCardPayment(env, url, settings, placed.order, placed.lines as OrderLine[], orderPath)
@@ -365,8 +367,9 @@ async function emailStatus(env: Env, origin: string, id: number) {
     (async () => {
       const site = await getSite(env)
       if (!site) return
-      const settings = JSON.parse(liveSite(site).settings) as Settings
       const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ? AND site_id = ?').bind(id, site.id).first<Order>()
+      // In the language the customer ordered in, while the site still has it.
+      const settings = localizeSettings(JSON.parse(liveSite(site).settings) as Settings, order?.language || null)
       if (!order || !isEmail(order.email) || !canSendEmail(env, settings)) return
       const t = words(settings.language)
       const token = newToken()
@@ -379,7 +382,7 @@ async function emailStatus(env: Env, origin: string, id: number) {
         facts: [[t.orderStatus, state], ...orderFacts(order, lines, t)],
         heading: `${t.order} ${number}: ${state}`,
         lines: [t.statusEmail[order.status] ?? ''],
-        link: { href: `${origin}/order/${token}`, label: t.orderEmailLink },
+        link: { href: `${origin}${languagePrefix(settings)}/order/${token}`, label: t.orderEmailLink },
         replyTo: settings.email,
         subject: t.statusEmailSubject.replace('{number}', number).replace('{status}', state),
       })
@@ -476,7 +479,7 @@ async function payAgain(env: Env, url: URL, site: SiteRow, token: string) {
 async function productPage(request: Request, env: Env, url: URL, site: SiteRow, id: number) {
   const settings = JSON.parse(site.settings) as Settings
   const t = words(settings.language)
-  const item = await getProduct(env, site.id, id)
+  const item = await getProduct(env, site.id, id, settings.viewLanguage)
   if (!item) return notFound()
   const customer = settings.accounts ? await getCustomer(request, env, site.id) : null
   const options = item.variants ?? []
@@ -512,7 +515,7 @@ async function productPage(request: Request, env: Env, url: URL, site: SiteRow, 
     description: item.body || item.title,
     ...(item.image_url ? { image: item.image_url.startsWith('/') ? `${url.origin}${item.image_url}` : item.image_url } : {}),
     name: item.title,
-    ...(price && settings.currency ? { offers: { '@type': 'Offer', availability: `https://schema.org/${available ? 'InStock' : 'OutOfStock'}`, price: (price.amount / 100).toFixed(2), priceCurrency: settings.currency.toUpperCase(), url: `${url.origin}${url.pathname}` } } : {}),
+    ...(price && settings.currency ? { offers: { '@type': 'Offer', availability: `https://schema.org/${available ? 'InStock' : 'OutOfStock'}`, price: (price.amount / 100).toFixed(2), priceCurrency: settings.currency.toUpperCase(), url: `${url.origin}${languagePrefix(settings)}${url.pathname}` } } : {}),
   }).replace(/</g, '\\u003c')
   return html(
     renderLayout(site, {

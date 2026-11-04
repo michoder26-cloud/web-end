@@ -520,6 +520,21 @@ const en = {
   previewBanner: (publishHref: string) => `Private preview of unpublished changes. Forms, login and buying use the live site. <a href="${publishHref}">Publish</a>`,
   customCodeLater: 'Custom code runs after you publish.',
 
+  // More than one language
+  notTranslated: 'Not translated yet. Visitors see the main language here.',
+  previewUntranslated: (name: string, main: string, missing: number, items: string[]) => `${name}: ${missing ? `${missing} texts on this page are not translated yet, so visitors see the ${main} words there. They are marked below.` : ''}${items.length ? ` Products not fully translated: ${items.join(', ')}.` : ''}`,
+  siteLanguages: 'Languages, main language first, such as th, en. Leave empty for one language.',
+  languages: 'Languages',
+  mainTag: (name: string) => `${name} (main)`,
+  editIn: (name: string) => `Edit in ${name}`,
+  translateIntro: (name: string, main: string) => `Write the words in ${name}. Leave a box empty to show the ${main} words there. Photos, links and the order of sections always come from the ${main} version.`,
+  original: 'Main language:',
+  saveTranslation: 'Save translation',
+  leftToTranslate: (count: number) => (count ? `${count} left to translate` : 'Translated'),
+  translateSite: (name: string) => `Menu, tagline and footer in ${name}`,
+  translateOptions: 'Option names',
+  wordpressMainOnly: (main: string) => `The WordPress file holds the ${main} version of your site only. Your translations stay here, and Download everything on the System page includes them.`,
+
   // Setup, before the back office exists
   setupTitle: 'Set up your website',
   installed: 'Your website is installed.',
@@ -1323,6 +1338,20 @@ const th: OfficeWords = {
   seeYourPages: 'ดูหน้าเว็บของคุณ',
   previewBanner: (publishHref: string) => `ตัวอย่างส่วนตัวของการแก้ไขที่ยังไม่ได้เผยแพร่ แบบฟอร์ม การเข้าสู่ระบบ และการสั่งซื้อจะใช้เว็บจริง <a href="${publishHref}">เผยแพร่</a>`,
   customCodeLater: 'โค้ดเพิ่มเติมจะทำงานหลังจากเผยแพร่',
+
+  notTranslated: 'ยังไม่ได้แปล ผู้เข้าชมจะเห็นภาษาหลักตรงนี้',
+  previewUntranslated: (name: string, main: string, missing: number, items: string[]) => `${name}: ${missing ? `ข้อความในหน้านี้ ${missing} จุดยังไม่ได้แปล ผู้เข้าชมจะเห็นเป็นภาษา${main}ตรงนั้น มีเครื่องหมายไว้ด้านล่าง` : ''}${items.length ? ` สินค้าที่ยังแปลไม่ครบ: ${items.join(', ')}` : ''}`,
+  siteLanguages: 'ภาษา ใส่ภาษาหลักก่อน เช่น th, en เว้นว่างไว้ถ้าใช้ภาษาเดียว',
+  languages: 'ภาษา',
+  mainTag: (name: string) => `${name} (ภาษาหลัก)`,
+  editIn: (name: string) => `แก้ไขเป็นภาษา${name}`,
+  translateIntro: (name: string, main: string) => `เขียนข้อความเป็นภาษา${name} ช่องไหนเว้นว่างไว้ จะแสดงข้อความภาษา${main}แทน รูปภาพ ลิงก์ และลำดับของส่วนต่าง ๆ จะใช้ตามฉบับภาษา${main}เสมอ`,
+  original: 'ภาษาหลัก:',
+  saveTranslation: 'บันทึกคำแปล',
+  leftToTranslate: (count: number) => (count ? `เหลือที่ต้องแปลอีก ${count} จุด` : 'แปลครบแล้ว'),
+  translateSite: (name: string) => `เมนู คำโปรย และส่วนท้ายเว็บเป็นภาษา${name}`,
+  translateOptions: 'ชื่อตัวเลือก',
+  wordpressMainOnly: (main: string) => `ไฟล์ WordPress มีเฉพาะฉบับภาษา${main}ของเว็บ คำแปลจะยังอยู่ที่นี่ และไฟล์ดาวน์โหลดข้อมูลทั้งหมดในหน้าระบบมีคำแปลครบ`,
 
   setupTitle: 'ตั้งค่าเว็บไซต์',
   installed: 'ติดตั้งเว็บไซต์เรียบร้อยแล้ว',

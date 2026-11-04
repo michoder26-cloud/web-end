@@ -16,10 +16,10 @@ export function liveSite(site: SiteRow): SiteRow {
 
 export const findLivePage = (env: Env, site: SiteRow, slug: string) =>
   site.live_version
-    ? env.DB.prepare('SELECT slug, title, description, published, blocks FROM version_pages WHERE version_id = ? AND slug = ? AND published = 1').bind(site.live_version, slug).first<PageRow>()
-    : env.DB.prepare('SELECT slug, title, description, published, blocks FROM pages WHERE site_id = ? AND slug = ? AND published = 1').bind(site.id, slug).first<PageRow>()
+    ? env.DB.prepare('SELECT slug, title, description, published, blocks, translations FROM version_pages WHERE version_id = ? AND slug = ? AND published = 1').bind(site.live_version, slug).first<PageRow>()
+    : env.DB.prepare('SELECT slug, title, description, published, blocks, translations FROM pages WHERE site_id = ? AND slug = ? AND published = 1').bind(site.id, slug).first<PageRow>()
 
-export const findWorkingPage = (env: Env, site: SiteRow, slug: string) => env.DB.prepare('SELECT slug, title, description, published, blocks FROM pages WHERE site_id = ? AND slug = ?').bind(site.id, slug).first<PageRow>()
+export const findWorkingPage = (env: Env, site: SiteRow, slug: string) => env.DB.prepare('SELECT slug, title, description, published, blocks, translations FROM pages WHERE site_id = ? AND slug = ?').bind(site.id, slug).first<PageRow>()
 
 export const liveSlugs = async (env: Env, site: SiteRow) => {
   const query = site.live_version ? env.DB.prepare('SELECT slug FROM version_pages WHERE version_id = ? AND published = 1').bind(site.live_version) : env.DB.prepare('SELECT slug FROM pages WHERE site_id = ? AND published = 1').bind(site.id)
@@ -34,10 +34,10 @@ const comparable = (settings: string) => {
 /** Lists what would change for visitors at the next publish. */
 export async function unpublishedChanges(env: Env, site: SiteRow) {
   if (!site.live_version) return null
-  const row = (page: PageRow) => JSON.stringify([page.title, page.description, page.published, page.blocks])
+  const row = (page: PageRow) => JSON.stringify([page.title, page.description, page.published, page.blocks, page.translations])
   const [{ results: working }, { results: live }] = await Promise.all([
-    env.DB.prepare('SELECT slug, title, description, published, blocks FROM pages WHERE site_id = ?').bind(site.id).all<PageRow>(),
-    env.DB.prepare('SELECT slug, title, description, published, blocks FROM version_pages WHERE version_id = ?').bind(site.live_version).all<PageRow>(),
+    env.DB.prepare('SELECT slug, title, description, published, blocks, translations FROM pages WHERE site_id = ?').bind(site.id).all<PageRow>(),
+    env.DB.prepare('SELECT slug, title, description, published, blocks, translations FROM version_pages WHERE version_id = ?').bind(site.live_version).all<PageRow>(),
   ])
   const before = new Map(live.map((page) => [page.slug, row(page)]))
   const after = new Set(working.map((page) => page.slug))
@@ -53,7 +53,7 @@ export async function publishVersion(env: Env, site: SiteRow, note: string) {
   if (!home) return { error: 'There is no published home page yet, so there is nothing to show visitors.' }
   const version = await env.DB.prepare('INSERT INTO versions (site_id, note, settings) VALUES (?, ?, ?) RETURNING id').bind(site.id, note.slice(0, 200), site.settings).first<{ id: number }>()
   await env.DB.batch([
-    env.DB.prepare('INSERT INTO version_pages (version_id, slug, title, description, published, blocks) SELECT ?, slug, title, description, published, blocks FROM pages WHERE site_id = ?').bind(version!.id, site.id),
+    env.DB.prepare('INSERT INTO version_pages (version_id, slug, title, description, published, blocks, translations) SELECT ?, slug, title, description, published, blocks, translations FROM pages WHERE site_id = ?').bind(version!.id, site.id),
     env.DB.prepare(`UPDATE sites SET live_version = ?, updated_at = ${now} WHERE id = ?`).bind(version!.id, site.id),
     env.DB.prepare('DELETE FROM versions WHERE site_id = ? AND id NOT IN (SELECT id FROM versions WHERE site_id = ? ORDER BY id DESC LIMIT ?)').bind(site.id, site.id, keptVersions),
   ])
@@ -67,7 +67,7 @@ export async function restoreVersion(env: Env, site: SiteRow, id: number) {
   const settings = { ...(JSON.parse(version.settings) as Settings), ...systemSettings(JSON.parse(site.settings) as Settings) }
   await env.DB.batch([
     env.DB.prepare('DELETE FROM pages WHERE site_id = ?').bind(site.id),
-    env.DB.prepare('INSERT INTO pages (site_id, slug, title, description, published, blocks) SELECT ?, slug, title, description, published, blocks FROM version_pages WHERE version_id = ?').bind(site.id, id),
+    env.DB.prepare('INSERT INTO pages (site_id, slug, title, description, published, blocks, translations) SELECT ?, slug, title, description, published, blocks, translations FROM version_pages WHERE version_id = ?').bind(site.id, id),
     env.DB.prepare(`UPDATE sites SET settings = ?, live_version = ?, updated_at = ${now} WHERE id = ?`).bind(JSON.stringify(settings), id, site.id),
   ])
   return true

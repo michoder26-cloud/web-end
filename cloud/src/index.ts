@@ -12,6 +12,7 @@ import { validateEntry } from './forms'
 import { guidedStart, noteClaude, notePhone } from './first-steps'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { loadItems, showImage } from './items'
+import { alternates, extraLanguages, keepLanguage, languageName, localizePage, localizeSite, mainLanguage, siteLanguages } from './languages'
 import { createMcpServer } from './mcp'
 import { addSubscriber, handleNewsLink, runNews } from './news'
 import { followRedirect } from './moving'
@@ -35,6 +36,9 @@ const frameHeaders = {
   'X-Robots-Tag': 'noindex',
 }
 
+/** The extra language this copy of the site is for, or null for the main language. */
+const viewingIn = (site: SiteRow) => (JSON.parse(site.settings) as Settings).viewLanguage ?? null
+
 const customerFor = (request: Request, env: Env, site: SiteRow) => ((JSON.parse(site.settings) as Settings).accounts ? getCustomer(request, env, site.id) : Promise.resolve(null))
 
 const buildingPage = () =>
@@ -46,13 +50,15 @@ const buildingPage = () =>
   )
 
 async function showPage(request: Request, env: Env, url: URL, site: SiteRow, slug: string) {
-  const page = await findLivePage(env, site, slug)
-  if (!page) {
+  const found = await findLivePage(env, site, slug)
+  if (!found) {
     if (slug !== 'home') return notFound()
     return html(buildingPage())
   }
-  const blocks = JSON.parse(page.blocks) as Block[]
-  const [items, customer] = await Promise.all([loadItems(env, site.id, blocks), customerFor(request, env, site)])
+  const language = viewingIn(site)
+  const page = localizePage({ ...found, blocks: JSON.parse(found.blocks) as Block[] }, language)
+  const blocks = page.blocks
+  const [items, customer] = await Promise.all([loadItems(env, site.id, blocks, language), customerFor(request, env, site)])
   const records = await loadPageRecords(env, site.id, blocks, { admin: false, customer: customer ?? null })
   return html(
     renderPage(
@@ -72,21 +78,30 @@ async function showPage(request: Request, env: Env, url: URL, site: SiteRow, slu
   )
 }
 
-/** Shows the owner, or staff who edit pages, the unpublished copy of a page, with its menu links staying inside the preview. */
-async function showPreview(env: Env, url: URL, site: SiteRow, desk: Desk, slug: string) {
-  const page = await findWorkingPage(env, site, slug)
-  const t = officeText(site)
-  if (!page) return html(shell(t.previewTitle, `<h1>${t.previewMissing}</h1><p><a href="${escapeHtml(desk.base)}/pages">${t.seeYourPages}</a></p>`, false, t.lang), 404, privateHeaders)
-  const blocks = JSON.parse(page.blocks) as Block[]
+/** Shows the owner, or staff who edit pages, the unpublished copy of a page, with its menu links staying inside the preview. In an extra language, it marks what isn't translated yet. */
+async function showPreview(env: Env, url: URL, working: SiteRow, desk: Desk, parts: string[]) {
+  const settings = JSON.parse(working.settings) as Settings
+  const language = extraLanguages(settings).includes(parts[0]) ? parts[0] : null
+  const slug = (language ? parts[1] : parts[0]) ?? 'home'
+  const site = localizeSite(working, language)
+  const found = await findWorkingPage(env, site, slug)
+  const t = officeText(working)
+  if (!found) return html(shell(t.previewTitle, `<h1>${t.previewMissing}</h1><p><a href="${escapeHtml(desk.base)}/pages">${t.seeYourPages}</a></p>`, false, t.lang), 404, privateHeaders)
+  const page = localizePage({ ...found, blocks: JSON.parse(found.blocks) as Block[] }, language)
+  const blocks = page.blocks
   const [items, records, { results }] = await Promise.all([
-    loadItems(env, site.id, blocks),
+    loadItems(env, site.id, blocks, language),
     loadPageRecords(env, site.id, blocks, { admin: false, customer: null }),
     env.DB.prepare('SELECT slug FROM pages WHERE site_id = ?').bind(site.id).all<{ slug: string }>(),
   ])
-  const base = `${desk.base}/preview`
+  const base = `${desk.base}/preview${language ? `/${language}` : ''}`
   const slugs = new Set(results.map((row) => row.slug))
-  const rendered = renderPage(site, { ...page, blocks }, { canonical: `${url.origin}/`, customer: null, items, query: url.searchParams, records })
-  const banner = `<p class="preview-banner" role="status">${t.previewBanner(`${escapeHtml(desk.base)}/publish`)}</p>`
+  const untranslatedItems = language ? [...items.values()].flat().filter((item) => item.untranslated).map((item) => item.title) : []
+  const rendered = renderPage(site, page, { canonical: `${url.origin}/`, customer: null, items, query: url.searchParams, records, untranslated: language ? { blocks: page.untranslated, label: t.notTranslated } : undefined })
+  const missing = language && (page.missing.length || untranslatedItems.length) ? `<br>${escapeHtml(t.previewUntranslated(languageName(language, t.lang), languageName(mainLanguage(settings), t.lang), page.missing.length, untranslatedItems))}` : ''
+  // Only the owner sees these marks. Visitors get the main language's words in those places, without a mark.
+  const marks = missing ? '<style>[data-untranslated]{outline:3px dashed #d97706;outline-offset:-3px}[data-untranslated]::before{content:attr(data-untranslated);display:block;background:#d97706;color:#16201b;font:600 14px/1.4 system-ui,sans-serif;padding:4px 12px}</style>' : ''
+  const banner = `<p class="preview-banner" role="status">${t.previewBanner(`${escapeHtml(desk.base)}/publish`)}${missing}</p>${marks}`
   const body = rendered
     .replace(/href="\/([a-z0-9-]*)((?:[?#][^"]*)?)"/g, (match, target: string, rest: string) => (!target || slugs.has(target) ? `href="${base}${target ? `/${target}` : ''}${rest}"` : match))
     // A frame could read its own address, and this address holds the owner's secret.
@@ -102,8 +117,10 @@ async function showFrame(env: Env, site: SiteRow, slug: string, index: string) {
 }
 
 async function receiveForm(request: Request, env: Env, url: URL, site: SiteRow, pageSlug: string, formName: string) {
-  const page = await findLivePage(env, site, pageSlug)
-  const blocks = page ? (JSON.parse(page.blocks) as Block[]) : []
+  const found = await findLivePage(env, site, pageSlug)
+  const language = viewingIn(site)
+  // In another language the choices and messages are in its words, so the answers are checked against those.
+  const blocks = found ? localizePage({ ...found, blocks: JSON.parse(found.blocks) as Block[] }, language).blocks : []
   const block = blocks.find((item) => item.type === 'form' && item.name === formName)
   if (!block) return notFound()
 
@@ -125,7 +142,7 @@ async function receiveForm(request: Request, env: Env, url: URL, site: SiteRow, 
     .first<{ total: number }>()
   if ((recent?.total ?? 0) >= maxEntriesPerHour) return back('error')
 
-  await loadItems(env, site.id, blocks)
+  await loadItems(env, site.id, blocks, language)
   const data = validateEntry(block.fields as FormField[], form)
   if (!data) return back('error')
   const entry = await env.DB.prepare('INSERT INTO entries (site_id, form, page, data, customer_id) VALUES (?, ?, ?, ?, ?) RETURNING id, created_at')
@@ -171,8 +188,20 @@ async function handleMcp(request: Request, env: Env, url: URL, code: string) {
 async function sitemap(env: Env, url: URL, site: SiteRow) {
   const slugs = await liveSlugs(env, site)
   const { results: products } = await env.DB.prepare('SELECT id FROM items WHERE site_id = ? AND published = 1 LIMIT 500').bind(site.id).all<{ id: number }>()
-  const urls = [...slugs.map((slug) => `/${slug === 'home' ? '' : slug}`), ...products.map(({ id }) => `/product/${id}`)].map((path) => `<url><loc>${url.origin}${path}</loc></url>`).join('')
-  return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`, {
+  const paths = [...slugs.map((slug) => `/${slug === 'home' ? '' : slug}`), ...products.map(({ id }) => `/product/${id}`)]
+  const settings = JSON.parse(site.settings) as Settings
+  const several = siteLanguages(settings).length > 0
+  // With more than one language, every page is listed in each, and each entry names all of them.
+  const urls = several
+    ? paths
+        .flatMap((path) => {
+          const all = alternates(settings, url.origin, path)
+          const links = all.map((one) => `<xhtml:link rel="alternate" hreflang="${one.code}" href="${escapeHtml(one.href)}"/>`).join('')
+          return all.map((one) => `<url><loc>${escapeHtml(one.href)}</loc>${links}</url>`)
+        })
+        .join('')
+    : paths.map((path) => `<url><loc>${url.origin}${path}</loc></url>`).join('')
+  return new Response(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"${several ? ' xmlns:xhtml="http://www.w3.org/1999/xhtml"' : ''}>${urls}</urlset>`, {
     headers: { 'Content-Type': 'application/xml' },
   })
 }
@@ -212,7 +241,7 @@ async function answer(request: Request, env: Env): Promise<Response> {
       // Ticks "Check on your phone" on the owner's checklist.
       await notePhone(request, env)
       const desk = ownerDesk(parts[1])
-      if (parts[2] === 'preview' && parts.length <= 4 && request.method === 'GET') return await showPreview(env, url, working, desk, parts[3] ?? 'home')
+      if (parts[2] === 'preview' && parts.length <= 5 && request.method === 'GET') return await showPreview(env, url, working, desk, parts.slice(3))
       return await handleOffice(request, env, url, working, desk, parts.slice(2))
     }
 
@@ -220,34 +249,47 @@ async function answer(request: Request, env: Env): Promise<Response> {
     if (parts[0] === 'staff') {
       const desk = await staffEntry(request, env, url, working)
       if (desk instanceof Response) return desk
-      if (parts[1] === 'preview' && parts.length <= 3 && request.method === 'GET' && allows(desk, 'pages')) return await showPreview(env, url, working, desk, parts[2] ?? 'home')
+      if (parts[1] === 'preview' && parts.length <= 4 && request.method === 'GET' && allows(desk, 'pages')) return await showPreview(env, url, working, desk, parts.slice(2))
       return await handleOffice(request, env, url, working, desk, parts.slice(1))
     }
 
     if (parts[0] === 'api') return await handleApi(request, env, url, site, parts)
-    if (parts[0] === 'data' && request.method === 'POST' && (parts.length === 2 || (parts.length === 4 && parts[3] === 'delete' && /^\d{1,12}$/.test(parts[2])))) {
-      const customer = await customerFor(request, env, site)
-      return await receiveRecord(request, env, url, site, { admin: false, customer: customer ?? null }, parts[1], parts[2] ? Number(parts[2]) : undefined)
-    }
-
-    // Confirm and unsubscribe links. Four parts long, so statistics never count them as page views.
-    if (parts[0] === 'newsletter' && parts.length === 4 && (request.method === 'GET' || request.method === 'POST')) return await handleNewsLink(request, env, url, site, parts)
-    if (['account', 'login', 'logout', 'reset', 'signup'].includes(parts[0])) return await handleAccount(request, env, url, site, parts)
-    if (['cart', 'checkout', 'order', 'product'].includes(parts[0])) return await handleShop(request, env, url, site, parts)
     if (url.pathname === '/stripe/webhook' && request.method === 'POST') return await stripeWebhook(request, env, site)
 
-    if (parts[0] === 'form' && request.method === 'POST' && parts.length === 3) {
-      return await receiveForm(request, env, url, site, parts[1], parts[2])
+    // An extra language, such as /en/about, is the same site in its words, with every link and redirect kept in it.
+    if (extraLanguages(JSON.parse(site.settings) as Settings).includes(parts[0])) {
+      const inner = new URL(url)
+      inner.pathname = `/${parts.slice(1).join('/')}`
+      const response = await visit(request, env, inner, localizeSite(site, parts[0]), parts.slice(1))
+      return await keepLanguage(response, `/${parts[0]}`, url.origin)
     }
-    if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405 })
-    if (parts[0] === 'media' && parts.length === 2 && /^\d+(\.(gif|jpe?g|png|webp))?$/.test(parts[1])) return (await showImage(env, site.id, parts[1].split('.')[0])) ?? notFound()
-    if (parts[0] === 'frame' && parts.length === 3 && /^\d+$/.test(parts[2])) return await showFrame(env, site, parts[1], parts[2])
-    if (parts.length > 1) return notFound()
-    return await showPage(request, env, url, site, parts[0] ?? 'home')
+    return await visit(request, env, url, localizeSite(site, null), parts)
   } catch (error) {
     console.error(error)
     return html('<!doctype html><meta charset="utf-8"><title>Error</title><h1>Something went wrong</h1><p>Please try again.</p>', 500)
   }
+}
+
+/** What visitors can open, in whichever language the site row was made for. */
+async function visit(request: Request, env: Env, url: URL, site: SiteRow, parts: string[]) {
+  if (parts[0] === 'data' && request.method === 'POST' && (parts.length === 2 || (parts.length === 4 && parts[3] === 'delete' && /^\d{1,12}$/.test(parts[2])))) {
+    const customer = await customerFor(request, env, site)
+    return await receiveRecord(request, env, url, site, { admin: false, customer: customer ?? null }, parts[1], parts[2] ? Number(parts[2]) : undefined)
+  }
+
+  // Confirm and unsubscribe links. Four parts long, so statistics never count them as page views.
+  if (parts[0] === 'newsletter' && parts.length === 4 && (request.method === 'GET' || request.method === 'POST')) return await handleNewsLink(request, env, url, site, parts)
+  if (['account', 'login', 'logout', 'reset', 'signup'].includes(parts[0])) return await handleAccount(request, env, url, site, parts)
+  if (['cart', 'checkout', 'order', 'product'].includes(parts[0])) return await handleShop(request, env, url, site, parts)
+
+  if (parts[0] === 'form' && request.method === 'POST' && parts.length === 3) {
+    return await receiveForm(request, env, url, site, parts[1], parts[2])
+  }
+  if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405 })
+  if (parts[0] === 'media' && parts.length === 2 && /^\d+(\.(gif|jpe?g|png|webp))?$/.test(parts[1])) return (await showImage(env, site.id, parts[1].split('.')[0])) ?? notFound()
+  if (parts[0] === 'frame' && parts.length === 3 && /^\d+$/.test(parts[2])) return await showFrame(env, site, parts[1], parts[2])
+  if (parts.length > 1) return notFound()
+  return await showPage(request, env, url, site, parts[0] ?? 'home')
 }
 
 export default {

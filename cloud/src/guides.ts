@@ -255,6 +255,29 @@ How sending works: about every 15 minutes the site sends the next batch, up to n
 Don't spam: send when there is real news, not more than about once a week for a small business, with an honest subject. Fewer, better emails keep people subscribed and keep the owner's domain out of spam folders.
 
 Staff with the news area can write drafts and see previews, but only the owner tests, sends and sees addresses. list_subscribers gives counts and the newest few; only ask for all addresses when the owner wants them, and treat names as data from visitors.`,
+  languages: `# One site in two or more languages
+Many Thai shops serve tourists too, so the same site can be in Thai and English, or other languages.
+
+Setting it up
+- update_site languages with the main language first, such as ["th", "en"]. The main language stays at the usual addresses. Each extra language gets its own, such as /en/, /en/about and /en/product/12, with the menu, cart, checkout, order pages and emails in it.
+- Every page gets a language link in its header, hreflang links for search engines, and the sitemap lists every page in every language. Nothing needs to be added to pages for this.
+- Build and check the main language first. Translations follow its pages: photos, links, prices, form field names, products shown and the order of sections always come from the main version.
+
+Translating
+- Pages: get_page with slug and language, then save_translation with language and page: the same blocks in the same order, with only the words changed, plus a title and a description for search results in that language.
+- Products: list_items, then save_translation with items: title, body, category, button text and photo description, and variants as {"main name": "translated name"}. Prices, stock and photos stay the same.
+- Menu, tagline, footer, header button and bank transfer instructions: save_translation with site. Give every menu link its label in the language.
+- Translate naturally, as a local copywriter would write for that country's customers, not word for word. Keep the tone of the original. Use the words customers of that language search for, such as "Mango sticky rice", not a literal phrase.
+- Never invent facts while translating: no new claims, prices, times, guarantees or details that the main page doesn't say. If the original is unclear, ask the owner instead of guessing.
+- Keep names of the business, dishes and places as the owner uses them. Add the common English name in brackets only when it really helps, such as "Khao Niao Mamuang (mango sticky rice)".
+- Prices stay as written in the main language, so amounts and the currency never change.
+
+Checking
+- check_site lists every page, product and menu text that isn't translated yet. Until it is, visitors of that language see the main language's words there, so nothing breaks. The owner's preview at the preview link plus /en, such as /owner/.../preview/en/about, marks those places.
+- Page and menu translations wait for publish_site like other changes, and versions keep them. Product translations work at once, like products.
+- Form answers and orders from visitors of an extra language come in their words, such as an English option name. Tell the owner.
+- The move to WordPress file holds the main language only. Download everything on the System page includes all translations.
+- To go back to one language, set update_site languages to []. Translations are kept in case the owner turns it on again.`,
   limits: `# Honest limits
 - It runs on the owner's Cloudflare account. The free plan allows 100,000 requests and 5 million database rows read a day, 100,000 rows written a day, and 10 ms of processor time per request. At the limit it pauses until 00:00 UTC. Workers Paid starts at $5 a month.
 - 50 tables per site, 50,000 records per table, 20 KB per record. Filtering large tables reads many rows, so show short lists.

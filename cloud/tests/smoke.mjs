@@ -76,7 +76,7 @@ check((await rpc('/mcp/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd')).status === 404, 'M
 check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd`)).status === 404, 'the back office with a wrong link is refused')
 
 const { tools } = await client.listTools()
-check(tools.length === 48, 'lists the tools', tools.map((tool) => tool.name).join(','))
+check(tools.length === 49, 'lists the tools', tools.map((tool) => tool.name).join(','))
 check(stepDone(await (await fetch(`${base}/owner/${code}`)).text(), 'claude') === '1', 'connecting Claude ticks its step')
 check(client.getInstructions()?.includes('apply_starter') && tools.find((tool) => tool.name === 'apply_starter')?.description.includes('replacePages'), 'Claude knows about starters and when it may replace pages')
 check(client.getInstructions()?.includes('web team'), 'gives Claude its working method')
@@ -2438,6 +2438,142 @@ for (const language of ['en', 'th']) {
 }
 check((await call('apply_starter', {})).data.starters.length === 5, 'Claude can list the starters')
 await call('update_site', { language: 'en' })
+
+// One site in two languages: Thai first, English for tourists, under /en
+await emptySite()
+// These checks read the back office's English words.
+await call('update_site', { officeLanguage: 'en' })
+const singleHome = await call('save_page', { slug: 'home', title: 'Home', description: 'A one-language home page, used to check nothing changes until a site has a second language.', published: true, blocks: [{ type: 'hero', heading: 'Only one language' }] })
+await call('publish_site', { note: 'One language' })
+const single = await (await fetch(base)).text()
+check(!singleHome.isError && !single.includes('hreflang') && !single.includes('site-lang') && (await fetch(`${base}/en/`)).status === 404, 'a single-language site has no language links, and /en is not a page')
+const twoLanguages = await call('update_site', { language: 'th', languages: ['th', 'en'], name: 'ร้านมะม่วง', tagline: 'ข้าวเหนียวมะม่วงสดทุกวัน', footerText: 'เปิดทุกวัน 10.00 ถึง 20.00 น.', nav: [{ label: 'หน้าแรก', href: '/' }, { label: 'เกี่ยวกับเรา', href: '/about' }], cart: true, payCod: true, payCard: false, payPromptPay: false, cartMembersOnly: false, currency: 'thb' })
+check(!twoLanguages.isError && twoLanguages.data.settings.language === 'th' && twoLanguages.data.settings.languages.join() === 'th,en', 'update_site turns on a second language, with Thai as the main one', twoLanguages.text)
+const mango = (await call('save_item', { collection: 'products', title: 'ข้าวเหนียวมะม่วง', price: '฿120', category: 'ของหวาน', body: 'มะม่วงน้ำดอกไม้สุกหวาน', variants: [{ name: 'เล็ก' }, { name: 'ใหญ่', price: '฿180' }] })).data.id
+const tea = (await call('save_item', { collection: 'products', title: 'ชาไทย', price: '฿60', category: 'เครื่องดื่ม', body: 'ชาไทยเย็น' })).data.id
+const thaiHome = {
+  slug: 'home',
+  title: 'ร้านมะม่วง',
+  description: 'ข้าวเหนียวมะม่วงสดใหม่ทุกวัน สั่งกลับบ้านหรือทานที่ร้านได้ ใกล้ถนนข้าวสาร กรุงเทพ',
+  published: true,
+  blocks: [
+    { type: 'hero', heading: 'ข้าวเหนียวมะม่วงสด', text: 'ทำใหม่ทุกเช้า', buttonLabel: 'เกี่ยวกับเรา', buttonHref: '/about' },
+    { type: 'collection', id: 'products', collection: 'products', heading: 'เมนู', filters: true, tone: 'tint' },
+    { type: 'form', name: 'order', heading: 'จองล่วงหน้า', newsletter: 'checkbox', sentMessage: 'ได้รับแล้ว', buttonLabel: 'ส่ง', fields: [{ name: 'guest', label: 'ชื่อ', type: 'text', required: true }, { name: 'phone', label: 'เบอร์โทร', type: 'phone', required: true }, { name: 'time', label: 'เวลา', type: 'select', options: ['เช้า', 'บ่าย'] }] },
+  ],
+}
+await call('save_page', thaiHome)
+await call('save_page', { slug: 'about', title: 'เกี่ยวกับเรา', description: 'เรื่องราวของร้านมะม่วงเล็ก ๆ ที่ทำข้าวเหนียวมะม่วงด้วยมือทุกวันมาตั้งแต่ปี 2010 ในกรุงเทพ', published: true, blocks: [{ type: 'hero', heading: 'เรื่องของเรา' }, { type: 'text', body: 'ครอบครัวเราทำข้าวเหนียวมะม่วงมานาน' }] })
+await call('publish_site', { note: 'Thai shop with an English address' })
+
+const untranslatedEn = await (await fetch(`${base}/en/`)).text()
+check(untranslatedEn.includes('<html lang="en">') && untranslatedEn.includes('ข้าวเหนียวมะม่วงสด') && !untranslatedEn.includes('data-untranslated') && untranslatedEn.includes('>Add to cart<'), 'an untranslated page shows the Thai words under /en, with English shop words and no marks for visitors')
+check(untranslatedEn.includes(`<link rel="canonical" href="${base}/en/">`) && untranslatedEn.includes(`<link rel="alternate" hreflang="th" href="${base}/">`) && untranslatedEn.includes(`<link rel="alternate" hreflang="en" href="${base}/en/">`) && untranslatedEn.includes(`hreflang="x-default" href="${base}/"`), 'the English page has its own canonical address and hreflang links to both languages')
+check(untranslatedEn.includes(`<a class="site-lang" href="${base}/" hreflang="th" lang="th">ไทย</a>`), 'the English page links to the Thai one in the header, without scripts')
+const thaiNow = await (await fetch(`${base}/about`)).text()
+check(thaiNow.includes('<html lang="th">') && thaiNow.includes(`<link rel="canonical" href="${base}/about">`) && thaiNow.includes(`<a class="site-lang" href="${base}/en/about" hreflang="en" lang="en">English</a>`), 'the Thai page stays at its address, with a link to the English one')
+const gaps = (await call('check_site')).data.problems.join('\n')
+check(gaps.includes('Page "home" is not translated into en yet') && gaps.includes('Page "about" is not translated into en yet') && gaps.includes('2 products are not fully translated into en') && gaps.includes('menu "หน้าแรก"'), 'check_site lists the pages, products and menu not translated yet', gaps)
+const homeEn = await call('get_page', { slug: 'home', language: 'en' })
+check(!homeEn.isError && homeEn.data.untranslated.includes('title') && homeEn.data.untranslated.includes('blocks.0.heading') && homeEn.data.blocks[0].heading === 'ข้าวเหนียวมะม่วงสด' && homeEn.data.url === `${base}/en/`, 'get_page in English shows the page with what is still untranslated', homeEn.text)
+check((await call('get_page', { slug: 'home', language: 'de' })).isError, 'get_page refuses a language the site does not have')
+check((await call('save_translation', { language: 'en', page: { slug: 'home', title: 'Mango Shop', description: 'x'.repeat(60), blocks: [{ type: 'hero', heading: 'Fresh mango sticky rice' }] } })).isError, 'a translation with different blocks from the main page is refused')
+const englishBlocks = structuredClone(homeEn.data.blocks)
+englishBlocks[0] = { ...englishBlocks[0], heading: 'Fresh mango sticky rice', text: 'Made fresh every morning', buttonLabel: 'About us', buttonHref: '/somewhere-else' }
+englishBlocks[1] = { ...englishBlocks[1], heading: 'Menu', collection: 'other' }
+englishBlocks[2] = { ...englishBlocks[2], name: 'renamed', heading: 'Book ahead', sentMessage: 'Received, thank you', buttonLabel: 'Send', fields: englishBlocks[2].fields.map((field, index) => ({ ...field, name: `changed${index}`, label: ['Name', 'Phone', 'Time'][index], ...(field.options ? { options: ['Morning', 'Afternoon'] } : {}) })) }
+const savedHome = await call('save_translation', { language: 'en', page: { slug: 'home', title: 'Mango Shop', description: 'Fresh mango sticky rice every day, to take away or eat in, near Khao San Road in Bangkok.', blocks: englishBlocks } })
+check(!savedHome.isError && !savedHome.data.page.stillUntranslated, 'save_translation saves the English home page', savedHome.text)
+await call('save_translation', { language: 'en', page: { slug: 'about', title: 'About us', description: 'The story of a small mango shop making sticky rice by hand every day since 2010 in Bangkok.', blocks: (await call('get_page', { slug: 'about', language: 'en' })).data.blocks } })
+const itemsSaved = await call('save_translation', { language: 'en', items: [{ id: mango, title: 'Mango sticky rice', body: 'Sweet ripe Nam Dok Mai mango', category: 'Desserts', variants: { เล็ก: 'Small', ใหญ่: 'Large' } }], site: { tagline: 'Fresh mango sticky rice every day', footerText: 'Open daily 10am to 8pm', nav: [{ href: '/', label: 'Home' }, { href: '/about', label: 'About us' }] } })
+check(!itemsSaved.isError && itemsSaved.data.items.saved === 1, 'save_translation saves a product and the menu and footer', itemsSaved.text)
+check((await call('save_translation', { language: 'fr', site: { tagline: 'x' } })).isError, 'save_translation refuses a language the site does not have')
+await call('publish_site', { note: 'English words' })
+const englishHome = await (await fetch(`${base}/en/`)).text()
+check(englishHome.includes('Fresh mango sticky rice</h1>') && englishHome.includes('<title>Mango Shop</title>') && englishHome.includes('>Mango sticky rice</h3>') && englishHome.includes('>ชาไทย</h3>') && englishHome.includes('Open daily 10am to 8pm'), 'the English home page shows the English words, with the Thai name of the product not translated yet')
+check(englishHome.includes('href="/en/about">About us</a>') && englishHome.includes(`href="/en/product/${mango}"`) && englishHome.includes('action="/en/form/home/order"') && englishHome.includes('action="/en/cart/add"') && englishHome.includes('href="/en/cart"') && englishHome.includes('href="/fonts/fonts.css"') && !englishHome.includes('somewhere-else'), 'every link and form on the English page stays in English, while links, files and form names come from the main page')
+check(englishHome.includes('href="?category=Desserts#products"') && englishHome.includes('<option value="Morning">Morning</option>') && englishHome.includes('Yes, email me news.') && !englishHome.includes('ส่งข่าวสารทางอีเมล'), 'category filters, form choices and the news box are in English too')
+const englishPreview = await (await fetch(`${owner}/preview/en/`)).text()
+check(!englishPreview.includes('<section data-untranslated'), 'a fully translated page has no marked sections in the preview')
+check(englishPreview.includes('ชาไทย') && englishPreview.includes('Products not fully translated: ชาไทย') && englishPreview.includes(`href="/owner/${code}/preview/en/about"`), 'the owner\'s English preview names the products not translated yet, and its links stay in the English preview')
+await call('save_page', { slug: 'about', title: 'เกี่ยวกับเรา', description: 'เรื่องราวของร้านมะม่วงเล็ก ๆ ที่ทำข้าวเหนียวมะม่วงด้วยมือทุกวันมาตั้งแต่ปี 2010 ในกรุงเทพ', published: true, blocks: [{ type: 'hero', heading: 'เรื่องของเรา' }, { type: 'text', body: 'ครอบครัวเราทำข้าวเหนียวมะม่วงมานาน' }, { type: 'cta', heading: 'แวะมาหาเรา', tone: 'dark' }] })
+const aboutPreview = await (await fetch(`${owner}/preview/en/about`)).text()
+await call('publish_site', { note: 'A new block in Thai' })
+const aboutVisitor = await (await fetch(`${base}/en/about`)).text()
+check(aboutPreview.includes('<section data-untranslated="Not translated yet. Visitors see the main language here."') && aboutPreview.includes('1 texts on this page are not translated yet'), 'a block added in Thai later is marked in the owner\'s English preview', aboutPreview.slice(aboutPreview.indexOf('preview-banner'), aboutPreview.indexOf('preview-banner') + 400))
+check(aboutVisitor.includes('แวะมาหาเรา') && aboutVisitor.includes('<title>About us | ') && !aboutVisitor.includes('data-untranslated') && !aboutVisitor.includes('not translated'), 'visitors see the Thai words of the new block, unmarked, and the rest in English')
+check((await call('check_site')).data.problems.some((line) => line.includes('Page "about" has 1 texts not translated into en yet: blocks.2.heading')), 'check_site names the text the English page is missing')
+
+const sitemapXml = await (await fetch(`${base}/sitemap.xml`)).text()
+check(sitemapXml.includes('xmlns:xhtml') && sitemapXml.includes(`<loc>${base}/en/about</loc>`) && sitemapXml.includes(`<loc>${base}/about</loc>`) && sitemapXml.includes(`<xhtml:link rel="alternate" hreflang="en" href="${base}/en/product/${mango}"/>`), 'the sitemap lists every page and product in both languages, with alternates')
+
+const productEn = await (await fetch(`${base}/en/product/${mango}`)).text()
+check(productEn.includes('<h1>Mango sticky rice</h1>') && productEn.includes('Small') && productEn.includes('Large · ฿180') && productEn.includes('>Desserts</p>') && productEn.includes(`<link rel="canonical" href="${base}/en/product/${mango}">`) && productEn.includes('action="/en/cart/add"') && productEn.includes(`"url":"${base}/en/product/${mango}"`), 'the English product page has English words, options and its own address')
+const variantId = productEn.match(/name="variant" required type="radio" value="(\d+)"/)?.[1]
+const addedEn = await fetch(`${base}/en/cart/add`, { body: new URLSearchParams({ item: String(mango), variant: variantId ?? '', quantity: '2' }), method: 'POST', redirect: 'manual' })
+const cartCookie = (addedEn.headers.get('set-cookie') ?? '').split(';')[0]
+check(addedEn.status === 303 && addedEn.headers.get('location') === `${base}/en/cart` && cartCookie.startsWith('cart='), 'adding to the cart in English comes back to the English cart', `${addedEn.status} ${addedEn.headers.get('location')}`)
+const cartEn = await (await fetch(`${base}/en/cart`, { headers: { Cookie: cartCookie } })).text()
+check(cartEn.includes('<h1>Cart</h1>') && cartEn.includes('Mango sticky rice') && cartEn.includes('Small') && cartEn.includes('href="/en/checkout"') && cartEn.includes('<html lang="en">') && cartEn.includes(`<a class="site-lang" href="${base}/cart" hreflang="th"`), 'the cart is in English on a Thai site, with a link to the Thai cart')
+check((await (await fetch(`${base}/cart`, { headers: { Cookie: cartCookie } })).text()).includes('ข้าวเหนียวมะม่วง'), 'the same cart in Thai shows the Thai product name')
+const checkoutEn = await (await fetch(`${base}/en/checkout`, { headers: { Cookie: cartCookie } })).text()
+check(checkoutEn.includes('<h1>Checkout</h1>') && checkoutEn.includes('Place order') && checkoutEn.includes('Pay on delivery') && checkoutEn.includes('action="/en/checkout"'), 'checkout is in English')
+const placedEn = await fetch(`${base}/en/checkout`, { body: new URLSearchParams({ name: 'Tourist', phone: '+44 7700 900123', email: '', address: 'Hotel on Khao San Road', note: '', payment: 'cod' }), headers: { Cookie: cartCookie }, method: 'POST', redirect: 'manual' })
+const orderLocation = placedEn.headers.get('location') ?? ''
+check(placedEn.status === 303 && orderLocation.startsWith(`${base}/en/order/`) && orderLocation.endsWith('?new=1'), 'placing an order in English leads to the English order page', `${placedEn.status} ${orderLocation}`)
+const orderEn = await (await fetch(orderLocation)).text()
+check(orderEn.includes('Thank you. We have received your order.') && orderEn.includes('Mango sticky rice · Small × 2') && orderEn.includes('Waiting for confirmation') && orderEn.includes('href="/en/"'), 'the order page is in English, with the English product name')
+const orderThai = await (await fetch(orderLocation.replace('/en/order/', '/order/').replace('?new=1', ''))).text()
+check(orderThai.includes('รอการยืนยัน'), 'the same order link without /en shows the Thai words')
+const lastOrder = (await call('list_orders', { limit: 1 })).data[0]
+check(lastOrder.lines[0].title === 'Mango sticky rice' && lastOrder.lines[0].variant === 'Small', 'the order keeps the words the customer saw', JSON.stringify(lastOrder.lines))
+const sentEn = await fetch(`${base}/en/form/home/order`, { body: new URLSearchParams({ guest: 'Tourist', phone: '+44 7700 900123', time: 'Morning' }), method: 'POST', redirect: 'manual' })
+check(sentEn.status === 303 && sentEn.headers.get('location') === `${base}/en/?sent=order#form-order`, 'a form sent in English with an English choice is accepted and comes back in English', `${sentEn.status} ${sentEn.headers.get('location')}`)
+check((await (await fetch(`${base}/en/?sent=order`)).text()).includes('Received, thank you'), 'the English thank-you message shows')
+
+// Publishing and versions keep translations
+const firstVersion = await call('publish_site', { note: 'Thai and English' })
+check(firstVersion.data.published, 'a site with translations publishes', firstVersion.text)
+await call('save_translation', { language: 'en', page: { slug: 'home', title: 'Mango Shop Bangkok', description: 'Fresh mango sticky rice every day, to take away or eat in, near Khao San Road in Bangkok.', blocks: englishBlocks } })
+check((await (await fetch(`${base}/en/`)).text()).includes('<title>Mango Shop</title>') && (await call('list_versions')).data.waiting.pages.includes('home'), 'a changed translation waits for publishing, and shows as waiting')
+await call('publish_site', { note: 'New English title' })
+check((await (await fetch(`${base}/en/`)).text()).includes('<title>Mango Shop Bangkok</title>'), 'publishing makes the new translation live')
+const restoredEn = await call('restore_version', { version: firstVersion.data.version })
+check(!restoredEn.isError && (await (await fetch(`${base}/en/`)).text()).includes('<title>Mango Shop</title>') && (await call('get_page', { slug: 'home', language: 'en' })).data.title === 'Mango Shop', 'going back to a version brings back its translations, for visitors and in the working copy', restoredEn.text)
+
+// The back office: a language tab on the page and product editors, and the menu and footer
+const pageTabs = await ownerPage('/page/home')
+check(pageTabs.includes('class="cms-actions cms-languages"') && pageTabs.includes(`href="/owner/${code}/page/home?lang=en"`) && pageTabs.includes('Thai (main)'), 'the page editor has a tab for English')
+const englishEditor = await ownerPage('/page/home?lang=en')
+check(englishEditor.includes('value="Mango Shop"') && englishEditor.includes('Main language: ข้าวเหนียวมะม่วงสด') && englishEditor.includes('Save translation') && !englishEditor.includes('name="b2.name"'), 'the English tab shows each Thai text above its English words, and no form or field names')
+const englishValues = formValues(englishEditor)
+englishValues.set('b0.heading', 'Mango sticky rice, made fresh')
+const editorSaved = await fetch(`${owner}/page/home?lang=en`, { body: englishValues, method: 'POST', redirect: 'manual' })
+check(editorSaved.status === 303 && (await call('get_page', { slug: 'home', language: 'en' })).data.blocks[0].heading === 'Mango sticky rice, made fresh' && (await call('get_page', { slug: 'home', language: 'en' })).data.blocks[2].options === undefined, 'the owner changes an English heading in the back office')
+check((await call('get_page', { slug: 'home', language: 'en' })).data.blocks[2].fields[2].options.join() === 'Morning,Afternoon', 'saving the English tab keeps the other English words')
+const itemsOffice = await ownerPage('/items')
+check(itemsOffice.includes(`href="/owner/${code}/items/${tea}?lang=en"`) && itemsOffice.includes('Edit in English'), 'each product links to its English words')
+const teaForm = formValues(await ownerPage(`/items/${tea}?lang=en`))
+teaForm.set('title', 'Thai iced tea')
+await fetch(`${owner}/items/${tea}?lang=en`, { body: teaForm, method: 'POST', redirect: 'manual' })
+check((await (await fetch(`${base}/en/product/${tea}`)).text()).includes('<h1>Thai iced tea</h1>'), 'a product translated in the back office shows in English at once')
+const siteWords = await ownerPage('/settings?lang=en')
+check(siteWords.includes('value="Home"') && siteWords.includes('Main language: เปิดทุกวัน'), 'the menu and footer have their own English page in the back office')
+const settingsSaved = formValues(await ownerPage('/settings'))
+check(settingsSaved.get('languages') === 'th, en', 'the settings page shows the languages')
+await fetch(`${owner}/settings`, { body: settingsSaved, method: 'POST', redirect: 'manual' })
+check((await call('get_site')).data.settings.translations?.en?.footerText === 'Open daily 10am to 8pm' && (await call('get_site')).data.settings.languages.join() === 'th,en', 'saving the settings page keeps the languages and translations')
+check((await ownerPage('/wordpress')).includes('The WordPress file holds the Thai version of your site only.'), 'the WordPress page says it holds the Thai version only')
+const exportedAll = await (await fetch(`${owner}/export.json`)).json()
+check(JSON.parse(exportedAll.pages.find((one) => one.slug === 'home').translations).en.title === 'Mango Shop' && JSON.parse(exportedAll.items.find((one) => one.id === mango).translations).en.title === 'Mango sticky rice' && exportedAll.settings.translations.en.tagline, 'Download everything includes the translations')
+check((await call('get_guide', { topic: 'languages' })).text.includes('never invent') || (await call('get_guide', { topic: 'languages' })).text.includes('Never invent facts'), 'the languages guide tells Claude to translate naturally and never invent facts')
+
+// Back to one language: the old addresses work as before
+await call('update_site', { languages: [] })
+await call('publish_site', { note: 'Thai only' })
+const thaiOnly = await (await fetch(`${base}/about`)).text()
+check((await fetch(`${base}/en/about`)).status === 404 && !thaiOnly.includes('hreflang') && !thaiOnly.includes('site-lang') && !(await call('check_site')).data.problems.some((line) => line.includes('translated')), 'with one language again, /en is gone and nothing mentions languages')
+await call('update_site', { language: 'en', officeLanguage: 'auto' })
 
 
 // Visitor statistics: counted on the server as pages are sent, with no cookies and nothing kept about a person past the day.

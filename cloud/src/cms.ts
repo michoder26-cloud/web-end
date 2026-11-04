@@ -3,12 +3,14 @@ import { z } from 'zod'
 import { createResetLink, getCustomer } from './auth'
 import { reschedule } from './automations'
 import { handleAutomationsOffice } from './automations-office'
+import { itemInLanguage, itemLanguageLinks, languageTabs, pageInLanguage, settingsInLanguage } from './cms-languages'
 import { handlePlatform } from './cms-platform'
 import { zoneOf } from './clock'
 import { canSendEmail } from './email'
 import { checklist, claudeLinkField, connectGuide, firstSteps, handleStarters, isStarter } from './first-steps'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { saveImage } from './items'
+import { extraLanguages, languageName, localizePage, mainLanguage, siteMissing } from './languages'
 import { handleNewsOffice } from './news-office'
 import { blockSchema, itemSchema, maxBlocksBytes, maxPagesPerSite, pageSlugSchema, settingsShape } from './mcp'
 import { officeText, officeWords } from './office-words'
@@ -30,7 +32,7 @@ const maxOfficeBytes = 3_000_000
 const statuses = ['new', 'confirmed', 'done']
 
 type Kind = 'bool' | 'image' | 'lines' | 'list' | 'long' | 'number' | 'select' | 'text'
-type Spec = { fields?: Spec[]; key: string; kind: Kind; label: string; options?: string[] }
+export type Spec = { fields?: Spec[]; key: string; kind: Kind; label: string; options?: string[] }
 
 export type Notice = { error?: string; saved?: string }
 
@@ -56,7 +58,7 @@ const buttons = [spec('buttonLabel', 'Button text'), spec('buttonHref', 'Button 
 const list = (key: string, label: string, fields: Spec[]) => spec(key, label, 'list', { fields })
 const titled = list('items', 'Items', [spec('title', 'Title'), spec('text', 'Text', 'long')])
 
-const catalog: Record<string, { label: string; fields: Spec[]; start: Block }> = {
+export const catalog: Record<string, { label: string; fields: Spec[]; start: Block }> = {
   hero: { label: 'Top banner', start: { heading: 'New heading', type: 'hero' }, fields: [spec('eyebrow', 'Small line above'), spec('heading', 'Heading'), spec('text', 'Text', 'long'), ...buttons, spec('imageUrl', 'Photo', 'image'), spec('imageAlt', 'Photo description'), spec('layout', 'Layout', 'select', { options: ['', 'split', 'centered', 'cover'] }), tone] },
   text: { label: 'Text', start: { body: 'New text', type: 'text' }, fields: [heading, spec('body', 'Text', 'long'), tone] },
   split: { label: 'Text beside photo', start: { body: 'New text', imageAlt: 'Photo', imageUrl: 'https://', type: 'split' }, fields: [heading, spec('body', 'Text', 'long'), spec('imageUrl', 'Photo', 'image'), spec('imageAlt', 'Photo description'), spec('imageSide', 'Photo side', 'select', { options: ['', 'left', 'right'] }), ...buttons, tone] },
@@ -173,8 +175,9 @@ const mediaList = async (env: Env, site: SiteRow) => {
   return `<datalist id="media-list">${results.map((image) => `<option value="/media/${image.id}">${escapeHtml(image.name)}</option>`).join('')}</datalist>`
 }
 
-async function pageEditor(env: Env, site: SiteRow, desk: Desk, slug: string, page: { blocks: Block[]; description: string; published: boolean; title: string }, notice?: { error?: string; saved?: string }) {
+async function pageEditor(env: Env, site: SiteRow, desk: Desk, slug: string, page: { blocks: Block[]; description: string; published: boolean; title: string; translations?: string }, notice?: { error?: string; saved?: string }) {
   const t = officeText(site)
+  const tabs = languageTabs(site, (code) => `${desk.base}/page/${slug}${code ? `?lang=${code}` : ''}`, null, (code) => localizePage({ ...page, translations: page.translations ?? '{}' }, code).missing.length)
   const blocks = page.blocks
     .map((block, index) => {
       const entry = catalog[block.type]
@@ -189,7 +192,7 @@ ${entry.fields.map((field) => input(`b${index}.${field.key}`, field, block[field
     site,
     desk,
     t.editPage(page.title),
-    `${await mediaList(env, site)}<form action="${escapeHtml(desk.base)}/page/${escapeHtml(slug)}" class="contact-form cms-form" method="post"><input name="count" type="hidden" value="${page.blocks.length}">
+    `${tabs}${await mediaList(env, site)}<form action="${escapeHtml(desk.base)}/page/${escapeHtml(slug)}" class="contact-form cms-form" method="post"><input name="count" type="hidden" value="${page.blocks.length}">
 <label>${t.pageTitle}<input maxlength="120" name="title" required value="${escapeHtml(page.title)}"></label>
 <label>${t.pageDescription}<textarea maxlength="300" name="description" required rows="2">${escapeHtml(page.description)}</textarea></label>
 <label class="check"><input name="published" type="checkbox"${page.published ? ' checked' : ''}> ${t.showPage}</label>
@@ -359,7 +362,7 @@ async function itemsPage(env: Env, site: SiteRow, desk: Desk, notice?: { error?:
   const collections = [...new Set(results.map((item) => item.collection))]
   const rows = results
     .map(
-      (item) => `<details class="cms-item"><summary>${escapeHtml(item.title)}${item.price ? ` · ${escapeHtml(item.price)}` : ''} <small>${escapeHtml(item.collection)}${item.published ? '' : t.hiddenItem}</small></summary>${itemForm(desk, item, collections, t)}<form action="${escapeHtml(desk.base)}/items/${item.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmDeleteItem}</label><button class="button button--small" type="submit">${t.delete}</button></form></details>`,
+      (item) => `<details class="cms-item"><summary>${escapeHtml(item.title)}${item.price ? ` · ${escapeHtml(item.price)}` : ''} <small>${escapeHtml(item.collection)}${item.published ? '' : t.hiddenItem}</small></summary>${itemLanguageLinks(site, desk, item)}${itemForm(desk, item, collections, t)}<form action="${escapeHtml(desk.base)}/items/${item.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmDeleteItem}</label><button class="button button--small" type="submit">${t.delete}</button></form></details>`,
     )
     .join('')
   return office(site, desk, t.nav.products, `${await mediaList(env, site)}${rows || `<p>${t.nothingYet}</p>`}<h2>${t.addNew}</h2>${itemForm(desk, {}, collections, t)}`, notice)
@@ -469,6 +472,8 @@ const settingsForm = (site: SiteRow, desk: Desk, notice?: { error?: string; save
     t.nav.settings,
     `<form action="${escapeHtml(desk.base)}/settings" class="contact-form cms-form" method="post">
 ${text('name', t.siteName)}${text('tagline', t.tagline)}${text('language', t.siteLanguage)}
+<label>${t.siteLanguages}<input name="languages" pattern="[a-z, -]*" value="${escapeHtml((settings.languages ?? []).join(', '))}"></label>
+${extraLanguages(settings).map((code) => `<p><a href="${escapeHtml(desk.base)}/settings?lang=${code}">${escapeHtml(t.translateSite(languageName(code, t.lang)))}</a> · ${escapeHtml(t.leftToTranslate(siteMissing(settings, code).length))}</p>`).join('')}
 ${text('timeZone', t.timeZone)}
 <label>${t.officeLanguage}<select name="officeLanguage">${[['', t.officeLanguageSame], ['en', 'English'], ['th', 'ภาษาไทย']].map(([value, name]) => `<option value="${value}"${value === (settings.officeLanguage === 'auto' ? '' : (settings.officeLanguage ?? '')) ? ' selected' : ''}>${name}</option>`).join('')}</select></label>
 <label>${t.style}<select name="style">${siteStyles.map((style) => `<option${style === settings.style ? ' selected' : ''}>${style}</option>`).join('')}</select></label>
@@ -530,6 +535,8 @@ async function saveSettings(request: Request, env: Env, url: URL, site: SiteRow,
     const value = String(form.get(key) ?? '').trim()
     if (value) draft[key] = value
   }
+  const languages = [...new Set(String(form.get('languages') ?? '').split(/[\s,]+/).map((code) => code.trim().toLowerCase()).filter(Boolean))]
+  if (languages.length) draft.languages = languages
   draft.nav = String(form.get('nav') ?? '')
     .split('\n')
     .map((line) => line.split('|').map((part) => part.trim()))
@@ -540,7 +547,10 @@ async function saveSettings(request: Request, env: Env, url: URL, site: SiteRow,
   if (draft.promptPayId && !validPromptPayId(draft.promptPayId)) return settingsForm(site, desk, { error: t.promptPayIdBad }, draft as Partial<Settings>)
   const parsed = z.object(settingsShape).safeParse(draft)
   if (!parsed.success || !draft.name) return settingsForm(site, desk, { error: parsed.success ? t.needName : t.notSaved(firstProblem(parsed.error)) }, draft as Partial<Settings>)
-  await env.DB.prepare("UPDATE sites SET settings = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?").bind(JSON.stringify(parsed.data), site.id).run()
+  // Translations of the menu and footer have their own page, so this form keeps them. The main language is the first of the languages.
+  const next = { ...parsed.data, translations: (JSON.parse(site.settings) as Settings).translations } as Settings
+  if (extraLanguages(next).length) next.language = mainLanguage(next)
+  await env.DB.prepare("UPDATE sites SET settings = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?").bind(JSON.stringify(next), site.id).run()
   // Scheduled automations run on the site's clock, so a new time zone moves their next runs.
   if (zoneOf(parsed.data) !== zoneOf(JSON.parse(site.settings) as Settings)) await reschedule(env, site.id)
   return see(url, `${desk.base}/settings?saved=1`)
@@ -631,7 +641,12 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
   if (area === 'pages' && !id) return post ? addPage(request, env, url, site, desk) : pagesList(env, site, desk)
 
   if (area === 'page' && id) {
-    const page = await env.DB.prepare('SELECT title, description, published, blocks FROM pages WHERE site_id = ? AND slug = ?').bind(site.id, id).first<{ blocks: string; description: string; published: number; title: string }>()
+    // The same page in an extra language, from the tabs at the top of its editor.
+    if (!action) {
+      const other = await pageInLanguage(request, env, url, site, desk, id, saved)
+      if (other) return other
+    }
+    const page = await env.DB.prepare('SELECT title, description, published, blocks, translations FROM pages WHERE site_id = ? AND slug = ?').bind(site.id, id).first<{ blocks: string; description: string; published: number; title: string; translations: string }>()
     if (!page) return notFound()
     if (action === 'delete' && post && id !== 'home') {
       const form = await request.formData()
@@ -640,11 +655,12 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
     }
     if (action) return notFound()
     if (post) return savePageFromForm(request, env, url, site, desk, id)
-    return pageEditor(env, site, desk, id, { blocks: JSON.parse(page.blocks) as Block[], description: page.description, published: Boolean(page.published), title: page.title }, saved)
+    return pageEditor(env, site, desk, id, { blocks: JSON.parse(page.blocks) as Block[], description: page.description, published: Boolean(page.published), title: page.title, translations: page.translations }, saved)
   }
 
   if (area === 'items') {
     if (!id) return post ? saveItemFromForm(request, env, url, site, desk) : itemsPage(env, site, desk, saved)
+    if (/^\d+$/.test(id) && !action && url.searchParams.has('lang')) return itemInLanguage(request, env, url, site, desk, Number(id), saved)
     if (!/^\d+$/.test(id) || !post) return notFound()
     if (!action) return saveItemFromForm(request, env, url, site, desk, Number(id))
     if (action === 'delete') {
@@ -711,7 +727,11 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
     return office(site, desk, t.nav.updates, updatesBody(code, settings.githubRepo, await latestRelease(), t), saved)
   }
 
-  if (area === 'settings' && !id) return post ? saveSettings(request, env, url, site, desk) : settingsForm(site, desk, saved)
+  if (area === 'settings' && !id) {
+    const other = await settingsInLanguage(request, env, url, site, desk, saved)
+    if (other) return other
+    return post ? saveSettings(request, env, url, site, desk) : settingsForm(site, desk, saved)
+  }
   if (area === 'starters' && !id) return handleStarters(request, env, url, site, desk)
   return notFound()
 }

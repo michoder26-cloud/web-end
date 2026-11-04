@@ -824,6 +824,30 @@ details p:first-of-type {
   text-decoration: underline;
 }
 
+/* The link to the same page in another language. It stays visible on phones. */
+.site-lang {
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--ink) 25%, transparent);
+  border-radius: 999px;
+  font-size: 15px;
+  text-decoration: none;
+}
+
+.site-lang:hover {
+  text-decoration: underline;
+}
+
+.cms-languages a[aria-current] {
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.cms-original {
+  display: block;
+  font-weight: 400;
+  opacity: 0.75;
+}
+
 /* Footer */
 .site-footer {
   padding: clamp(40px, 6vw, 72px) 0;

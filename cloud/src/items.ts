@@ -1,3 +1,4 @@
+import { itemMissing, localizeItem } from './languages'
 import type { Block, Env, FormField, Item, Variant } from './types'
 
 export const isAvailable = (item: Item) => {
@@ -14,21 +15,24 @@ async function attachVariants(env: Env, items: Item[]) {
   return items
 }
 
-export async function getProduct(env: Env, siteId: number, id: number) {
+// In an extra language, products come in its words where they exist, and are marked when something isn't translated yet.
+const inLanguage = (items: Item[], language?: null | string) => (language ? items.map((item) => ({ ...localizeItem(item, language), untranslated: itemMissing(item, language).length > 0 })) : items)
+
+export async function getProduct(env: Env, siteId: number, id: number, language?: null | string) {
   const item = await env.DB.prepare('SELECT * FROM items WHERE site_id = ? AND id = ? AND published = 1').bind(siteId, id).first<Item>()
   if (!item) return null
   await attachVariants(env, [item])
-  return item
+  return inLanguage([item], language)[0]
 }
 
-export async function getProducts(env: Env, siteId: number, ids: number[]) {
+export async function getProducts(env: Env, siteId: number, ids: number[], language?: null | string) {
   if (!ids.length) return []
   const { results } = await env.DB.prepare(`SELECT * FROM items WHERE site_id = ? AND published = 1 AND id IN (${ids.map(() => '?').join(',')})`).bind(siteId, ...ids).all<Item>()
-  return attachVariants(env, results)
+  return inLanguage(await attachVariants(env, results), language)
 }
 
 /** Loads the items a page shows, and fills in form choices that come from a collection. */
-export async function loadItems(env: Env, siteId: number, blocks: Block[]) {
+export async function loadItems(env: Env, siteId: number, blocks: Block[], language?: null | string) {
   const names = new Set<string>()
   for (const block of blocks) {
     if (block.type === 'collection') names.add(block.collection)
@@ -37,8 +41,7 @@ export async function loadItems(env: Env, siteId: number, blocks: Block[]) {
   const items = new Map<string, Item[]>()
   if (!names.size) return items
   const { results } = await env.DB.prepare('SELECT * FROM items WHERE site_id = ? AND published = 1 ORDER BY sort, id LIMIT 500').bind(siteId).all<Item>()
-  const wanted = results.filter((item) => names.has(item.collection))
-  await attachVariants(env, wanted)
+  const wanted = inLanguage(await attachVariants(env, results.filter((item) => names.has(item.collection))), language)
   for (const item of wanted) items.set(item.collection, [...(items.get(item.collection) ?? []), item])
   for (const block of blocks) {
     if (block.type !== 'form') continue

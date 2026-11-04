@@ -6,6 +6,7 @@ import { sha256, withinLimit } from './auth'
 import { canSendEmail, isEmail, later, sendEmail } from './email'
 import type { Inline, Message } from './email'
 import { escapeHtml, html, privateHeaders } from './http'
+import { languagePrefix } from './languages'
 import { getSite } from './owner'
 import { renderLayout } from './render'
 import { words } from './text'
@@ -139,7 +140,8 @@ async function sendConfirmation(env: Env, siteId: number, settings: Settings, pe
     after: [t.newsConfirmIgnore],
     heading: t.newsConfirmTitle,
     lines: [t.newsConfirmBody.replace('{site}', site)],
-    link: { href: await newsLink(env, siteId, person.origin, 'confirm', person), label: t.newsConfirmButton },
+    // Someone who signed up on an extra language's page confirms on a page in that language.
+    link: { href: await newsLink(env, siteId, `${person.origin}${languagePrefix(settings)}`, 'confirm', person), label: t.newsConfirmButton },
     replyTo: settings.email,
     subject: t.newsConfirmSubject.replace('{site}', site),
   })
