@@ -1,4 +1,4 @@
 {
-  "version": "0.10.0",
-  "notes": "Automations can now run on a schedule: a daily summary, a reminder the day before a booking, a follow-up after an order, or a monthly report, in your own time zone. New sites start with a short guide to connect Claude, five starter sites in Thai and English for a working site in one click, and a checklist that ticks itself."
+  "version": "0.11.0",
+  "notes": "PromptPay QR at checkout: customers scan a code with the exact amount in any Thai banking app, and you confirm the payment in your back office. Settings such as time zone and email now say plainly that they work at once, without publishing."
 }
