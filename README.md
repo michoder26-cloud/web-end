@@ -38,7 +38,7 @@ Claude asks a few short questions about your business, builds the pages and desi
 - **Build guides for Claude:** planning, data design, access rules, screens, design, copy, shop, publishing, Wix, staff, automations and launch checks, built in, so there's nothing extra to install
 - **System page:** hosting, version, publishing, database use, login, payments, email and connections in one place
 - **Shop:** product pages, categories, sale prices, sizes and colours, stock that can't oversell, a cart, free delivery thresholds, private order links and order status. Prices are always set on the server.
-- **Payments:** bank transfer and pay on delivery, plus cards through your own Stripe account
+- **Payments:** bank transfer, PromptPay QR codes and pay on delivery, plus cards through your own Stripe account
 - **Phone-first shopping:** a bottom tab bar and two-column product grid on phones, with no scripts on your pages
 - **Back office (CMS):** a private page to edit pages and sections, products, photos, menus, colours, orders and customers, with or without Claude. It's in Thai or English: a Thai site gets a Thai back office, and you can choose either one in Settings.
 - **Staff logins:** your team logs in with their own accounts and sees only the parts of the back office you tick for each person, such as orders, products, pages or messages. Settings, connections and your private links stay yours.
@@ -63,7 +63,7 @@ Nobody hosts your site but you. There's no central server, and web-end never see
 - Send email without an email account of your own. Emails go through your own Resend account, which you set up once, as shown below. Until then there are no emails, and if a customer forgets a password, you make a reset link in the back office and send it yourself.
 - Send newsletters, or email many customers at once. Customers get an email when their order is placed and when its status changes, and the emails your automations send, such as a reminder before their booking, but nothing else.
 - Give staff finer access than whole areas, such as one table or only some orders, or show staff the full history of who changed what outside orders
-- Check bank transfers automatically or take payment slips. You check each transfer and confirm it in the back office.
+- Check bank transfers or PromptPay payments automatically, or take payment slips. The PromptPay QR code fills in the amount for the customer, but nothing tells web-end the money arrived. You check each payment in your banking app and confirm it in the back office.
 - Create product photos. Upload your own, or use images you have the right to use.
 - Show customer reviews as a ready-made feature
 - Add any feature you can describe. Claude builds with tables, rules, pages, automations, webhooks and sandboxed custom code. Automations are a fixed menu of steps, not code: anything they can't express, such as calculations across many records or calling another service and using its answer, still means a developer changing the source, and an update replaces such changes.
@@ -146,6 +146,16 @@ The page also lists what WordPress needs a plugin for, such as forms and tables.
 Keep your pages where they are, and let web-end hold the data, logins and orders. Open **Connect** in your back office to create a secret key, then ask Claude to read its `connect_wix` guide and write the code for you. A key only works from server code, such as Wix backend code. A browser that sends one is refused, so never put one in a page.
 
 This has been tested against the API, but not yet inside a real Wix site, so try it on a copy first.
+
+## PromptPay QR codes
+
+For shops that price in Thai baht. After checkout, the customer's order page shows a PromptPay QR code with the exact amount of the order. They scan it with any Thai banking app and pay. The confirmation email links to that page.
+
+1. In your back office's Settings, enter the currency code `thb`.
+2. Turn on **Accept PromptPay QR** and enter your PromptPay ID: the mobile number or 13-digit national ID or tax ID your PromptPay is linked to, or a 15-digit e-wallet ID. A 13-digit ID is checked for typing mistakes. You can add the name on the account so customers can check it before they pay.
+3. Place a small test order and scan it with your own banking app before you take real orders. The app should show your name and the right amount.
+
+Payments aren't checked automatically. Like a bank transfer, you see the money in your banking app, then mark the order paid in the back office. The code is made on your own site, with no outside service.
 
 ## Taking cards with Stripe
 

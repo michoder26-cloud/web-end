@@ -11,6 +11,7 @@ import { checkMove, cleanPath, finishMove, importProducts, moveStatus, safeWebUr
 import type { MoveReport } from './moving'
 import { officeText } from './office-words'
 import type { OfficeWords } from './office-words'
+import { canPayByPromptPay } from './shop'
 import { latestRelease } from './updates'
 import { listVersions, publishVersion, restoreVersion, unpublishedChanges } from './versions'
 import { version } from './version'
@@ -390,7 +391,7 @@ export async function systemStatus(env: Env, site: SiteRow, origin: string) {
     publishing: { liveVersion: site.live_version ?? null, waiting },
     database: { imageBytes, customers, orders, pages, records, tables },
     login: { customerAccounts: Boolean(settings.accounts) },
-    payments: { bankTransfer: Boolean(settings.payTransfer), card: Boolean(settings.payCard), cardSecretsSet: Boolean(env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET), payOnDelivery: Boolean(settings.payCod), cart: Boolean(settings.cart) },
+    payments: { bankTransfer: Boolean(settings.payTransfer), promptPay: Boolean(settings.payPromptPay), promptPayReady: canPayByPromptPay(settings), card: Boolean(settings.payCard), cardSecretsSet: Boolean(env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET), payOnDelivery: Boolean(settings.payCod), cart: Boolean(settings.cart) },
     email: emailStatus(env, settings),
     google: googleStatus(env, settings, origin),
     connections: { apiKeys: keys, browserSites: settings.allowedOrigins ?? [], webhooks: hooks },
@@ -413,7 +414,7 @@ async function systemPage(env: Env, url: URL, site: SiteRow, code: string, notic
 <article class="card account__record"><h2>${t.hosting}</h2><dl>${row(t.siteAddress, status.address)}${row(t.whereItRuns, t.hostingText)}${row(t.versionLabel, `${status.version}${status.latestVersion === 'unknown' || status.latestVersion === status.version ? '' : t.isAvailable(status.latestVersion)}`, '/updates')}</dl></article>
 <article class="card account__record"><h2>${t.publishing}</h2><dl>${row(t.liveVersion, status.publishing.liveVersion ?? t.notPublishedYet, '/publish')}${row(t.waitingToPublish, waiting ? waiting.pages.length + (waiting.settings ? 1 : 0) : 0)}</dl></article>
 <article class="card account__record"><h2>${t.database}</h2><dl>${row(t.nav.pages, status.database.pages, '/pages')}${row(t.tables, status.database.tables, '/data')}${row(t.recordsLabel, status.database.records)}${row(t.nav.customers, status.database.customers, '/customers')}${row(t.nav.orders, status.database.orders, '/orders')}${row(t.nav.images, t.imageSpace((status.database.imageBytes / 1_000_000).toFixed(1)), '/media')}</dl></article>
-<article class="card account__record"><h2>${t.loginAndPayments}</h2><dl>${row(t.customerAccounts, on(status.login.customerAccounts), '/settings')}${row(t.cartLabel, on(status.payments.cart))}${row(t.bankTransfer, on(status.payments.bankTransfer))}${row(t.payOnDelivery, on(status.payments.payOnDelivery))}${row(t.cards, on(status.payments.card))}${row(t.stripeSecrets, status.payments.cardSecretsSet ? t.isSet : t.notSet)}</dl></article>
+<article class="card account__record"><h2>${t.loginAndPayments}</h2><dl>${row(t.customerAccounts, on(status.login.customerAccounts), '/settings')}${row(t.cartLabel, on(status.payments.cart))}${row(t.bankTransfer, on(status.payments.bankTransfer))}${row(t.promptPay, status.payments.promptPay && !status.payments.promptPayReady ? t.promptPayHalf : on(status.payments.promptPay))}${row(t.payOnDelivery, on(status.payments.payOnDelivery))}${row(t.cards, on(status.payments.card))}${row(t.stripeSecrets, status.payments.cardSecretsSet ? t.isSet : t.notSet)}</dl></article>
 <article class="card account__record"><h2>${t.emailHeading}</h2><dl>${row(t.resendKey, status.email.resendKeySet ? t.isSet : t.notSet)}${row(t.sendFrom, status.email.senderAddress ?? t.notSet, '/settings')}${row(t.notifyEmail, status.email.ownerAddress ?? t.notSet, '/settings')}${row(t.emails, status.email.sending ? t.on : t.off)}</dl>${emailProblems(env, settings).map((problem) => `<p role="alert">${escapeHtml(t.problem(problem))}</p>`).join('')}${status.email.ownerNotices ? `<form action="${base}/system/test-email" method="post"><button class="button button--small" type="submit">${t.sendTestEmail}</button></form>` : ''}</article>
 <article class="card account__record"><h2>${t.googleHeading}</h2><p>${t.googleHelp}</p><dl>${row(t.googleClientId, status.google.clientIdSet ? t.isSet : t.notSet)}${row(t.googleClientSecret, status.google.clientSecretSet ? t.isSet : t.notSet)}${row(t.googleRedirect, status.google.redirectAddress)}${row(t.googleButton, on(status.google.on))}</dl>${googleProblems(env, settings).map((problem) => `<p role="alert">${escapeHtml(t.problem(problem))}</p>`).join('')}</article>
 <article class="card account__record"><h2>${t.yourData}</h2><p>${t.yourDataHelp}</p><p><a class="button button--small" href="${base}/export.json">${t.downloadEverything}</a> <a class="button button--small" href="${base}/wordpress">${t.moveToWordpress}</a></p></article>

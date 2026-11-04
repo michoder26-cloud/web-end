@@ -13,6 +13,7 @@ import { blockSchema, itemSchema, maxBlocksBytes, maxPagesPerSite, pageSlugSchem
 import { officeText, officeWords } from './office-words'
 import type { OfficeWords } from './office-words'
 import { entryFields, shell } from './owner'
+import { validPromptPayId } from './promptpay'
 import { orderDetails, orderHistory, orderLines, orderNumber, orderStatuses, paymentName, setOrderStatus } from './shop'
 import { setStaff, staffAreas, staffPermissions } from './staff'
 import type { StaffArea, StaffMember } from './staff'
@@ -477,6 +478,10 @@ ${text('accent', t.accent, 'color').replace('value=""', 'value="#1f4d3a"')}${tex
 <label class="check"><input name="payTransfer" type="checkbox"${settings.payTransfer ? ' checked' : ''}> ${t.payTransfer}</label>
 <label>${t.transferDetails}<textarea maxlength="1000" name="transferDetails" rows="3">${escapeHtml(settings.transferDetails)}</textarea></label>
 <label class="check"><input name="payCod" type="checkbox"${settings.payCod ? ' checked' : ''}> ${t.payCod}</label>
+<label class="check"><input name="payPromptPay" type="checkbox"${settings.payPromptPay ? ' checked' : ''}> ${t.payPromptPay}</label>
+<label>${t.promptPayId}<input autocomplete="off" inputmode="numeric" maxlength="40" name="promptPayId" value="${escapeHtml(settings.promptPayId)}"></label>
+<label>${t.promptPayName}<input maxlength="80" name="promptPayName" value="${escapeHtml(settings.promptPayName)}"></label>
+<p>${t.promptPayHelp}</p>
 <label>${t.shippingFee}<input min="0" name="shippingFee" step="any" type="number" value="${escapeHtml(settings.shippingFee)}"></label>
 <label>${t.freeShippingOver}<input min="0" name="freeShippingOver" step="any" type="number" value="${escapeHtml(settings.freeShippingOver)}"></label>
 <label>${t.currency}<input maxlength="3" name="currency" value="${escapeHtml(settings.currency)}"></label>
@@ -507,13 +512,14 @@ async function saveSettings(request: Request, env: Env, url: URL, site: SiteRow,
     cartMembersOnly: form.get('cartMembersOnly') === 'on',
     payCard: form.get('payCard') === 'on',
     payCod: form.get('payCod') === 'on',
+    payPromptPay: form.get('payPromptPay') === 'on',
     payTransfer: form.get('payTransfer') === 'on',
   }
   const fee = String(form.get('shippingFee') ?? '').trim()
   if (fee) draft.shippingFee = Number(fee)
   const freeOver = String(form.get('freeShippingOver') ?? '').trim()
   if (freeOver) draft.freeShippingOver = Number(freeOver)
-  for (const key of ['name', 'tagline', 'language', 'officeLanguage', 'timeZone', 'style', 'accent', 'background', 'text', 'headerButtonLabel', 'headerButtonHref', 'footerText', 'email', 'emailFrom', 'notifyEmail', 'phone', 'address', 'customCss', 'transferDetails', 'currency']) {
+  for (const key of ['name', 'tagline', 'language', 'officeLanguage', 'timeZone', 'style', 'accent', 'background', 'text', 'headerButtonLabel', 'headerButtonHref', 'footerText', 'email', 'emailFrom', 'notifyEmail', 'phone', 'address', 'customCss', 'transferDetails', 'currency', 'promptPayId', 'promptPayName']) {
     const value = String(form.get(key) ?? '').trim()
     if (value) draft[key] = value
   }
@@ -522,8 +528,10 @@ async function saveSettings(request: Request, env: Env, url: URL, site: SiteRow,
     .map((line) => line.split('|').map((part) => part.trim()))
     .filter(([label, href]) => label && href)
     .map(([label, href]) => ({ href, label }))
-  const parsed = z.object(settingsShape).safeParse(draft)
   const t = officeText(site)
+  // A wrong digit would send customers' money nowhere, so say exactly what is wrong, in the owner's language.
+  if (draft.promptPayId && !validPromptPayId(draft.promptPayId)) return settingsForm(site, desk, { error: t.promptPayIdBad }, draft as Partial<Settings>)
+  const parsed = z.object(settingsShape).safeParse(draft)
   if (!parsed.success || !draft.name) return settingsForm(site, desk, { error: parsed.success ? t.needName : t.notSaved(firstProblem(parsed.error)) }, draft as Partial<Settings>)
   await env.DB.prepare("UPDATE sites SET settings = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?").bind(JSON.stringify(parsed.data), site.id).run()
   // Scheduled automations run on the site's clock, so a new time zone moves their next runs.

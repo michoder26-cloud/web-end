@@ -42,8 +42,11 @@ export type Settings = {
   officeLanguage?: string
   payCard?: boolean
   payCod?: boolean
+  payPromptPay?: boolean
   payTransfer?: boolean
   phone?: string
+  promptPayId?: string
+  promptPayName?: string
   shippingFee?: number
   style?: string
   tagline?: string

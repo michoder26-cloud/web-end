@@ -1270,6 +1270,29 @@ details p:first-of-type {
   margin-top: 0;
 }
 
+/* The QR code keeps its own white background and black modules in every style, because banking apps scan dark on light best. */
+.promptpay-qr {
+  width: min(100%, 300px);
+  margin: 0 auto 16px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.promptpay-qr svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.promptpay-amount {
+  font-size: 1.25rem;
+  text-align: center;
+}
+
+.promptpay-steps {
+  padding-left: 1.4em;
+}
+
 /* Storefront */
 .button--ghost {
   border: 1px solid currentColor;

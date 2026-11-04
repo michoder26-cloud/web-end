@@ -598,6 +598,149 @@ check(afterEdit.id === shirt && (await (await fetch(`${base}/product/${shirt}`))
 const itemPage = formValues((await (await fetch(`${owner}/items`)).text()).split('</details>').find((part) => part.includes('>Shirt') || part.includes('Shirt ·')) ?? '')
 check(itemPage.get('variants')?.includes('Size M') && itemPage.get('comparePrice') === '฿700' && itemPage.get('category') === 'Clothes', 'the back office shows options, sale price and category')
 
+// PromptPay QR payments
+// The payload and QR code are checked against the spec without a server: hand-built payloads with their CRC worked out
+// separately, and a second payload builder written here from the spec, so the site's code isn't only checked against itself.
+let promptpay = null
+let qr = null
+try {
+  promptpay = await import('../src/promptpay.ts')
+  qr = await import('../src/qr.ts')
+} catch (error) {
+  check(false, 'the PromptPay and QR code files load in Node (needs Node 22.18 or later)', String(error))
+}
+// Written from the EMVCo and Thai QR spec for this test alone: fields are tag, two-digit length, value, and the CRC is
+// CRC-16/CCITT-FALSE worked out bit by bit as polynomial division, unlike the site's code.
+const specPayload = (id, satang) => {
+  const tlv = (tag, value) => `${tag}${String(value.length).padStart(2, '0')}${value}`
+  const digits = id.replace(/[^0-9]/g, '')
+  const account = digits.length === 10 ? tlv('01', `0066${digits.slice(1)}`) : digits.length === 13 ? tlv('02', digits) : tlv('03', digits)
+  const body = `${tlv('00', '01')}${tlv('01', '12')}${tlv('29', tlv('00', 'A000000677010111') + account)}${tlv('53', '764')}${tlv('54', (satang / 100).toFixed(2))}${tlv('58', 'TH')}6304`
+  const bits = [...new TextEncoder().encode(body)].flatMap((byte) => [...byte.toString(2).padStart(8, '0')].map(Number))
+  // An initial value of FFFF is the same as flipping the first 16 message bits.
+  for (let i = 0; i < 16; i++) bits[i] ^= 1
+  const work = [...bits, ...new Array(16).fill(0)]
+  const poly = [1, ...(0x1021).toString(2).padStart(16, '0')].map(Number)
+  for (let i = 0; i < bits.length; i++) if (work[i]) for (let j = 0; j < 17; j++) work[i + j] ^= poly[j]
+  return body + parseInt(work.slice(-16).join(''), 2).toString(16).toUpperCase().padStart(4, '0')
+}
+// Worked out by hand from the spec, field by field; the CRCs came from Python's binascii.crc_hqx with a start of 0xFFFF.
+const knownPayloads = [
+  ['081-234-5678', 74100, '00020101021229370016A0000006770101110113006681234567853037645406741.005802TH6304D12A'],
+  ['3101234567893', 100, '00020101021229370016A00000067701011102133101234567893530376454041.005802TH63049F3A'],
+  ['004999000288505', 1234567, '00020101021229390016A00000067701011103150049990002885055303764540812345.675802TH6304EEB6'],
+]
+if (promptpay && qr) {
+  const { crc16, promptPayPayload, readPromptPayId } = promptpay
+  check(crc16('123456789') === '29B1', "the CRC matches CRC-16/CCITT-FALSE's published check value")
+  for (const [id, satang, expected] of knownPayloads) check(promptPayPayload(id, satang) === expected && specPayload(id, satang) === expected, `the PromptPay code for ${id} and ${satang / 100} baht matches the spec`, promptPayPayload(id, satang))
+  const many = [['0899999999', 1], ['0612345678', 99], ['1101700230708', 123456], ['004999000288505', 999999999999], ['3101234567893', 50050]]
+  check(many.every(([id, satang]) => promptPayPayload(id, satang) === specPayload(id, satang)), 'the PromptPay code matches a second builder for other IDs and amounts', JSON.stringify(many.map(([id, satang]) => promptPayPayload(id, satang))))
+  check(readPromptPayId('081-234-5678')?.kind === 'mobile' && readPromptPayId('3101234567893')?.kind === 'id' && readPromptPayId('004999000288505')?.kind === 'ewallet', 'mobile numbers, 13-digit IDs and e-wallet IDs are recognised')
+  check(['3101234567894', '1812345678', '081234567', '08123456789', '31012345678931', 'abc', '', '+66812345678'].every((id) => readPromptPayId(id) === null), 'wrong PromptPay IDs are refused, including a 13-digit ID with a wrong check digit')
+  check(promptPayPayload('0812345678', 0) === null && promptPayPayload('0812345678', 1_000_000_000_000) === null && promptPayPayload('3101234567894', 100) === null, 'no code is made for a zero or too large amount, or a wrong ID')
+  check(qr.qrModules('x'.repeat(214)) === null && qr.qrModules(knownPayloads[0][2]).length === 37, 'a PromptPay code fits a version 5 QR code, and text too long for the encoder is refused')
+}
+
+// Finds a QR decoder on this computer: Python with zxing-cpp or OpenCV (QR_PYTHON can name which Python), or zbarimg.
+// The SVG goes to a PNG through Chromium first. Without them the decode check is skipped, and says so.
+const { spawnSync } = await import('node:child_process')
+const decoder = (() => {
+  for (const python of [process.env.QR_PYTHON, 'python3'].filter(Boolean)) {
+    if (spawnSync(python, ['-I', '-c', 'import cv2, zxingcpp']).status === 0) return { python, kind: 'zxing-cpp' }
+    if (spawnSync(python, ['-I', '-c', 'import cv2']).status === 0) return { python, kind: 'OpenCV' }
+  }
+  return spawnSync('zbarimg', ['--version']).status === 0 ? { kind: 'zbarimg' } : null
+})()
+let chromium = null
+try {
+  chromium = (await import('node:module')).createRequire(import.meta.url)('playwright').chromium
+} catch {
+  // No Playwright, so no PNG to decode.
+}
+const decodeQr = async (svg) => {
+  if (!decoder || !chromium) return null
+  const { mkdtempSync, rmSync } = await import('node:fs')
+  const { join } = await import('node:path')
+  const { tmpdir } = await import('node:os')
+  const folder = mkdtempSync(join(tmpdir(), 'qr-'))
+  const file = join(folder, 'qr.png')
+  const browser = await chromium.launch()
+  try {
+    const page = await browser.newPage({ viewport: { width: 500, height: 500 } })
+    await page.setContent(`<body style="margin:0;background:#fff"><div style="width:400px">${svg}</div></body>`)
+    await page.screenshot({ clip: { height: 400, width: 400, x: 0, y: 0 }, path: file })
+  } finally {
+    await browser.close()
+  }
+  const read =
+    decoder.kind === 'zbarimg'
+      ? spawnSync('zbarimg', ['--raw', '-q', file], { encoding: 'utf8' })
+      : spawnSync(decoder.python, ['-I', '-c', decoder.kind === 'zxing-cpp' ? 'import sys, cv2, zxingcpp; r = zxingcpp.read_barcodes(cv2.imread(sys.argv[1])); print(r[0].text if r else "")' : 'import sys, cv2; print(cv2.QRCodeDetector().detectAndDecode(cv2.imread(sys.argv[1]))[0])', file], { encoding: 'utf8' })
+  rmSync(folder, { force: true, recursive: true })
+  return read.stdout.trim()
+}
+
+const promptPayStore = (await call('save_item', { collection: 'qr-shop', title: 'QR Tea', price: '฿345.50' })).data.id
+check((await call('update_site', { promptPayId: '3101234567894' })).isError && (await call('update_site', { promptPayId: '12345' })).isError, 'Claude cannot save a PromptPay ID that is not a real format or has a wrong check digit')
+await call('update_site', { payPromptPay: true })
+check((await call('check_site', {})).data.problems.some((problem) => problem.includes('no PromptPay ID')), 'check_site finds PromptPay turned on with no ID')
+const noIdCart = cartCookieOf(await postForm('/cart/add', { item: String(promptPayStore), quantity: '2' }))
+check(!(await (await fetch(`${base}/checkout`, { headers: { Cookie: noIdCart } })).text()).includes('value="promptpay"'), 'checkout hides PromptPay until it has an ID')
+check(!(await call('update_site', { promptPayId: '081-234-5678', promptPayName: 'Test <Shop>' })).isError, 'Claude can set a PromptPay ID as the owner writes it')
+check(!(await call('check_site', {})).data.problems.some((problem) => problem.includes('PromptPay')), 'check_site is happy with PromptPay, an ID and baht')
+await call('update_site', { currency: 'usd' })
+check((await call('check_site', {})).data.problems.some((problem) => problem.includes('PromptPay is on, but the currency is not thb')), 'check_site finds PromptPay with a currency other than baht')
+check(!(await (await fetch(`${base}/checkout`, { headers: { Cookie: noIdCart } })).text()).includes('value="promptpay"'), 'checkout hides PromptPay when the currency is not baht')
+check((await (await postForm('/checkout', { ...order, payment: 'promptpay' }, noIdCart)).text()).includes('role="alert"'), 'an order cannot choose PromptPay when the currency is not baht')
+await call('update_site', { currency: 'thb' })
+const promptPayCheckout = await (await fetch(`${base}/checkout`, { headers: { Cookie: noIdCart } })).text()
+check(promptPayCheckout.includes('value="promptpay"') && promptPayCheckout.includes('PromptPay QR') && promptPayCheckout.includes('value="transfer"'), 'checkout offers PromptPay next to the other ways to pay')
+const promptPayPlaced = await postForm('/checkout', { ...order, payment: 'promptpay' }, noIdCart)
+const promptPayPath = new URL(promptPayPlaced.headers.get('location') ?? '', base).pathname
+const promptPayResponse = await fetch(`${base}${promptPayPath}`)
+const promptPayPage = await promptPayResponse.text()
+const promptPayOrder = (await call('list_orders', {})).data[0]
+// Two teas at ฿345.50 and ฿50 delivery.
+check(promptPayPlaced.status === 303 && promptPayOrder.payment === 'promptpay' && promptPayOrder.total === 74100 && promptPayOrder.status === 'pending', 'an order paid by PromptPay is saved with its exact total, waiting for the owner', JSON.stringify([promptPayOrder.payment, promptPayOrder.total]))
+const pageSvg = promptPayPage.match(/class="promptpay-qr">(<svg[\s\S]*?<\/svg>)/)?.[1] ?? ''
+const expectedPayload = knownPayloads[0][2]
+check(promptPayPage.includes('Pay with PromptPay') && promptPayPage.includes('฿741') && promptPayPage.includes('Account name: Test &lt;Shop&gt;') && !promptPayPage.includes('<Shop>'), 'the order page shows the amount and the account name, safely')
+check(promptPayPage.includes('Open any Thai banking app') && promptPayPage.includes('Payments are not checked automatically'), 'the order page says how to pay and that the shop confirms payment itself')
+check(Boolean(qr) && pageSvg === qr.qrSvg(expectedPayload, 'PromptPay QR code to pay ฿741'), 'the order page shows the QR code for exactly this ID and amount', pageSvg.slice(0, 120))
+check(!promptPayPage.includes('<script') && (promptPayResponse.headers.get('content-security-policy') ?? '').includes("script-src 'none'"), 'the QR code needs no scripts, and the page still allows none')
+const decoded = await decodeQr(pageSvg)
+if (decoded === null) console.log('      (no QR decoder found, so the order page QR code was not scanned here. Set QR_PYTHON to a Python with opencv-python-headless, or install zbarimg.)')
+else check(decoded === expectedPayload && decoded.includes('5406741.00'), `a real QR reader (${decoder.kind}) scans the order page code as the right payment and amount`, decoded)
+check((await (await fetch(`${owner}/orders`)).text()).includes('PromptPay QR'), 'the back office shows which orders were paid by PromptPay')
+const qrStatus = (await call('get_status')).data.payments
+check(qrStatus.promptPay === true && qrStatus.promptPayReady === true, 'get_status shows PromptPay is on and ready')
+await call('update_order', { id: promptPayOrder.id, status: 'paid' })
+check(!(await (await fetch(`${base}${promptPayPath}`)).text()).includes('promptpay-qr'), 'the QR code goes away once the owner confirms the payment')
+// Thai words, for customers and the owner.
+const languageBeforeQr = (await call('get_site')).data.settings.language
+await call('update_site', { language: 'th' })
+const thaiCart = cartCookieOf(await postForm('/cart/add', { item: String(promptPayStore) }))
+check((await (await fetch(`${base}/checkout`, { headers: { Cookie: thaiCart } })).text()).includes('พร้อมเพย์ (สแกนคิวอาร์)'), 'checkout names PromptPay in Thai')
+const thaiPromptPay = await (await fetch(new URL((await postForm('/checkout', { ...order, payment: 'promptpay' }, thaiCart)).headers.get('location') ?? '', base))).text()
+check(thaiPromptPay.includes('ชำระเงินด้วยพร้อมเพย์') && thaiPromptPay.includes('เปิดแอปธนาคารใดก็ได้') && thaiPromptPay.includes('ระบบไม่ได้ตรวจการชำระเงินให้อัตโนมัติ') && thaiPromptPay.includes('class="promptpay-qr"><svg'), 'the order page explains PromptPay in Thai')
+const thaiQrSettings = await (await fetch(`${owner}/settings`)).text()
+check(thaiQrSettings.includes('รับพร้อมเพย์ (สแกนคิวอาร์)') && thaiQrSettings.includes('หมายเลขพร้อมเพย์ของคุณ') && thaiQrSettings.includes('ระบบไม่ได้ตรวจการชำระเงินให้อัตโนมัติ'), 'the PromptPay settings are in Thai, with plain help')
+const badQrSettings = formValues(thaiQrSettings)
+badQrSettings.set('promptPayId', '3101234567894')
+check((await (await fetch(`${owner}/settings`, { body: badQrSettings, method: 'POST' })).text()).includes('หมายเลขพร้อมเพย์ต้องเป็น') && (await call('get_site')).data.settings.promptPayId === '081-234-5678', 'the back office refuses a wrong PromptPay ID, and says why in Thai')
+await call('update_site', { currency: 'usd' })
+check((await (await fetch(`${owner}/system`)).text()).includes('ต้องมีหมายเลขพร้อมเพย์ที่ถูกต้องและสกุลเงิน thb'), 'the system page says in Thai when PromptPay is on but hidden')
+await call('update_site', { currency: 'thb', language: languageBeforeQr ?? 'en' })
+const goodQrSettings = formValues(await (await fetch(`${owner}/settings`)).text())
+goodQrSettings.set('promptPayId', '3101234567893')
+await fetch(`${owner}/settings`, { body: goodQrSettings, method: 'POST', redirect: 'manual' })
+const savedQr = (await call('get_site')).data.settings
+check(savedQr.promptPayId === '3101234567893' && savedQr.payPromptPay === true && savedQr.promptPayName === 'Test <Shop>', 'the owner can change the PromptPay ID in the back office without losing the rest')
+// Later tests expect no PromptPay, and the starters must not find an ID left from here.
+await call('update_site', { payPromptPay: false, promptPayId: '', promptPayName: '' })
+await call('delete_item', { id: promptPayStore })
+
 // Card payments, tested against a stand-in for Stripe
 const hasStripe = process.env.STRIPE_TEST === '1'
 if (hasStripe) {
@@ -2281,6 +2424,8 @@ for (const language of ['en', 'th']) {
     const home = await fetch(`${base}/owner/${code}/preview`)
     check(home.status === 200 && (await home.text()).includes(language === 'th' ? 'นี่คือเว็บตัวอย่าง' : 'This is a sample site'), `the ${starter} starter in ${language} shows that it is a sample site`)
     if (starter === 'shop') check(siteNow.settings.cart && siteNow.settings.payTransfer && siteNow.settings.payCod && items.length === 6 && items.some((one) => one.title.includes(language === 'th' ? 'เสื้อยืด' : 'T-shirt')), `the ${language} shop has a cart, bank transfer, pay on delivery and samples with sizes`)
+    // PromptPay sends customers' money to a real ID, so a starter never turns it on or fills one in.
+    if (starter === 'shop') check(!siteNow.settings.payPromptPay && !siteNow.settings.promptPayId, `the ${language} shop starter leaves PromptPay off, with no made-up ID`)
     if (starter === 'classes') {
       const classes = records[siteNow.tables.findIndex((table) => table.name === 'classes')]
       const automations = (await call('list_automations')).data

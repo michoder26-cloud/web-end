@@ -4,6 +4,8 @@ import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { getProduct, getProducts, isAvailable } from './items'
 import { formatMoney, parsePrice } from './money'
 import { getSite } from './owner'
+import { promptPayAmountOk, promptPayPayload, readPromptPayId } from './promptpay'
+import { qrSvg } from './qr'
 import { pageImage, renderLayout } from './render'
 import { startCardPayment } from './stripe'
 import { words } from './text'
@@ -23,6 +25,9 @@ export const orderStatuses = ['pending', 'paid', 'shipped', 'done', 'cancelled']
 
 const zeroDecimal = new Set(['jpy', 'krw', 'vnd', 'clp', 'pyg', 'isk'])
 export const canPayByCard = (env: Env, settings: Settings) => Boolean(settings.payCard && settings.currency && !zeroDecimal.has(settings.currency) && env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET)
+
+/** PromptPay codes are in Thai baht, so the option shows only for shops pricing in baht with a PromptPay ID that reads correctly. */
+export const canPayByPromptPay = (settings: Settings) => Boolean(settings.payPromptPay && settings.currency === 'thb' && readPromptPayId(settings.promptPayId))
 
 /** The cookie holds only ids and quantities. Names, prices and stock always come from the database. */
 export function readCart(request: Request) {
@@ -151,9 +156,15 @@ async function updateCart(request: Request, url: URL, adding: boolean, env: Env,
   return see(url, '/cart', cartCookie(url, cart))
 }
 
-const paymentChoices = (env: Env, settings: Settings) => [...(canPayByCard(env, settings) ? ['card'] : []), ...(settings.payTransfer ? ['transfer'] : []), ...(settings.payCod ? ['cod'] : [])]
+// With a total, PromptPay is offered only if that amount fits in a QR code.
+const paymentChoices = (env: Env, settings: Settings, total?: number) => [
+  ...(canPayByCard(env, settings) ? ['card'] : []),
+  ...(canPayByPromptPay(settings) && (total === undefined || promptPayAmountOk(total)) ? ['promptpay'] : []),
+  ...(settings.payTransfer ? ['transfer'] : []),
+  ...(settings.payCod ? ['cod'] : []),
+]
 
-const paymentName = (t: ReturnType<typeof words>, payment: string) => ({ card: t.payCard, cod: t.payCod, transfer: t.payTransfer })[payment] ?? payment
+const paymentName = (t: ReturnType<typeof words>, payment: string) => ({ card: t.payCard, cod: t.payCod, promptpay: t.payPromptPay, transfer: t.payTransfer })[payment] ?? payment
 
 async function checkoutPage(request: Request, env: Env, url: URL, site: SiteRow, customer: Customer | null, error?: string, values: Record<string, string> = {}) {
   const settings = JSON.parse(site.settings) as Settings
@@ -162,7 +173,7 @@ async function checkoutPage(request: Request, env: Env, url: URL, site: SiteRow,
   if (priced.changed) return see(url, '/cart?changed=1', cleanCookie(url, priced.lines))
   if (!priced.lines.length) return see(url, '/cart')
   const money = (amount: number) => formatMoney(amount, priced.prefix, priced.suffix)
-  const choices = paymentChoices(env, settings)
+  const choices = paymentChoices(env, settings, priced.total)
   const payment = values.payment ?? choices[0]
   return page(
     site,
@@ -208,6 +219,7 @@ export async function submitOrder(request: Request, env: Env, site: SiteRow, car
   const priced = await priceCart(env, site, cart)
   if (priced.changed) return { lines: priced.lines, problem: 'changed' as const }
   if (!priced.lines.length) return { problem: 'empty' as const }
+  if (!paymentChoices(env, settings, priced.total).includes(values.payment)) return { problem: 'details' as const }
   const token = newToken()
   const tokenHash = await sha256(token)
   const orderId = '(SELECT id FROM orders WHERE token_hash = ?)'
@@ -250,7 +262,11 @@ async function emailOrder(env: Env, settings: Settings, origin: string, order: O
     await later(
       env,
       sendEmail(env, settings, order.email, {
-        after: [...(order.payment === 'transfer' && settings.transferDetails ? [`${t.transferHow}\n${settings.transferDetails}`] : []), `${t.deliverTo}\n${order.name}\n${order.phone}\n${order.address}`, t.orderEmailKeep],
+        after: [
+          ...(order.payment === 'transfer' && settings.transferDetails ? [`${t.transferHow}\n${settings.transferDetails}`] : []),
+          // The QR code stays on the order page: many email apps block images, and the page always shows the current amount and status.
+          ...(order.payment === 'promptpay' ? [t.promptPayEmail.replace('{amount}', () => formatMoney(order.total, order.money_prefix, order.money_suffix))] : []),
+          `${t.deliverTo}\n${order.name}\n${order.phone}\n${order.address}`, t.orderEmailKeep],
         facts: orderFacts(order, lines, t),
         heading: `${t.order} ${number}`,
         lines: [t.orderPlaced],
@@ -417,6 +433,7 @@ ${url.searchParams.has('new') ? `<p role="status">${t.orderPlaced}</p>` : ''}${u
 <p><strong>${t.orderStatus}:</strong> ${escapeHtml(t.orderState[order.status] ?? order.status)}<br><strong>${t.payment}:</strong> ${paymentName(t, order.payment)}</p>
 ${cardDue ? `<form action="/order/${escapeHtml(token)}/pay" method="post"><button class="button" type="submit">${t.payNow}</button></form>` : ''}
 ${waiting && order.payment === 'transfer' && settings.transferDetails ? `<div class="card cart-transfer"><h2>${t.transferHow}</h2><p class="pre-line">${escapeHtml(settings.transferDetails)}</p></div>` : ''}
+${waiting && order.payment === 'promptpay' ? promptPayCard(order, settings, t) : ''}
 ${orderDetails(order, lines, t)}
 <h2>${t.deliverTo}</h2><p class="pre-line">${escapeHtml(order.name)}<br>${escapeHtml(order.phone)}<br>${escapeHtml(order.address)}</p>
 ${customer ? '' : `<p role="alert">${t.keepOrderLink}</p>`}
@@ -424,6 +441,20 @@ ${customer ? '' : `<p role="alert">${t.keepOrderLink}</p>`}
     customer,
     cartCount(request),
   )
+}
+
+/** The QR code for this order's exact amount, with plain steps. It is drawn on the server, so the page still needs no scripts. */
+function promptPayCard(order: Order, settings: Settings, t: ReturnType<typeof words>) {
+  const amount = formatMoney(order.total, order.money_prefix, order.money_suffix)
+  // The ID comes from today's settings. If the owner has since removed it, say so rather than show a code for nobody.
+  const payload = settings.payPromptPay && settings.promptPayId ? promptPayPayload(settings.promptPayId, order.total) : null
+  if (!payload) return `<div class="card cart-transfer"><h2>${t.promptPayHeading}</h2><p>${t.promptPayMissing}</p></div>`
+  const name = settings.promptPayName ? escapeHtml(settings.promptPayName) : ''
+  return `<div class="card cart-transfer cart-promptpay"><h2>${t.promptPayHeading}</h2>
+<div class="promptpay-qr">${qrSvg(payload, t.promptPayQrLabel.replace('{amount}', () => amount))}</div>
+<p class="promptpay-amount"><strong>${t.promptPayAmount}:</strong> ${escapeHtml(amount)}</p>${name ? `<p class="promptpay-amount">${t.promptPayName}: ${name}</p>` : ''}
+<ol class="promptpay-steps"><li>${t.promptPayStepOpen}</li><li>${escapeHtml(t.promptPayStepScan.replace('{amount}', () => amount))}${name ? ` ${t.promptPayStepName.replace('{name}', () => name)}` : ''}</li><li>${t.promptPayStepConfirm}</li></ol>
+<p>${t.promptPayPhone}</p></div>`
 }
 
 async function payAgain(env: Env, url: URL, site: SiteRow, token: string) {
