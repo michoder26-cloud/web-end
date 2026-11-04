@@ -1920,7 +1920,8 @@ if (process.env.GOOGLE_TEST === '1') {
         response.end(JSON.stringify({ id: `email-${mail.length}` }))
       })
     })
-    await new Promise((done) => receiver.listen(8874, done))
+    // With the email tests on, the site sends to their stand-in's port, which the email part has closed by now.
+    await new Promise((done) => receiver.listen(hasEmailTest ? Number(process.env.EMAIL_TEST_PORT || 8823) : 8874, done))
     await call('update_site', { emailFrom: 'shop@schedule.test', notifyEmail: 'owner@schedule.test' })
   }
   const save = (automation) => call('save_automation', automation)
@@ -2248,6 +2249,8 @@ const clearEmail = formValues(await ownerPage('/settings'))
 clearEmail.set('emailFrom', '')
 clearEmail.set('notifyEmail', '')
 await fetch(`${owner}/settings`, { body: clearEmail, method: 'POST', redirect: 'manual' })
+// A server started with a Resend key needs a sender too, or check_site rightly reports email as half set up.
+if ((await call('get_status')).data.email?.resendKeySet) await call('update_site', { emailFrom: 'shop@starter.test' })
 const emailPattern = /[\w.+-]+@[\w-]+\.[a-z]{2,}/i
 const phonePattern = /\+?\d[\d -]{7,}\d/
 const placePattern = /\b(street|road|avenue|suite)\b|ถนน|ซอย|แขวง|เขต /i

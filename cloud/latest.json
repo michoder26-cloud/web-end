@@ -1,4 +1,4 @@
 {
-  "version": "0.9.0",
-  "notes": "Automations: things can happen by themselves, such as a booking number, taking a seat, a confirmation email or a low-stock alert, set up by Claude and shown in your back office. Your team can log in to their own back office with only the areas you allow. Customers get an email when their order is paid, shipped, done or cancelled, and can log in with Google through your own Google account."
+  "version": "0.10.0",
+  "notes": "Automations can now run on a schedule: a daily summary, a reminder the day before a booking, a follow-up after an order, or a monthly report, in your own time zone. New sites start with a short guide to connect Claude, five starter sites in Thai and English for a working site in one click, and a checklist that ticks itself."
 }
