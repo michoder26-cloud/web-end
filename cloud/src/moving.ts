@@ -8,6 +8,10 @@ import { findWorkingPage } from './versions'
 const maxPageBytes = 3_000_000
 const maxTextChars = 60_000
 const maxListed = 200
+// Raise this when the reader finds more or reads differently, so readings an older version saved are read again.
+const readerVersion = 2
+// Cloudflare's free plan allows 50 outside requests per visit, so one check re-reads only some pages and the rest on the next.
+const maxRereads = 20
 const maxProducts = 500
 export const maxRedirects = 2000
 
@@ -246,14 +250,14 @@ const pageText = (html: string) => comparable(html.replace(/<(script|style)\b[\s
 
 const maxReported = 60
 
-type Reading = { buttons?: string[]; description: string; headings: { level: number; text: string }[]; images: { url: string }[]; links: { text: string }[]; text: string[]; title: string; truncated: boolean; url: string }
+type Reading = { buttons?: string[]; reader?: number; description: string; headings: { level: number; text: string }[]; images: { url: string }[]; links: { text: string }[]; text: string[]; title: string; truncated: boolean; url: string }
 type WorkingPage = { blocks: string; description: string; published: number; slug: string; title: string }
 
 const sourcesKeptDays = 30
 
 /** Keeps what an old page contained, so the move can be checked later by any tool, without reading the page again. */
 export async function rememberReading(env: Env, siteId: number, reading: Reading, slug: null | string = null) {
-  const kept = { buttons: reading.buttons, description: reading.description, headings: reading.headings.map((heading) => ({ level: heading.level, text: heading.text })), images: reading.images.map((image) => ({ url: image.url })), links: reading.links.map((link) => ({ text: link.text })), text: reading.text, title: reading.title, truncated: reading.truncated, url: reading.url }
+  const kept = { buttons: reading.buttons, description: reading.description, reader: reading.reader ?? readerVersion, headings: reading.headings.map((heading) => ({ level: heading.level, text: heading.text })), images: reading.images.map((image) => ({ url: image.url })), links: reading.links.map((link) => ({ text: link.text })), text: reading.text, title: reading.title, truncated: reading.truncated, url: reading.url }
   await env.DB.prepare(`INSERT INTO move_sources (site_id, url, page_slug, reading) VALUES (?, ?, ?, ?)
     ON CONFLICT (site_id, url) DO UPDATE SET page_slug = COALESCE(excluded.page_slug, page_slug), reading = excluded.reading, read_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`)
     .bind(siteId, reading.url, slug, JSON.stringify(kept))
@@ -323,8 +327,17 @@ export async function moveStatus(env: Env, site: SiteRow) {
   const { results: pages } = await env.DB.prepare('SELECT slug, title, description, published, blocks FROM pages WHERE site_id = ?').bind(site.id).all<WorkingPage>()
   const reports: MoveReport[] = []
   const notRebuilt: string[] = []
+  let rereads = 0
   for (const source of sources) {
-    const old = JSON.parse(source.reading) as Reading
+    let old = JSON.parse(source.reading) as Reading
+    if ((old.reader ?? 1) < readerVersion && rereads < maxRereads) {
+      rereads += 1
+      const target = safeWebUrl(env, source.url)
+      const fresh = target ? await readWebPage(target) : { error: 'Not a public address.' }
+      // If the old site is gone, keep what was read before, marked as current so it isn't fetched on every check.
+      old = 'error' in fresh ? { ...old, reader: readerVersion } : { ...fresh, reader: readerVersion, url: source.url }
+      await rememberReading(env, site.id, old, source.page_slug)
+    }
     const wanted = comparable(old.title)
     const page = pages.find((item) => item.slug === source.page_slug) ?? pages.find((item) => comparable(item.title) === wanted) ?? pages.find((item) => wanted && wanted.includes(comparable(item.title)) && item.title.length > 3)
     if (page) reports.push(await comparePage(env, site, old, page))
