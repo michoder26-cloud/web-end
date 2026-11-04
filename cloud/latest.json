@@ -1,4 +1,4 @@
 {
-  "version": "0.7.0",
-  "notes": "Move your site to WordPress: a new back office page gives you a WordPress import file with your pages, photos and menu, a WooCommerce product file, and your old links for the Redirection plugin. Moving from Wix to WordPress now works through web-end. Pages can also have a links block for sub-menus, footer links and resource lists."
+  "version": "0.8.0",
+  "notes": "Email through your own Resend account: customers can reset their password themselves, you get an email for each new order, message and booking, and customers get an order confirmation. The back office now works in Thai as well as English. Moving to WordPress has been tested with a real WordPress and WooCommerce import, with clearer steps, product links that keep working, and shop sections that show the right products."
 }
