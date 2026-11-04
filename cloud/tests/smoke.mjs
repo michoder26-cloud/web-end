@@ -1295,6 +1295,168 @@ if (hasEmailTest) {
   check(!(await call('check_site', {})).data.problems.some((problem) => problem.includes('RESEND')), 'the owner can clear the sender address')
 }
 
+// Log in with Google, tested against a stand-in for Google on port 8824. Start the site with
+// --var WEBHOOK_ALLOW_HTTP:1 --var GOOGLE_CLIENT_ID:test-client --var GOOGLE_CLIENT_SECRET:test-secret --var GOOGLE_API_BASE:http://localhost:8824
+const googleState = (await call('get_status', {})).data.google
+check(Boolean(googleState) && googleState.redirectAddress === `${base}/login/google/callback`, 'get_status shows the redirect address for Google', JSON.stringify(googleState))
+check((await call('check_site', {})).data.problems.some((problem) => problem.includes("can't log in with Google")) === (googleState?.clientIdSet !== googleState?.clientSecretSet), 'check_site reports a Google setup with only one of its two secrets')
+if (process.env.GOOGLE_TEST === '1') {
+  const { createServer } = await import('node:http')
+  const { createHash, generateKeyPairSync, randomBytes, sign } = await import('node:crypto')
+  // A fresh key each run, with a fresh key id, like Google rotating its keys.
+  const kid = randomBytes(8).toString('hex')
+  const googleKeys = generateKeyPairSync('rsa', { modulusLength: 2048 })
+  const strangerKeys = generateKeyPairSync('rsa', { modulusLength: 2048 })
+  const part = (value) => Buffer.from(JSON.stringify(value)).toString('base64url')
+  const idToken = (claims, key) => {
+    const signed = `${part({ alg: 'RS256', kid, typ: 'JWT' })}.${part(claims)}`
+    return `${signed}.${sign('sha256', Buffer.from(signed), key).toString('base64url')}`
+  }
+  const grants = new Map()
+  let nextLogin = {}
+  let certFetches = 0
+  const fakeGoogle = createServer((request, response) => {
+    const address = new URL(request.url, 'http://localhost:8824')
+    if (address.pathname === '/oauth2/v3/certs') {
+      certFetches++
+      response.writeHead(200, { 'Cache-Control': 'public, max-age=3600', 'Content-Type': 'application/json' })
+      response.end(JSON.stringify({ keys: [{ ...googleKeys.publicKey.export({ format: 'jwk' }), alg: 'RS256', kid, use: 'sig' }] }))
+      return
+    }
+    if (address.pathname === '/o/oauth2/v2/auth') {
+      // The person agrees at once, and Google sends them back with a one-time code.
+      const asked = address.searchParams
+      const code = randomBytes(16).toString('hex')
+      grants.set(code, { challenge: asked.get('code_challenge'), clientId: asked.get('client_id'), login: nextLogin, nonce: asked.get('nonce'), redirect: asked.get('redirect_uri') })
+      const back = new URL(asked.get('redirect_uri'))
+      back.searchParams.set('code', code)
+      back.searchParams.set('state', asked.get('state'))
+      response.writeHead(302, { Location: back.toString() })
+      response.end()
+      return
+    }
+    if (address.pathname === '/token' && request.method === 'POST') {
+      let body = ''
+      request.on('data', (chunk) => (body += chunk))
+      request.on('end', () => {
+        const form = new URLSearchParams(body)
+        const grant = grants.get(form.get('code'))
+        grants.delete(form.get('code'))
+        response.setHeader('Content-Type', 'application/json')
+        // Like Google: the code works once, only with the right secret, redirect address and PKCE verifier.
+        const proved = grant && createHash('sha256').update(form.get('code_verifier') ?? '').digest('base64url') === grant.challenge
+        if (!proved || form.get('grant_type') !== 'authorization_code' || form.get('client_id') !== 'test-client' || form.get('client_secret') !== 'test-secret' || form.get('redirect_uri') !== grant.redirect) {
+          response.statusCode = 400
+          response.end(JSON.stringify({ error: 'invalid_grant' }))
+          return
+        }
+        const now = Math.floor(Date.now() / 1000)
+        const claims = { aud: grant.clientId, azp: grant.clientId, email: 'someone@example.test', email_verified: true, exp: now + 3600, iat: now, iss: 'https://accounts.google.com', name: 'Someone', nonce: grant.nonce, sub: 'google-0', ...grant.login.claims }
+        response.end(JSON.stringify({ access_token: 'ya29.fake', expires_in: 3599, id_token: idToken(claims, grant.login.key ?? googleKeys.privateKey), scope: 'openid email profile', token_type: 'Bearer' }))
+      })
+      return
+    }
+    response.statusCode = 404
+    response.end()
+  })
+  await new Promise((done) => fakeGoogle.listen(8824, done))
+
+  let visitor = 0
+  const sessionFrom = (response) => response.headers.getSetCookie().find((line) => line.startsWith('session='))?.split(';')[0] ?? ''
+  // One whole trip through Google. Each trip comes from its own address, so the limits on attempts don't get in the way.
+  const googleTrip = async (claims = {}, options = {}) => {
+    nextLogin = { claims, key: options.key }
+    const ip = `203.0.113.${++visitor}`
+    const start = await fetch(`${base}/login/google?next=${options.next ?? '/book'}`, { headers: { 'CF-Connecting-IP': ip }, redirect: 'manual' })
+    const stateCookie = start.headers.getSetCookie().find((line) => line.startsWith('google_state=')) ?? ''
+    const toGoogle = start.headers.get('location') ?? ''
+    let back = start.status === 303 ? ((await fetch(toGoogle, { redirect: 'manual' })).headers.get('location') ?? '') : ''
+    if (options.change) back = options.change(back)
+    const done = back ? await fetch(back, { headers: { 'CF-Connecting-IP': ip, ...(options.noCookie ? {} : { Cookie: stateCookie.split(';')[0] }) }, redirect: 'manual' }) : null
+    return { back, body: done?.status === 200 ? await done.text() : '', done, ip, session: done ? sessionFrom(done) : '', start, stateCookie, toGoogle }
+  }
+  const accountOf = async (session) => (session ? await (await fetch(`${base}/account`, { headers: { Cookie: session }, redirect: 'manual' })).text() : '')
+  const customerEmails = async () => (await call('list_customers', { limit: 200 })).data.map((row) => row.email)
+
+  await call('update_site', { accounts: true })
+  await call('publish_site', { note: 'Google test' })
+  const googleStatus = await call('get_status', {})
+  check(googleStatus.data.google.clientIdSet && googleStatus.data.google.clientSecretSet && googleStatus.data.google.on && !googleStatus.text.includes('test-secret') && !googleStatus.text.includes('test-client'), 'get_status shows Google login is on, never the secrets', JSON.stringify(googleStatus.data.google))
+  check(!(await call('check_site', {})).data.problems.some((problem) => problem.includes('Google')), 'a full Google setup has no problems')
+  const googleSystem = await (await fetch(`${owner}/system`)).text()
+  check(googleSystem.includes('Redirect address for Google') && googleSystem.includes(`${base}/login/google/callback`) && !googleSystem.includes('test-secret'), 'the System page shows the redirect address to paste into Google, never the secret')
+  const googleLoginPage = await (await fetch(`${base}/login?next=/book`)).text()
+  check(googleLoginPage.includes('href="/login/google?next=%2Fbook"') && googleLoginPage.includes('Continue with Google'), 'the login page offers Continue with Google')
+  check((await (await fetch(`${base}/signup`)).text()).includes('href="/login/google?next=%2F"'), 'the sign-up page offers Continue with Google')
+
+  // A new customer
+  const first = await googleTrip({ email: 'Gail@Example.test', name: 'Gail <b>', sub: 'google-gail' })
+  const asked = new URL(first.toGoogle || 'http://x/')
+  check(first.start.status === 303 && asked.origin === 'http://localhost:8824' && asked.pathname === '/o/oauth2/v2/auth', 'Continue with Google sends the visitor to Google', `${first.start.status} ${first.toGoogle.slice(0, 60)}`)
+  check(asked.searchParams.get('client_id') === 'test-client' && asked.searchParams.get('redirect_uri') === `${base}/login/google/callback` && asked.searchParams.get('response_type') === 'code' && asked.searchParams.get('scope') === 'openid email profile', 'Google is asked for a code for the owner\'s client and the right redirect address')
+  check(asked.searchParams.get('code_challenge_method') === 'S256' && /^[A-Za-z0-9_-]{43}$/.test(asked.searchParams.get('code_challenge') ?? '') && /^[0-9a-f]{64}$/.test(asked.searchParams.get('nonce') ?? ''), 'the login uses PKCE and a nonce')
+  check(/^google_state=[0-9a-f]{64};/.test(first.stateCookie) && first.stateCookie.split(';')[0] === `google_state=${asked.searchParams.get('state')}` && first.stateCookie.includes('HttpOnly') && first.stateCookie.includes('SameSite=Lax') && first.stateCookie.includes('Path=/login/google') && first.stateCookie.includes('Max-Age=600'), 'the state is kept in a short-lived cookie scripts cannot read', first.stateCookie)
+  check(!first.toGoogle.includes('test-secret') && !first.stateCookie.includes('test-secret'), 'the client secret never goes to the browser')
+  check(first.done?.status === 303 && first.done.headers.get('location') === `${base}/book` && /^session=[0-9a-f]{64}$/.test(first.session), 'a new customer logs in with Google and goes back where they were', `${first.done?.status} ${first.body.match(/role="alert">([^<]*)/)?.[1] ?? ''}`)
+  check(first.done?.headers.getSetCookie().some((line) => line.startsWith('google_state=;') && line.includes('Max-Age=0')), 'the state cookie is cleared after the login')
+  const gailAccount = await accountOf(first.session)
+  check(gailAccount.includes('gail@example.test') && gailAccount.includes('Gail &lt;b&gt;'), 'the new account has the Google name and email, shown safely')
+  check((await customerEmails()).filter((email) => email === 'gail@example.test').length === 1, 'the Google customer is a normal customer for the owner')
+  check((await (await postAs(first.ip, '/login', { email: 'gail@example.test', password: '' })).text()).includes('role="alert"') && (await (await postAs(first.ip, '/login', { email: 'gail@example.test', password: 'any-password-1' })).text()).includes('role="alert"'), 'an account made with Google has no password anyone can use')
+  const replay = await fetch(first.back, { headers: { 'CF-Connecting-IP': first.ip, Cookie: first.stateCookie.split(';')[0] }, redirect: 'manual' })
+  check(replay.status === 200 && !sessionFrom(replay) && (await replay.text()).includes('Logging in with Google didn&#39;t work'), 'a Google answer works only once')
+
+  // Later logins match on Google's account id first
+  const before = (await customerEmails()).length
+  const again = await googleTrip({ email: 'gail.new@example.test', name: 'Gail New', sub: 'google-gail' })
+  check(Boolean(again.session) && (await accountOf(again.session)).includes('gail@example.test') && (await customerEmails()).length === before, 'a second Google login finds the same account, even with a new Gmail address')
+
+  // Linking to an account made with a password
+  check((await postAs('203.0.113.200', '/signup', { email: 'pat@example.test', name: 'Pat', password: 'pat-password-1' })).status === 303, 'a customer signs up with a password for the linking test')
+  const unverifiedPat = await googleTrip({ email: 'pat@example.test', email_verified: false, sub: 'google-pat' })
+  check(!unverifiedPat.session && unverifiedPat.body.includes('isn&#39;t verified'), 'an email Google has not verified never opens an existing account')
+  const linked = await googleTrip({ email: 'PAT@example.test', name: 'Other name', sub: 'google-pat' })
+  const patAccount = await accountOf(linked.session)
+  check(Boolean(linked.session) && patAccount.includes('pat@example.test') && patAccount.includes('Pat') && !patAccount.includes('Other name') && (await customerEmails()).filter((email) => email === 'pat@example.test').length === 1, 'a verified Google email logs into the existing account with that email')
+  check((await postAs('203.0.113.201', '/login', { email: 'pat@example.test', password: 'pat-password-1' })).status === 303, 'the password still works after linking Google')
+  const otherGoogle = await googleTrip({ email: 'pat@example.test', sub: 'google-someone-else' })
+  check(!otherGoogle.session && otherGoogle.body.includes('linked to a different Google account'), 'another Google account with the same email cannot take over a linked account')
+
+  // Everything that must fail
+  const failedLogin = (trip) => !trip.session && trip.done?.status === 200 && trip.body.includes('Logging in with Google didn&#39;t work')
+  const emailsBefore = (await customerEmails()).length
+  check(failedLogin(await googleTrip({ email: 'state@example.test', sub: 'google-state' }, { change: (back) => back.replace(/state=[0-9a-f]+/, `state=${'a'.repeat(64)}`) })), 'a wrong state is refused')
+  check(failedLogin(await googleTrip({ email: 'nocookie@example.test', sub: 'google-nocookie' }, { noCookie: true })), 'a Google answer from another browser is refused')
+  check(failedLogin(await googleTrip({ aud: 'another-app', azp: 'another-app', email: 'aud@example.test', sub: 'google-aud' })), 'a token made for another app is refused')
+  check(failedLogin(await googleTrip({ aud: ['test-client', 'another-app'], azp: 'another-app', email: 'azp@example.test', sub: 'google-azp' })), 'a token shared with another app is refused')
+  check(failedLogin(await googleTrip({ email: 'expired@example.test', exp: Math.floor(Date.now() / 1000) - 3600, iat: Math.floor(Date.now() / 1000) - 7200, sub: 'google-expired' })), 'an expired token is refused')
+  check(failedLogin(await googleTrip({ email: 'issuer@example.test', iss: 'https://evil.example.test', sub: 'google-issuer' })), 'a token from another issuer is refused')
+  check(failedLogin(await googleTrip({ email: 'nonce@example.test', nonce: 'a'.repeat(64), sub: 'google-nonce' })), 'a token with the wrong nonce is refused')
+  check(failedLogin(await googleTrip({ email: 'forged@example.test', sub: 'google-forged' }, { key: strangerKeys.privateKey })), 'a token with a bad signature is refused')
+  check(failedLogin(await googleTrip({ email: 'pkce@example.test', sub: 'google-pkce' }, { change: (back) => back.replace(/code=[0-9a-f]+/, 'code=not-a-real-code') })), 'a code Google did not give is refused')
+  check(failedLogin(await googleTrip({}, { change: (back) => back.replace(/code=[0-9a-f]+/, 'error=access_denied') })), 'cancelling on Google goes back to the login page')
+  const unverified = await googleTrip({ email: 'unverified@example.test', email_verified: false, sub: 'google-unverified' })
+  check(!unverified.session && unverified.body.includes('isn&#39;t verified'), 'an unverified Google email is refused')
+  check((await customerEmails()).length === emailsBefore, 'refused Google logins make no accounts')
+  check(certFetches === 1, "Google's keys are fetched once and then kept", String(certFetches))
+  const awayTrip = await googleTrip({ email: 'gail@example.test', sub: 'google-gail' }, { next: 'https://evil.test' })
+  check(awayTrip.done?.headers.get('location') === `${base}/`, 'a Google login never sends the customer to another site', awayTrip.done?.headers.get('location'))
+  check((await fetch(`${base}/login/google`, { headers: { Cookie: first.session }, redirect: 'manual' })).headers.get('location') === `${base}/account`, 'a logged-in customer is not sent to Google again')
+
+  // Accounts off means no Google login either
+  await call('update_site', { accounts: false })
+  check((await call('check_site', {})).data.problems.some((problem) => problem.includes('customer accounts are off, so nobody sees it')), 'check_site says when Google login is set up but accounts are off')
+  await call('publish_site', { note: 'Accounts off' })
+  check((await fetch(`${base}/login/google`, { redirect: 'manual' })).status === 404 && (await fetch(`${base}/login/google/callback?code=x&state=y`, { redirect: 'manual' })).status === 404 && (await call('get_status', {})).data.google.on === false, 'with accounts off, Google login is off too')
+  await call('update_site', { accounts: true })
+  await call('publish_site', { note: 'Accounts on' })
+  await new Promise((done) => fakeGoogle.close(done))
+} else if (!googleState?.clientIdSet && !googleState?.clientSecretSet) {
+  check(!(await (await fetch(`${base}/login`)).text()).includes('/login/google') && !(await (await fetch(`${base}/signup`)).text()).includes('Continue with Google') && (await fetch(`${base}/login/google`, { redirect: 'manual' })).status === 404 && googleState?.on === false, 'without the Google secrets, nothing about Google shows')
+  const systemGoogle = await (await fetch(`${owner}/system`)).text()
+  check(systemGoogle.includes('Log in with Google') && systemGoogle.includes('GOOGLE_CLIENT_ID in Cloudflare'), 'the System page explains how to turn on Google login')
+}
+
 // The back office in Thai
 const officePage = async (area = '') => (await fetch(`${owner}${area}`)).text()
 const languageBefore = (await call('get_site')).data.settings.language

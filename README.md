@@ -25,7 +25,7 @@ Claude asks about your business, then writes the pages, chooses the design, and 
 - **Design:** 19 kinds of sections, including link lists for sub-menus and resources, five design styles, phone-friendly layouts, and fonts that cover Latin and Thai
 - **Database:** your own tables with text, numbers, dates, choices, images and links between tables, plus products, orders and messages. Up to 50 tables of 50,000 records each. Download any table as a spreadsheet file.
 - **Access rules:** for each table, choose who can read and add: anyone, logged-in customers, customers' own records only, staff, or only you. Fields can be staff-only, and every rule is enforced on the server.
-- **Customer accounts:** sign up, log in, log out, staff roles, a page where customers see their own orders, and password reset emails once email is set up. Turn it on when you need it.
+- **Customer accounts:** sign up, log in, log out, staff roles, a page where customers see their own orders, password reset emails once email is set up, and "Continue with Google" through your own Google client. Turn it on when you need it.
 - **API:** other systems and front ends can use your data, logins and orders, with secret keys and an OpenAPI description at `/api/v1/openapi.json`
 - **Publishing:** after your first publish, changes stay private with a preview link until you publish them. Go back to any of the last 20 versions. Version history covers pages and settings, while data changes at once.
 - **Limits nothing can get around:** seats and other places can't be overbooked, even by two people at the same moment, and one customer can't book the same thing twice
@@ -62,7 +62,7 @@ Nobody hosts your site but you. There's no central server, and web-end never see
 - Create product photos. Upload your own, or use images you have the right to use.
 - Show customer reviews as a ready-made feature
 - Add any feature you can describe. Claude builds with tables, rules, pages, webhooks and sandboxed custom code. Custom server logic still means a developer changing the source, and an update replaces such changes.
-- Log in with Google or other accounts
+- Log in with Facebook, Apple, LINE or other accounts. Google works once you set it up, as shown below. Google login works on your website, not yet through the API.
 - Show the back office in languages other than Thai and English
 
 Passing our tests means common mistakes weren't found. It isn't a security audit or legal advice. Customer passwords use PBKDF2 with 100,000 rounds, the most Cloudflare Workers allow, which is below the 600,000 that security guides recommend. You're responsible for the customer data your site holds. Don't collect health data, ID numbers or card details through forms, and have legal pages checked for your country.
@@ -147,6 +147,27 @@ You need your own domain, such as `your-shop.com`, because Resend only sends fro
 
 If only part of this is done, **System** and Claude's site check tell you what's missing. Emails pass through Resend, so their terms apply to them. web-end itself still never sees your data. Each email is sent once, with no retry, and you get at most 60 notices an hour, so a flood of spam can't use up your allowance. This has been tested against a stand-in for Resend, but not yet with a real Resend account, so send a test email and place a test order before you rely on it.
 
+## Logging in with Google
+
+Customers can press **Continue with Google** on the login and sign-up pages instead of choosing a password. It uses your own Google client, so Google shows your site's name, and web-end never sees your data. It's free. This has been tested against a stand-in for Google, but not yet with a real Google account, so try it yourself before you tell customers.
+
+1. In your back office, open **System** and copy the **Redirect address for Google**. It looks like `https://your-address/login/google/callback`.
+2. Go to [Google Cloud Console](https://console.cloud.google.com/) and create a project, or pick one you have.
+3. Open **Google Auth Platform** (called **OAuth consent screen** in some accounts). Enter your site's name and your email, choose **External**, and finish the steps. Google asks for these so customers know who they are logging in to.
+4. Open **Clients** (or **Credentials**), create an **OAuth client ID**, and choose **Web application**. Under **Authorized redirect URIs**, paste the address from step 1. If customers also use your own domain, add that address too, with your domain in it.
+5. Google shows a **client ID** and a **client secret**. In Cloudflare, open your Worker, then **Settings**, **Variables and Secrets**. Add a secret named `GOOGLE_CLIENT_ID` with the client ID, and another named `GOOGLE_CLIENT_SECRET` with the client secret.
+6. Make sure customer accounts are on in your back office's **Settings**. Open your site's login page and try **Continue with Google**.
+
+While your Google app is in testing, only the test users you add in Google can log in. Publish the app in Google Auth Platform to let everyone in. Google usually doesn't need to review an app that only asks for name and email.
+
+How accounts work:
+
+- Someone new gets an account with their Google name and email, and no password. They can choose one later with **Forgot your password?** once email is set up, or with a reset link you make in the back office.
+- If an account already uses the same email, a Google login opens that account, but only when Google has confirmed the person owns that email. After that, the account is linked to their Google account, so it still works if they change their Gmail address.
+- Google logins follow the same rules as everyone else: the same member role, members-only checkout, and the same limits on attempts.
+
+If only one of the two secrets is set, **System** and Claude's site check tell you what's missing. Nothing shows to customers until both are set. To turn it off, delete the two secrets in Cloudflare.
+
 ## For developers
 
 The site is in [`cloud/`](cloud): a Cloudflare Worker with a D1 database and an MCP server at `/mcp/<secret>`. No build step or framework.
@@ -172,6 +193,8 @@ Then, in a second terminal, test a fresh install. It needs an empty local databa
 ```bash
 BASE_URL=http://localhost:8799 npm test
 ```
+
+To test logging in with Google against a stand-in for Google on port 8824, start the site with `--var WEBHOOK_ALLOW_HTTP:1 --var GOOGLE_CLIENT_ID:test-client --var GOOGLE_CLIENT_SECRET:test-secret --var GOOGLE_API_BASE:http://localhost:8824`, and run the tests with `GOOGLE_TEST=1`. Like the Resend address, the Google address can only be changed while `WEBHOOK_ALLOW_HTTP` is on.
 
 To test email against a stand-in for Resend on port 8823, start the site with `--var WEBHOOK_ALLOW_HTTP:1 --var RESEND_API_KEY:re_test_fake --var RESEND_API_BASE:http://localhost:8823`, and run the tests with `EMAIL_TEST=1`. The Resend address can only be changed while `WEBHOOK_ALLOW_HTTP` is on, which is for local tests only.
 

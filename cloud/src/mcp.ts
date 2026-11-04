@@ -6,6 +6,7 @@ import { writeItem } from './cms'
 import { systemStatus } from './cms-platform'
 import { createRecord, deleteRecord, getRecord, getTable, listRecords, listTables, ownerActor, saveTable, showRecord, tableBase, tableSchema, updateRecord } from './data'
 import { emailProblems } from './email'
+import { googleProblems } from './google'
 import { guides, guideTopics } from './guides'
 import { parsePrice } from './money'
 import { checkMove, cleanPath, copyImage, importProducts, moveGate, moveStatus, readWebPage, rememberReading, saveRedirects, safeWebUrl, scanWebsite } from './moving'
@@ -53,6 +54,7 @@ Limits to explain honestly:
 - Secret API keys are created only by the owner on the Connect page of the back office. Never ask for one in chat.
 - It cannot check bank transfers automatically. The owner confirms transfers in the back office. Card payments need the owner's own Stripe account and its secrets added in Cloudflare. Bookings can't be overbooked or doubled when the table uses capacityField and unique, as the screens guide shows.
 - Email is optional and uses the owner's own Resend account: they add the RESEND_API_KEY secret in Cloudflare themselves, and you set emailFrom and notifyEmail with update_site. Then customers can get a password reset email from the login page and an order confirmation, and the owner gets an email for each new order, form entry and record visitors add. Without it, a customer who forgets a password needs a reset link from the back office, and the owner checks the back office or a chat notification for new orders.
+- Log in with Google is optional and uses the owner's own Google OAuth client: they add the GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET secrets in Cloudflare themselves, following the README, and paste the redirect address from the System page into Google Cloud Console. Then the login and sign-up pages show Continue with Google while accounts are on. You can't set it up for them, and other social logins aren't available.
 - Don't collect health data, ID numbers or card details through forms, and never add a password field to a form. Customer passwords belong only to the built-in login.
 - Don't build sites that imitate another business or trick people.
 - Many countries require legal pages such as a privacy notice or imprint. Tell them to have legal text checked.`
@@ -184,6 +186,7 @@ export async function findProblems(env: Env, site: SiteRow) {
     if (contact && table.read_access === 'public') problems.push(`Anyone can read the "${contact.name}" field of the table "${table.name}". Set staffOnly on it unless that is intended.`)
   }
   problems.push(...emailProblems(env, settings))
+  problems.push(...googleProblems(env, settings))
   if (settings.cart) {
     if (!settings.payTransfer && !settings.payCod && !settings.payCard) problems.push('The cart is on, but no payment method is on. Turn on bank transfer, pay on delivery or cards.')
     if (settings.payCard && (!settings.currency || !env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET)) problems.push('Card payments are on, but the currency or the Stripe secrets are missing, so customers will not see this option.')

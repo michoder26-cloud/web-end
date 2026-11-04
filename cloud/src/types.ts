@@ -2,6 +2,9 @@ export type Env = {
   ASSETS: Fetcher
   DB: D1Database
   defer?: (work: Promise<unknown>) => void
+  GOOGLE_API_BASE?: string
+  GOOGLE_CLIENT_ID?: string
+  GOOGLE_CLIENT_SECRET?: string
   RESEND_API_BASE?: string
   RESEND_API_KEY?: string
   STRIPE_API_BASE?: string

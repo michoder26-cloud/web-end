@@ -95,6 +95,11 @@ const en = {
   sendResetLink: 'Send me a link',
   haveAccount: 'Already have an account?',
   noAccount: "Don't have an account?",
+  continueWithGoogle: 'Continue with Google',
+  orEmail: 'Or use your email',
+  googleFailed: "Logging in with Google didn't work. Please try again.",
+  googleTaken: 'The account with this email is linked to a different Google account. Log in with your email and password instead.',
+  googleUnverified: "Your Google account's email isn't verified yet, so it can't be used here.",
 }
 
 const th: typeof en = {
@@ -194,6 +199,11 @@ const th: typeof en = {
   sendResetLink: 'ส่งลิงก์ให้ฉัน',
   haveAccount: 'มีบัญชีอยู่แล้ว?',
   noAccount: 'ยังไม่มีบัญชี?',
+  continueWithGoogle: 'ดำเนินการต่อด้วย Google',
+  orEmail: 'หรือใช้อีเมล',
+  googleFailed: 'เข้าสู่ระบบด้วย Google ไม่สำเร็จ กรุณาลองใหม่',
+  googleTaken: 'บัญชีที่ใช้อีเมลนี้เชื่อมกับบัญชี Google อื่นอยู่แล้ว กรุณาเข้าสู่ระบบด้วยอีเมลและรหัสผ่านแทน',
+  googleUnverified: 'อีเมลของบัญชี Google นี้ยังไม่ได้รับการยืนยัน จึงใช้ที่นี่ไม่ได้',
 }
 
 export const words = (language?: string) => (language?.toLowerCase().startsWith('th') ? th : en)

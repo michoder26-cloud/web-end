@@ -1,5 +1,6 @@
 import { allowAttempt, createResetLink, endCookie, endSession, getCustomer, hashPassword, registerCustomer, sha256, startSession, verifyLogin, withinLimit } from './auth'
 import { canSendEmail, isEmail, later, sendEmail } from './email'
+import { canUseGoogle, endGoogleCookie, finishGoogle, startGoogle } from './google'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { entryFields } from './owner'
 import { renderLayout } from './render'
@@ -27,6 +28,10 @@ const page = (site: SiteRow, url: URL, title: string, body: string, customer: Cu
 
 const message = (text?: string, role = 'alert') => (text ? `<p role="${role}">${escapeHtml(text)}</p>` : '')
 
+// Shown only once the owner has added both Google secrets in Cloudflare. A link, not a form, because the page's rules only let forms post to this site.
+const googleButton = (env: Env, t: ReturnType<typeof words>, next: string) =>
+  canUseGoogle(env) ? `<p><a class="button button--ghost" href="/login/google?next=${encodeURIComponent(next)}">${t.continueWithGoogle}</a></p><p>${t.orEmail}</p>` : ''
+
 function loginPage(env: Env, site: SiteRow, url: URL, error?: string) {
   const settings = JSON.parse(site.settings) as Settings
   const t = words(settings.language)
@@ -35,7 +40,7 @@ function loginPage(env: Env, site: SiteRow, url: URL, error?: string) {
     site,
     url,
     t.logIn,
-    `<h1>${t.logIn}</h1>${message(error)}${url.searchParams.has('changed') ? message(t.passwordChanged, 'status') : ''}
+    `<h1>${t.logIn}</h1>${message(error)}${url.searchParams.has('changed') ? message(t.passwordChanged, 'status') : ''}${googleButton(env, t, next)}
 <form action="/login" class="contact-form" method="post"><input name="next" type="hidden" value="${escapeHtml(next)}">
 <label>${t.email}<input autocomplete="email" maxlength="254" name="email" required type="email"></label>
 <label>${t.password}<input autocomplete="current-password" maxlength="200" name="password" required type="password"></label>
@@ -45,14 +50,14 @@ ${canSendEmail(env, settings) ? `<p class="account__alt"><a href="/reset">${t.fo
   )
 }
 
-function signupPage(site: SiteRow, url: URL, error?: string) {
+function signupPage(env: Env, site: SiteRow, url: URL, error?: string) {
   const t = words((JSON.parse(site.settings) as Settings).language)
   const next = safeNext(url.searchParams.get('next'))
   return page(
     site,
     url,
     t.newAccount,
-    `<h1>${t.newAccount}</h1>${message(error)}
+    `<h1>${t.newAccount}</h1>${message(error)}${googleButton(env, t, next)}
 <form action="/signup" class="contact-form" method="post"><input name="next" type="hidden" value="${escapeHtml(next)}">
 <label>${t.name}<input autocomplete="name" maxlength="120" name="name" required></label>
 <label>${t.email}<input autocomplete="email" maxlength="254" name="email" required type="email"></label>
@@ -115,12 +120,12 @@ async function login(request: Request, env: Env, url: URL, site: SiteRow) {
 
 async function signup(request: Request, env: Env, url: URL, site: SiteRow) {
   const t = words((JSON.parse(site.settings) as Settings).language)
-  if (!(await allowAttempt(request, env, 'signup', 10, 3600))) return signupPage(site, url, t.busy)
+  if (!(await allowAttempt(request, env, 'signup', 10, 3600))) return signupPage(env, site, url, t.busy)
   const form = await receive(request)
   // Bots fill in the hidden field. Send them away and keep nothing.
   if (!form || form.get('website')) return see(url, '/')
   const created = await registerCustomer(env, site.id, { email: String(form.get('email') ?? ''), name: String(form.get('name') ?? ''), password: String(form.get('password') ?? '') })
-  if (!created.id) return signupPage(site, url, created.problem === 'password' ? t.badPassword : t.badEmail)
+  if (!created.id) return signupPage(env, site, url, created.problem === 'password' ? t.badPassword : t.badEmail)
   return see(url, safeNext(form.get('next')), await startSession(env, url, created.id))
 }
 
@@ -203,11 +208,32 @@ async function askReset(request: Request, env: Env, url: URL, site: SiteRow) {
   return askResetPage(site, url, { sent: true })
 }
 
+/** Starts a Google login, or finishes one when Google sends the visitor back. */
+async function googleLogin(request: Request, env: Env, url: URL, site: SiteRow, step?: string) {
+  const t = words((JSON.parse(site.settings) as Settings).language)
+  if (!step) return (await startGoogle(request, env, url, safeNext(url.searchParams.get('next')))) ?? loginPage(env, site, url, t.busy)
+  const result = await finishGoogle(request, env, url, site.id)
+  if ('problem' in result) {
+    const problems = { busy: t.busy, cancelled: t.googleFailed, failed: t.googleFailed, taken: t.googleTaken, unverified: t.googleUnverified }
+    const answer = loginPage(env, site, url, problems[result.problem])
+    answer.headers.append('Set-Cookie', endGoogleCookie(url))
+    return answer
+  }
+  const headers = new Headers({ 'Cache-Control': 'no-store', Location: `${url.origin}${safeNext(result.next)}` })
+  headers.append('Set-Cookie', await startSession(env, url, result.customerId))
+  headers.append('Set-Cookie', endGoogleCookie(url))
+  return new Response(null, { headers, status: 303 })
+}
+
 /** Handles the customer account pages. They exist only when the site turns accounts on. */
 export async function handleAccount(request: Request, env: Env, url: URL, site: SiteRow, parts: string[]) {
   if (!(JSON.parse(site.settings) as Settings).accounts) return notFound()
   const post = request.method === 'POST'
   if (parts[0] === 'reset' && parts.length === 2 && /^[0-9a-f]{64}$/.test(parts[1])) return resetPassword(request, env, url, site, parts[1])
+  if (parts[0] === 'login' && parts[1] === 'google' && (parts.length === 2 || (parts.length === 3 && parts[2] === 'callback')) && !post && canUseGoogle(env)) {
+    if (await getCustomer(request, env, site.id)) return see(url, '/account')
+    return googleLogin(request, env, url, site, parts[2])
+  }
   if (parts.length !== 1) return notFound()
 
   if (parts[0] === 'logout') {
@@ -219,7 +245,7 @@ export async function handleAccount(request: Request, env: Env, url: URL, site: 
   if (parts[0] === 'account') return customer ? accountPage(env, site, url, customer) : see(url, '/login?next=/account')
   if (customer && !post) return see(url, '/account')
   if (parts[0] === 'login') return post ? login(request, env, url, site) : loginPage(env, site, url)
-  if (parts[0] === 'signup') return post ? signup(request, env, url, site) : signupPage(site, url)
+  if (parts[0] === 'signup') return post ? signup(request, env, url, site) : signupPage(env, site, url)
   // Asking for a reset email only exists while the site can send one.
   if (parts[0] === 'reset' && canSendEmail(env, JSON.parse(site.settings) as Settings)) return post ? askReset(request, env, url, site) : askResetPage(site, url)
   return notFound()

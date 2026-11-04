@@ -68,7 +68,7 @@ Common recipes:
 - Member directory: read members, write staff.
 - Public reviews by members: read public, write members, with email staffOnly. Only publish real reviews from real people.
 
-Members, own and login prompts need update_site accounts true. Default to the tightest rule that works, and tell the owner in plain words who can see what. Never store passwords, card numbers, ID numbers or health data in tables.`,
+Members, own and login prompts need update_site accounts true. Customers who log in with Google, once the owner has set it up as the limits guide explains, get the same member role and follow the same rules. Default to the tightest rule that works, and tell the owner in plain words who can see what. Never store passwords, card numbers, ID numbers or health data in tables.`,
   screens: `# Pages and screens
 - records block: lists a table as cards, respecting access. Choose fields with fields, cap it with limit, and set allowDelete true so people can remove their own records.
 - record-form block: adds a record, with inputs built from the table. Use fields to choose which to show. It asks people to log in when the table requires it.
@@ -159,7 +159,7 @@ Tell the owner plainly what you could not test, such as real card payments or he
 - 50 tables per site, 50,000 records per table, 20 KB per record. Filtering large tables reads many rows, so show short lists.
 - The owner can download all content and data from the System page, and move the site to WordPress from the Move to WordPress page. Their code is in their GitHub and their database in their Cloudflare account.
 - Email needs the owner's own Resend account. Resend's free plan allows 100 emails a day and 3,000 a month. The owner verifies a domain in Resend, adds the RESEND_API_KEY secret in Cloudflare, and the sender address and their own address go in with update_site emailFrom and notifyEmail. Then customers can ask for a password reset email on the login page and get an order confirmation with their private order link, and the owner gets an email for each new order, form entry and record visitors add, up to 60 an hour. Emails go once, with no retry. Without email, a forgotten password needs a reset link from the back office. No automatic bank transfer checks. No built-in logic beyond tables, rules, webhooks and sandboxed custom code. Anything else means a developer changing the code in the owner's GitHub repository, and an update replaces such changes, though they stay in GitHub history.
-- No Google or social login yet.
+- Log in with Google is optional and needs the owner's own Google OAuth client. The owner creates it in Google Cloud Console, pastes the redirect address shown on the System page, and adds the GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET secrets in Cloudflare. Then, while accounts are on, the login and sign-up pages show Continue with Google. A Google login with the email of an existing account opens that account, and a new email gets a new account without a password, which the customer can add later with a reset link. Google's own account screens are in Google's words. No other social logins, and Google login works on the website only, not through the API.
 - Claude can't create secret keys, change Cloudflare secrets, or connect a domain. The owner does those.`,
 }
 
