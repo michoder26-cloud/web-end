@@ -2,7 +2,7 @@ import type { Customer, Env } from './types'
 
 // The parts of the back office the owner can open to staff, one by one. Settings, Connect, System, Updates,
 // Move here, WordPress, table fields, customer accounts and the owner's own link are never on this list.
-export const staffAreas = ['orders', 'products', 'pages', 'publish', 'data', 'messages', 'customers', 'stats'] as const
+export const staffAreas = ['orders', 'products', 'pages', 'publish', 'data', 'messages', 'customers', 'stats', 'news'] as const
 export type StaffArea = (typeof staffAreas)[number]
 export type StaffMember = Customer & { permissions: StaffArea[] }
 

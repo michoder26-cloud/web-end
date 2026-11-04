@@ -33,9 +33,10 @@ Claude asks a few short questions about your business, builds the pages and desi
 - **Your data can leave with you:** download all your content and data in one file at any time
 - **Notifications:** get an email for each new order, form entry and booking through your own Resend account, get them in Discord, Slack or Telegram for free, or send signed webhooks to other services
 - **Automations:** "when this happens, do that" rules that run on your server without code, such as a booking confirmation email, a booking number, a seat taken from a class, a status workflow or a low-stock alert, and schedules such as a summary every evening or a reminder the day before a booking. Claude sets them up from what you say, and you can see them, switch them off and read what they did in the back office.
+- **News by email:** send news to customers who agreed to get it, with a box at sign-up and checkout that starts unticked, newsletter forms, confirmation by email first, and a one-click unsubscribe link in every email. Write it yourself or with Claude, preview it, send yourself a test, then send. It goes out in batches inside Resend's free daily limit.
 - **Email:** order confirmations with the customer's private order link, an email when an order is paid, shipped, done or cancelled, and password reset emails, in your site's language when it's English or Thai
 - **Starters:** five complete sample sites in English and Thai, ready in one click from the back office or through Claude: a café or restaurant, an online shop, classes and bookings with booking numbers, services or coaching, and a portfolio. Samples are labelled as samples, with no made-up reviews, figures, addresses or phone numbers.
-- **Build guides for Claude:** planning, data design, access rules, screens, design, copy, shop, publishing, Wix, staff, automations and launch checks, built in, so there's nothing extra to install
+- **Build guides for Claude:** planning, data design, access rules, screens, design, copy, shop, publishing, Wix, staff, automations, news by email and launch checks, built in, so there's nothing extra to install
 - **Visitor statistics without tracking:** visitors, page views, top pages, sites that sent visitors, countries, devices, and orders, messages and bookings with a conversion rate, on a Statistics page in the back office, or ask Claude "how is my site doing?". No cookies, no scripts and no cookie banner. [How it works](#visitor-statistics-and-privacy)
 - **System page:** hosting, version, publishing, database use, login, payments, email and connections in one place
 - **Shop:** product pages, categories, sale prices, sizes and colours, stock that can't oversell, a cart, free delivery thresholds, private order links and order status. Prices are always set on the server.
@@ -62,7 +63,9 @@ Nobody hosts your site but you. There's no central server, and web-end never see
 ## What it can't do yet
 
 - Send email without an email account of your own. Emails go through your own Resend account, which you set up once, as shown below. Until then there are no emails, and if a customer forgets a password, you make a reset link in the back office and send it yourself.
-- Send newsletters, or email many customers at once. Customers get an email when their order is placed and when its status changes, and the emails your automations send, such as a reminder before their booking, but nothing else.
+- Send news to people who didn't agree to get it, or to a list you bought or copied. News goes only to people who signed up and confirmed by email, as shown below.
+- Send a lot of news fast on Resend's free plan. It allows 100 emails a day, so news goes out at 90 a day by default: 340 people take four days. A paid Resend plan lets you raise the limit.
+- Design news emails freely. They're plain text with paragraphs, links, one image and one button, with no templates, scheduling for later, open tracking or groups of subscribers.
 - Give staff finer access than whole areas, such as one table or only some orders, or show staff the full history of who changed what outside orders
 - Check bank transfers or PromptPay payments automatically, or take payment slips. The PromptPay QR code fills in the amount for the customer, but nothing tells web-end the money arrived. You check each payment in your banking app and confirm it in the back office.
 - Create product photos. Upload your own, or use images you have the right to use.
@@ -95,6 +98,7 @@ What you can give, one by one:
 - **Messages and bookings** from your forms
 - **Customers:** see the list of names and emails, nothing more
 - **Statistics:** visitors, pages, referring sites, countries, devices and conversions
+- **News:** write news email drafts and see their preview. Only you send them, send tests, and see who is subscribed.
 
 Settings, Connect, Automations, System, Updates, Move here, WordPress, the full download of your data, customer accounts, staff access and your private links always stay yours alone. Every page and every change is checked on the server, not just hidden from the menu, and a change must come from a page of your own site. Press **Remove staff access** and it stops at once, even if they're logged in. Making them staff again starts with nothing ticked.
 
@@ -200,6 +204,26 @@ You need your own domain, such as `your-shop.com`, because Resend only sends fro
 6. Open **System** and press **Send me a test email**.
 
 If only part of this is done, **System** and Claude's site check tell you what's missing. Emails pass through Resend, so their terms apply to them. web-end itself still never sees your data. Each email is sent once, with no retry, and you get at most 60 notices an hour, so a flood of spam can't use up your allowance. This has been tested against a stand-in for Resend, but not yet with a real Resend account, so send a test email and place a test order before you rely on it.
+
+## Sending news to your customers
+
+Open **News** in your back office, or ask Claude: "Write a news email about our new menu." It needs email set up with Resend, as shown above.
+
+Who gets news: only people who agreed, which Thai law (PDPA) and European law (GDPR) both expect.
+
+- **A box at sign-up and checkout.** Tick **Ask at sign-up and checkout** on the News page, or ask Claude. The box starts unticked.
+- **A newsletter form.** Claude can add an unticked box to any form, such as a booking form, or make a form that's only a newsletter sign-up.
+- **People who agreed elsewhere,** such as on a sign-up sheet at your shop. Add them on the News page, tick that each person agreed, and write how and when. Never buy, borrow or copy a list.
+
+Each person gets an email to confirm, and nothing else until they do. The News page shows how and when each person agreed and confirmed, and you can remove someone or download everyone as a spreadsheet file. Every news email has a one-click unsubscribe link, plus the headers that put an unsubscribe button in Gmail and other mail apps. Unsubscribing needs no login and works at once. Someone who unsubscribed is never added back unless they sign up again themselves.
+
+Sending:
+
+1. Write a subject and your text. A blank line starts a new paragraph. Add a link like `[our new menu](/menu)`, one photo you uploaded, and one button if you like.
+2. Look at the preview, and press **Send a test** to get it yourself.
+3. Tick **Send this to … people now** and press **Send**. Claude can send it too, but only after you clearly tell it to.
+
+About every 15 minutes, the next batch goes out, up to **Most news emails a day**, 90 by default. Resend's free plan allows 100 emails a day and 3,000 a month, including your order and password emails, so 90 leaves room for those. The News page shows progress, such as "120 of 340 sent, the rest go out tomorrow". Nobody gets the same news twice, and nobody who unsubscribed or never confirmed gets it at all. **Stop sending** stops the rest. An email Resend refuses isn't tried again. This has been tested against a stand-in for Resend, so send yourself a test before you rely on it.
 
 ## Logging in with Google
 

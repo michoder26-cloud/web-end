@@ -115,6 +115,21 @@ const en = {
   googleFailed: "Logging in with Google didn't work. Please try again.",
   googleTaken: 'The account with this email is linked to a different Google account. Log in with your email and password instead.',
   googleUnverified: "Your Google account's email isn't verified yet, so it can't be used here.",
+  newsAsk: 'Yes, email me news from {site}. I can unsubscribe at any time.',
+  newsAskShort: 'Yes, email me news. I can unsubscribe at any time.',
+  newsFormNote: 'We will email you a link to confirm. You can unsubscribe at any time.',
+  newsConfirmSubject: 'Please confirm: news from {site}',
+  newsConfirmBody: 'You asked to get news by email from {site}. Please confirm with the link below. Until you do, we send you nothing.',
+  newsConfirmIgnore: "If you didn't ask for this, ignore this email and you won't hear from us.",
+  newsConfirmButton: 'Yes, send me news',
+  newsConfirmTitle: 'Confirm your subscription',
+  newsConfirmPage: 'Press the button to start getting news from {site} at {email}.',
+  newsConfirmed: 'Thank you. You will get news from {site} at {email}. Every email has a link to unsubscribe.',
+  newsUnsubscribed: '{email} will get no more news from {site}. It worked at once, and you need to do nothing else.',
+  newsUnsubscribeTitle: 'Unsubscribed',
+  newsBadLink: 'This link is not valid. Please use the newest link from your email.',
+  newsWhy: 'You get this because you agreed to get news by email from {site}.',
+  newsUnsubscribe: 'Unsubscribe',
 }
 
 const th: typeof en = {
@@ -234,6 +249,21 @@ const th: typeof en = {
   googleFailed: 'เข้าสู่ระบบด้วย Google ไม่สำเร็จ กรุณาลองใหม่',
   googleTaken: 'บัญชีที่ใช้อีเมลนี้เชื่อมกับบัญชี Google อื่นอยู่แล้ว กรุณาเข้าสู่ระบบด้วยอีเมลและรหัสผ่านแทน',
   googleUnverified: 'อีเมลของบัญชี Google นี้ยังไม่ได้รับการยืนยัน จึงใช้ที่นี่ไม่ได้',
+  newsAsk: 'ใช่ ส่งข่าวสารจาก {site} ทางอีเมลให้ฉัน ยกเลิกได้ทุกเมื่อ',
+  newsAskShort: 'ใช่ ส่งข่าวสารทางอีเมลให้ฉัน ยกเลิกได้ทุกเมื่อ',
+  newsFormNote: 'เราจะส่งลิงก์ยืนยันไปที่อีเมลของคุณ ยกเลิกการรับข่าวสารได้ทุกเมื่อ',
+  newsConfirmSubject: 'กรุณายืนยัน: ข่าวสารจาก {site}',
+  newsConfirmBody: 'คุณขอรับข่าวสารทางอีเมลจาก {site} กรุณายืนยันด้วยลิงก์ด้านล่าง ระหว่างนี้เราจะยังไม่ส่งอะไรให้คุณ',
+  newsConfirmIgnore: 'ถ้าคุณไม่ได้ขอ ไม่ต้องทำอะไร แล้วเราจะไม่ส่งอีเมลหาคุณอีก',
+  newsConfirmButton: 'ใช่ ส่งข่าวสารให้ฉัน',
+  newsConfirmTitle: 'ยืนยันการรับข่าวสาร',
+  newsConfirmPage: 'กดปุ่มเพื่อเริ่มรับข่าวสารจาก {site} ที่ {email}',
+  newsConfirmed: 'ขอบคุณ คุณจะได้รับข่าวสารจาก {site} ที่ {email} ทุกอีเมลมีลิงก์สำหรับยกเลิก',
+  newsUnsubscribed: '{email} จะไม่ได้รับข่าวสารจาก {site} อีก มีผลทันที ไม่ต้องทำอะไรเพิ่ม',
+  newsUnsubscribeTitle: 'ยกเลิกการรับข่าวสารแล้ว',
+  newsBadLink: 'ลิงก์นี้ใช้ไม่ได้ กรุณาใช้ลิงก์ล่าสุดจากอีเมลของคุณ',
+  newsWhy: 'คุณได้รับอีเมลนี้เพราะตกลงรับข่าวสารทางอีเมลจาก {site}',
+  newsUnsubscribe: 'ยกเลิกการรับข่าวสาร',
 }
 
 export const words = (language?: string) => (language?.toLowerCase().startsWith('th') ? th : en)

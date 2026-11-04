@@ -9,6 +9,7 @@ import { canSendEmail } from './email'
 import { checklist, claudeLinkField, connectGuide, firstSteps, handleStarters, isStarter } from './first-steps'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { saveImage } from './items'
+import { handleNewsOffice } from './news-office'
 import { blockSchema, itemSchema, maxBlocksBytes, maxPagesPerSite, pageSlugSchema, settingsShape } from './mcp'
 import { officeText, officeWords } from './office-words'
 import type { OfficeWords } from './office-words'
@@ -42,7 +43,7 @@ export const staffDesk = (staff: StaffMember): Desk => ({ base: '/staff', code: 
 export const allows = (desk: Desk, area: StaffArea) => !desk.staff || desk.staff.permissions.includes(area)
 
 // The menu entries staff can see, with the area each one needs. Anything else in the menu is for the owner alone.
-const staffMenu: Record<string, StaffArea> = { '/customers': 'customers', '/data': 'data', '/items': 'products', '/media': 'products', '/orders': 'orders', '/pages': 'pages', '/publish': 'publish', '/stats': 'stats' }
+const staffMenu: Record<string, StaffArea> = { '/customers': 'customers', '/data': 'data', '/items': 'products', '/media': 'products', '/news': 'news', '/orders': 'orders', '/pages': 'pages', '/publish': 'publish', '/stats': 'stats' }
 
 // Staff addresses hold no secret, and their changes are checked by where they come from, which needs the browser to say so.
 const staffHeaders = { ...privateHeaders, 'Referrer-Policy': 'same-origin' }
@@ -83,7 +84,7 @@ export const office = (site: SiteRow, at: Desk | string, title: string, body: st
   const settings = JSON.parse(site.settings) as Settings
   const t = officeText(site)
   const base = `${escapeHtml(desk.base)}`
-  const links: [string, string][] = [['', t.nav.overview], ['/stats', t.nav.stats], ['/orders', t.nav.orders], ['/pages', t.nav.pages], ['/items', t.nav.products], ['/data', t.nav.data], ['/automations', t.automations.title], ['/media', t.nav.images], ['/customers', t.nav.customers], ['/publish', t.nav.publish], ['/connect', t.nav.connect], ['/move', t.nav.move], ['/wordpress', t.nav.wordpress], ['/settings', t.nav.settings], ['/system', t.nav.system], ['/updates', t.nav.updates]]
+  const links: [string, string][] = [['', t.nav.overview], ['/stats', t.nav.stats], ['/orders', t.nav.orders], ['/pages', t.nav.pages], ['/items', t.nav.products], ['/data', t.nav.data], ['/automations', t.automations.title], ['/media', t.nav.images], ['/customers', t.nav.customers], ['/news', t.news.title], ['/publish', t.nav.publish], ['/connect', t.nav.connect], ['/move', t.nav.move], ['/wordpress', t.nav.wordpress], ['/settings', t.nav.settings], ['/system', t.nav.system], ['/updates', t.nav.updates]]
   const shown = desk.staff ? links.filter(([path]) => !path || (staffMenu[path] && allows(desk, staffMenu[path]))) : links
   const who = desk.staff ? `<p class="cms-who">${t.staffLoggedIn(escapeHtml(desk.staff.name))}</p><form action="/logout" method="post"><button class="button button--small button--ghost" type="submit">${t.logOut}</button></form>` : ''
   return html(
@@ -509,6 +510,9 @@ async function saveSettings(request: Request, env: Env, url: URL, site: SiteRow,
   const draft: Record<string, unknown> = {
     allowedOrigins: (JSON.parse(site.settings) as Settings).allowedOrigins,
     githubRepo: (JSON.parse(site.settings) as Settings).githubRepo,
+    // Set on the News page, so this form keeps them as they are.
+    newsDailyLimit: (JSON.parse(site.settings) as Settings).newsDailyLimit,
+    newsletter: (JSON.parse(site.settings) as Settings).newsletter,
     accounts: form.get('accounts') === 'on',
     cart: form.get('cart') === 'on',
     cartMembersOnly: form.get('cartMembersOnly') === 'on',
@@ -573,6 +577,8 @@ export function staffMay(staff: StaffMember, post: boolean, area?: string, id?: 
   if (area === 'entry') return has('messages')
   if (area === 'customers') return has('customers') && !post
   if (area === 'stats') return has('stats') && !post
+  // Drafts and their preview only. Testing, sending, the people and their addresses stay with the owner.
+  if (area === 'news') return has('news') && (post ? id === 'campaign' && !extra && (!action || /^\d{1,12}$/.test(action)) : !id || (id === 'campaign' && /^\d{1,12}$/.test(action ?? '') && (!extra || extra === 'preview')))
   // Records only. Creating or deleting a table stays with the owner, and so does changing its fields, which the data area checks itself.
   if (area === 'data') return has('data') && !(post && (!id || (action === 'delete' && !extra)))
   return false
@@ -595,6 +601,7 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
   const platform = handlePlatform(request, env, url, site, desk, area, id, action, extra, saved)
   if (platform) return platform
   // Automations stay the owner's alone: staffMay refuses the area, and this checks again.
+  if (area === 'news') return handleNewsOffice(request, env, url, site, desk, id, action, extra, saved)
   if (area === 'automations' && !extra && !desk.staff) return handleAutomationsOffice(request, env, url, site, desk, id, action, saved)
 
   if (area === 'entry' && post && /^\d+$/.test(id ?? '') && !action) {

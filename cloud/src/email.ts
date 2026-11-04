@@ -36,12 +36,26 @@ export function emailProblems(env: Env, settings: Settings) {
   return problems
 }
 
+/** A run of text, or a link inside a paragraph. */
+export type Inline = string | { href: string; label: string }
+
 export type Message = {
   after?: string[]
+  /** One button, such as on a newsletter. */
+  button?: { href: string; label: string }
   facts?: [string, string][]
+  /** Small print at the end, such as why someone gets a newsletter, with one link, such as to unsubscribe. */
+  footer?: string[]
+  footerLink?: { href: string; label: string }
+  /** Extra email headers, such as List-Unsubscribe. */
+  headers?: Record<string, string>
   heading: string
+  /** One picture under the heading, from an absolute address. */
+  image?: { alt: string; src: string }
   lines?: string[]
   link?: { href: string; label: string }
+  /** Paragraphs that may hold links. Every part is escaped. */
+  paragraphs?: Inline[][]
   replyTo?: string
   subject: string
 }
@@ -57,21 +71,27 @@ const sender = (settings: Settings) => {
 /** One message as plain text and simple HTML. Everything people typed is escaped in the HTML version. */
 export function renderMessage(settings: Settings, message: Message) {
   const facts = (message.facts ?? []).filter(([, value]) => value !== '')
+  const inlineText = (parts: Inline[]) => parts.map((part) => (typeof part === 'string' ? part : part.label === part.href ? part.href : `${part.label} (${part.href})`)).join('')
   const text = [
     message.heading,
     ...(message.lines ?? []),
+    ...(message.paragraphs ?? []).map(inlineText),
+    message.button ? `${message.button.label}:\n${message.button.href}` : '',
     facts.map(([label, value]) => `${label}: ${value}`).join('\n'),
     message.link ? `${message.link.label}:\n${message.link.href}` : '',
     ...(message.after ?? []),
     `— ${settings.name}`,
+    message.footer || message.footerLink ? ['---', ...(message.footer ?? []), message.footerLink ? `${message.footerLink.label}: ${message.footerLink.href}` : ''].filter(Boolean).join('\n') : '',
   ]
     .filter(Boolean)
     .join('\n\n')
   const paragraph = (value: string) => `<p style="margin:0 0 16px">${escapeHtml(value).replaceAll('\n', '<br>')}</p>`
+  const inlineHtml = (parts: Inline[]) =>
+    `<p style="margin:0 0 16px">${parts.map((part) => (typeof part === 'string' ? escapeHtml(part).replaceAll('\n', '<br>') : `<a href="${escapeHtml(part.href)}" style="color:#1a56db">${escapeHtml(part.label)}</a>`)).join('')}</p>`
   const html = `<!doctype html><html lang="${escapeHtml(settings.language ?? 'en')}"><head><meta charset="utf-8"><title>${escapeHtml(message.subject)}</title></head><body style="margin:0;padding:24px 16px;background:#f6f6f4;color:#1b1b1b;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:16px;line-height:1.5"><div style="max-width:560px;margin:0 auto;background:#ffffff;padding:24px;border-radius:8px">
 <p style="margin:0 0 8px;color:#555555;font-size:14px">${escapeHtml(settings.name)}</p><h1 style="margin:0 0 16px;font-size:22px;line-height:1.3">${escapeHtml(message.heading)}</h1>
-${(message.lines ?? []).map(paragraph).join('')}${facts.length ? `<table style="border-collapse:collapse;margin:0 0 16px">${facts.map(([label, value]) => `<tr><td style="padding:4px 16px 4px 0;color:#555555;vertical-align:top">${escapeHtml(label)}</td><td style="padding:4px 0;vertical-align:top">${escapeHtml(value).replaceAll('\n', '<br>')}</td></tr>`).join('')}</table>` : ''}${message.link ? `<p style="margin:0 0 16px"><a href="${escapeHtml(message.link.href)}" style="color:#1a56db;font-weight:600">${escapeHtml(message.link.label)}</a></p><p style="margin:0 0 16px;color:#555555;font-size:13px;word-break:break-all">${escapeHtml(message.link.href)}</p>` : ''}${(message.after ?? []).map(paragraph).join('')}
-</div></body></html>`
+${message.image ? `<p style="margin:0 0 16px"><img alt="${escapeHtml(message.image.alt)}" src="${escapeHtml(message.image.src)}" style="display:block;max-width:100%;height:auto;border-radius:6px" width="512"></p>` : ''}${(message.lines ?? []).map(paragraph).join('')}${(message.paragraphs ?? []).map(inlineHtml).join('')}${message.button ? `<p style="margin:8px 0 24px"><a href="${escapeHtml(message.button.href)}" style="display:inline-block;background:#1b1b1b;color:#ffffff;padding:12px 20px;border-radius:6px;font-weight:600;text-decoration:none">${escapeHtml(message.button.label)}</a></p>` : ''}${facts.length ? `<table style="border-collapse:collapse;margin:0 0 16px">${facts.map(([label, value]) => `<tr><td style="padding:4px 16px 4px 0;color:#555555;vertical-align:top">${escapeHtml(label)}</td><td style="padding:4px 0;vertical-align:top">${escapeHtml(value).replaceAll('\n', '<br>')}</td></tr>`).join('')}</table>` : ''}${message.link ? `<p style="margin:0 0 16px"><a href="${escapeHtml(message.link.href)}" style="color:#1a56db;font-weight:600">${escapeHtml(message.link.label)}</a></p><p style="margin:0 0 16px;color:#555555;font-size:13px;word-break:break-all">${escapeHtml(message.link.href)}</p>` : ''}${(message.after ?? []).map(paragraph).join('')}
+</div>${message.footer || message.footerLink ? `<div style="max-width:560px;margin:16px auto 0;color:#666666;font-size:13px;line-height:1.5">${(message.footer ?? []).map((line) => `<p style="margin:0 0 8px">${escapeHtml(line)}</p>`).join('')}${message.footerLink ? `<p style="margin:0"><a href="${escapeHtml(message.footerLink.href)}" style="color:#444444">${escapeHtml(message.footerLink.label)}</a></p>` : ''}</div>` : ''}</body></html>`
   return { html, text }
 }
 
@@ -79,13 +99,13 @@ ${(message.lines ?? []).map(paragraph).join('')}${facts.length ? `<table style="
 const apiBase = (env: Env) => (env.WEBHOOK_ALLOW_HTTP === '1' && env.RESEND_API_BASE ? env.RESEND_API_BASE : resendApi)
 
 /** Sends one email through the owner's own Resend account. Never throws, so a failed email can't break an order or a form. */
-export async function sendEmail(env: Env, settings: Settings, to: string, message: Message): Promise<{ ok: boolean; problem?: string }> {
+export async function sendEmail(env: Env, settings: Settings, to: string, message: Message): Promise<{ ok: boolean; problem?: string; status?: number }> {
   if (!canSendEmail(env, settings)) return { ok: false, problem: 'Email is not set up yet.' }
   if (!isEmail(to)) return { ok: false, problem: 'That is not an email address.' }
   const { html, text } = renderMessage(settings, message)
   try {
     const response = await fetch(`${apiBase(env)}/emails`, {
-      body: JSON.stringify({ from: sender(settings), html, subject: oneLine(message.subject, 200), text, to: [to], ...(isEmail(message.replyTo) ? { reply_to: message.replyTo } : {}) }),
+      body: JSON.stringify({ from: sender(settings), html, subject: oneLine(message.subject, 200), text, to: [to], ...(isEmail(message.replyTo) ? { reply_to: message.replyTo } : {}), ...(message.headers ? { headers: Object.fromEntries(Object.entries(message.headers).map(([name, value]) => [name, oneLine(value, 2000)])) } : {}) }),
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
       method: 'POST',
       signal: AbortSignal.timeout(10_000),
@@ -94,7 +114,7 @@ export async function sendEmail(env: Env, settings: Settings, to: string, messag
     const answer = (await response.json().catch((): null => null)) as { message?: unknown } | null
     const reason = typeof answer?.message === 'string' ? answer.message.slice(0, 300) : ''
     console.error('Resend refused an email', response.status, reason)
-    return { ok: false, problem: `Resend answered ${response.status}${reason ? `: ${reason}` : ''}` }
+    return { ok: false, problem: `Resend answered ${response.status}${reason ? `: ${reason}` : ''}`, status: response.status }
   } catch (error) {
     console.error('An email could not be sent', error)
     return { ok: false, problem: 'Resend could not be reached.' }

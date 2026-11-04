@@ -109,6 +109,14 @@ const field = (item: FormField, query?: URLSearchParams) => {
   return `<label>${label}<input maxlength="500" name="${name}"${required} ${item.type === 'number' ? 'step="any" ' : ''}type="${inputTypes[item.type] ?? 'text'}"></label>`
 }
 
+/** A newsletter form says what sending it means. A form with the box asks, unticked, so only people who tick it get news. */
+const newsletterOption = (block: Block, language?: string) => {
+  const t = words(language)
+  if (block.newsletter === 'checkbox') return `<label class="check"><input name="_newsletter" type="checkbox"> ${escapeHtml(t.newsAskShort)}</label>`
+  if (block.newsletter === 'signup') return `<p class="form-note">${escapeHtml(t.newsFormNote)}</p>`
+  return ''
+}
+
 const renderers: Record<string, (block: Block, context: Context) => string> = {
   hero(block, { base, isMainHeading }) {
     const tag = isMainHeading ? 'h1' : 'h2'
@@ -250,7 +258,7 @@ const renderers: Record<string, (block: Block, context: Context) => string> = {
     return section(
       'form',
       block.tone,
-      `<div class="wrap info"><div>${block.heading ? `<h2>${escapeHtml(block.heading)}</h2>` : ''}${paragraphs(block.intro)}</div><div>${status}<form action="${escapeHtml(`${base}/form/${pageSlug}/${name}`)}" class="contact-form" method="post">${(block.fields ?? []).map((item: FormField) => field(item, query)).join('')}<label aria-hidden="true" class="trap">Leave this empty<input autocomplete="off" name="website" tabindex="-1"></label><button class="button" type="submit">${escapeHtml(block.buttonLabel || 'Send')}</button></form></div></div>`,
+      `<div class="wrap info"><div>${block.heading ? `<h2>${escapeHtml(block.heading)}</h2>` : ''}${paragraphs(block.intro)}</div><div>${status}<form action="${escapeHtml(`${base}/form/${pageSlug}/${name}`)}" class="contact-form" method="post">${(block.fields ?? []).map((item: FormField) => field(item, query)).join('')}${newsletterOption(block, language)}<label aria-hidden="true" class="trap">Leave this empty<input autocomplete="off" name="website" tabindex="-1"></label><button class="button" type="submit">${escapeHtml(block.buttonLabel || 'Send')}</button></form></div></div>`,
       `form-${name}`,
     )
   },

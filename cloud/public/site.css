@@ -1696,3 +1696,29 @@ details p:first-of-type {
     white-space: nowrap;
   }
 }
+
+/* News: the subscriber list in the back office, and the note under a newsletter form. */
+.cms-table {
+  overflow-x: auto;
+  margin: 0 0 1.5rem;
+}
+.cms-table table {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  min-width: 640px;
+  width: 100%;
+}
+.cms-table th,
+.cms-table td {
+  border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  padding: 0.5rem 0.75rem 0.5rem 0;
+  text-align: left;
+  vertical-align: top;
+}
+.cms-table td:first-child {
+  overflow-wrap: anywhere;
+}
+.form-note {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}

@@ -3,6 +3,7 @@ import { canSendEmail, isEmail, later, sendEmail, tellOwner } from './email'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { getProduct, getProducts, isAvailable } from './items'
 import { formatMoney, parsePrice } from './money'
+import { addSubscriber } from './news'
 import { getSite } from './owner'
 import { promptPayAmountOk, promptPayPayload, readPromptPayId } from './promptpay'
 import { qrSvg } from './qr'
@@ -189,6 +190,7 @@ ${totals(t, money, priced.subtotal, priced.shipping, priced.total)}
 <label>${canSendEmail(env, settings) ? t.emailForOrder : t.emailOptional}<input autocomplete="email" maxlength="254" name="email" type="email" value="${escapeHtml(values.email ?? customer?.email)}"></label>
 <label>${t.address}<textarea autocomplete="street-address" maxlength="1000" name="address" required rows="3">${escapeHtml(values.address)}</textarea></label>
 <label>${t.note}<textarea maxlength="1000" name="note" rows="2">${escapeHtml(values.note)}</textarea></label>
+${settings.newsletter ? `<label class="check"><input${values.newsletter === 'on' ? ' checked' : ''} name="newsletter" type="checkbox"> ${escapeHtml(t.newsAsk.replace('{site}', settings.name))}</label>` : ''}
 <fieldset class="cart-payment"><legend>${t.payment}</legend>${choices.map((choice) => `<label class="check"><input${choice === payment ? ' checked' : ''} name="payment" required type="radio" value="${choice}"> ${paymentName(t, choice)}</label>`).join('')}</fieldset>
 <label aria-hidden="true" class="trap">Leave this empty<input autocomplete="off" name="website" tabindex="-1"></label>
 <button class="button" type="submit">${t.placeOrder}</button></form>`,
@@ -302,12 +304,15 @@ async function placeOrder(request: Request, env: Env, url: URL, site: SiteRow, c
   // Bots fill in the hidden field. Send them away and keep nothing.
   if (form.get('website')) return see(url, '/')
   const values = Object.fromEntries(['name', 'phone', 'email', 'address', 'note', 'payment'].map((key) => [key, String(form.get(key) ?? '').trim()])) as OrderValues
+  const newsletter = settings.newsletter && form.get('newsletter') === 'on' ? 'on' : ''
   const placed = await submitOrder(request, env, site, readCart(request), values, customer)
-  if (placed.problem === 'details') return checkoutPage(request, env, url, site, customer, t.checkDetails, values)
-  if (placed.problem === 'busy') return checkoutPage(request, env, url, site, customer, t.busy, values)
+  if (placed.problem === 'details') return checkoutPage(request, env, url, site, customer, t.checkDetails, { ...values, newsletter })
+  if (placed.problem === 'busy') return checkoutPage(request, env, url, site, customer, t.busy, { ...values, newsletter })
   if (placed.problem === 'changed') return see(url, '/cart?changed=1', cleanCookie(url, placed.lines as Line[]))
   if (placed.problem === 'stock') return see(url, '/cart?changed=1')
   if (!placed.order) return see(url, '/cart')
+  // Only when they ticked the box themselves. It starts unticked, and they still confirm by email.
+  if (newsletter && placed.order.email) await addSubscriber(env, site, url.origin, { customerId: customer?.id ?? null, email: placed.order.email, name: placed.order.name, source: 'checkout' })
   const orderPath = `/order/${placed.token}`
   const empty = cartCookie(url, new Map())
   if (values.payment !== 'card') return see(url, `${orderPath}?new=1`, empty)

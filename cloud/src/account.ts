@@ -3,6 +3,7 @@ import { canSendEmail, isEmail, later, sendEmail } from './email'
 import { canUseGoogle, endGoogleCookie, finishGoogle, startGoogle } from './google'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { entryFields } from './owner'
+import { addSubscriber } from './news'
 import { renderLayout } from './render'
 import { orderDetails, orderLines, orderNumber, paymentName } from './shop'
 import { words } from './text'
@@ -51,7 +52,8 @@ ${canSendEmail(env, settings) ? `<p class="account__alt"><a href="/reset">${t.fo
 }
 
 function signupPage(env: Env, site: SiteRow, url: URL, error?: string) {
-  const t = words((JSON.parse(site.settings) as Settings).language)
+  const settings = JSON.parse(site.settings) as Settings
+  const t = words(settings.language)
   const next = safeNext(url.searchParams.get('next'))
   return page(
     site,
@@ -62,7 +64,7 @@ function signupPage(env: Env, site: SiteRow, url: URL, error?: string) {
 <label>${t.name}<input autocomplete="name" maxlength="120" name="name" required></label>
 <label>${t.email}<input autocomplete="email" maxlength="254" name="email" required type="email"></label>
 <label>${t.password}<input autocomplete="new-password" maxlength="200" minlength="8" name="password" required type="password"></label>
-<label aria-hidden="true" class="trap">Leave this empty<input autocomplete="off" name="website" tabindex="-1"></label>
+${settings.newsletter ? `<label class="check"><input name="newsletter" type="checkbox"> ${escapeHtml(t.newsAsk.replace('{site}', settings.name))}</label>` : ''}<label aria-hidden="true" class="trap">Leave this empty<input autocomplete="off" name="website" tabindex="-1"></label>
 <button class="button" type="submit">${t.signUp}</button></form>
 <p class="account__alt">${t.haveAccount} <a href="/login?next=${encodeURIComponent(next)}">${t.logIn}</a></p>`,
   )
@@ -126,6 +128,8 @@ async function signup(request: Request, env: Env, url: URL, site: SiteRow) {
   if (!form || form.get('website')) return see(url, '/')
   const created = await registerCustomer(env, site.id, { email: String(form.get('email') ?? ''), name: String(form.get('name') ?? ''), password: String(form.get('password') ?? '') })
   if (!created.id) return signupPage(env, site, url, created.problem === 'password' ? t.badPassword : t.badEmail)
+  // Only when they ticked the box themselves. It starts unticked, and they still confirm by email.
+  if ((JSON.parse(site.settings) as Settings).newsletter && form.get('newsletter') === 'on') await addSubscriber(env, site, url.origin, { customerId: created.id, email: String(form.get('email') ?? ''), name: String(form.get('name') ?? ''), source: 'signup' })
   return see(url, safeNext(form.get('next')), await startSession(env, url, created.id))
 }
 

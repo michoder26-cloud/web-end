@@ -13,6 +13,7 @@ import { guidedStart, noteClaude, notePhone } from './first-steps'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { loadItems, showImage } from './items'
 import { createMcpServer } from './mcp'
+import { addSubscriber, handleNewsLink, runNews } from './news'
 import { followRedirect } from './moving'
 import { browserWords, officeText } from './office-words'
 import { claimSite, getSite, isOwner, setupPage, shell } from './owner'
@@ -132,6 +133,13 @@ async function receiveForm(request: Request, env: Env, url: URL, site: SiteRow, 
     .first<{ created_at: string; id: number }>()
   await countConversion(env, site, 'entry')
   await runAutomations(env, site.id, 'entry.created', { form: formName, page: pageSlug, id: entry?.id, created_at: entry?.created_at, customer_id: customer?.id ?? null, data })
+  // A newsletter form adds the person who sent it, or who ticked its box. Never anyone else: they still confirm by email.
+  if (block.newsletter === 'signup' || (block.newsletter === 'checkbox' && form.get('_newsletter') === 'on')) {
+    const fields = block.fields as FormField[]
+    const email = fields.filter((field) => field.type === 'email').map((field) => data[field.name]).find((value) => typeof value === 'string' && value)
+    const name = fields.filter((field) => field.type === 'text').map((field) => data[field.name]).find((value) => typeof value === 'string' && value)
+    if (typeof email === 'string') await addSubscriber(env, site, url.origin, { email, name: typeof name === 'string' ? name : (customer?.name ?? ''), source: 'form', detail: `${pageSlug}/${formName}`, customerId: customer?.id ?? null })
+  }
   await tellOwnerAboutEntry(env, { fields: block.fields as FormField[], heading: block.heading, name: formName }, data)
   return back('sent')
 }
@@ -188,7 +196,7 @@ async function answer(request: Request, env: Env): Promise<Response> {
     const site = liveSite(working)
     if (url.pathname === '/setup') return see(url, '/')
     if (url.pathname === '/robots.txt') {
-      return new Response(`User-agent: *\nDisallow: /owner/\nDisallow: /staff\nDisallow: /mcp/\nDisallow: /api/\nDisallow: /data/\nDisallow: /frame/\nDisallow: /account\nDisallow: /cart\nDisallow: /checkout\nDisallow: /order/\nDisallow: /login\nDisallow: /signup\nDisallow: /reset/\nSitemap: ${url.origin}/sitemap.xml\n`, { headers: { 'Content-Type': 'text/plain' } })
+      return new Response(`User-agent: *\nDisallow: /owner/\nDisallow: /staff\nDisallow: /mcp/\nDisallow: /api/\nDisallow: /data/\nDisallow: /frame/\nDisallow: /account\nDisallow: /cart\nDisallow: /checkout\nDisallow: /order/\nDisallow: /login\nDisallow: /signup\nDisallow: /reset/\nDisallow: /newsletter/\nSitemap: ${url.origin}/sitemap.xml\n`, { headers: { 'Content-Type': 'text/plain' } })
     }
     if (url.pathname === '/sitemap.xml') return await sitemap(env, url, site)
 
@@ -222,6 +230,8 @@ async function answer(request: Request, env: Env): Promise<Response> {
       return await receiveRecord(request, env, url, site, { admin: false, customer: customer ?? null }, parts[1], parts[2] ? Number(parts[2]) : undefined)
     }
 
+    // Confirm and unsubscribe links. Four parts long, so statistics never count them as page views.
+    if (parts[0] === 'newsletter' && parts.length === 4 && (request.method === 'GET' || request.method === 'POST')) return await handleNewsLink(request, env, url, site, parts)
     if (['account', 'login', 'logout', 'reset', 'signup'].includes(parts[0])) return await handleAccount(request, env, url, site, parts)
     if (['cart', 'checkout', 'order', 'product'].includes(parts[0])) return await handleShop(request, env, url, site, parts)
     if (url.pathname === '/stripe/webhook' && request.method === 'POST') return await stripeWebhook(request, env, site)
@@ -254,6 +264,8 @@ export default {
     const env: Env = { ...plainEnv, defer: (work) => context.waitUntil(work) }
     const now = testClock(env, controller.cron) ?? Date.now()
     await runSchedules(env, now)
+    // News emails go out in batches, inside the owner's daily limit.
+    await runNews(env, now)
     // Once a day: forgets yesterday's visitor hashes and deletes statistics older than 400 days.
     await cleanStats(env, now).catch((error) => console.error('Statistics could not be cleaned up', error))
   },

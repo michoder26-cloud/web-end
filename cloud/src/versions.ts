@@ -5,8 +5,8 @@ const now = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"
 
 // These connect the site to the outside world, or only change the owner's back office and automations, so they work at once and a rollback must not undo them.
 // Settings that work at once and stay out of publishing and going back to a version.
-export const systemSettingKeys: readonly string[] = ['allowedOrigins', 'emailFrom', 'githubRepo', 'notifyEmail', 'officeLanguage', 'statistics', 'timeZone']
-const systemSettings = (settings: Settings) => ({ allowedOrigins: settings.allowedOrigins, emailFrom: settings.emailFrom, githubRepo: settings.githubRepo, notifyEmail: settings.notifyEmail, officeLanguage: settings.officeLanguage, statistics: settings.statistics, timeZone: settings.timeZone })
+export const systemSettingKeys: readonly string[] = ['allowedOrigins', 'emailFrom', 'githubRepo', 'newsDailyLimit', 'newsletter', 'notifyEmail', 'officeLanguage', 'statistics', 'timeZone']
+const systemSettings = (settings: Settings) => ({ allowedOrigins: settings.allowedOrigins, emailFrom: settings.emailFrom, githubRepo: settings.githubRepo, newsDailyLimit: settings.newsDailyLimit, newsletter: settings.newsletter, notifyEmail: settings.notifyEmail, officeLanguage: settings.officeLanguage, statistics: settings.statistics, timeZone: settings.timeZone })
 
 /** What visitors see. Once something is published they get that copy, and changes wait until the next publish. */
 export function liveSite(site: SiteRow): SiteRow {

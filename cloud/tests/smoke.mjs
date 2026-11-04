@@ -76,7 +76,7 @@ check((await rpc('/mcp/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd')).status === 404, 'M
 check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd`)).status === 404, 'the back office with a wrong link is refused')
 
 const { tools } = await client.listTools()
-check(tools.length === 43, 'lists the tools', tools.map((tool) => tool.name).join(','))
+check(tools.length === 48, 'lists the tools', tools.map((tool) => tool.name).join(','))
 check(stepDone(await (await fetch(`${base}/owner/${code}`)).text(), 'claude') === '1', 'connecting Claude ticks its step')
 check(client.getInstructions()?.includes('apply_starter') && tools.find((tool) => tool.name === 'apply_starter')?.description.includes('replacePages'), 'Claude knows about starters and when it may replace pages')
 check(client.getInstructions()?.includes('web team'), 'gives Claude its working method')
@@ -2586,6 +2586,246 @@ await call('update_site', { language: 'en' })
   } else {
     console.log(`skip  statistics retention: start the site with --test-scheduled --var WEBHOOK_ALLOW_HTTP:1 to check it${canTick ? '' : ' (no scheduled runs here)'}`)
   }
+}
+
+// News by email: consent first, confirmation by email, one-click unsubscribe, and batches inside a daily limit.
+// With NEWS_TEST=1, start the site with --test-scheduled --var WEBHOOK_ALLOW_HTTP:1 --var RESEND_API_KEY:re_test_fake
+// --var RESEND_API_BASE:http://localhost:8924, and this part runs a stand-in for Resend on port 8924, or on the email test's port with EMAIL_TEST=1.
+// Without it, the parts that need sending are skipped, and sending must be refused.
+{
+  const newsTest = process.env.NEWS_TEST === '1'
+  const newsMail = []
+  let newsServer = null
+  if (newsTest) {
+    const { createServer } = await import('node:http')
+    newsServer = createServer((request, response) => {
+      let body = ''
+      request.on('data', (part) => (body += part))
+      request.on('end', () => {
+        response.setHeader('Content-Type', 'application/json')
+        newsMail.push({ path: request.url, ...JSON.parse(body) })
+        response.end(JSON.stringify({ id: `news-${newsMail.length}` }))
+      })
+    })
+    // With EMAIL_TEST the site sends to the shared stand-in's port, which the email section has closed by now.
+    await new Promise((done) => newsServer.listen(process.env.EMAIL_TEST === '1' ? Number(process.env.EMAIL_TEST_PORT || 8823) : 8924, done))
+  }
+  const settle = () => new Promise((done) => setTimeout(done, 1500))
+  const mailTo = (address) => newsMail.filter((email) => email.to?.[0] === address)
+  let ip = 0
+  const fromVisitor = (path, values, cookie) => fetch(`${base}${path}`, { body: new URLSearchParams(values), headers: { 'CF-Connecting-IP': `10.77.0.${++ip}`, ...(cookie ? { Cookie: cookie } : {}) }, method: 'POST', redirect: 'manual' })
+  const subscribers = async () => (await call('list_subscribers', { all: true })).data
+  const person = async (email) => (await subscribers()).everyone.find((row) => row.email === email)
+  const newsOwner = `${owner}/news`
+
+  check((await client.listTools()).tools.filter((tool) => ['list_subscribers', 'save_campaign', 'preview_campaign', 'send_campaign', 'campaign_status'].includes(tool.name)).length === 5, 'Claude has the news tools')
+  check((await call('get_guide', { topic: 'newsletter' })).text.includes('Never buy') && client.getInstructions()?.includes('newsletter guide'), 'Claude has a newsletter guide with the consent rules')
+  if (newsTest) await call('update_site', { emailFrom: 'news@cafe.test', notifyEmail: 'owner@news.test' })
+  await call('update_site', { accounts: true, cart: true, payCod: true, newsletter: false })
+  const coffee = (await call('save_item', { collection: 'news-shop', title: 'News coffee', price: '100' })).data.id
+
+  // Consent at sign-up: no box unless the owner asks, and it starts unticked
+  check(!(await (await fetch(`${base}/signup`)).text()).includes('name="newsletter"'), 'sign-up asks nothing about news until the owner turns it on')
+  const turnedOn = await call('update_site', { newsletter: true })
+  check(turnedOn.data.live === true, 'asking for news works at once, without publishing')
+  const signupHtml = await (await fetch(`${base}/signup`)).text()
+  check(/<input name="newsletter" type="checkbox"> Yes, email me news from /.test(signupHtml), 'sign-up has a news box that starts unticked', signupHtml.match(/.{0,40}name="newsletter".{0,80}/)?.[0])
+  await fromVisitor('/signup', { email: 'nobox@news.test', name: 'No Box', password: 'password-123' })
+  check(!(await person('nobox@news.test')), 'signing up without ticking the box adds nobody')
+  await fromVisitor('/signup', { email: 'Ticked@News.test', name: 'Ticked', password: 'password-123', newsletter: 'on' })
+  const ticked = await person('ticked@news.test')
+  check(ticked?.status === 'pending' && ticked.source === 'signup' && Boolean(ticked.consented_at) && !ticked.confirmed_at, 'ticking the box at sign-up asks them to confirm, and keeps when and how they agreed', JSON.stringify(ticked))
+
+  // Consent at checkout
+  const cartFor = async () => ((await fromVisitor('/cart/add', { item: String(coffee) })).headers.get('set-cookie') ?? '').split(';')[0]
+  const checkoutHtml = await (await fetch(`${base}/checkout`, { headers: { Cookie: await cartFor() } })).text()
+  check(/<input name="newsletter" type="checkbox">/.test(checkoutHtml), 'checkout has a news box that starts unticked')
+  const buyer = { address: '1 News Road', name: 'Buyer', payment: 'cod', phone: '0812345678', note: '' }
+  await fromVisitor('/checkout', { ...buyer, email: 'buyer-nobox@news.test' }, await cartFor())
+  const boughtTicked = await fromVisitor('/checkout', { ...buyer, email: 'buyer@news.test', newsletter: 'on' }, await cartFor())
+  check(boughtTicked.status === 303 && !(await person('buyer-nobox@news.test')) && (await person('buyer@news.test'))?.source === 'checkout', 'only a buyer who ticks the box is asked to confirm', String(boughtTicked.status))
+
+  // Consent through forms
+  const newsForms = await call('save_page', {
+    slug: 'news-forms',
+    title: 'News forms',
+    description: 'A page with a newsletter sign-up and a booking form that asks about news, for testing.',
+    published: true,
+    blocks: [
+      { type: 'form', name: 'join', heading: 'Get our news', buttonLabel: 'Sign me up', newsletter: 'signup', fields: [{ name: 'name', label: 'Name', type: 'text' }, { name: 'email', label: 'Email', type: 'email', required: true }] },
+      { type: 'form', name: 'visit', heading: 'Book a visit', newsletter: 'checkbox', fields: [{ name: 'name', label: 'Name', type: 'text' }, { name: 'email', label: 'Email', type: 'email', required: true }] },
+    ],
+  })
+  check(!newsForms.isError, 'a page with newsletter forms saves', newsForms.text)
+  check((await call('save_page', { slug: 'news-bad', title: 'Bad', description: 'A newsletter form that has the wrong option, for testing.', published: false, blocks: [{ type: 'form', name: 'x', newsletter: 'yes', fields: [{ name: 'email', label: 'Email', type: 'email' }] }] })).isError, 'a newsletter form only takes checkbox or signup')
+  await call('publish_site', { note: 'news forms' })
+  const formsHtml = await (await fetch(`${base}/news-forms`)).text()
+  check(formsHtml.includes('<input name="_newsletter" type="checkbox"> Yes, email me news.') && formsHtml.includes('class="form-note">We will email you a link to confirm.'), 'a form can ask with an unticked box, or say it is a newsletter sign-up', formsHtml.match(/.{0,80}_newsletter.{0,80}/)?.[0])
+  await fromVisitor('/form/news-forms/visit', { name: 'Visitor', email: 'visit-nobox@news.test' })
+  await fromVisitor('/form/news-forms/visit', { name: 'Visitor <b>', email: 'visit@news.test', _newsletter: 'on' })
+  await fromVisitor('/form/news-forms/join', { name: '=HYPERLINK("http://evil")', email: 'join@news.test' })
+  const visit = await person('visit@news.test')
+  check(!(await person('visit-nobox@news.test')) && visit?.source === 'form' && visit.source_detail === 'news-forms/visit' && (await person('join@news.test'))?.status === 'pending', 'forms add only people who ticked the box or sent a sign-up form, and say which form', JSON.stringify(visit))
+
+  // Adding people who agreed elsewhere: only with the owner's confirmation and note
+  const imported = (values) => fetch(`${newsOwner}/import`, { body: new URLSearchParams(values), method: 'POST', redirect: 'manual' })
+  const noConsent = await (await imported({ people: 'paper1@news.test', note: 'Paper list' })).text()
+  check(noConsent.includes('role="alert"') && !(await person('paper1@news.test')), 'nobody is added without the owner confirming they agreed')
+  check((await (await imported({ people: 'paper1@news.test\nnot an address', note: 'Paper list', confirm: 'on' })).text()).includes('not email addresses') && !(await person('paper1@news.test')), 'a line that is not an address stops the import')
+  const importedHtml = await (await imported({ people: 'paper1@news.test, Paper One\nPaper Two <paper2@news.test>\npaper3@news.test\nticked@news.test', note: 'Sign-up sheet at the counter, May 2026', confirm: 'on' })).text()
+  const paper1 = await person('paper1@news.test')
+  check(importedHtml.includes('3 added. 1 were already') && paper1?.status === 'subscribed' && paper1.source === 'import' && paper1.source_detail === 'Sign-up sheet at the counter, May 2026' && (await person('ticked@news.test')).status === 'pending', 'imported people who agreed are kept with the owner\'s note, and people already there stay as they were', importedHtml.match(/role="status">[^<]*/)?.[0])
+
+  // Confirming by email (double opt-in), and bad links
+  const listed = (await call('list_subscribers', {})).data
+  check(listed.counts.subscribed === 3 && listed.counts.waitingToConfirm === 4 && listed.newest.length <= 10 && !('everyone' in listed), 'list_subscribers counts people and lists only the newest, unless asked for all', JSON.stringify(listed.counts))
+  check((await fetch(`${base}/newsletter/confirm/${ticked.id}/${'0'.repeat(32)}`)).status === 404 && (await fetch(`${base}/newsletter/unsubscribe/${paper1.id}/${'0'.repeat(32)}`, { method: 'POST' })).status === 404 && (await person('paper1@news.test')).status === 'subscribed', 'a link with a wrong signature does nothing')
+  if (newsTest) {
+    await settle()
+    const confirmMail = mailTo('ticked@news.test')[0]
+    const confirmLink = confirmMail?.text.match(/http:\/\/[^\s]+\/newsletter\/confirm\/\d+\/[0-9a-f]{32}/)?.[0]
+    check(Boolean(confirmLink) && confirmMail.subject.includes('Please confirm') && !mailTo('nobox@news.test').length && !mailTo('paper1@news.test').length, 'people who ticked the box get an email to confirm, and nobody else does', JSON.stringify(newsMail.map((mail) => [mail.to?.[0], mail.subject])))
+    const confirmPage = await (await fetch(confirmLink)).text()
+    check(confirmPage.includes('method="post"') && (await person('ticked@news.test')).status === 'pending', 'opening the confirm link shows a button, so a mail filter opening it confirms nothing')
+    const confirmed = await (await fetch(confirmLink, { method: 'POST' })).text()
+    check(confirmed.includes('You will get news') && Boolean((await person('ticked@news.test')).confirmed_at), 'pressing the button confirms them')
+    for (const address of ['buyer@news.test', 'visit@news.test', 'join@news.test']) {
+      // A buyer also gets their order confirmation, so look through every email to them.
+      const link = mailTo(address).map((mail) => mail.text.match(/http:\/\/[^\s]+\/newsletter\/confirm\/\d+\/[0-9a-f]{32}/)?.[0]).find(Boolean)
+      if (link) await fetch(link, { method: 'POST' })
+    }
+    check((await call('list_subscribers', {})).data.counts.subscribed === 7, 'everyone who confirmed is subscribed')
+    // visit-nobox never agreed, so it stays out. One person signs up and never confirms.
+    await fromVisitor('/form/news-forms/join', { email: 'never-confirms@news.test' })
+    await settle()
+  }
+
+  // Writing a campaign: escaped, with only safe links and the site's own image
+  check((await call('save_campaign', { subject: 'Hi', body: 'Text', imageUrl: '/media/999999', imageAlt: 'x' })).isError, 'a campaign image must be one the site uploaded')
+  check((await call('save_campaign', { subject: 'Hi', body: 'Text', buttonLabel: 'Go' })).isError, 'a button needs a link')
+  const draft = await call('save_campaign', { subject: 'New <b>menu</b> & more', body: 'Hello <script>alert(1)</script> friends.\n\nSee [the menu](/news-forms) or https://example.com/page.\n\n[bad](javascript:alert(1))', buttonLabel: 'Visit "us"', buttonHref: '/news-forms' })
+  const campaignId = draft.data.saved
+  check(!draft.isError && Boolean(campaignId), 'Claude can save a campaign as a draft', draft.text)
+  const previewed = await call('preview_campaign', { id: campaignId })
+  check(!previewed.isError && previewed.data.text.includes('the menu (http') && previewed.data.text.includes('[bad](javascript:alert(1))') && previewed.data.status === 'draft', 'preview_campaign shows the text with its links, and an unsafe link stays text', previewed.text.slice(0, 400))
+  const framed = await fetch(`${newsOwner}/campaign/${campaignId}/preview`)
+  const framedHtml = await framed.text()
+  check(framed.status === 200 && (framed.headers.get('content-security-policy') ?? '').startsWith('sandbox') && framedHtml.includes('New &lt;b&gt;menu&lt;/b&gt; &amp; more') && framedHtml.includes('Hello &lt;script&gt;alert(1)&lt;/script&gt;') && framedHtml.includes(`href="${base}/news-forms"`) && !framedHtml.includes('href="javascript') && framedHtml.includes('Visit &quot;us&quot;'), 'the back office preview escapes everything and only links where it is safe')
+  const campaignPage = await (await fetch(`${newsOwner}/campaign/${campaignId}`)).text()
+  check(campaignPage.includes(`src="/owner/${code}/news/campaign/${campaignId}/preview"`) && campaignPage.includes('sandbox'), 'the campaign page shows the preview in a sandboxed frame')
+  check((await call('send_campaign', { id: campaignId })).isError && (await call('send_campaign', { id: campaignId, ownerConfirmed: false })).isError, "send_campaign needs the owner's go-ahead")
+
+  if (!newsTest) {
+    const refusedSend = await call('send_campaign', { id: campaignId, ownerConfirmed: true })
+    check(refusedSend.isError && refusedSend.text.includes('Email is not set up') && (await call('campaign_status', { id: campaignId })).data.status === 'draft', 'send_campaign refuses while email is not set up')
+    check((await call('check_site')).data.problems.some((problem) => problem.includes('newsletter form, but email is not set up')), 'check_site says a newsletter form needs email to be set up')
+  }
+
+  // Sending: tests to the owner, then batches inside the daily limit, never twice, never to people who left or never confirmed
+  let campaignTwo = null
+  if (newsTest) {
+    const test = await call('preview_campaign', { id: campaignId, sendTest: true })
+    await settle()
+    const testMail = mailTo('owner@news.test').find((mail) => mail.subject.startsWith('[Test]'))
+    check(test.data.test?.sentTo === 'owner@news.test' && Boolean(testMail), 'the owner can send themselves a test', test.text.slice(0, 300))
+    check((await (await fetch(`${newsOwner}/settings`, { body: new URLSearchParams({ newsletter: 'on', limit: '0' }), method: 'POST' })).text()).includes('role="alert"'), 'a daily limit must be at least 1')
+    await fetch(`${newsOwner}/settings`, { body: new URLSearchParams({ newsletter: 'on', limit: '4' }), method: 'POST', redirect: 'manual' })
+    check((await call('list_subscribers', {})).data.dailyLimit === 4, 'the owner sets the daily limit on the News page')
+    // The settings form keeps the news settings it doesn't show.
+    const settingsForm = formValues(await (await fetch(`${owner}/settings`)).text())
+    await fetch(`${owner}/settings`, { body: settingsForm, method: 'POST', redirect: 'manual' })
+    const kept = (await call('get_site')).data.settings
+    check(kept.newsletter === true && kept.newsDailyLimit === 4, 'saving Settings keeps the news settings', JSON.stringify([kept.newsletter, kept.newsDailyLimit]))
+
+    const sent = await call('send_campaign', { id: campaignId, ownerConfirmed: true })
+    check(!sent.isError && sent.data.status === 'sending' && sent.data.total === 7 && sent.data.sent === 0, 'send_campaign starts sending to the 7 people who confirmed', sent.text.slice(0, 300))
+    check((await call('send_campaign', { id: campaignId, ownerConfirmed: true })).isError && (await call('save_campaign', { id: campaignId, subject: 'Changed', body: 'x' })).isError, 'a campaign sends once and can no longer change')
+
+    const newsTick = async (at) => (await fetch(`${base}/__scheduled?cron=${encodeURIComponent(`*/15 * * * * now=${at}`)}`)).text()
+    const campaignMail = (id) => newsMail.filter((mail) => mail.headers?.['List-Unsubscribe'] && mail.subject === (id === 1 ? 'New <b>menu</b> & more' : 'Second news'))
+    const canTick = (await newsTick('2030-01-01T00:05:00Z')).includes('Ran scheduled')
+    check(canTick, 'the scheduled run can be started for the test')
+    if (canTick) {
+      // Two runs at the same moment, on top of the first one, still send only the day's limit, and nobody twice.
+      await Promise.all([newsTick('2030-01-01T00:20:00Z'), newsTick('2030-01-01T00:20:00Z')])
+      const dayOne = campaignMail(1)
+      check(dayOne.length === 4 && new Set(dayOne.map((mail) => mail.to[0])).size === 4, 'the first day sends only the daily limit, each to a different person, even with overlapping runs', JSON.stringify(dayOne.map((mail) => mail.to[0])))
+      const status = (await call('campaign_status', { id: campaignId })).data
+      check(status.sent === 4 && status.total === 7 && status.says.startsWith('4 of 7 sent, the rest go out tomorrow'), 'campaign_status says how far it got and when the rest go', status.says)
+      const officeList = await (await fetch(newsOwner)).text()
+      check(officeList.includes('4 of 7 sent, the rest go out tomorrow.'), 'the News page shows the progress')
+      const first = dayOne[0]
+      const unsubscribeLink = first.headers['List-Unsubscribe'].match(/^<(http:\/\/[^>]+\/newsletter\/unsubscribe\/\d+\/[0-9a-f]{32})>$/)?.[1]
+      check(Boolean(unsubscribeLink) && first.headers['List-Unsubscribe-Post'] === 'List-Unsubscribe=One-Click' && first.html.includes(`href="${unsubscribeLink}"`) && first.text.includes(`Unsubscribe: ${unsubscribeLink}`) && first.html.includes('You get this because you agreed'), 'every news email has its own unsubscribe link and the one-click headers', JSON.stringify(first.headers))
+      check(first.html.includes('<h1 style="margin:0 0 16px;font-size:22px;line-height:1.3">New &lt;b&gt;menu&lt;/b&gt; &amp; more</h1>') && first.html.includes('Hello &lt;script&gt;') && !first.html.includes('<script') && first.from.endsWith('<news@cafe.test>'), 'what is sent is escaped, from the owner\'s address')
+      // One person leaves from the link in the email, another from their mail app's button.
+      const leaving = await fetch(unsubscribeLink)
+      check(leaving.status === 200 && (await leaving.text()).includes('will get no more news') && (await person(first.to[0])).status === 'unsubscribed', 'the unsubscribe link works at once, with no login')
+      const second = dayOne[1]
+      const oneClick = await fetch(second.headers['List-Unsubscribe'].slice(1, -1), { body: 'List-Unsubscribe=One-Click', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, method: 'POST' })
+      check(oneClick.status === 200 && (await person(second.to[0])).status === 'unsubscribed', "a mail app's one-click unsubscribe works")
+      // Importing someone who left never brings them back.
+      await imported({ people: first.to[0], note: 'Paper list', confirm: 'on' })
+      check((await person(first.to[0])).status === 'unsubscribed', 'an import never brings back someone who unsubscribed')
+      await newsTick('2030-01-01T23:50:00Z')
+      check(campaignMail(1).length === 4, 'nothing more goes out the same day')
+      await newsTick('2030-01-02T00:05:00Z')
+      check(campaignMail(1).length === 7, 'the next day sends the rest', String(campaignMail(1).length))
+      await newsTick('2030-01-03T00:05:00Z')
+      await newsTick('2030-01-03T00:20:00Z')
+      const allOne = campaignMail(1).map((mail) => mail.to[0])
+      const doneStatus = (await call('campaign_status', { id: campaignId })).data
+      check(allOne.length === 7 && new Set(allOne).size === 7 && doneStatus.status === 'sent' && doneStatus.sent === 7, 'the campaign finishes, with each person getting it once', JSON.stringify([allOne, doneStatus.status]))
+      check(!allOne.includes('never-confirms@news.test') && !allOne.includes('nobox@news.test') && !allOne.includes('visit-nobox@news.test'), 'people who never agreed or never confirmed get nothing')
+
+      // A second campaign skips the two who left
+      campaignTwo = (await call('save_campaign', { subject: 'Second news', body: 'More news.' })).data.saved
+      await call('send_campaign', { id: campaignTwo, ownerConfirmed: true })
+      await newsTick('2030-01-04T00:05:00Z')
+      await newsTick('2030-01-05T00:05:00Z')
+      await newsTick('2030-01-05T00:20:00Z')
+      const allTwo = campaignMail(2).map((mail) => mail.to[0])
+      check(allTwo.length === 5 && new Set(allTwo).size === 5 && !allTwo.includes(first.to[0]) && !allTwo.includes(second.to[0]) && (await call('campaign_status', { id: campaignTwo })).data.status === 'sent', 'people who unsubscribed get nothing more', JSON.stringify(allTwo))
+    }
+  }
+
+  // Staff with the news area write drafts, and nothing more
+  await fromVisitor('/signup', { email: 'writer@news.test', name: 'Writer', password: 'password-123' })
+  const writerId = (await call('list_customers', {})).data.find((row) => row.email === 'writer@news.test').id
+  const writerCookie = ((await fromVisitor('/login', { email: 'writer@news.test', password: 'password-123' })).headers.get('set-cookie') ?? '').split(';')[0]
+  const asWriter = (path, values) => fetch(`${base}${path}`, values ? { body: new URLSearchParams(values), headers: { Cookie: writerCookie, Origin: base }, method: 'POST', redirect: 'manual' } : { headers: { Cookie: writerCookie }, redirect: 'manual' })
+  await call('set_customer_role', { id: writerId, role: 'staff', areas: ['orders'] })
+  check((await asWriter('/staff/news')).status === 403, 'staff without the news area cannot open it')
+  await call('set_customer_role', { id: writerId, role: 'staff', areas: ['news'] })
+  const writerNews = await asWriter('/staff/news')
+  const writerHtml = await writerNews.text()
+  check(writerNews.status === 200 && writerHtml.includes('href="/staff/news"') && !writerHtml.includes('@news.test') && !writerHtml.includes('subscribers.csv') && !writerHtml.includes('/news/import'), 'staff with news see campaigns and counts, never addresses', writerHtml.match(/@news\.test.{0,40}/)?.[0])
+  const writerDraft = await asWriter('/staff/news/campaign', { subject: 'Staff draft', body: 'Written by staff.' })
+  const writerDraftId = Number((writerDraft.headers.get('location') ?? '').match(/campaign\/(\d+)/)?.[1])
+  check(writerDraft.status === 303 && writerDraftId > 0 && (await asWriter(`/staff/news/campaign/${writerDraftId}`, { subject: 'Staff draft, changed', body: 'Better.' })).status === 303 && (await call('campaign_status', { id: writerDraftId })).data.subject === 'Staff draft, changed', 'staff with news write and change drafts')
+  check((await asWriter(`/staff/news/campaign/${writerDraftId}/preview`)).status === 200, 'staff with news see the preview')
+  const blocked = []
+  for (const path of ['/staff/news/subscribers.csv']) if ((await asWriter(path)).status !== 403) blocked.push(path)
+  for (const [path, values] of [[`/staff/news/campaign/${writerDraftId}/send`, { confirm: 'on' }], [`/staff/news/campaign/${writerDraftId}/test`, {}], [`/staff/news/campaign/${writerDraftId}/delete`, { confirm: 'on' }], [`/staff/news/campaign/${writerDraftId}/stop`, { confirm: 'on' }], ['/staff/news/import', { people: 'staff@news.test', note: 'x', confirm: 'on' }], ['/staff/news/settings', { limit: '5000' }], [`/staff/news/subscriber/${paper1.id}/delete`, { confirm: 'on' }]]) if ((await asWriter(path, values)).status !== 403) blocked.push(path)
+  check(!blocked.length && (await call('campaign_status', { id: writerDraftId })).data.status === 'draft' && !(await person('staff@news.test')) && Boolean(await person('paper1@news.test')), 'staff cannot send, test, delete, import, change settings, remove people or download addresses', blocked.join(', '))
+  await call('set_customer_role', { id: writerId, role: 'member' })
+
+  // The owner's News page, in English and Thai, and taking it all with you
+  const newsHtml = await (await fetch(newsOwner)).text()
+  check(newsHtml.includes('>News</h1>') && newsHtml.includes('People who agreed') && newsHtml.includes('Sign-up sheet at the counter, May 2026') && newsHtml.includes('Box at sign-up') && newsHtml.includes('Visitor &lt;b&gt;') && newsHtml.includes(`href="/owner/${code}/news"`), 'the News page shows each person with how and when they agreed, escaped')
+  await call('update_site', { officeLanguage: 'th' })
+  const thaiNews = await (await fetch(newsOwner)).text()
+  check(thaiNews.includes('>ข่าวสาร</h1>') && thaiNews.includes('คนที่ตกลงรับข่าวสาร') && thaiNews.includes('ติ๊กช่องตอนสมัครสมาชิก'), 'the News page is in Thai for a Thai back office')
+  await call('update_site', { officeLanguage: 'en' })
+  const csv = await (await fetch(`${newsOwner}/subscribers.csv`)).text()
+  check(csv.includes('email,name,status,source') && csv.includes('paper1@news.test') && csv.includes(`'=HYPERLINK`), 'the owner can download everyone, safe to open in a spreadsheet')
+  const everything = await (await fetch(`${owner}/export.json`)).json()
+  check(everything.subscribers?.some((row) => row.email === 'paper1@news.test' && row.source_detail) && everything.campaigns?.some((row) => row.id === campaignId) && !JSON.stringify(everything).includes('email_hash') && !JSON.stringify(everything).includes('news_secret'), 'Download everything includes subscribers and campaigns, without hashes or secrets')
+  await fetch(`${newsOwner}/subscriber/${paper1.id}/delete`, { body: new URLSearchParams({ confirm: 'on' }), method: 'POST', redirect: 'manual' })
+  check(!(await person('paper1@news.test')), 'the owner can remove someone completely')
+  check((await call('delete_page', { slug: 'news-forms' })).isError === false, 'cleans up')
+  await call('update_site', { newsletter: false, cart: false })
+  if (newsServer) await new Promise((done) => newsServer.close(done))
 }
 
 if (loadCount) {

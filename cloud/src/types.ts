@@ -38,6 +38,8 @@ export type Settings = {
   language?: string
   name: string
   nav?: Nav[]
+  newsDailyLimit?: number
+  newsletter?: boolean
   notifyEmail?: string
   officeLanguage?: string
   payCard?: boolean
