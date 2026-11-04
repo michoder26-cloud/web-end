@@ -418,12 +418,13 @@ ${file('site.xml', 'WordPress file', `${plan.pages.length} pages, their photos a
 ${plan.products.length ? file('products.csv', 'WooCommerce products', `${plan.products.length} products with prices, sale prices, stock, categories, photos and options.`) : ''}
 ${plan.data.redirects.length ? file('redirects.csv', 'Old links', `${plan.data.redirects.length} old addresses, so links to your old site keep working.`) : ''}</article>
 <article class="card account__record"><h2>2. Bring them into WordPress</h2><ol>
-<li>Set up WordPress with your host.${plan.products.length ? ' Add the WooCommerce plugin for your products.' : ''}${plan.data.redirects.length ? ' Add the Redirection plugin for your old links.' : ''}</li>
+<li>Set up WordPress with your host.</li>
 <li>In WordPress, open <b>Tools</b>, <b>Import</b>, <b>WordPress</b>. Install the importer if it asks, then upload the WordPress file. Tick <b>Download and import file attachments</b> so your photos are copied.</li>
 <li>In <b>Settings</b>, <b>Reading</b>, choose <b>A static page</b> and pick <b>Home</b> as your homepage.</li>
 <li>Your menu arrives as <b>Main menu</b>. Choose it in your theme's menu or navigation settings.</li>
-${plan.products.length ? '<li>In <b>Products</b>, choose <b>Import</b> and upload the WooCommerce products file. Shop sections on your pages already show your WooCommerce products.</li>' : ''}
-${plan.data.redirects.length ? '<li>In <b>Tools</b>, <b>Redirection</b>, <b>Import/Export</b>, upload the old links file.</li>' : ''}
+${plan.products.length ? `<li>Now add the WooCommerce plugin. Adding it after the WordPress file lets it use your Shop page instead of making a second one. In <b>WooCommerce</b>, <b>Settings</b>, <b>General</b>, set the currency${plan.currency ? ` to <b>${escapeHtml(plan.currency)}</b>` : ''}.</li>
+<li>In <b>Products</b>, choose <b>Import</b> and upload the WooCommerce products file. Shop sections on your pages already show your WooCommerce products. A new WooCommerce shop shows visitors a Coming soon page until you choose <b>Live</b> in <b>WooCommerce</b>, <b>Settings</b>, <b>Site visibility</b>.</li>` : ''}
+${plan.data.redirects.length ? '<li>Add the Redirection plugin, open <b>Tools</b>, <b>Redirection</b> and finish its short setup. Then in <b>Import/Export</b>, upload the old links file.</li>' : ''}
 </ol><p>Keep this site online until WordPress has copied your photos. Your design comes from your WordPress theme, so pages look different there.</p></article>
 <article class="card account__record"><h2>3. What needs your attention</h2>${plan.todo.length ? `<ul>${plan.todo.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>` : '<p>Nothing. Everything on your pages has a place in WordPress.</p>'}</article>`,
   )

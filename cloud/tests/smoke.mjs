@@ -1063,6 +1063,24 @@ check(wooRows[0].startsWith('"Type","SKU","Name","Published"') && wooRows.some((
 check(wooRows.some((row) => row.startsWith('"variation",') && row.includes('"0","0"')), 'a sold out option stays sold out in WooCommerce')
 const redirectionFile = await (await fetch(`${owner}/wordpress/redirects.csv`)).text()
 check(redirectionFile.startsWith('"source","target","regex","code"') && redirectionFile.includes('"301"'), 'old links go to the Redirection plugin', redirectionFile)
+// Found by importing these files into a real WordPress with WooCommerce and Redirection.
+check(/<!-- wp:heading \{"anchor":"hours"\} -->\n<h2 id="hours">/.test(wpXml) && wpXml.includes('<h2 id="form-all">'), 'section anchors survive the move and converting to blocks', wpXml.match(/.{0,80}hours.{0,80}/)?.[0])
+check(wpXml.includes('[products limit="-1" columns="3" orderby="menu_order" order="ASC"') && wpXml.includes('[products limit="3" ') && / tag="catalog"\]/.test(wpXml), 'shop sections show all their products, in order, from their own collection', wpXml.match(/\[products[^\]]*\]/g)?.join(' '))
+await call('save_page', { slug: 'wp-photo', title: 'Photo', description: 'A page with an uploaded photo, used to test the WordPress file.', published: true, blocks: [{ type: 'split', body: 'B', imageUrl: `/media/${mediaId}`, imageAlt: 'A' }] })
+const photoXml = await (await fetch(`${owner}/wordpress/site.xml`)).text()
+const photoUrl = new RegExp(`<wp:attachment_url><!\\[CDATA\\[([^\\]]+/media/${mediaId}\\.png)\\]\\]></wp:attachment_url>`).exec(photoXml)?.[1]
+check(Boolean(photoUrl) && photoXml.includes(`<wp:meta_key><![CDATA[_wc_attachment_source]]></wp:meta_key><wp:meta_value><![CDATA[${photoUrl}]]></wp:meta_value>`) && photoXml.includes(`<img src="${photoUrl}" alt="A">`), 'WooCommerce reuses photos WordPress already copied', photoUrl)
+await call('delete_page', { slug: 'wp-photo' })
+check(wpPage.includes('set the currency to <b>THB</b>') && wpPage.indexOf('add the WooCommerce plugin') > wpPage.indexOf('upload the WordPress file') && wpPage.includes('Site visibility'), 'the steps add WooCommerce after the pages and say which currency to choose')
+const commaItem = (await call('save_item', { collection: 'catalog', title: 'Cup, large', price: '฿120', category: 'Cups, mugs', variants: [{ name: 'Red, matte' }, { name: 'Blue | gloss' }] })).data.id
+await call('save_redirects', { redirects: [{ from: '/old-shirt', to: `/product/${shirt}` }, { from: '/old-seats', to: '/seats' }] })
+const wooRowsAfter = (await (await fetch(`${owner}/wordpress/products.csv`)).text()).trim().split('\r\n')
+check(wooRowsAfter[0].includes('"Tags","Images","Position"') && wooRowsAfter.some((row) => row.includes('"Cups\\, mugs","catalog"') && row.includes('"Red\\, matte, Blue / gloss"')), 'commas in categories and options are kept, and collections become tags', wooRowsAfter.find((row) => row.includes('Cup, large')))
+const redirectionAfter = await (await fetch(`${owner}/wordpress/redirects.csv`)).text()
+check(redirectionAfter.includes('"/old-shirt","/?post_type=product&sentence=1&s=Shirt"') && redirectionAfter.includes('"/old-seats","/seats/"'), 'old links reach the same product and page in WordPress', redirectionAfter)
+await call('delete_item', { id: commaItem })
+await call('delete_redirect', { from: '/old-shirt' })
+await call('delete_redirect', { from: '/old-seats' })
 
 // Reading the old site
 check((await call('read_website_page', { url: 'https://example.test/', ownerConfirmed: false }).catch(() => ({ isError: true }))).isError, 'reading a site needs the owner to confirm it is theirs')

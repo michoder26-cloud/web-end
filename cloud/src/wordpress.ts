@@ -31,8 +31,9 @@ async function load(env: Env, site: SiteRow) {
 }
 
 /** Addresses that work on the WordPress side: photos keep loading from here until WordPress has copied them, and shop pages map to WooCommerce's. */
-function addresses(origin: string, media: { id: number; type: string }[]) {
+function addresses(origin: string, media: { id: number; type: string }[], products: ItemRow[]) {
   const typeOf = new Map(media.map((row) => [row.id, row.type]))
+  const itemById = new Map(products.map((item) => [item.id, item]))
   const photo = (value: unknown) => {
     if (typeof value !== 'string' || !value) return ''
     const own = /^\/media\/(\d+)$/.exec(value)
@@ -42,9 +43,20 @@ function addresses(origin: string, media: { id: number; type: string }[]) {
   const page = (value: unknown) => {
     if (typeof value !== 'string' || !value) return ''
     const path = value.split(/[?#]/)[0]
+    const rest = value.slice(path.length)
+    const product = /^\/product\/(\d+)$/.exec(path)
+    if (product) {
+      // WooCommerce picks its own product addresses, but a search with one result opens that product,
+      // so an exact search for the name reaches the same product without knowing its new address.
+      const item = itemById.get(Number(product[1]))
+      return item?.published ? `/?post_type=product&sentence=1&s=${encodeURIComponent(item.title)}` : '/shop/'
+    }
     if (/^\/product\//.test(path)) return '/shop/'
-    if (path === '/cart' || path === '/checkout') return `/${path.slice(1)}/`
-    if (['/account', '/login', '/signup'].includes(path)) return '/my-account/'
+    if (path === '/cart' || path === '/checkout') return `/${path.slice(1)}/${rest}`
+    if (['/account', '/login', '/signup'].includes(path) || path.startsWith('/order/')) return '/my-account/'
+    // WordPress page addresses end in a slash, and the home page is the site's front page.
+    const slug = /^\/([a-z0-9-]+)\/?$/.exec(path)?.[1]
+    if (slug) return `${slug === 'home' ? '/' : `/${slug}/`}${rest}`
     return value
   }
   return { page, photo }
@@ -59,10 +71,16 @@ const paragraphs = (text: unknown) =>
     .join('\n')
 
 /** Turns one page into plain HTML that the WordPress editor shows as a Classic block and can convert into blocks. Returns what it could not move. */
-function pageHtml(page: PageRow, items: ItemRow[], link: ReturnType<typeof addresses>) {
+function pageHtml(page: PageRow, items: ItemRow[], link: ReturnType<typeof addresses>, tagged: boolean) {
   const blocks = JSON.parse(page.blocks) as Block[]
   const todo: string[] = []
-  const h2 = (text: unknown) => (text ? `<h2>${e(text)}</h2>` : '')
+  // A section's heading carries its anchor, so links such as /#hours still jump to it. It goes in as a heading block,
+  // because converting classic HTML to blocks drops the id of a plain heading. Anchors only use a-z, 0-9, - and _.
+  const h2 = (text: unknown, id?: unknown) => {
+    if (!text) return ''
+    if (!id) return `<h2>${e(text)}</h2>`
+    return `<!-- wp:heading {"anchor":"${e(id)}"} -->\n<h2 id="${e(id)}">${e(text)}</h2>\n<!-- /wp:heading -->`
+  }
   const img = (url: unknown, alt: unknown, caption?: unknown) => {
     const src = link.photo(url)
     if (!src) return ''
@@ -100,7 +118,7 @@ function pageHtml(page: PageRow, items: ItemRow[], link: ReturnType<typeof addre
       case 'gallery':
         return [h2(block.heading), ...(block.images ?? []).map((image: any) => img(image.imageUrl, image.imageAlt, image.caption))].join('\n')
       case 'info':
-        return [h2(block.heading), ...(block.items ?? []).map((item: any) => `<p><strong>${e(item.label)}</strong><br>${e(item.value).replaceAll('\n', '<br>')}</p>`), button(block.buttonLabel, block.buttonHref)].join('\n')
+        return [h2(block.heading, block.id), ...(block.items ?? []).map((item: any) => `<p><strong>${e(item.label)}</strong><br>${e(item.value).replaceAll('\n', '<br>')}</p>`), button(block.buttonLabel, block.buttonHref)].join('\n')
       case 'faq':
         return [h2(block.heading), ...(block.items ?? []).map((item: any) => `<h3>${e(item.question)}</h3>\n${paragraphs(item.answer)}`)].join('\n')
       case 'links':
@@ -108,17 +126,21 @@ function pageHtml(page: PageRow, items: ItemRow[], link: ReturnType<typeof addre
       case 'cta':
         return [h2(block.heading), paragraphs(block.text), button(block.buttonLabel, block.buttonHref)].join('\n')
       case 'collection': {
-        const shown = items.filter((item) => item.collection === block.collection && item.published).slice(0, block.limit ?? 100)
-        if (shown.some((item) => parsePrice(item.price))) return [h2(block.heading), paragraphs(block.intro), `[products limit="${Number(block.limit) || 12}" columns="3"]`].join('\n')
-        return [h2(block.heading), paragraphs(block.intro), ...shown.map((item) => [`<h3>${e(item.title)}</h3>`, item.price ? `<p><strong>${e(item.price)}</strong></p>` : '', paragraphs(item.body), img(item.image_url, item.image_alt || item.title), button(item.link_label, item.link_href)].join('\n'))].join('\n')
+        const shown = items.filter((item) => item.collection === block.collection && item.published).slice(0, Number(block.limit) || undefined)
+        if (shown.some((item) => parsePrice(item.price))) {
+          // Like this section: all of its products unless it has a limit, in the same order, and only this collection when there are several.
+          const only = tagged ? ` tag="${e(block.collection)}"` : ''
+          return [h2(block.heading, block.id), paragraphs(block.intro), `[products limit="${Number(block.limit) || -1}" columns="3" orderby="menu_order" order="ASC"${only}]`].join('\n')
+        }
+        return [h2(block.heading, block.id), paragraphs(block.intro), ...shown.map((item) => [`<h3>${e(item.title)}</h3>`, item.price ? `<p><strong>${e(item.price)}</strong></p>` : '', paragraphs(item.body), img(item.image_url, item.image_alt || item.title), button(item.link_label, item.link_href)].join('\n'))].join('\n')
       }
       case 'form':
         todo.push(`The form ${named(block)} needs a form plugin, such as Contact Form 7 or WPForms. Its fields: ${(block.fields ?? []).map((field: any) => field.label).join(', ')}.`)
-        return h2(block.heading)
+        return h2(block.heading, `form-${block.name}`)
       case 'records':
       case 'record-form':
         todo.push(`${named(block)} uses the table "${block.table}". WordPress has no tables like this, so it needs a plugin, or keep this site as the backend and call its API.`)
-        return h2(block.heading)
+        return h2(block.heading, block.type === 'records' ? block.id || `record-${block.table}` : '')
       case 'html':
         todo.push(`${block.title ? `"${String(block.title)}"` : 'A custom code section'} was left out, because code made for a sandboxed frame can break a WordPress theme. Copy it into a Custom HTML block if you still need it.`)
         return ''
@@ -134,13 +156,23 @@ const shortTitle = (title: string, slug: string) => title.split(/\s+[|–—]\s+
 
 export async function wordpressPlan(env: Env, site: SiteRow, origin: string) {
   const data = await load(env, site)
-  const link = addresses(origin, data.media)
-  const pages = data.pages.map((page) => ({ ...pageHtml(page, data.items, link), page }))
   const products = data.items.filter((item) => parsePrice(item.price) || data.variantsOf.get(item.id)?.some((variant) => parsePrice(variant.price)))
+  const link = addresses(origin, data.media, products)
+  // WooCommerce has one list of products, so separate collections become tags that each shop section can show.
+  const tagged = new Set(products.map((item) => item.collection)).size > 1
+  const pages = data.pages.map((page) => ({ ...pageHtml(page, data.items, link, tagged), page }))
   const todo = pages.flatMap(({ page, todo }) => todo.map((line) => `Page "${page.slug}": ${line}`))
+  const shop = data.pages.find((page) => page.slug === 'shop')
+  if (shop && products.length && (JSON.parse(shop.blocks) as Block[]).some((block) => block.type !== 'collection')) {
+    todo.push('Page "shop": WooCommerce shows its own product list at /shop, so the other sections of this page won\'t show there. Move them to another page.')
+  }
   if (data.settings.accounts) todo.push("Customer passwords can't move to any other system. Customers make new accounts in WooCommerce.")
   if (data.settings.cart) todo.push('Orders stay here. Download them with Download everything on the System page before you close this site.')
-  return { data, link, pages, products, todo }
+  // WooCommerce starts in US dollars, so the owner needs to know which currency to choose.
+  const symbols: Record<string, string> = { '£': 'GBP', '¥': 'JPY', '฿': 'THB', '€': 'EUR' }
+  const first = products.map((item) => parsePrice(item.price)).find(Boolean)
+  const currency = data.settings.currency?.toUpperCase() || symbols[first?.prefix.trim() ?? ''] || (/บาท/.test(first?.suffix ?? '') ? 'THB' : '')
+  return { currency, data, link, pages, products, tagged, todo }
 }
 
 export async function wordpressXml(env: Env, site: SiteRow, origin: string) {
@@ -176,7 +208,8 @@ ${fields.extra ?? ''}
   const used = new Set([...pages.map(({ html }) => html).join(' ').matchAll(/\/media\/(\d+)\./g)].map((match) => Number(match[1])))
   const photos = data.media.filter((row) => used.has(row.id)).map((row) => {
     const url = link.photo(`/media/${row.id}`)
-    return item({ extra: `<wp:attachment_url>${cdata(url)}</wp:attachment_url>`, id: 10_000 + row.id, name: `photo-${row.id}`, status: 'inherit', title: row.name || `Photo ${row.id}`, type: 'attachment', url })
+    // WooCommerce's product importer looks for this before downloading, so a product photo that is also on a page isn't copied twice.
+    return item({ extra: `<wp:attachment_url>${cdata(url)}</wp:attachment_url>\n${meta('_wc_attachment_source', url)}`, id: 10_000 + row.id, name: `photo-${row.id}`, status: 'inherit', title: row.name || `Photo ${row.id}`, type: 'attachment', url })
   })
   const pageIds = new Map<string, number>()
   const pageItems = pages.map(({ html, page }, index) => {
@@ -223,8 +256,10 @@ const amount = (text: string) => {
 
 /** Products in the layout WooCommerce's product importer reads, with options as variations. */
 export async function woocommerceCsv(env: Env, site: SiteRow, origin: string) {
-  const { data, link, products } = await wordpressPlan(env, site, origin)
-  const header = ['Type', 'SKU', 'Name', 'Published', 'Short description', 'Description', 'In stock?', 'Stock', 'Regular price', 'Sale price', 'Categories', 'Images', 'Parent', 'Attribute 1 name', 'Attribute 1 value(s)', 'Attribute 1 visible', 'Attribute 1 global']
+  const { data, link, products, tagged } = await wordpressPlan(env, site, origin)
+  const header = ['Type', 'SKU', 'Name', 'Published', 'Short description', 'Description', 'In stock?', 'Stock', 'Regular price', 'Sale price', 'Categories', 'Tags', 'Images', 'Position', 'Parent', 'Attribute 1 name', 'Attribute 1 value(s)', 'Attribute 1 visible', 'Attribute 1 global']
+  // WooCommerce splits lists on commas unless they are written \, (so a backslash of its own is dropped), and keeps options apart with |.
+  const listed = (text: string) => text.replaceAll('\\', '').replaceAll(',', '\\,')
   // A former price is the regular price, and the price people pay is the sale price.
   const prices = (price: string, compare: string) => {
     const now = amount(price)
@@ -233,28 +268,29 @@ export async function woocommerceCsv(env: Env, site: SiteRow, origin: string) {
   }
   const stock = (value: null | number) => (value === null ? ['1', ''] : [value > 0 ? '1' : '0', String(value)])
   const rows: (number | string)[][] = [header]
-  for (const item of products) {
+  // Products keep the order they have here, as WooCommerce's custom order.
+  products.forEach((item, position) => {
     const sku = `web-end-${item.id}`
     const options = data.variantsOf.get(item.id) ?? []
     const description = paragraphs(item.body)
     const image = link.photo(item.image_url)
     const published = item.published ? '1' : '-1'
+    const groups = [listed(item.category), tagged ? item.collection : '']
     if (!options.length) {
-      rows.push(['simple', sku, item.title, published, '', description, ...stock(item.stock), ...prices(item.price, item.compare_price), item.category, image, '', '', '', '', ''])
-      continue
+      rows.push(['simple', sku, item.title, published, '', description, ...stock(item.stock), ...prices(item.price, item.compare_price), ...groups, image, position + 1, '', '', '', '', ''])
+      return
     }
-    // WooCommerce separates values with commas, so an option name can't contain one.
-    const names = options.map((option) => option.name.replace(/\s*,\s*/g, ' ').trim())
-    rows.push(['variable', sku, item.title, published, '', description, '1', '', '', '', item.category, image, '', 'Option', names.join(', '), '1', '0'])
+    const names = options.map((option) => listed(option.name.replaceAll('|', '/').trim()))
+    rows.push(['variable', sku, item.title, published, '', description, '1', '', '', '', ...groups, image, position + 1, '', 'Option', names.join(', '), '1', '0'])
     options.forEach((option, index) => {
-      rows.push(['variation', `${sku}-${index + 1}`, `${item.title} - ${names[index]}`, published, '', '', ...stock(option.stock), ...prices(option.price || item.price, option.compare_price || item.compare_price), '', '', sku, 'Option', names[index], '', '0'])
+      rows.push(['variation', `${sku}-${index + 1}`, `${item.title} - ${option.name}`, published, '', '', ...stock(option.stock), ...prices(option.price || item.price, option.compare_price || item.compare_price), '', '', '', index + 1, sku, 'Option', names[index], '', '0'])
     })
-  }
+  })
   return csv(rows)
 }
 
 /** Old addresses in the CSV layout the Redirection plugin imports: source, target, regex, code. */
 export async function redirectionCsv(env: Env, site: SiteRow, origin: string) {
   const { data, link } = await wordpressPlan(env, site, origin)
-  return csv([['source', 'target', 'regex', 'code'], ...data.redirects.map((row) => [row.from_path, link.page(row.to_path === '/home' ? '/' : row.to_path), '0', '301'])])
+  return csv([['source', 'target', 'regex', 'code'], ...data.redirects.map((row) => [row.from_path, link.page(row.to_path), '0', '301'])])
 }
