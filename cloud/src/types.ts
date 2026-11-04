@@ -1,5 +1,8 @@
 export type Env = {
   ASSETS: Fetcher
+  // How many automation steps led to this write, and how many runs one visitor's request may still start. Set only by automations.ts.
+  automationBudget?: { left: number }
+  automationDepth?: number
   DB: D1Database
   defer?: (work: Promise<unknown>) => void
   GOOGLE_API_BASE?: string

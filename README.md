@@ -31,8 +31,9 @@ Claude asks about your business, then writes the pages, chooses the design, and 
 - **Limits nothing can get around:** seats and other places can't be overbooked, even by two people at the same moment, and one customer can't book the same thing twice
 - **Your data can leave with you:** download all your content and data in one file at any time
 - **Notifications:** get an email for each new order, form entry and booking through your own Resend account, get them in Discord, Slack or Telegram for free, or send signed webhooks to other services
+- **Automations:** "when this happens, do that" rules that run on your server without code, such as a booking confirmation email, a booking number, a seat taken from a class, a status workflow or a low-stock alert. Claude sets them up from what you say, and you can see them, switch them off and read what they did in the back office.
 - **Email:** order confirmations with the customer's private order link, an email when an order is paid, shipped, done or cancelled, and password reset emails, in your site's language when it's English or Thai
-- **Build guides for Claude:** planning, data design, access rules, screens, design, copy, shop, publishing, Wix, staff and launch checks, built in, so there's nothing extra to install
+- **Build guides for Claude:** planning, data design, access rules, screens, design, copy, shop, publishing, Wix, staff, automations and launch checks, built in, so there's nothing extra to install
 - **System page:** hosting, version, publishing, database use, login, payments, email and connections in one place
 - **Shop:** product pages, categories, sale prices, sizes and colours, stock that can't oversell, a cart, free delivery thresholds, private order links and order status. Prices are always set on the server.
 - **Payments:** bank transfer and pay on delivery, plus cards through your own Stripe account
@@ -58,12 +59,13 @@ Nobody hosts your site but you. There's no central server, and web-end never see
 ## What it can't do yet
 
 - Send email without an email account of your own. Emails go through your own Resend account, which you set up once, as shown below. Until then there are no emails, and if a customer forgets a password, you make a reset link in the back office and send it yourself.
-- Send newsletters. Customers get an email when their order is placed and when its status changes, but nothing else.
+- Send newsletters, or email many customers at once. Customers get an email when their order is placed and when its status changes, and the emails your automations send when something happens, but nothing else.
 - Give staff finer access than whole areas, such as one table or only some orders, or show staff the full history of who changed what outside orders
 - Check bank transfers automatically or take payment slips. You check each transfer and confirm it in the back office.
 - Create product photos. Upload your own, or use images you have the right to use.
 - Show customer reviews as a ready-made feature
-- Add any feature you can describe. Claude builds with tables, rules, pages, webhooks and sandboxed custom code. Custom server logic still means a developer changing the source, and an update replaces such changes.
+- Add any feature you can describe. Claude builds with tables, rules, pages, automations, webhooks and sandboxed custom code. Automations are a fixed menu of steps, not code: anything they can't express, such as calculations across many records or calling another service and using its answer, still means a developer changing the source, and an update replaces such changes.
+- Run something on a schedule, such as a reminder the day before a booking. Automations only run when something happens on your site.
 - Log in with Facebook, Apple, LINE or other accounts. Google works once you set it up, as shown below. Google login works on your website, not yet through the API.
 - Show the back office in languages other than Thai and English
 
@@ -90,7 +92,7 @@ What you can give, one by one:
 - **Messages and bookings** from your forms
 - **Customers:** see the list of names and emails, nothing more
 
-Settings, Connect, System, Updates, Move here, WordPress, the full download of your data, customer accounts, staff access and your private links always stay yours alone. Every page and every change is checked on the server, not just hidden from the menu, and a change must come from a page of your own site. Press **Remove staff access** and it stops at once, even if they're logged in. Making them staff again starts with nothing ticked.
+Settings, Connect, Automations, System, Updates, Move here, WordPress, the full download of your data, customer accounts, staff access and your private links always stay yours alone. Every page and every change is checked on the server, not just hidden from the menu, and a change must come from a page of your own site. Press **Remove staff access** and it stops at once, even if they're logged in. Making them staff again starts with nothing ticked.
 
 The staff role on its own still lets a person read and change tables you open to staff, on your pages and through the API, as it did before. Orders through the API need **Orders**.
 
@@ -193,6 +195,18 @@ How accounts work:
 - Google logins follow the same rules as everyone else: the same member role, members-only checkout, and the same limits on attempts.
 
 If only one of the two secrets is set, **System** and Claude's site check tell you what's missing. Nothing shows to customers until both are set. To turn it off, delete the two secrets in Cloudflare.
+
+## Automations
+
+Automations are rules like "when a booking comes in, email me" or "when an order is shipped, email the customer". Tell Claude what you want in your own words. It builds the rule from a fixed menu, tries it on your real data without changing anything, and tells you in one sentence what it does.
+
+- **When:** a record is added or changed (or one field changes to a value you choose), a form is sent, an order is placed, an order's status changes, or a customer signs up.
+- **Only if:** simple checks on what happened, such as "seats left is less than 1" or "status is confirmed".
+- **Then:** fill in fields such as a booking number or today's date, add a record to another table, change a linked record such as taking a seat away from a class, email you, the customer or an address on the record, or send the details to another service.
+
+Open **Automations** in your back office to read each rule as a sentence, switch it off, see its last runs and what went wrong in plain words, or delete it. Rules work at once, without publishing.
+
+They are safe by design: no code runs, what visitors type is only ever used as text, a rule that keeps starting itself stops after 3 rounds, and each rule runs at most 100 times an hour (500 for the whole site). A failed step never stops a visitor's booking or order. Emails need email set up, and automations send at most 100 an hour.
 
 ## For developers
 

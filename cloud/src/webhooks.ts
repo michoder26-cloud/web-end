@@ -41,7 +41,7 @@ export function chatMessage(event: string, data: unknown) {
   return `${eventNames_[event] ?? event}${item.table ? ` (${String(item.table)})` : ''}\n${facts.slice(0, 10).join('\n')}`.slice(0, 1500)
 }
 
-const sign = async (secret: string, text: string) => {
+export const sign = async (secret: string, text: string) => {
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { hash: 'SHA-256', name: 'HMAC' }, false, ['sign'])
   return [...new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(text)))].map((byte) => byte.toString(16).padStart(2, '0')).join('')
 }
@@ -75,8 +75,18 @@ async function deliver(env: Env, siteId: number, event: string, data: unknown) {
   }
 }
 
-/** Tells the owner's other systems what happened, once and after the visitor has their answer. */
-export async function fireEvent(env: Env, siteId: number, event: (typeof eventNames)[number], data: unknown) {
+type EventHook = (env: Env, siteId: number, event: string, data: unknown, before?: Record<string, unknown>) => Promise<void>
+let afterEvent: EventHook | null = null
+
+/** automations.ts registers itself here. Importing it directly would make the modules load in a circle. */
+export const onEvent = (hook: EventHook) => {
+  afterEvent = hook
+}
+
+/** Tells the owner's other systems what happened, once and after the visitor has their answer. `before` is a changed record's old values. */
+export async function fireEvent(env: Env, siteId: number, event: (typeof eventNames)[number], data: unknown, before?: Record<string, unknown>) {
+  // Every write that other systems hear about can also start the owner's automations. They never throw.
+  if (afterEvent) await afterEvent(env, siteId, event, data, before)
   const work = deliver(env, siteId, event, data)
   if (env.defer) env.defer(work)
   else await work

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { createResetLink, getCustomer } from './auth'
+import { handleAutomationsOffice } from './automations-office'
 import { handlePlatform } from './cms-platform'
 import { canSendEmail } from './email'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
@@ -77,7 +78,7 @@ export const office = (site: SiteRow, at: Desk | string, title: string, body: st
   const settings = JSON.parse(site.settings) as Settings
   const t = officeText(site)
   const base = `${escapeHtml(desk.base)}`
-  const links: [string, string][] = [['', t.nav.overview], ['/orders', t.nav.orders], ['/pages', t.nav.pages], ['/items', t.nav.products], ['/data', t.nav.data], ['/media', t.nav.images], ['/customers', t.nav.customers], ['/publish', t.nav.publish], ['/connect', t.nav.connect], ['/move', t.nav.move], ['/wordpress', t.nav.wordpress], ['/settings', t.nav.settings], ['/system', t.nav.system], ['/updates', t.nav.updates]]
+  const links: [string, string][] = [['', t.nav.overview], ['/orders', t.nav.orders], ['/pages', t.nav.pages], ['/items', t.nav.products], ['/data', t.nav.data], ['/automations', t.automations.title], ['/media', t.nav.images], ['/customers', t.nav.customers], ['/publish', t.nav.publish], ['/connect', t.nav.connect], ['/move', t.nav.move], ['/wordpress', t.nav.wordpress], ['/settings', t.nav.settings], ['/system', t.nav.system], ['/updates', t.nav.updates]]
   const shown = desk.staff ? links.filter(([path]) => !path || (staffMenu[path] && allows(desk, staffMenu[path]))) : links
   const who = desk.staff ? `<p class="cms-who">${t.staffLoggedIn(escapeHtml(desk.staff.name))}</p><form action="/logout" method="post"><button class="button button--small button--ghost" type="submit">${t.logOut}</button></form>` : ''
   return html(
@@ -571,6 +572,8 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
 
   const platform = handlePlatform(request, env, url, site, desk, area, id, action, extra, saved)
   if (platform) return platform
+  // Automations stay the owner's alone: staffMay refuses the area, and this checks again.
+  if (area === 'automations' && !extra && !desk.staff) return handleAutomationsOffice(request, env, url, site, desk, id, action, saved)
 
   if (area === 'entry' && post && /^\d+$/.test(id ?? '') && !action) {
     const form = await request.formData().catch((): null => null)

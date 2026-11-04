@@ -55,7 +55,7 @@ check((await rpc('/mcp/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd')).status === 404, 'M
 check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd`)).status === 404, 'the back office with a wrong link is refused')
 
 const { tools } = await client.listTools()
-check(tools.length === 37, 'lists the tools', tools.map((tool) => tool.name).join(','))
+check(tools.length === 41, 'lists the tools', tools.map((tool) => tool.name).join(','))
 check(client.getInstructions()?.includes('web team'), 'gives Claude its working method')
 check(client.getInstructions()?.includes('2 to 4 short choices') && client.getInstructions()?.includes('Only offer choices these tools can really deliver'), 'tells Claude to ask with choices and only offer what works')
 
@@ -1265,6 +1265,8 @@ check((await call('get_guide', { topic: 'move_from_wix' })).text.includes('check
 
 // Email, tested against a stand-in for Resend on port 8823, or EMAIL_TEST_PORT. Start the site with --var RESEND_API_KEY:re_test_fake --var RESEND_API_BASE:http://localhost:8823
 const hasEmailTest = process.env.EMAIL_TEST === '1'
+// A Resend key can be set for another part of the tests, such as automations, without this email test. Then the checks for a missing key don't apply.
+const resendKeyOnly = !hasEmailTest && (await call('get_status', {})).data.email?.resendKeySet === true
 const postAs = (ip, path, values, cookie) => fetch(`${base}${path}`, { body: new URLSearchParams(values), headers: { 'CF-Connecting-IP': ip, ...(cookie ? { Cookie: cookie } : {}) }, method: 'POST', redirect: 'manual' })
 if (hasEmailTest) {
   const { createServer } = await import('node:http')
@@ -1417,7 +1419,7 @@ if (hasEmailTest) {
   check((await call('check_site', {})).data.problems.some((problem) => problem.includes('no sender address')) && !(await (await fetch(`${base}/login`)).text()).includes('href="/reset"'), 'clearing the sender turns email off, and check_site says why')
   await call('update_site', { cart: false })
   await new Promise((done) => resend.close(done))
-} else {
+} else if (!resendKeyOnly) {
   check(!(await (await fetch(`${base}/login`)).text()).includes('href="/reset"') && (await fetch(`${base}/reset`)).status === 404 && (await apiJson('/auth/reset', { body: asJson({ email: 'x@example.test' }), method: 'POST' })).status === 404, 'without email, customers are not offered reset emails')
   await call('update_site', { emailFrom: 'shop@cafe.test' })
   check((await call('check_site', {})).data.problems.some((problem) => problem.includes('RESEND_API_KEY secret is missing')) && (await call('get_status', {})).data.email.sending === false, 'check_site finds a sender address with no Resend key')
@@ -1589,6 +1591,286 @@ if (process.env.GOOGLE_TEST === '1') {
   check(systemGoogle.includes('Log in with Google') && systemGoogle.includes('GOOGLE_CLIENT_ID in Cloudflare'), 'the System page explains how to turn on Google login')
 }
 
+// Automations: rules that run on the server when something happens.
+// With AUTOMATION_TEST=1, start the site with --var WEBHOOK_ALLOW_HTTP:1 --var RESEND_API_KEY:re_test_fake, and this part starts a webhook
+// receiver on port 8864. Emails go to a stand-in for Resend on the email test's port when EMAIL_TEST=1, which has closed its own by now,
+// or else on 8864 too, with --var RESEND_API_BASE:http://localhost:8864.
+{
+  const hasAutomationTest = process.env.AUTOMATION_TEST === '1'
+  const settle = () => new Promise((done) => setTimeout(done, 1000))
+  const autoMail = []
+  const autoHooks = []
+  let hookStatus = 200
+  let receivers = null
+  if (hasAutomationTest) {
+    const { createServer } = await import('node:http')
+    const mailPort = hasEmailTest ? Number(process.env.EMAIL_TEST_PORT || 8823) : 8864
+    const receive = (request, response) => {
+      let body = ''
+      request.on('data', (part) => (body += part))
+      request.on('end', () => {
+        if (request.url === '/emails') {
+          autoMail.push(JSON.parse(body))
+          response.setHeader('Content-Type', 'application/json')
+          response.end(JSON.stringify({ id: `email-${autoMail.length}` }))
+          return
+        }
+        autoHooks.push({ body, event: request.headers['x-web-end-event'], path: request.url, signature: request.headers['x-web-end-signature'] })
+        response.statusCode = hookStatus
+        response.end('ok')
+      })
+    }
+    receivers = [createServer(receive), ...(mailPort === 8864 ? [] : [createServer(receive)])]
+    await Promise.all(receivers.map((server, index) => new Promise((done) => server.listen(index ? mailPort : 8864, done))))
+    await call('update_site', { emailFrom: 'shop@auto.test', notifyEmail: 'owner@auto.test' })
+  }
+  const mailTo = (address) => autoMail.filter((email) => email.to?.[0] === address)
+  const automationById = async (id) => (await call('list_automations')).data.find((item) => item.id === id)
+  const lastRun = async (id) => (await automationById(id))?.recentRuns?.[0]
+  const recordsOf = async (table) => (await call('list_records', { table, limit: 100 })).data.records
+  const save = (automation) => call('save_automation', automation)
+
+  await call('update_site', { accounts: true, cart: true, payCod: true })
+  await call('save_table', { name: 'auto_classes', label: 'Auto classes', readAccess: 'public', writeAccess: 'owner', fields: [{ name: 'title', label: 'Title', type: 'text', required: true }, { name: 'seats_left', label: 'Seats left', type: 'number' }] })
+  await call('save_table', {
+    name: 'auto_bookings',
+    label: 'Auto bookings',
+    readAccess: 'owner',
+    writeAccess: 'public',
+    fields: [
+      { name: 'name', label: 'Name', type: 'text', required: true },
+      { name: 'email', label: 'Email', type: 'email' },
+      { name: 'class', label: 'Class', type: 'reference', table: 'auto_classes' },
+      { name: 'status', label: 'Status', type: 'select', options: ['new', 'confirmed', 'cancelled'], default: 'new', readOnly: true },
+      { name: 'ref', label: 'Reference', type: 'text', readOnly: true },
+      { name: 'booked_on', label: 'Booked on', type: 'date', readOnly: true },
+      { name: 'note', label: 'Note', type: 'text' },
+    ],
+  })
+  await call('save_table', { name: 'auto_inbox', label: 'Auto inbox', readAccess: 'owner', writeAccess: 'owner', fields: [{ name: 'who', label: 'Who', type: 'text', required: true }, { name: 'mail', label: 'Mail', type: 'email' }, { name: 'count', label: 'Count', type: 'number' }] })
+  await call('save_table', { name: 'auto_counter', label: 'Auto counter', readAccess: 'owner', writeAccess: 'owner', fields: [{ name: 'label', label: 'Label', type: 'text' }, { name: 'count', label: 'Count', type: 'number', default: 0 }] })
+  await call('save_table', { name: 'auto_flags', label: 'Auto flags', readAccess: 'owner', writeAccess: 'owner', fields: [{ name: 'label', label: 'Label', type: 'text' }] })
+  await call('save_table', { name: 'auto_flood', label: 'Auto flood', readAccess: 'owner', writeAccess: 'owner', fields: [{ name: 'label', label: 'Label', type: 'text' }] })
+  await call('save_page', { slug: 'auto-contact', title: 'Auto contact', description: 'A page with a contact form, used to test that automations copy form entries into a table.', published: true, blocks: [{ type: 'hero', heading: 'Write to us' }, { type: 'form', name: 'auto-contact', fields: [{ name: 'who', label: 'Name', type: 'text', required: true }, { name: 'mail', label: 'Email', type: 'email' }] }] })
+  const autoMug = (await call('save_item', { collection: 'auto-shop', title: 'Auto mug', price: '฿100', sort: 1 })).data.id
+  // A site moved from elsewhere stops its first publish once to show differences, then publishes.
+  if (!(await call('publish_site', { note: 'Automation test' })).data?.published) await call('publish_site', { note: 'Automation test' })
+
+  // Saving checks every reference
+  const refusedWith = async (automation, words) => {
+    const result = await save(automation)
+    return result.isError && result.text.includes(words)
+  }
+  const emailOwner = { do: 'email', to: 'owner', subject: 'New', message: 'Hello' }
+  check(await refusedWith({ name: 'x', trigger: { on: 'record_added', table: 'nope' }, actions: [emailOwner] }, 'There is no table called "nope"'), 'an automation on a missing table is refused')
+  check(await refusedWith({ name: 'x', trigger: { on: 'record_added', table: 'auto_bookings' }, actions: [{ ...emailOwner, message: 'Hi {{nickname}}' }] }, '"nickname" is not something this automation can read'), 'a template with an unknown field is refused')
+  check(await refusedWith({ name: 'x', trigger: { on: 'record_added', table: 'auto_bookings' }, actions: [{ do: 'set_fields', values: { colour: 'red' } }] }, 'has no field "colour"'), 'setting a field the table lacks is refused')
+  check(await refusedWith({ name: 'x', trigger: { on: 'record_added', table: 'auto_bookings' }, actions: [{ do: 'set_fields', values: { status: 'lost' } }] }, 'not one of the choices'), 'a value that is not one of the choices is refused')
+  check(await refusedWith({ name: 'x', trigger: { on: 'form_sent', form: 'nope' }, actions: [emailOwner] }, 'no form called "nope"'), 'an automation on a missing form is refused')
+  check(await refusedWith({ name: 'x', trigger: { on: 'order_status', status: 'lost' }, actions: [emailOwner] }, 'not an order status'), 'an unknown order status is refused')
+  check(await refusedWith({ name: 'x', trigger: { on: 'order_placed' }, actions: [{ do: 'webhook', url: 'https://hooks.slack.com/services/T/B/x' }] }, 'chat address'), 'a chat address is refused, because it holds a secret')
+  check(await refusedWith({ name: 'x', trigger: { on: 'order_placed' }, actions: [{ do: 'set_fields', values: { note: 'x' } }] }, 'only works when a record is added or changed'), 'changing a record is refused when no record starts it')
+  check(await refusedWith({ name: 'x', trigger: { on: 'order_placed' }, actions: [{ do: 'stop' }, emailOwner] }, 'never run'), 'an unconditional stop before other steps is refused')
+  check(await refusedWith({ name: 'x', trigger: { on: 'record_added', table: 'auto_bookings' }, actions: [{ do: 'add_record', table: 'auto_inbox', values: { mail: '{{email}}' } }] }, 'needs "who"'), 'adding a record without its required fields is refused')
+  check(await refusedWith({ name: 'x', trigger: { on: 'record_added', table: 'auto_bookings' }, actions: [{ do: 'change_linked', through: 'name', values: { seats_left: 1 } }] }, 'not a reference field'), 'changing a linked record needs a reference field')
+  check((await save({ name: 'x', trigger: { on: 'sometime' }, actions: [emailOwner] })).isError && (await save({ name: 'x', trigger: { on: 'order_placed' }, actions: [{ do: 'run_code', code: 'x' }] })).isError, 'unknown triggers and steps are refused, so there is no way to run code')
+  check((await call('list_automations')).data.length === 0, 'nothing refused was saved')
+
+  // A booking gets a number and a date, and takes a seat from its class
+  const yoga = (await call('save_record', { table: 'auto_classes', values: { title: 'Yoga <b>', seats_left: 2 } })).data.saved.id
+  const numbering = await save({ name: 'Booking number', trigger: { on: 'record_added', table: 'auto_bookings' }, actions: [{ do: 'set_fields', values: { ref: 'BK-{{number}}', booked_on: '{{today}}' } }] })
+  check(!numbering.isError && numbering.data.says === 'When a record is added to Auto bookings → set Reference to “BK-{{number}}”, Booked on to “{{today}}”', 'an automation is saved with a plain sentence', numbering.text)
+  const seatsSaved = await save({ name: 'Take a seat', trigger: { on: 'record_added', table: 'auto_bookings' }, actions: [{ do: 'change_linked', through: 'class', values: { seats_left: { field: 'seats_left', add: -1 } } }] })
+  check(!seatsSaved.isError, 'a step can take one away from a linked record', seatsSaved.text)
+  const seats = seatsSaved.data.saved
+  const lastSeat = (await save({ name: 'Last seat', trigger: { on: 'record_added', table: 'auto_bookings' }, conditions: [{ field: 'class.seats_left', is: 'less_than', value: 1 }], actions: [{ do: 'email', to: 'owner', subject: 'Full: {{class.title}}', message: 'The last seat went to {{name}}.' }] })).data
+  check(lastSeat.says === 'When a record is added to Auto bookings and Class › Seats left is less than 1 → email the owner', 'conditions on linked records read plainly', lastSeat.says)
+  const confirmMail = (await save({ name: 'Confirm', trigger: { on: 'record_added', table: 'auto_bookings' }, conditions: [{ field: 'email', is: 'not_empty' }], actions: [{ do: 'email', to: 'field', field: 'email', subject: 'Booked: {{class.title}}', message: 'Hi {{name}},\n\nyou booked {{class.title}}.' }] })).data.saved
+  const book = (ip, values) => postAs(ip, '/data/auto_bookings', { next: '/', ...values })
+  check(((await book('198.51.100.40', { class: String(yoga), email: 'ann@auto.test', name: 'Ann' })).headers.get('location') ?? '').includes('sent=record-auto_bookings'), 'a visitor books while automations run')
+  const [firstBooking] = await recordsOf('auto_bookings')
+  const today = new Date().toISOString().slice(0, 10)
+  check(firstBooking?.ref === `BK-${String(firstBooking?.id).padStart(4, '0')}` && firstBooking?.booked_on === today, 'set_fields fills in a number and today’s date', JSON.stringify(firstBooking))
+  const seatsAfter = async () => (await recordsOf('auto_classes')).find((row) => row.id === yoga)?.seats_left
+  check((await seatsAfter()) === 1, 'change_linked takes a seat from the booked class')
+  await settle()
+  check((await lastRun(lastSeat.saved)) === undefined, 'a rule whose conditions do not hold does not run')
+  await book('198.51.100.41', { class: String(yoga), email: 'ben@auto.test', name: '<script>alert(1)</script> {{email}} Ben' })
+  check((await seatsAfter()) === 0, 'two bookings take two seats')
+  await settle()
+  if (hasAutomationTest) {
+    const full = mailTo('owner@auto.test').filter((row) => row.subject.startsWith('Full:'))
+    check(full.length === 1 && full[0].subject === 'Full: Yoga <b>' && full[0].text.includes('The last seat went to <script>alert(1)</script> {{email}} Ben.'), 'a condition on a linked record emails the owner when the last seat goes', JSON.stringify(full.map((row) => row.subject)))
+    const confirmation = mailTo('ben@auto.test')
+    check(confirmation.length === 1 && confirmation[0].html.includes('&lt;script&gt;alert(1)&lt;/script&gt; {{email}} Ben') && !confirmation[0].html.includes('<script>') && confirmation[0].html.includes('Yoga &lt;b&gt;'), 'templates put in visitor text escaped, and never read it as a template', confirmation[0]?.html.match(/Hi[^<]*/)?.[0])
+    check(mailTo('ann@auto.test').length === 1 && (await lastRun(confirmMail)).notes.includes('Emailed ben@auto.test.'), 'the run log says who was emailed')
+  } else {
+    const run = await lastRun(lastSeat.saved)
+    check(run?.outcome === 'failed' && run.error === 'Email is not set up yet, so nothing was sent.', 'an email step without email set up is logged in plain words', JSON.stringify(run))
+  }
+  const seatRuns = await automationById(seats)
+  check(seatRuns.runs === 2 && seatRuns.recentRuns[0].outcome === 'done' && seatRuns.recentRuns[0].notes[0] === `Changed Seats left of the linked Auto classes #${yoga}.`, 'each run is logged in plain words', JSON.stringify(seatRuns.recentRuns[0]))
+
+  // A field changing to one value
+  const giveBack = (await save({ name: 'Give the seat back', trigger: { on: 'record_changed', table: 'auto_bookings', field: 'status', to: 'cancelled' }, actions: [{ do: 'change_linked', through: 'class', values: { seats_left: { field: 'seats_left', add: 1 } } }] })).data
+  check(giveBack.says === 'When Status of a record in Auto bookings changes to “cancelled” → change the linked Class: Seats left to Seats left + 1', 'a change trigger reads plainly', giveBack.says)
+  await call('save_record', { table: 'auto_bookings', id: firstBooking.id, values: { note: 'Window seat' } })
+  await call('save_record', { table: 'auto_bookings', id: firstBooking.id, values: { status: 'confirmed' } })
+  check((await seatsAfter()) === 0, 'other changes do not start a rule waiting for one value')
+  await call('save_record', { table: 'auto_bookings', id: firstBooking.id, values: { status: 'cancelled' } })
+  check((await seatsAfter()) === 1, 'changing to that value starts it')
+  await call('save_record', { table: 'auto_bookings', id: firstBooking.id, values: { note: 'Still cancelled' } })
+  check((await seatsAfter()) === 1, 'it starts only when the field changes, not on every save')
+  for (const id of [numbering.data.saved, seats, lastSeat.saved, confirmMail, giveBack.saved]) await call('delete_automation', { id })
+
+  // A rule that starts itself stops after three rounds
+  const loop = await save({ name: 'Count changes', trigger: { on: 'record_changed', table: 'auto_counter' }, actions: [{ do: 'set_fields', values: { count: { field: 'count', add: 1 } } }] })
+  check(loop.data.warnings?.some((warning) => warning.includes('starts itself again')), 'Claude is warned about a rule that starts itself')
+  const counter = (await call('save_record', { table: 'auto_counter', values: { label: 'a' } })).data.saved.id
+  const changed = await call('save_record', { table: 'auto_counter', id: counter, values: { label: 'b' } })
+  const counted = (await recordsOf('auto_counter'))[0]
+  check(!changed.isError && counted.count === 3 && counted.label === 'b', 'the depth limit stops a self-starting rule after three rounds', JSON.stringify(counted))
+  // The deepest run finishes first, so the stop is not the newest line of the log.
+  const loopRun = (await automationById(loop.data.saved)).recentRuns.find((run) => run.outcome === 'stopped')
+  check(loopRun?.outcome === 'stopped' && loopRun.error.includes('more than 3 rounds deep'), 'the stop is logged in plain words', JSON.stringify(loopRun))
+  await call('delete_automation', { id: loop.data.saved })
+
+  // Switched off, a rule does nothing; the back office switches it on
+  const flag = (await save({ name: 'Flag new', enabled: false, trigger: { on: 'record_added', table: 'auto_flags' }, actions: [{ do: 'set_fields', values: { label: 'flagged' } }] })).data
+  check(flag.enabled === false, 'an automation can be saved switched off')
+  await call('save_record', { table: 'auto_flags', values: { label: 'quiet' } })
+  check((await recordsOf('auto_flags'))[0].label === 'quiet' && (await automationById(flag.saved)).runs === 0, 'a switched-off rule does nothing')
+  const officeList = await (await fetch(`${owner}/automations`)).text()
+  check(officeList.includes('>Automations</h1>') && officeList.includes('Flag new · Off') && officeList.includes('When a record is added to Auto flags → set Label to “flagged”') && officeList.includes('>Turn on<'), 'the back office lists automations in plain sentences')
+  check((await fetch(`${owner}/automations/${flag.saved}/switch`, { body: new URLSearchParams({ enabled: '1' }), method: 'POST', redirect: 'manual' })).status === 303, 'the owner switches an automation on in the back office')
+  await call('save_record', { table: 'auto_flags', values: { label: 'loud' } })
+  check((await recordsOf('auto_flags'))[0].label === 'flagged', 'once on, it runs')
+  check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd/automations/${flag.saved}/switch`, { body: new URLSearchParams({ enabled: '0' }), method: 'POST', redirect: 'manual' })).status === 404 && (await automationById(flag.saved)).enabled, 'only the owner can switch automations')
+  const fullStaffSignup = await postAs('198.51.100.46', '/signup', { email: 'allareas@auto.test', name: 'All Areas', password: 'a-good-password' })
+  const fullStaffCookie = (fullStaffSignup.headers.get('set-cookie') ?? '').split(';')[0]
+  const fullStaffId = (await call('list_customers', {})).data.find((row) => row.email === 'allareas@auto.test')?.id
+  const fullStaff = await call('set_customer_role', { id: fullStaffId, role: 'staff', areas: ['orders', 'products', 'pages', 'publish', 'data', 'messages', 'customers'] })
+  const asFullStaff = (path, values) => fetch(`${base}${path}`, { ...(values ? { body: new URLSearchParams(values), method: 'POST' } : {}), headers: { Cookie: fullStaffCookie, Origin: base }, redirect: 'manual' })
+  const staffHomeAll = await (await asFullStaff('/staff')).text()
+  check(!fullStaff.isError && staffHomeAll.includes('href="/staff/orders"') && !staffHomeAll.includes('href="/staff/automations"'), 'staff with every area see no Automations link', fullStaff.text)
+  const staffTries = [await asFullStaff('/staff/automations'), await asFullStaff(`/staff/automations/${flag.saved}/switch`, { enabled: '0' }), await asFullStaff(`/staff/automations/${flag.saved}/delete`, { confirm: 'on' })]
+  check(staffTries.every((response) => response.status === 403) && (await automationById(flag.saved))?.enabled === true, 'staff with every area are refused automations, to read or change', staffTries.map((response) => response.status).join())
+  await call('set_customer_role', { id: fullStaffId, role: 'member' })
+  await fetch(`${owner}/automations/${flag.saved}/delete`, { body: new URLSearchParams({ confirm: 'on' }), method: 'POST', redirect: 'manual' })
+  check(!(await automationById(flag.saved)), 'the owner deletes an automation in the back office')
+
+  // A form entry is copied into a table; a failing step is logged and the visitor never notices
+  const copy = (await save({ name: 'Copy messages', trigger: { on: 'form_sent', form: 'auto-contact' }, actions: [{ do: 'add_record', table: 'auto_inbox', values: { who: '{{who}}', mail: '{{mail}}' } }] })).data.saved
+  const broken = (await save({ name: 'Broken', trigger: { on: 'form_sent', form: 'auto-contact' }, actions: [{ do: 'add_record', table: 'auto_inbox', values: { who: '{{who}}', count: '{{who}}' } }, emailOwner] })).data.saved
+  const sent = await postAs('198.51.100.42', '/form/auto-contact/auto-contact', { mail: 'cy@auto.test', who: 'Cy' })
+  check((sent.headers.get('location') ?? '').includes('sent=auto-contact'), 'a failing automation never breaks the visitor’s request')
+  const inbox = await recordsOf('auto_inbox')
+  check(inbox.length === 1 && inbox[0].who === 'Cy' && inbox[0].mail === 'cy@auto.test', 'add_record copies a form entry into a table', JSON.stringify(inbox))
+  const brokenRun = await lastRun(broken)
+  check(brokenRun?.outcome === 'failed' && brokenRun.error === '"Count" isn\'t valid.' && brokenRun.notes.length === 0, 'the failure is logged in plain words, and later steps are skipped', JSON.stringify(brokenRun))
+  await call('delete_automation', { id: broken })
+
+  // Trying a rule changes nothing
+  const before = JSON.stringify(await recordsOf('auto_inbox'))
+  const mailBefore = autoMail.length
+  const tried = await call('test_automation', { id: copy, sample: { who: 'Dry <run>', mail: 'dry@auto.test' } })
+  check(!tried.isError && tried.data.wouldRun && tried.data.steps[0].values?.who === 'Dry <run>' && tried.data.nothingWasChanged, 'test_automation shows what a step would do', tried.text.slice(0, 300))
+  const conditionsTried = await call('test_automation', {
+    automation: {
+      name: 'Conditions',
+      trigger: { on: 'record_added', table: 'auto_bookings' },
+      conditions: [
+        { field: 'name', is: 'equals', value: 'ann' },
+        { field: 'name', is: 'not_equals', value: 'Ben' },
+        { field: 'note', is: 'contains', value: 'window' },
+        { field: 'class.seats_left', is: 'greater_than', value: 0 },
+        { field: 'booked_on', is: 'less_than', value: '{{today}}' },
+        { field: 'email', is: 'not_empty' },
+        { field: 'ref', is: 'empty' },
+      ],
+      actions: [{ do: 'set_fields', values: { note: 'Seen {{name}}' } }, { do: 'stop', when: [{ field: 'name', is: 'equals', value: 'Ann' }] }, emailOwner],
+    },
+    sample: { id: firstBooking.id, name: 'Ann', note: 'Big Window seat', booked_on: '2020-01-01', email: 'ann@auto.test', ref: '' },
+  })
+  const holding = conditionsTried.data.conditions?.map((item) => item.holds)
+  check(!conditionsTried.isError && holding?.every(Boolean) && conditionsTried.data.steps.length === 2 && conditionsTried.data.steps[0].changes?.note === 'Seen Ann' && conditionsTried.data.steps[1].result === 'stops here', 'every kind of condition, and stop, work in a dry run', conditionsTried.text.slice(0, 400))
+  const notHolding = await call('test_automation', { automation: { name: 'No', trigger: { on: 'record_added', table: 'auto_bookings' }, conditions: [{ field: 'class.seats_left', is: 'greater_than', value: 5 }, { field: 'booked_on', is: 'greater_than', value: '{{today}}' }], actions: [emailOwner] }, sample: { id: firstBooking.id, booked_on: '2020-01-01' } })
+  check(notHolding.data.wouldRun === false && notHolding.data.conditions.every((item) => !item.holds), 'conditions that fail are shown as failing')
+  await settle()
+  check(JSON.stringify(await recordsOf('auto_inbox')) === before && autoMail.length === mailBefore && (await automationById(copy)).runs === 1, 'a dry run writes and sends nothing')
+
+  // Orders, order status, webhooks and new customers
+  const hookUrl = hasAutomationTest ? 'http://localhost:8864/hook' : 'https://hooks.example.test/in'
+  const orderHook = (await save({ name: 'Order to the warehouse', trigger: { on: 'order_placed' }, conditions: [{ field: 'total', is: 'greater_than', value: 50 }], actions: [{ do: 'webhook', url: hookUrl }] })).data.saved
+  const shippedMail = (await save({ name: 'Shipped', trigger: { on: 'order_status', status: 'shipped' }, actions: [{ do: 'email', to: 'customer', subject: 'Order {{number}} is on its way', message: 'Your {{items}} left today.' }] })).data
+  check(shippedMail.says === "When an order's status becomes shipped → email the customer", 'order rules read plainly', shippedMail.says)
+  const welcome = (await save({ name: 'Welcome', trigger: { on: 'customer_signed_up' }, actions: [{ do: 'email', to: 'customer', subject: 'Welcome, {{name}}', message: 'Thanks for joining.' }] })).data.saved
+  const autoCart = cartCookieOf(await addToCart(autoMug))
+  const placed = await postAs('198.51.100.43', '/checkout', { address: '1 Auto Road', email: 'buyer@auto.test', name: 'Auto Buyer', note: '', payment: 'cod', phone: '0812345678' }, autoCart)
+  check(placed.status === 303, 'an order goes through with automations on')
+  const autoOrder = (await call('list_orders', {})).data.find((row) => row.email === 'buyer@auto.test')
+  await call('update_order', { id: autoOrder.id, status: 'shipped' })
+  await call('update_order', { id: autoOrder.id, status: 'shipped' })
+  check((await automationById(shippedMail.saved)).runs === 1, 'an order status rule runs only when the status really changes')
+  check((await postAs('198.51.100.44', '/signup', { email: 'newbie@auto.test', name: 'Newbie', password: 'a-good-password' })).status === 303, 'a customer signs up with automations on')
+  await settle()
+  if (hasAutomationTest) {
+    const hook = autoHooks.find((item) => item.path === '/hook')
+    const officeHtml = await (await fetch(`${owner}/automations`)).text()
+    const secret = officeHtml.match(/Signing secret for its webhook steps<\/summary><code[^>]*>([0-9a-f]{64})/)?.[1]
+    const [, time, digest] = /t=(\d+),v1=([0-9a-f]+)/.exec(hook?.signature ?? '') ?? []
+    const { createHmac } = await import('node:crypto')
+    check(hook && JSON.parse(hook.body).data.number === `#${String(autoOrder.id).padStart(4, '0')}` && JSON.parse(hook.body).data.items === 'Auto mug × 1', 'a new order reaches the webhook step', hook?.body.slice(0, 200))
+    check(Boolean(secret) && digest === createHmac('sha256', secret).update(`${time}.${hook.body}`).digest('hex') && !JSON.stringify((await call('list_automations')).data).includes(secret), 'webhook steps are signed, and Claude never sees the secret')
+    const shipped = mailTo('buyer@auto.test').find((row) => row.subject.startsWith('Order #'))
+    check(shipped?.subject === `Order #${String(autoOrder.id).padStart(4, '0')} is on its way` && shipped.text.includes('Auto mug × 1'), 'an order status change emails the customer', JSON.stringify(mailTo('buyer@auto.test').map((row) => row.subject)))
+    check(mailTo('newbie@auto.test').some((row) => row.subject === 'Welcome, Newbie'), 'a new customer gets a welcome email')
+    hookStatus = 500
+    const failing = cartCookieOf(await addToCart(autoMug))
+    await postAs('198.51.100.45', '/checkout', { address: '2 Auto Road', email: 'buyer2@auto.test', name: 'Auto Buyer', note: '', payment: 'cod', phone: '0812345678' }, failing)
+    await settle()
+    const hookRun = await lastRun(orderHook)
+    check(hookRun?.outcome === 'failed' && hookRun.error === 'localhost:8864 answered 500, so the details may not have arrived.', 'a webhook that fails is logged in plain words', JSON.stringify(hookRun))
+    hookStatus = 200
+  } else {
+    check((await lastRun(welcome))?.error === 'Email is not set up yet, so nothing was sent.' && (await lastRun(shippedMail.saved))?.outcome === 'failed', 'email steps without email are logged, and nothing breaks')
+    check((await lastRun(orderHook))?.outcome === 'failed', 'a webhook that cannot be reached is logged')
+  }
+
+  // Too many runs in an hour pause a rule
+  const flood = (await save({ name: 'Flood', trigger: { on: 'record_added', table: 'auto_flood' }, actions: [{ do: 'set_fields', values: { label: 'seen' } }] })).data.saved
+  for (let round = 0; round < 11; round++) await Promise.all(Array.from({ length: round === 10 ? 1 : 10 }, (_, index) => call('save_record', { table: 'auto_flood', values: { label: `x${round}-${index}` } })))
+  const flooded = await automationById(flood)
+  const floodRows = await call('list_records', { table: 'auto_flood', limit: 100, filters: { label: 'seen' } })
+  check(flooded.runs === 101 && flooded.recentRuns[0].outcome === 'skipped' && flooded.recentRuns[0].error.includes('already ran 100 times this hour') && floodRows.data.records.length === 100 && floodRows.data.next === null, 'one automation runs at most 100 times an hour', `${flooded.runs} runs, ${floodRows.data.records.length} changed, next ${floodRows.data.next}`)
+
+  // check_site finds rules that point at something gone
+  await call('delete_table', { name: 'auto_inbox' })
+  check((await call('check_site')).data.problems.some((problem) => problem.startsWith('The automation "Copy messages"') && problem.includes('no table called "auto_inbox"')), 'check_site finds an automation whose table is gone')
+
+  // The back office in Thai
+  const languageWas = (await call('get_site')).data.settings.language
+  await call('update_site', { language: 'th' })
+  const thaiList = await (await fetch(`${owner}/automations`)).text()
+  check(thaiList.includes('>ระบบอัตโนมัติ</h1>') && thaiList.includes('เมื่อสถานะคำสั่งซื้อเป็น จัดส่งแล้ว → ส่งอีเมลถึงลูกค้า') && thaiList.includes('>ปิดใช้<') && thaiList.includes('การทำงานล่าสุด') && !thaiList.includes('>Turn off<'), 'the automations page is in Thai')
+  await call('update_site', { language: languageWas })
+  check(!(await call('get_guide', { topic: 'automations' })).isError && client.getInstructions()?.includes('automations'), 'Claude has an automations guide')
+
+  for (const item of (await call('list_automations')).data) await call('delete_automation', { id: item.id })
+  check((await call('list_automations')).data.length === 0, 'automations can be deleted')
+  for (const name of ['auto_bookings', 'auto_classes', 'auto_counter', 'auto_flags', 'auto_flood']) await call('delete_table', { name })
+  await call('delete_page', { slug: 'auto-contact' })
+  await call('delete_item', { id: autoMug })
+  await call('update_site', { cart: false })
+  if (receivers) {
+    await Promise.all(receivers.map((server) => new Promise((done) => server.close(done))))
+    const clearing = formValues(await (await fetch(`${owner}/settings`)).text())
+    clearing.set('emailFrom', '')
+    clearing.set('notifyEmail', '')
+    await fetch(`${owner}/settings`, { body: clearing, method: 'POST', redirect: 'manual' })
+  }
+}
+
 // The back office in Thai
 const officePage = async (area = '') => (await fetch(`${owner}${area}`)).text()
 const languageBefore = (await call('get_site')).data.settings.language
@@ -1613,8 +1895,8 @@ const thaiTestEmail = await (await fetch(`${owner}/system/test-email`, { method:
 check(/ส่งไปที่|ใส่อีเมลของคุณ|ยังส่งไม่ได้/.test(thaiTestEmail) && !/Sent to|Add your own address|Not sent/.test(thaiTestEmail), 'the test email result is in Thai')
 await call('update_site', { emailFrom: 'shop@cafe.test' })
 const halfEmail = await officePage('/system')
-check(hasEmailTest || (halfEmail.includes('ใส่อีเมลผู้ส่งแล้ว แต่ยังไม่มี secret') && !halfEmail.includes('A sender address for emails is set')), 'an unfinished email setup is explained in Thai')
-check(hasEmailTest || (await call('check_site', {})).text.includes('RESEND_API_KEY secret is missing'), 'Claude still gets the email problems in English')
+check(hasEmailTest || resendKeyOnly || (halfEmail.includes('ใส่อีเมลผู้ส่งแล้ว แต่ยังไม่มี secret') && !halfEmail.includes('A sender address for emails is set')), 'an unfinished email setup is explained in Thai')
+check(hasEmailTest || resendKeyOnly || (await call('check_site', {})).text.includes('RESEND_API_KEY secret is missing'), 'Claude still gets the email problems in English')
 const thaiWordpress = await officePage('/wordpress')
 check(thaiWordpress.includes('รหัสผ่านของลูกค้าย้ายไประบบอื่นไม่ได้') && !thaiWordpress.includes("Customer passwords can't move"), 'what needs attention before WordPress is in Thai')
 for (const area of ['/items', '/data', '/media', '/customers', '/publish', '/connect', '/move', '/wordpress', '/updates']) {

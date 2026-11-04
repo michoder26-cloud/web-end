@@ -3,6 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { handleAccount } from './account'
 import { handleApi } from './api'
 import { getCustomer } from './auth'
+import { runAutomations } from './automations'
 import { allows, handleOffice, ownerDesk, staffEntry } from './cms'
 import type { Desk } from './cms'
 import { loadPageRecords, receiveRecord } from './data'
@@ -124,9 +125,10 @@ async function receiveForm(request: Request, env: Env, url: URL, site: SiteRow, 
   await loadItems(env, site.id, blocks)
   const data = validateEntry(block.fields as FormField[], form)
   if (!data) return back('error')
-  await env.DB.prepare('INSERT INTO entries (site_id, form, page, data, customer_id) VALUES (?, ?, ?, ?, ?)')
+  const entry = await env.DB.prepare('INSERT INTO entries (site_id, form, page, data, customer_id) VALUES (?, ?, ?, ?, ?) RETURNING id, created_at')
     .bind(site.id, formName, pageSlug, JSON.stringify(data), customer?.id ?? null)
-    .run()
+    .first<{ created_at: string; id: number }>()
+  await runAutomations(env, site.id, 'entry.created', { form: formName, page: pageSlug, id: entry?.id, created_at: entry?.created_at, customer_id: customer?.id ?? null, data })
   await tellOwnerAboutEntry(env, { fields: block.fields as FormField[], heading: block.heading, name: formName }, data)
   return back('sent')
 }

@@ -35,7 +35,8 @@ export type DataField = {
 }
 export type DataTable = { fields: DataField[]; id: number; label: string; name: string; read_access: Access; record_count: number; write_access: Access }
 export type DataRow = { created_at: string; customer_id: null | number; data: string; id: number; updated_at: string }
-export type Actor = { admin: boolean; customer: Customer | null; readOnly?: boolean }
+// quiet: an automation's own write, which tells the owner only when its rule says so.
+export type Actor = { admin: boolean; customer: Customer | null; quiet?: boolean; readOnly?: boolean }
 
 export const ownerActor: Actor = { admin: true, customer: null }
 
@@ -168,7 +169,7 @@ function coerce(field: DataField, raw: unknown): { error: string } | { value: bo
 const blank = (value: unknown) => value === undefined || value === null || value === ''
 
 /** Checks what someone sent against the table's fields. Anything the table doesn't define is dropped. */
-async function readInput(env: Env, siteId: number, table: DataTable, input: Record<string, unknown>, actor: Actor, existing?: Record<string, unknown>) {
+export async function readInput(env: Env, siteId: number, table: DataTable, input: Record<string, unknown>, actor: Actor, existing?: Record<string, unknown>) {
   const data: Record<string, unknown> = {}
   for (const field of table.fields) {
     const held = existing?.[field.name]
@@ -245,7 +246,7 @@ const counted = (field: DataField, alias: string) => (field.ignoreField && field
 type Guard = { code: 'duplicate' | 'full'; field: DataField; sql: string; values: unknown[] }
 
 /** Conditions the database checks in the same step as a write, so two people can't take the last seat at once. Field names were checked when the table was saved. */
-function writeGuards(table: DataTable, data: Record<string, unknown>, customerId: null | number, self?: DataRow) {
+export function writeGuards(table: DataTable, data: Record<string, unknown>, customerId: null | number, self?: DataRow) {
   const before = self ? (JSON.parse(self.data) as Record<string, unknown>) : null
   const guards: Guard[] = []
   for (const field of table.fields) {
@@ -286,7 +287,7 @@ export async function createRecord(env: Env, siteId: number, table: DataTable, i
   await env.DB.prepare('UPDATE data_tables SET record_count = record_count + 1 WHERE id = ?').bind(table.id).run()
   await fireEvent(env, siteId, 'record.created', { table: table.name, record: showRecord(table, row, ownerActor) })
   // The owner already knows about records they add in the back office or through Claude. Visitors, customers and connected sites count.
-  if (actor !== ownerActor) await tellOwnerAboutRecord(env, table, row)
+  if (actor !== ownerActor && !actor.quiet) await tellOwnerAboutRecord(env, table, row)
   return { row }
 }
 
@@ -298,7 +299,7 @@ export async function updateRecord(env: Env, siteId: number, table: DataTable, r
     .bind(JSON.stringify(read.data), row.id, table.id, ...guards.flatMap((guard) => guard.values))
     .first<DataRow>()
   if (!updated) return refused(env, guards)
-  await fireEvent(env, siteId, 'record.updated', { table: table.name, record: showRecord(table, updated, ownerActor) })
+  await fireEvent(env, siteId, 'record.updated', { table: table.name, record: showRecord(table, updated, ownerActor) }, JSON.parse(row.data))
   return { row: updated }
 }
 

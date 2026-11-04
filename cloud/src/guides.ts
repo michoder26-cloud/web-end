@@ -179,11 +179,48 @@ The staff role on its own still lets that person read and change tables open to 
 - Ask the owner to open every page on their phone.
 - Remove samples. Have legal text checked. Then publish_site.
 Tell the owner plainly what you could not test, such as real card payments or heavy traffic.`,
+  automations: `# Automations: "when this happens, do that"
+Automations run on the server by themselves after something happens. They are rules made of fixed parts, never code. Use them when the owner says "when…, then…", "automatically", "notify me", "send a confirmation" or "every time".
+
+How a rule is built (save_automation):
+- One trigger: record_added (table), record_changed (table, optionally only when one field changes, optionally to one value), form_sent (the form block's name), order_placed, order_status (pending, paid, shipped, done or cancelled), or customer_signed_up.
+- conditions, which must all hold: equals, not_equals, contains, greater_than, less_than (numbers, dates such as 2026-05-01, and times such as 09:30), empty and not_empty. Compare with a value, {{today}} or another {{field}}.
+- Up to 10 steps, done in order. Each step can have its own when, checked when the step is reached.
+  - set_fields: changes fields of the record that started it.
+  - add_record: adds a record to a table. It belongs to the same customer, if one was logged in.
+  - change_linked: changes the record a reference field points to, such as {"seats_left": {"field": "seats_left", "add": -1}} on the class a booking points to. The database works out additions itself, so two bookings at the same moment both count.
+  - email: to the owner (notifyEmail), the customer (the logged-in customer, or the email given with an order), or an email field. Needs email set up, as the limits guide explains.
+  - webhook: sends the details to a public https address, signed with the automation's secret, which the owner copies from the Automations page.
+  - stop: does nothing more. Give it a when.
+- A rule can read: the fields of the record or form, id, number (the id as 0042, or #0042 for an order), created_at, customer_name, customer_email, today and now (in UTC), and reference.field, such as class.title, for the record a reference field points to. Orders give number, name, email, phone, address, note, payment, status, total, subtotal, shipping, total_text and items. A new customer gives id, name and email.
+- Templates: "Thanks {{name}}, see you on {{date}}." A template that is only {{field}} keeps a number as a number. Values always go in as plain text and are escaped in emails, so what visitors type can never become code or another template.
+
+Patterns:
+- Booking confirmation: record_added on bookings. Steps: email the customer (with accounts) or the email field, naming what they booked with class.title, then email the owner.
+- Low stock or last seats: record_changed on classes with field seats_left, a condition seats_left less_than 3, then email the owner. To make overbooking impossible, use capacityField on the booking's reference field. A counter kept by an automation is for showing, not a guarantee.
+- Seats left counter: record_added on bookings, then change_linked through class with seats_left add -1. Give it back when a booking is cancelled: record_changed on bookings, field status, to cancelled, change_linked add 1.
+- Status workflow: record_changed on requests, field status, to approved, then set_fields approved_on {{today}} and email the customer. Customers already get a built-in email when their order is paid, shipped, done or cancelled, so don't add another. Use order_status for other things, such as order_status paid, then a webhook to the owner's warehouse system. order_status runs only when the status really changes.
+- Assigning a number: record_added on bookings, then set_fields ref "BK-{{number}}". Make ref readOnly so customers can't change it.
+- Copying a form entry into a table: form_sent, then add_record with each field mapped, such as {"name": "{{name}}", "email": "{{email}}"}. A record-form block on the page may be simpler, so suggest that first.
+- Welcome email: customer_signed_up, then email the customer.
+
+Working method:
+1. Check the tables, fields and form names with list_tables and get_page. Add the fields a rule needs first, such as a status select or a readOnly ref.
+2. save_automation, then test_automation with its id, once with sample values that make the conditions hold and once with values that don't. Read every step. A test writes and sends nothing.
+3. Tell the owner in one plain sentence what it does, using the says line, and that they can switch it off and see its last runs on the Automations page of the back office.
+4. After real use, list_automations shows each run's outcome and any failure in plain words. check_site lists rules that point at tables, fields or forms that are gone.
+
+Safety and limits:
+- Automations work at once, without publishing. Up to 50 per site. Only the owner sees them in the back office. Staff never do, whatever areas they have.
+- A rule that changes what starts it starts itself again. Chains stop after 3 rounds, one visit starts at most 25 runs, one automation runs at most 100 times an hour, all of them together at most 500 times an hour, and they send at most 100 emails an hour. Add a field and value to record_changed, or a condition, to avoid loops.
+- A failed step never stops the visitor. It goes in the run log and the steps after it are skipped. Emails and webhooks go after the visitor has their answer, once, with no retry.
+- Chat addresses such as Slack, Discord and Telegram hold a secret, so the owner adds them on the Connect page as webhooks, not in an automation.
+- There is no arbitrary code, no schedule such as "every Monday", no loop over many records and no sum across a table. Say so plainly and offer the closest rule, or a developer.`,
   limits: `# Honest limits
 - It runs on the owner's Cloudflare account. The free plan allows 100,000 requests and 5 million database rows read a day, 100,000 rows written a day, and 10 ms of processor time per request. At the limit it pauses until 00:00 UTC. Workers Paid starts at $5 a month.
 - 50 tables per site, 50,000 records per table, 20 KB per record. Filtering large tables reads many rows, so show short lists.
 - The owner can download all content and data from the System page, and move the site to WordPress from the Move to WordPress page. Their code is in their GitHub and their database in their Cloudflare account.
-- Email needs the owner's own Resend account. Resend's free plan allows 100 emails a day and 3,000 a month. The owner verifies a domain in Resend, adds the RESEND_API_KEY secret in Cloudflare, and the sender address and their own address go in with update_site emailFrom and notifyEmail. Then customers can ask for a password reset email on the login page and get an order confirmation with their private order link, and the owner gets an email for each new order, form entry and record visitors add, up to 60 an hour. Emails go once, with no retry. Without email, a forgotten password needs a reset link from the back office. No automatic bank transfer checks. No built-in logic beyond tables, rules, webhooks and sandboxed custom code. Anything else means a developer changing the code in the owner's GitHub repository, and an update replaces such changes, though they stay in GitHub history.
+- Email needs the owner's own Resend account. Resend's free plan allows 100 emails a day and 3,000 a month. The owner verifies a domain in Resend, adds the RESEND_API_KEY secret in Cloudflare, and the sender address and their own address go in with update_site emailFrom and notifyEmail. Then customers can ask for a password reset email on the login page and get an order confirmation with their private order link, and the owner gets an email for each new order, form entry and record visitors add, up to 60 an hour. Emails go once, with no retry. Without email, a forgotten password needs a reset link from the back office. No automatic bank transfer checks. No built-in logic beyond tables, rules, automations, webhooks and sandboxed custom code. Automations are fixed steps, not code, as the automations guide explains. Anything else means a developer changing the code in the owner's GitHub repository, and an update replaces such changes, though they stay in GitHub history.
 - Log in with Google is optional and needs the owner's own Google OAuth client. The owner creates it in Google Cloud Console, pastes the redirect address shown on the System page, and adds the GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET secrets in Cloudflare. Then, while accounts are on, the login and sign-up pages show Continue with Google. A Google login with the email of an existing account opens that account, and a new email gets a new account without a password, which the customer can add later with a reset link. Google's own account screens are in Google's words. No other social logins, and Google login works on the website only, not through the API.
 - Claude can't create secret keys, change Cloudflare secrets, or connect a domain. The owner does those.`,
 }
