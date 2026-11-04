@@ -7,6 +7,7 @@ import { getProduct, isAvailable } from './items'
 import { parsePrice } from './money'
 import { canPayByCard, orderForApi, orderLines, orderStatuses, setOrderStatus, submitOrder } from './shop'
 import { staffPermissions } from './staff'
+import { countConversion } from './stats'
 import { startCardPayment } from './stripe'
 import type { Env, Item, Order, Settings, SiteRow, Variant } from './types'
 import { version } from './version'
@@ -164,6 +165,8 @@ async function handleData(request: Request, env: Env, url: URL, site: SiteRow, a
     const body = await readBody(request)
     if (!body) return fail(400, 'bad_body', 'Send a JSON object of up to 64 KB.')
     const saved = await createRecord(env, site.id, table, body, actor)
+    // A record a visitor's app adds counts as a conversion. Ones added with a full-access key are the owner's own.
+    if (saved.row && !actor.admin) await countConversion(env, site, 'record')
     return saved.row ? json({ record: showRecord(table, saved.row, actor) }, 201) : fail(saved.code ? 409 : 400, saved.code ?? 'invalid', saved.error ?? 'That is not valid.', saved.field)
   }
 

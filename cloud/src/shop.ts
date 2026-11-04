@@ -11,6 +11,7 @@ import { startCardPayment } from './stripe'
 import { words } from './text'
 import type { Customer, Env, Item, Order, OrderLine, Settings, SiteRow, Variant } from './types'
 import { liveSite } from './versions'
+import { countConversion } from './stats'
 import { fireEvent } from './webhooks'
 
 const cookieName = 'cart'
@@ -238,6 +239,7 @@ export async function submitOrder(request: Request, env: Env, site: SiteRow, car
   }
   const order = await env.DB.prepare('SELECT * FROM orders WHERE token_hash = ?').bind(tokenHash).first<Order>()
   const lines = (await orderLines(env, [order!.id])).get(order!.id) ?? []
+  await countConversion(env, site, 'order')
   await fireEvent(env, site.id, 'order.created', orderForApi(order!, lines))
   await emailOrder(env, settings, new URL(request.url).origin, order!, lines, token)
   return { lines, order: order!, token }

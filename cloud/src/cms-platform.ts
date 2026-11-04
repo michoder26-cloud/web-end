@@ -12,6 +12,7 @@ import type { MoveReport } from './moving'
 import { officeText } from './office-words'
 import type { OfficeWords } from './office-words'
 import { canPayByPromptPay } from './shop'
+import { exportStats } from './stats'
 import { latestRelease } from './updates'
 import { listVersions, publishVersion, restoreVersion, unpublishedChanges } from './versions'
 import { version } from './version'
@@ -249,7 +250,8 @@ async function exportEverything(env: Env, site: SiteRow) {
     // The rules, without their webhook signing secrets.
     all('SELECT id, name, rule, enabled, created_at FROM automations WHERE site_id = ?'),
   ])
-  const body = JSON.stringify({ automations: automations.map((row) => ({ ...row, rule: JSON.parse(String((row as { rule: string }).rule)) as unknown })), customers, entries, exported_at: new Date().toISOString(), format: 'web-end-export-1', images_note: 'Image files stay in your database. Each one can be downloaded from /media/<id>.', images, items, order_lines: lines, orders, pages, records, settings: JSON.parse(site.settings) as unknown, tables, variants, version }, null, 1)
+  const statistics = await exportStats(env, site.id)
+  const body = JSON.stringify({ automations: automations.map((row) => ({ ...row, rule: JSON.parse(String((row as { rule: string }).rule)) as unknown })), customers, entries, exported_at: new Date().toISOString(), format: 'web-end-export-1', images_note: 'Image files stay in your database. Each one can be downloaded from /media/<id>.', images, items, order_lines: lines, orders, pages, records, settings: JSON.parse(site.settings) as unknown, statistics, tables, variants, version }, null, 1)
   return new Response(body, { headers: { 'Cache-Control': 'no-store', 'Content-Disposition': 'attachment; filename="web-end-export.json"', 'Content-Type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff', 'X-Robots-Tag': 'noindex' } })
 }
 

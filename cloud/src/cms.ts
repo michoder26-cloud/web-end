@@ -16,6 +16,7 @@ import { entryFields, shell } from './owner'
 import { validPromptPayId } from './promptpay'
 import { orderDetails, orderHistory, orderLines, orderNumber, orderStatuses, paymentName, setOrderStatus } from './shop'
 import { setStaff, staffAreas, staffPermissions } from './staff'
+import { statsPage } from './stats-office'
 import type { StaffArea, StaffMember } from './staff'
 import { words } from './text'
 import { isNewer, latestRelease, repoPattern, updatesBody } from './updates'
@@ -41,7 +42,7 @@ export const staffDesk = (staff: StaffMember): Desk => ({ base: '/staff', code: 
 export const allows = (desk: Desk, area: StaffArea) => !desk.staff || desk.staff.permissions.includes(area)
 
 // The menu entries staff can see, with the area each one needs. Anything else in the menu is for the owner alone.
-const staffMenu: Record<string, StaffArea> = { '/customers': 'customers', '/data': 'data', '/items': 'products', '/media': 'products', '/orders': 'orders', '/pages': 'pages', '/publish': 'publish' }
+const staffMenu: Record<string, StaffArea> = { '/customers': 'customers', '/data': 'data', '/items': 'products', '/media': 'products', '/orders': 'orders', '/pages': 'pages', '/publish': 'publish', '/stats': 'stats' }
 
 // Staff addresses hold no secret, and their changes are checked by where they come from, which needs the browser to say so.
 const staffHeaders = { ...privateHeaders, 'Referrer-Policy': 'same-origin' }
@@ -82,7 +83,7 @@ export const office = (site: SiteRow, at: Desk | string, title: string, body: st
   const settings = JSON.parse(site.settings) as Settings
   const t = officeText(site)
   const base = `${escapeHtml(desk.base)}`
-  const links: [string, string][] = [['', t.nav.overview], ['/orders', t.nav.orders], ['/pages', t.nav.pages], ['/items', t.nav.products], ['/data', t.nav.data], ['/automations', t.automations.title], ['/media', t.nav.images], ['/customers', t.nav.customers], ['/publish', t.nav.publish], ['/connect', t.nav.connect], ['/move', t.nav.move], ['/wordpress', t.nav.wordpress], ['/settings', t.nav.settings], ['/system', t.nav.system], ['/updates', t.nav.updates]]
+  const links: [string, string][] = [['', t.nav.overview], ['/stats', t.nav.stats], ['/orders', t.nav.orders], ['/pages', t.nav.pages], ['/items', t.nav.products], ['/data', t.nav.data], ['/automations', t.automations.title], ['/media', t.nav.images], ['/customers', t.nav.customers], ['/publish', t.nav.publish], ['/connect', t.nav.connect], ['/move', t.nav.move], ['/wordpress', t.nav.wordpress], ['/settings', t.nav.settings], ['/system', t.nav.system], ['/updates', t.nav.updates]]
   const shown = desk.staff ? links.filter(([path]) => !path || (staffMenu[path] && allows(desk, staffMenu[path]))) : links
   const who = desk.staff ? `<p class="cms-who">${t.staffLoggedIn(escapeHtml(desk.staff.name))}</p><form action="/logout" method="post"><button class="button button--small button--ghost" type="submit">${t.logOut}</button></form>` : ''
   return html(
@@ -472,6 +473,7 @@ ${text('timeZone', t.timeZone)}
 <label>${t.style}<select name="style">${siteStyles.map((style) => `<option${style === settings.style ? ' selected' : ''}>${style}</option>`).join('')}</select></label>
 ${text('accent', t.accent, 'color').replace('value=""', 'value="#1f4d3a"')}${text('background', t.background, 'color').replace('value=""', 'value="#fbfaf6"')}${text('text', t.textColour, 'color').replace('value=""', 'value="#16201b"')}
 <label class="check"><input name="accounts" type="checkbox"${settings.accounts ? ' checked' : ''}> ${t.accounts}</label>
+<label class="check"><input name="statistics" type="checkbox"${settings.statistics === false ? '' : ' checked'}> ${t.stats.setting}</label>
 <fieldset class="cms-block"><legend>${t.shop}</legend>
 <label class="check"><input name="cart" type="checkbox"${settings.cart ? ' checked' : ''}> ${t.cart}</label>
 <label class="check"><input name="cartMembersOnly" type="checkbox"${settings.cartMembersOnly ? ' checked' : ''}> ${t.cartMembersOnly}</label>
@@ -514,6 +516,7 @@ async function saveSettings(request: Request, env: Env, url: URL, site: SiteRow,
     payCod: form.get('payCod') === 'on',
     payPromptPay: form.get('payPromptPay') === 'on',
     payTransfer: form.get('payTransfer') === 'on',
+    statistics: form.get('statistics') === 'on',
   }
   const fee = String(form.get('shippingFee') ?? '').trim()
   if (fee) draft.shippingFee = Number(fee)
@@ -569,6 +572,7 @@ export function staffMay(staff: StaffMember, post: boolean, area?: string, id?: 
   if (area === 'publish') return has('publish')
   if (area === 'entry') return has('messages')
   if (area === 'customers') return has('customers') && !post
+  if (area === 'stats') return has('stats') && !post
   // Records only. Creating or deleting a table stays with the owner, and so does changing its fields, which the data area checks itself.
   if (area === 'data') return has('data') && !(post && (!id || (action === 'delete' && !extra)))
   return false
@@ -614,6 +618,8 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
     }
     return see(url, `${owner}/orders`)
   }
+
+  if (area === 'stats') return post || id ? notFound() : statsPage(env, url, site, desk)
 
   if (area === 'pages' && !id) return post ? addPage(request, env, url, site, desk) : pagesList(env, site, desk)
 

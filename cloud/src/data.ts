@@ -5,6 +5,7 @@ import { tellOwnerAboutRecord } from './email'
 import { see } from './http'
 import { isSafeHref } from './theme'
 import type { Block, Customer, Env, SiteRow } from './types'
+import { countConversion } from './stats'
 import { fireEvent } from './webhooks'
 
 export const accessLevels = ['public', 'members', 'own', 'staff', 'owner'] as const
@@ -415,5 +416,6 @@ export async function receiveRecord(request: Request, env: Env, url: URL, site: 
     else if (form.has(field.name)) input[field.name] = String(form.get(field.name))
   }
   const saved = await createRecord(env, site.id, table, input, actor)
+  if (saved.row) await countConversion(env, site, 'record')
   return saved.row ? back('sent') : back('error', saved.code)
 }

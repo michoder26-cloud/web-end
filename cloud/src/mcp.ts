@@ -18,6 +18,7 @@ import { officeWords } from './office-words'
 import { getSite as findSite } from './owner'
 import { orderLines, orderStatuses, setOrderStatus } from './shop'
 import { readPermissions, setStaff, staffAreas } from './staff'
+import { maxReportDays, readStats } from './stats'
 import { starterIds, starterLanguages, starterSites } from './starters'
 import { listVersions, liveSite, publishVersion, restoreVersion, systemSettingKeys, unpublishedChanges } from './versions'
 import { version } from './version'
@@ -168,6 +169,7 @@ export const settingsShape = {
   emailFrom: z.string().email().max(254).optional().describe("The address the site's emails come from, on a domain the owner verified in their own Resend account, such as orders@their-shop.com. Emails also need the owner to add the RESEND_API_KEY secret in Cloudflare. Takes effect at once, without publishing."),
   notifyEmail: z.string().email().max(254).optional().describe('Where the owner gets an email for each new order, form entry and record that visitors add. Needs email set up. Takes effect at once, without publishing.'),
   timeZone: z.string().max(64).refine(validTimeZone, 'Use a time zone name such as Asia/Bangkok, Europe/Berlin or UTC.').optional().describe("The owner's time zone, such as Asia/Bangkok. Scheduled automations run on its clock, and {{today}} in automations is its date. UTC by default. Takes effect at once, without publishing."),
+  statistics: z.boolean().optional().describe('Visitor statistics, on unless this is false. Pages are counted on the server with no cookies, scripts or stored IP addresses, and get_statistics reads the counts. Takes effect at once, without publishing.'),
   phone: optional(40),
   address: optional(300),
 }
@@ -559,6 +561,30 @@ export function createMcpServer(env: Env, origin: string, code: string) {
       annotations: { readOnlyHint: true },
     },
     safely(async () => reply(await systemStatus(env, await getSite(), origin))),
+  )
+
+  server.registerTool(
+    'get_statistics',
+    {
+      title: 'See how the site is doing',
+      description: 'Visitors, page views, top pages, sites that sent visitors, countries, devices, and conversions (orders placed, form messages and records visitors added) for the last few days, today included. Use it when the owner asks how their site is doing, then answer in plain words with a few numbers that matter. Visitors are counted on the server with no cookies, scripts or stored IP addresses, and one person counts once a day.',
+      inputSchema: { days: z.number().int().min(1).max(maxReportDays).optional().describe('How many days, today included. 30 by default.') },
+      annotations: { readOnlyHint: true },
+    },
+    safely(async ({ days }) => {
+      const site = await getSite()
+      const report = await readStats(env, site, days ?? 30)
+      const rate = report.conversionRate === null ? 'no visitors yet' : `${(report.conversionRate * 100).toFixed(1)}% of visitors`
+      const summary = `From ${report.from} to ${report.to}: ${report.visitors} visitors, ${report.views} page views, ${report.conversions.total} conversions (${rate}).${report.pages[0] ? ` Most viewed page: ${report.pages[0].name}.` : ''}${report.referrers[0] ? ` Top site sending visitors: ${report.referrers[0].name}.` : ''}`
+      return reply({
+        summary,
+        ...report,
+        counting: report.counting ? 'on' : 'off. update_site statistics true turns it back on',
+        conversionRate: report.conversionRate === null ? null : Number(report.conversionRate.toFixed(4)),
+        note: 'Bots, the back office, previews and Claude are not counted. Days are in the site time zone. Statistics are kept for 400 days.',
+        back_office: `${origin}/owner/${code}/stats`,
+      })
+    }),
   )
 
   const ownSite = z.literal(true).describe('Set this only after the owner has said this is their own site, or that they have the right to move it. Never use these tools to copy someone else.')

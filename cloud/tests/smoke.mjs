@@ -76,7 +76,7 @@ check((await rpc('/mcp/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd')).status === 404, 'M
 check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd`)).status === 404, 'the back office with a wrong link is refused')
 
 const { tools } = await client.listTools()
-check(tools.length === 42, 'lists the tools', tools.map((tool) => tool.name).join(','))
+check(tools.length === 43, 'lists the tools', tools.map((tool) => tool.name).join(','))
 check(stepDone(await (await fetch(`${base}/owner/${code}`)).text(), 'claude') === '1', 'connecting Claude ticks its step')
 check(client.getInstructions()?.includes('apply_starter') && tools.find((tool) => tool.name === 'apply_starter')?.description.includes('replacePages'), 'Claude knows about starters and when it may replace pages')
 check(client.getInstructions()?.includes('web team'), 'gives Claude its working method')
@@ -2439,6 +2439,154 @@ for (const language of ['en', 'th']) {
 check((await call('apply_starter', {})).data.starters.length === 5, 'Claude can list the starters')
 await call('update_site', { language: 'en' })
 
+
+// Visitor statistics: counted on the server as pages are sent, with no cookies and nothing kept about a person past the day.
+// The retention checks need `wrangler dev --test-scheduled` and the test-only switch WEBHOOK_ALLOW_HTTP:1, which lets a
+// scheduled run pretend it is another day with " now=<time>" in the cron text. Without them, those checks are skipped.
+{
+  const settle = () => new Promise((done) => setTimeout(done, 700))
+  const tick = async (at) => (await fetch(`${base}/__scheduled?cron=${encodeURIComponent(`*/15 * * * *${at === undefined ? '' : ` now=${new Date(at).toISOString()}`}`)}`).catch(() => null))?.text() ?? ''
+  const stats = async (days = 1) => (await call('get_statistics', { days })).data
+  const desktop = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 Stats${Date.now()}`
+  const phone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
+  const tablet = 'Mozilla/5.0 (Linux; Android 13; SM-X700) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'
+  const visit = (path, agent, headers = {}, method = 'GET') => fetch(`${base}${path}`, { headers: { 'CF-Connecting-IP': '198.51.100.7', 'User-Agent': agent, ...headers }, method, redirect: 'manual' })
+
+  await call('update_site', { statistics: true, cart: true, payCod: true, accounts: true })
+  check(!(await call('save_table', { name: 'stat_bookings', label: 'Stat bookings', readAccess: 'owner', writeAccess: 'public', fields: [{ name: 'guest', label: 'Guest', type: 'text', required: true }] })).isError, 'statistics: a table visitors can add to')
+  check(!(await call('save_page', { slug: 'stats-test', title: 'Stats test', description: 'A page used to test that visitor statistics count views and conversions.', published: true, blocks: [{ type: 'hero', heading: 'Stats' }, { type: 'form', name: 'hello', fields: [{ name: 'message', label: 'Message', type: 'text', required: true }] }, { type: 'record-form', table: 'stat_bookings' }] })).isError, 'statistics: a page with a form')
+  await call('publish_site', { note: 'Stats test page' })
+  await settle()
+  const before = await stats()
+  check(before.counting === 'on' && typeof before.summary === 'string' && before.back_office === `${owner}/stats`, 'get_statistics gives Claude a plain summary', JSON.stringify(before).slice(0, 300))
+
+  // Five counted views from three people: one person opens three pages, one on a phone from Google, one on a tablet.
+  await visit('/', desktop)
+  await visit('/stats-test', desktop)
+  await visit('/stats-test?x=1', desktop, { Referer: `${base}/` })
+  await visit('/stats-test', phone, { Referer: 'https://www.google.com/search?q=cafe', 'CF-Connecting-IP': '198.51.100.8' })
+  await visit('/', tablet, { 'CF-Connecting-IP': '198.51.100.9' })
+  // None of these count.
+  const ignored = [
+    await visit('/', 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'),
+    await visit('/', 'curl/8.5.0'),
+    await fetch(`${base}/`),
+    await visit('/', desktop, {}, 'HEAD'),
+    await visit('/', desktop, { 'Sec-Purpose': 'prefetch' }),
+    await visit(`/owner/${code}`, desktop),
+    await visit(`/owner/${code}/preview`, desktop),
+    await visit(`/owner/${code}/stats`, desktop),
+    await visit('/media/1', desktop),
+    await visit('/api/v1/products', desktop),
+    await visit('/robots.txt', desktop),
+    await visit('/sitemap.xml', desktop),
+    await visit('/no-such-page-here', desktop),
+    await visit('/login', desktop),
+    await visit('/cart', desktop),
+  ]
+  check(ignored.every((response) => response.status < 500), 'statistics: the requests that are not counted still work')
+  await settle()
+  const after = await stats()
+  const grew = (key) => after[key] - before[key]
+  check(grew('views') === 5, 'page views are counted, and bots, HEAD, prefetching, the back office, previews, images, the API, files and missing pages are not', `${grew('views')} more views`)
+  check(grew('visitors') === 3, 'a person who opens three pages counts as one visitor that day', `${grew('visitors')} more visitors`)
+  const deviceGrew = (name) => (after.devices.find((row) => row.name === name)?.visitors ?? 0) - (before.devices.find((row) => row.name === name)?.visitors ?? 0)
+  check(deviceGrew('desktop') === 1 && deviceGrew('phone') === 1 && deviceGrew('tablet') === 1, 'devices are told apart: computer, phone and tablet', JSON.stringify(after.devices))
+  check(after.referrers.some((row) => row.name === 'google.com') && !after.referrers.some((row) => row.name.includes('localhost') || row.name.includes('search')), 'only the referring site’s name is kept, and the site’s own pages are not a referrer', JSON.stringify(after.referrers))
+  check(after.pages.some((row) => row.name === '/stats-test' && row.views >= 3) && !after.pages.some((row) => row.name.includes('?') || row.name.includes('owner')), 'views are counted per page path, without the query', JSON.stringify(after.pages))
+  check(after.summary.includes(`${after.visitors} visitors`), 'the summary says the numbers plainly', after.summary)
+
+  // Conversions: a form message, a record a visitor added and an order. Claude's own record is not one.
+  const entrySent = await fetch(`${base}/form/stats-test/hello`, { body: new URLSearchParams({ message: 'Hi' }), headers: { 'CF-Connecting-IP': '198.51.100.7' }, method: 'POST', redirect: 'manual' })
+  const recordSent = await fetch(`${base}/data/stat_bookings`, { body: new URLSearchParams({ guest: 'Ann', next: '/stats-test' }), headers: { 'CF-Connecting-IP': '198.51.100.7' }, method: 'POST', redirect: 'manual' })
+  await call('save_item', { collection: 'stats-shop', title: 'Stats Mug', price: '฿100', stock: 5 })
+  const mug = (await apiJson('/products?collection=stats-shop')).body.products.find((product) => product.title === 'Stats Mug')
+  const orderSent = await apiJson('/orders', { body: asJson({ address: '1 Test Road', lines: [{ item: mug.id, quantity: 1 }], name: 'Stats Buyer', payment: 'cod', phone: '0812345678' }), headers: { 'CF-Connecting-IP': '198.51.100.10' }, method: 'POST' })
+  await call('save_record', { table: 'stat_bookings', values: { guest: 'Added by Claude' } })
+  await settle()
+  const converted = await stats()
+  check(entrySent.status === 303 && recordSent.status === 303 && orderSent.status === 201, 'statistics: a form message, a record and an order go through', `${entrySent.status} ${recordSent.status} ${orderSent.status} ${JSON.stringify(orderSent.body)}`)
+  check(converted.conversions.entry - before.conversions.entry === 1 && converted.conversions.record - before.conversions.record === 1 && converted.conversions.order - before.conversions.order === 1, 'orders, form messages and records visitors add are counted as conversions, and the owner’s own are not', JSON.stringify(converted.conversions))
+  check(converted.conversionRate === Number((converted.conversions.total / converted.visitors).toFixed(4)), 'the conversion rate is conversions per visitor', `${converted.conversionRate}`)
+
+  // The Statistics page, in English and Thai, with a chart that needs no script
+  const statsHtml = await (await fetch(`${owner}/stats`)).text()
+  check(statsHtml.includes('>Statistics</h1>') && statsHtml.includes('<svg') && statsHtml.includes('role="img"') && !statsHtml.includes('<script') && statsHtml.includes('/stats-test') && statsHtml.includes('google.com') && statsHtml.includes('Conversion rate') && statsHtml.includes(`href="/owner/${code}/stats?days=30"`), 'the owner sees visitors, pages, referrers, conversions and a chart with no script')
+  check((await (await fetch(`${owner}/stats?days=30`)).text()).includes('aria-current="page">Last 30 days'), 'the owner can see the last 30 days')
+  check((await (await fetch(`${owner}`)).text()).includes(`href="/owner/${code}/stats"`), 'Statistics is in the back office menu')
+  check((await fetch(`${owner}/stats`, { method: 'POST', redirect: 'manual' })).status === 404 && (await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd/stats`)).status === 404, 'the Statistics page only opens with the right link')
+  await call('update_site', { officeLanguage: 'th' })
+  const thaiStats = await (await fetch(`${owner}/stats`)).text()
+  check(thaiStats.includes('>สถิติ</h1>') && thaiStats.includes('ผู้เข้าชม') && thaiStats.includes('อัตราการเกิดยอด'), 'the Statistics page is in Thai for a Thai back office')
+  await call('update_site', { officeLanguage: 'en' })
+
+  // Staff see it only when the owner gives them Statistics
+  const joinedStaff = await fetch(`${base}/signup`, { body: new URLSearchParams({ email: 'stats-staff@example.test', name: 'Stats Staff', password: 'stats-pass-123' }), headers: { 'CF-Connecting-IP': '198.51.100.11' }, method: 'POST', redirect: 'manual' })
+  const staffCookie = sessionOf(joinedStaff)
+  const statsStaff = (await call('list_customers', {})).data.find((row) => row.email === 'stats-staff@example.test')
+  const asStaff = (path, method = 'GET') => fetch(`${base}${path}`, { headers: { Cookie: staffCookie, Origin: base }, method, redirect: 'manual' })
+  await call('set_customer_role', { id: statsStaff.id, role: 'staff', areas: ['orders'] })
+  const staffHomeBefore = await (await asStaff('/staff')).text()
+  check((await asStaff('/staff/stats')).status === 403 && !staffHomeBefore.includes('href="/staff/stats"'), 'staff without Statistics can’t open it')
+  const granted = await call('set_customer_role', { id: statsStaff.id, role: 'staff', areas: ['stats'] })
+  const staffStats = await asStaff('/staff/stats')
+  const staffStatsHtml = await staffStats.text()
+  check(JSON.stringify(granted.data.areas) === '["stats"]' && staffStats.status === 200 && staffStatsHtml.includes('>Statistics</h1>') && (await (await asStaff('/staff')).text()).includes('href="/staff/stats"') && !staffStatsHtml.includes(code), 'the owner can give staff Statistics, without their private link')
+  check((await asStaff('/staff/stats', 'POST')).status === 403 && (await asStaff('/staff/orders')).status === 403, 'staff with Statistics can only look, and nothing else opens')
+  check((await (await fetch(`${owner}/customers`)).text()).includes('value="stats" checked'), 'the Customers page shows the Statistics area')
+  await call('set_customer_role', { id: statsStaff.id, role: 'member' })
+
+  // Taking everything with you: counts only, never an address, a browser name, a hash or the salt
+  const withStats = await (await fetch(`${owner}/export.json`)).json()
+  const statsText = JSON.stringify(withStats.statistics)
+  const firstRow = withStats.statistics?.daily?.[0] ?? {}
+  check(withStats.statistics?.daily?.length > 0 && withStats.statistics.conversions.length > 0 && JSON.stringify(Object.keys(firstRow).sort()) === JSON.stringify(['country', 'day', 'device', 'path', 'referrer', 'views', 'visitors']), 'the download has the daily statistics', JSON.stringify(firstRow))
+  check(!statsText.includes('198.51.100') && !statsText.includes('Mozilla') && !statsText.includes('iPhone') && !/[0-9a-f]{16}/.test(statsText) && !statsText.includes('salt') && !JSON.stringify(withStats).includes('198.51.100.7'), 'the download holds no IP address, browser name, visitor hash or salt')
+
+  // Turning it off stops counting at once, with no publishing
+  const offSaved = await call('update_site', { statistics: false })
+  await visit('/', desktop, { 'CF-Connecting-IP': '198.51.100.12' })
+  await fetch(`${base}/form/stats-test/hello`, { body: new URLSearchParams({ message: 'Off' }), headers: { 'CF-Connecting-IP': '198.51.100.12' }, method: 'POST', redirect: 'manual' })
+  await settle()
+  const off = await stats()
+  check(offSaved.data.live === true && off.views === converted.views && off.visitors === converted.visitors && off.conversions.total === converted.conversions.total && off.counting.startsWith('off'), 'turning statistics off stops counting views and conversions at once', `${off.views} ${converted.views}`)
+  check((await (await fetch(`${owner}/stats`)).text()).includes('Counting is off'), 'the Statistics page says counting is off')
+  const settingsHtml = await (await fetch(`${owner}/settings`)).text()
+  check(settingsHtml.includes('name="statistics" type="checkbox">') && !settingsHtml.includes('name="statistics" type="checkbox" checked'), 'Settings shows counting is off')
+  await call('update_site', { statistics: true })
+  await visit('/', desktop, { 'CF-Connecting-IP': '198.51.100.12' })
+  await settle()
+  check((await stats()).views === converted.views + 1, 'turning it back on counts again')
+
+  // Forgetting each day and keeping 400 days, on the test clock
+  const probe = await call('save_webhook', { url: 'http://insecure.test/stats-probe', events: ['order.created'] })
+  if (!probe.isError) for (const hook of (await call('list_webhooks', {})).data) if (hook.url.includes('stats-probe')) await call('delete_webhook', { id: hook.id })
+  const canTick = (await tick()).includes('Ran scheduled event')
+  if (canTick && !probe.isError) {
+    const now = Date.now()
+    const day = 86_400_000
+    const sameDay = await stats()
+    await visit('/stats-test', desktop)
+    await settle()
+    check((await stats()).visitors === sameDay.visitors, 'the same person later the same day is still one visitor')
+    // The first run of a new day forgets today's visitor hashes and salt, so the same person can no longer be recognised.
+    await tick(now + day)
+    await visit('/stats-test', desktop)
+    await settle()
+    const forgotten = await stats()
+    check(forgotten.visitors === sameDay.visitors + 1 && forgotten.views === sameDay.views + 2, 'after the day ends, nothing is left to recognise a visitor by: the same person counts again', `${forgotten.visitors} vs ${sameDay.visitors}`)
+    await tick(now + 399 * day)
+    check((await stats()).views === forgotten.views, 'statistics are kept for 400 days')
+    await tick(now + 400 * day)
+    const cleaned = await stats()
+    check(cleaned.views === 0 && cleaned.visitors === 0 && cleaned.conversions.total === 0, 'statistics older than 400 days are deleted', JSON.stringify(cleaned).slice(0, 200))
+    const cleanedExport = (await (await fetch(`${owner}/export.json`)).json()).statistics
+    check(!cleanedExport.daily.some((row) => row.day === forgotten.to) && !cleanedExport.conversions.some((row) => row.day === forgotten.to), 'the deleted days are gone from the download too')
+    await tick()
+  } else {
+    console.log(`skip  statistics retention: start the site with --test-scheduled --var WEBHOOK_ALLOW_HTTP:1 to check it${canTick ? '' : ' (no scheduled runs here)'}`)
+  }
+}
 
 if (loadCount) {
   const runs = [['view page', () => fetch(base)], ['list tools', () => client.listTools()], ['get_site', () => call('get_site')], ['check_site', () => call('check_site')], ['save_page', () => call('save_page', page)]]

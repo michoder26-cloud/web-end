@@ -18,6 +18,7 @@ import { browserWords, officeText } from './office-words'
 import { claimSite, getSite, isOwner, setupPage, shell } from './owner'
 import { renderPage } from './render'
 import { cartCount, handleShop } from './shop'
+import { cleanStats, countConversion, countVisit } from './stats'
 import { stripeWebhook } from './stripe'
 import type { Block, Env, FormField, Settings, SiteRow } from './types'
 import { findLivePage, findWorkingPage, liveSite, liveSlugs } from './versions'
@@ -129,6 +130,7 @@ async function receiveForm(request: Request, env: Env, url: URL, site: SiteRow, 
   const entry = await env.DB.prepare('INSERT INTO entries (site_id, form, page, data, customer_id) VALUES (?, ?, ?, ?, ?) RETURNING id, created_at')
     .bind(site.id, formName, pageSlug, JSON.stringify(data), customer?.id ?? null)
     .first<{ created_at: string; id: number }>()
+  await countConversion(env, site, 'entry')
   await runAutomations(env, site.id, 'entry.created', { form: formName, page: pageSlug, id: entry?.id, created_at: entry?.created_at, customer_id: customer?.id ?? null, data })
   await tellOwnerAboutEntry(env, { fields: block.fields as FormField[], heading: block.heading, name: formName }, data)
   return back('sent')
@@ -241,19 +243,29 @@ async function answer(request: Request, env: Env): Promise<Response> {
 export default {
   async fetch(request: Request, plainEnv: Env, context: ExecutionContext): Promise<Response> {
     const env: Env = { ...plainEnv, defer: (work) => context.waitUntil(work) }
-    const response = await answer(request, env)
-    if (response.status !== 404 || (request.method !== 'GET' && request.method !== 'HEAD')) return response
-    const url = new URL(request.url)
-    if (/^\/(owner|mcp|api)(\/|$)/.test(url.pathname)) return response
-    return (await followRedirect(env, url).catch((): null => null)) ?? response
+    const response = await answerOrRedirect(request, env)
+    // Counts a public page view after it is sent, with no cookies and nothing kept about the visitor. See stats.ts.
+    countVisit(env, request, new URL(request.url).pathname, response.status)
+    return response
   },
 
   /** Cloudflare calls this about every 15 minutes, as wrangler.jsonc says, to run scheduled automations that are due. */
   async scheduled(controller: ScheduledController, plainEnv: Env, context: ExecutionContext): Promise<void> {
     const env: Env = { ...plainEnv, defer: (work) => context.waitUntil(work) }
-    await runSchedules(env, testClock(env, controller.cron) ?? Date.now())
+    const now = testClock(env, controller.cron) ?? Date.now()
+    await runSchedules(env, now)
+    // Once a day: forgets yesterday's visitor hashes and deletes statistics older than 400 days.
+    await cleanStats(env, now).catch((error) => console.error('Statistics could not be cleaned up', error))
   },
 } satisfies ExportedHandler<Env>
+
+async function answerOrRedirect(request: Request, env: Env) {
+  const response = await answer(request, env)
+  if (response.status !== 404 || (request.method !== 'GET' && request.method !== 'HEAD')) return response
+  const url = new URL(request.url)
+  if (/^\/(owner|mcp|api)(\/|$)/.test(url.pathname)) return response
+  return (await followRedirect(env, url).catch((): null => null)) ?? response
+}
 
 /**
  * Tests start a run through `wrangler dev --test-scheduled` at /__scheduled?cron=..., which passes on nothing but the cron text.

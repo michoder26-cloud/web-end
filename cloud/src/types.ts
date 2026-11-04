@@ -48,6 +48,7 @@ export type Settings = {
   promptPayId?: string
   promptPayName?: string
   shippingFee?: number
+  statistics?: boolean
   style?: string
   tagline?: string
   text?: string

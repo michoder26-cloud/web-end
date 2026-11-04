@@ -36,6 +36,7 @@ Claude asks a few short questions about your business, builds the pages and desi
 - **Email:** order confirmations with the customer's private order link, an email when an order is paid, shipped, done or cancelled, and password reset emails, in your site's language when it's English or Thai
 - **Starters:** five complete sample sites in English and Thai, ready in one click from the back office or through Claude: a café or restaurant, an online shop, classes and bookings with booking numbers, services or coaching, and a portfolio. Samples are labelled as samples, with no made-up reviews, figures, addresses or phone numbers.
 - **Build guides for Claude:** planning, data design, access rules, screens, design, copy, shop, publishing, Wix, staff, automations and launch checks, built in, so there's nothing extra to install
+- **Visitor statistics without tracking:** visitors, page views, top pages, sites that sent visitors, countries, devices, and orders, messages and bookings with a conversion rate, on a Statistics page in the back office, or ask Claude "how is my site doing?". No cookies, no scripts and no cookie banner. [How it works](#visitor-statistics-and-privacy)
 - **System page:** hosting, version, publishing, database use, login, payments, email and connections in one place
 - **Shop:** product pages, categories, sale prices, sizes and colours, stock that can't oversell, a cart, free delivery thresholds, private order links and order status. Prices are always set on the server.
 - **Payments:** bank transfer, PromptPay QR codes and pay on delivery, plus cards through your own Stripe account
@@ -93,10 +94,23 @@ What you can give, one by one:
 - **Data:** add, change and delete records in tables open to staff. Owner-only tables stay hidden, and only you change a table's fields or delete it.
 - **Messages and bookings** from your forms
 - **Customers:** see the list of names and emails, nothing more
+- **Statistics:** visitors, pages, referring sites, countries, devices and conversions
 
 Settings, Connect, Automations, System, Updates, Move here, WordPress, the full download of your data, customer accounts, staff access and your private links always stay yours alone. Every page and every change is checked on the server, not just hidden from the menu, and a change must come from a page of your own site. Press **Remove staff access** and it stops at once, even if they're logged in. Making them staff again starts with nothing ticked.
 
 The staff role on its own still lets a person read and change tables you open to staff, on your pages and through the API, as it did before. Orders through the API need **Orders**.
+
+## Visitor statistics and privacy
+
+Your site counts its own visitors as it sends each page, so there's nothing to add and no outside analytics company sees your visitors. Open **Statistics** in your back office, or ask Claude "how is my site doing?".
+
+What is kept, and only as numbers per day: page views for each page, an estimate of visitors, the website that sent each visit (just its name, such as google.com, never the full address), the country Cloudflare reports, the kind of device (phone, tablet or computer) and how many orders, form messages and bookings or other records visitors made.
+
+What is never kept: cookies, scripts on your pages, IP addresses, full browser details or anything that follows a person from one day to the next. To count a person once a day, the site mixes their IP address and browser name with a random code made fresh each day and keeps only a short scrambled result. That code and those results are deleted shortly after midnight in your time zone, so yesterday's visitors can't be matched to today's, or to an address. Like [Plausible](https://plausible.io/data-policy), this means someone who visits on two days counts as two visitors, and two people sharing one network and the same browser may count as one.
+
+Bots that say what they are, your back office, previews, Claude, images and files aren't counted. Daily numbers are kept for 400 days, then deleted. They're in the full download of your data. Turn counting off in **Settings** whenever you like; numbers already counted stay until they're 400 days old.
+
+Each page view writes one row to your database, and a visitor's first page of the day writes one more and one when it's deleted, so about 1.8 rows per view. Cloudflare's free plan allows 100,000 rows written a day, enough for tens of thousands of views. This isn't legal advice: check what your country asks you to say about statistics in your privacy text.
 
 ## Updating your site
 
