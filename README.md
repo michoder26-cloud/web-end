@@ -100,6 +100,16 @@ We ran web-end's full test suite against a real EU database, and it passed. We h
 
 This covers where your database lives, including uploaded photos. Requests can still be handled by Cloudflare's servers near each visitor, and Claude and any services you connect have their own rules. It doesn't make your site GDPR compliant by itself, so have that checked for your business.
 
+## Moving to WordPress
+
+Wix can't export a site to WordPress, so web-end works as the bridge. Move your Wix site here first, then open **WordPress** in your back office. It gives you:
+
+- **A WordPress file** with your pages, photos and menu. In WordPress, open **Tools**, **Import**, **WordPress**, and tick **Download and import file attachments**.
+- **A WooCommerce file** with your products, prices, sale prices, stock, categories, photos and options.
+- **An old links file** for the Redirection plugin, so links to your old site keep working.
+
+The page also lists what WordPress needs a plugin for, such as forms and tables. Customer passwords and orders don't move. Your design comes from your WordPress theme. Keep this site online until WordPress has copied your photos. The files are tested against WordPress's import format, but we haven't yet imported one into a live WordPress site, so check yours before you rely on it.
+
 ## Using it as the backend for Wix or another front end
 
 Keep your pages where they are, and let web-end hold the data, logins and orders. Open **Connect** in your back office to create a secret key, then ask Claude to read its `connect_wix` guide and write the code for you. A key only works from server code, such as Wix backend code. A browser that sends one is refused, so never put one in a page.

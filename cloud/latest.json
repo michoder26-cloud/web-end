@@ -1,4 +1,4 @@
 {
-  "version": "0.6.5",
-  "notes": "The move check no longer reports lines as missing when the old page split them with a line break, or when only commas and other punctuation differ."
+  "version": "0.7.0",
+  "notes": "Move your site to WordPress: a new back office page gives you a WordPress import file with your pages, photos and menu, a WooCommerce product file, and your old links for the Redirection plugin. Moving from Wix to WordPress now works through web-end. Pages can also have a links block for sub-menus, footer links and resource lists."
 }

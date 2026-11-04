@@ -11,6 +11,7 @@ import { latestRelease } from './updates'
 import { listVersions, publishVersion, restoreVersion, unpublishedChanges } from './versions'
 import { version } from './version'
 import { eventNames, validWebhookUrl } from './webhooks'
+import { redirectionCsv, woocommerceCsv, wordpressPlan, wordpressXml } from './wordpress'
 import type { Env, Settings, SiteRow } from './types'
 
 const accessNames: Record<string, string> = { members: 'Logged-in customers', own: 'Logged-in customers, their own only', owner: 'Only you', public: 'Anyone', staff: 'Staff and you' }
@@ -377,8 +378,37 @@ async function systemPage(env: Env, url: URL, site: SiteRow, code: string) {
 <article class="card account__record"><h2>Publishing</h2><dl>${row('Live version', status.publishing.liveVersion ?? 'Not published yet, so changes show at once', '/publish')}${row('Waiting to publish', waiting ? waiting.pages.length + (waiting.settings ? 1 : 0) : 0)}</dl></article>
 <article class="card account__record"><h2>Database</h2><dl>${row('Pages', status.database.pages, '/pages')}${row('Tables', status.database.tables, '/data')}${row('Records', status.database.records)}${row('Customers', status.database.customers, '/customers')}${row('Orders', status.database.orders, '/orders')}${row('Images', `${(status.database.imageBytes / 1_000_000).toFixed(1)} MB of 200 MB`, '/media')}</dl></article>
 <article class="card account__record"><h2>Login and payments</h2><dl>${row('Customer accounts', on(status.login.customerAccounts), '/settings')}${row('Cart', on(status.payments.cart))}${row('Bank transfer', on(status.payments.bankTransfer))}${row('Pay on delivery', on(status.payments.payOnDelivery))}${row('Cards', on(status.payments.card))}${row('Stripe secrets in Cloudflare', status.payments.cardSecretsSet ? 'Set' : 'Not set')}</dl></article>
-<article class="card account__record"><h2>Your data is yours</h2><p>Your code is in your GitHub, and your database is in your Cloudflare account. You can also download all your content and data in one file at any time.</p><p><a class="button button--small" href="${base}/export.json">Download everything</a></p></article>
+<article class="card account__record"><h2>Your data is yours</h2><p>Your code is in your GitHub, and your database is in your Cloudflare account. You can also download all your content and data in one file at any time.</p><p><a class="button button--small" href="${base}/export.json">Download everything</a> <a class="button button--small" href="${base}/wordpress">Move to WordPress</a></p></article>
 <article class="card account__record"><h2>Connections</h2><dl>${row('Secret keys', status.connections.apiKeys, '/connect')}${row('Webhooks', status.connections.webhooks)}${row('Websites allowed to call from a browser', status.connections.browserSites.join(', ') || 'None')}</dl></article>`,
+  )
+}
+
+const download = (body: string, name: string, type: string) =>
+  new Response(body, { headers: { 'Cache-Control': 'no-store', 'Content-Disposition': `attachment; filename="${name}"`, 'Content-Type': `${type}; charset=utf-8`, 'X-Content-Type-Options': 'nosniff', 'X-Robots-Tag': 'noindex' } })
+
+/** The steps and files for moving this site to WordPress. A Wix site moves here first, so this is also the way from Wix to WordPress. */
+async function wordpressPage(env: Env, url: URL, site: SiteRow, code: string) {
+  const plan = await wordpressPlan(env, site, url.origin)
+  const base = `/owner/${escapeHtml(code)}/wordpress`
+  const file = (href: string, label: string, note: string) => `<p><a class="button button--small" href="${base}/${href}">${label}</a> ${note}</p>`
+  return office(
+    site,
+    code,
+    'Move to WordPress',
+    `<p>Your site can move to WordPress whenever you like. If your site is on Wix, move it here first with <a href="/owner/${escapeHtml(code)}/move">Move here</a>, check it, then come back to this page.</p>
+<article class="card account__record"><h2>1. Download your files</h2>
+${file('site.xml', 'WordPress file', `${plan.pages.length} pages, their photos and your menu.`)}
+${plan.products.length ? file('products.csv', 'WooCommerce products', `${plan.products.length} products with prices, sale prices, stock, categories, photos and options.`) : ''}
+${plan.data.redirects.length ? file('redirects.csv', 'Old links', `${plan.data.redirects.length} old addresses, so links to your old site keep working.`) : ''}</article>
+<article class="card account__record"><h2>2. Bring them into WordPress</h2><ol>
+<li>Set up WordPress with your host.${plan.products.length ? ' Add the WooCommerce plugin for your products.' : ''}${plan.data.redirects.length ? ' Add the Redirection plugin for your old links.' : ''}</li>
+<li>In WordPress, open <b>Tools</b>, <b>Import</b>, <b>WordPress</b>. Install the importer if it asks, then upload the WordPress file. Tick <b>Download and import file attachments</b> so your photos are copied.</li>
+<li>In <b>Settings</b>, <b>Reading</b>, choose <b>A static page</b> and pick <b>Home</b> as your homepage.</li>
+<li>Your menu arrives as <b>Main menu</b>. Choose it in your theme's menu or navigation settings.</li>
+${plan.products.length ? '<li>In <b>Products</b>, choose <b>Import</b> and upload the WooCommerce products file. Shop sections on your pages already show your WooCommerce products.</li>' : ''}
+${plan.data.redirects.length ? '<li>In <b>Tools</b>, <b>Redirection</b>, <b>Import/Export</b>, upload the old links file.</li>' : ''}
+</ol><p>Keep this site online until WordPress has copied your photos. Your design comes from your WordPress theme, so pages look different there.</p></article>
+<article class="card account__record"><h2>3. What needs your attention</h2>${plan.todo.length ? `<ul>${plan.todo.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>` : '<p>Nothing. Everything on your pages has a place in WordPress.</p>'}</article>`,
   )
 }
 
@@ -390,5 +420,11 @@ export function handlePlatform(request: Request, env: Env, url: URL, site: SiteR
   if (area === 'system' && !id && request.method !== 'POST') return systemPage(env, url, site, code)
   if (area === 'export.json' && !id && request.method === 'GET') return exportEverything(env, site)
   if (area === 'move' && !action) return handleMove(request, env, url, site, code, id, saved)
+  if (area === 'wordpress' && !action && request.method === 'GET') {
+    if (!id) return wordpressPage(env, url, site, code)
+    if (id === 'site.xml') return wordpressXml(env, site, url.origin).then((body) => download(body, 'wordpress-import.xml', 'application/xml'))
+    if (id === 'products.csv') return woocommerceCsv(env, site, url.origin).then((body) => download(body, 'woocommerce-products.csv', 'text/csv'))
+    if (id === 'redirects.csv') return redirectionCsv(env, site, url.origin).then((body) => download(body, 'redirection-old-links.csv', 'text/csv'))
+  }
   return null
 }

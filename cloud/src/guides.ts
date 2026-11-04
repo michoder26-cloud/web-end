@@ -32,6 +32,14 @@ Finish:
 14. Tell them to check the preview on a phone, publish, then move the domain and only then close the old site. If the domain was bought from Wix, it can stay there and point here, or be transferred out.
 
 Features Wix apps provide, such as bookings or members, can often be rebuilt with tables. Read plan_app before promising that. Don't claim the move is complete unless you checked it.`,
+  move_to_wordpress: `# Moving a site to WordPress, including from Wix
+Wix can't export a site to WordPress. web-end is the bridge: move the Wix site here first with the move_from_wix guide, check it with check_site, then hand it to WordPress. A site built here can move the same way.
+
+1. Make sure the site here is complete and check_site is clean, because WordPress gets what this site has.
+2. Send the owner to the back office page Move to WordPress, at the back office link from get_site followed by /wordpress. It has the WordPress import file with pages, photos and the menu, a WooCommerce product file when there are products, and an old-links file for the Redirection plugin when there are redirects, plus the steps in order.
+3. Read them the list under What needs your attention. Forms need a form plugin, tables need a plugin or this site kept as the backend through its API, custom code is left out, customer passwords can't move, and orders stay here until they download them with Download everything.
+4. Tell them the design comes from their WordPress theme, so pages will look different, and that this site must stay online until WordPress has copied the photos.
+5. Keep the Wix site and this site running until the WordPress site has been checked. Domains are moved by the owner at their registrar.`,
   plan_app: `# Planning an app or feature
 1. Name the people: visitors, customers who log in, staff, and the owner. List what each one must do.
 2. Turn each noun into a table and each action into a screen. "Customers book a class and staff mark who came" needs classes and bookings tables, a page listing classes, a booking form, and a staff page.
@@ -148,7 +156,7 @@ Tell the owner plainly what you could not test, such as real card payments or he
   limits: `# Honest limits
 - It runs on the owner's Cloudflare account. The free plan allows 100,000 requests and 5 million database rows read a day, 100,000 rows written a day, and 10 ms of processor time per request. At the limit it pauses until 00:00 UTC. Workers Paid starts at $5 a month.
 - 50 tables per site, 50,000 records per table, 20 KB per record. Filtering large tables reads many rows, so show short lists.
-- The owner can download all content and data from the System page. Their code is in their GitHub and their database in their Cloudflare account.
+- The owner can download all content and data from the System page, and move the site to WordPress from the Move to WordPress page. Their code is in their GitHub and their database in their Cloudflare account.
 - No built-in email, so a forgotten password needs a reset link from the back office. No automatic bank transfer checks. No built-in logic beyond tables, rules, webhooks and sandboxed custom code. Anything else means a developer changing the code in the owner's GitHub repository, and an update replaces such changes, though they stay in GitHub history.
 - No Google or social login yet.
 - Claude can't create secret keys, change Cloudflare secrets, or connect a domain. The owner does those.`,

@@ -203,7 +203,7 @@ async function answer(request: Request, env: Env): Promise<Response> {
       return await receiveForm(request, env, url, site, parts[1], parts[2])
     }
     if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405 })
-    if (parts[0] === 'media' && parts.length === 2 && /^\d+$/.test(parts[1])) return (await showImage(env, site.id, parts[1])) ?? notFound()
+    if (parts[0] === 'media' && parts.length === 2 && /^\d+(\.(gif|jpe?g|png|webp))?$/.test(parts[1])) return (await showImage(env, site.id, parts[1].split('.')[0])) ?? notFound()
     if (parts[0] === 'frame' && parts.length === 3 && /^\d+$/.test(parts[2])) return await showFrame(env, site, parts[1], parts[2])
     if (parts.length > 1) return notFound()
     return await showPage(request, env, url, site, parts[0] ?? 'home')

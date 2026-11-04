@@ -1043,6 +1043,22 @@ const afterOffice = (await call('list_redirects', {})).data
 check(afterOffice.length === 2 && afterOffice.some((row) => row.from_path === '/kept'), 'the Move page replaces the list')
 check((await (await fetch(`${owner}/move/redirects`, { body: new URLSearchParams({ redirects: '/x | https://evil.test' }), method: 'POST' })).text()).includes('role="alert"'), 'the Move page refuses links to other sites')
 check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd/move`)).status === 404, 'a wrong link cannot open the Move page')
+// Moving to WordPress
+const wpPage = await (await fetch(`${owner}/wordpress`)).text()
+check(wpPage.includes('Move to WordPress') && wpPage.includes('/wordpress/site.xml') && wpPage.includes('/wordpress/products.csv') && wpPage.includes('/wordpress/redirects.csv') && wpPage.includes('needs a form plugin'), 'the back office explains the move to WordPress and lists what needs attention')
+const wpXmlResponse = await fetch(`${owner}/wordpress/site.xml`)
+const wpXml = await wpXmlResponse.text()
+check(wpXmlResponse.headers.get('content-disposition')?.includes('wordpress-import.xml') && wpXml.includes('<wp:wxr_version>1.2</wp:wxr_version>') && wpXml.includes('<wp:post_type><![CDATA[page]]></wp:post_type>') && wpXml.includes('<wp:post_name><![CDATA[book]]></wp:post_name>'), 'the WordPress file has the pages', wpXml.slice(0, 400))
+check(wpXml.includes('<wp:post_type><![CDATA[nav_menu_item]]></wp:post_type>') && wpXml.includes('<category domain="nav_menu" nicename="main-menu">') && wpXml.includes('<![CDATA[_menu_item_object_id]]>'), 'the WordPress file has the menu')
+const wpPhoto = /<wp:attachment_url><!\[CDATA\[([^\]]+)\]\]><\/wp:attachment_url>/.exec(wpXml)?.[1]
+check(!wpPhoto || (/\/media\/\d+\.(png|jpg|webp|gif)$/.test(wpPhoto) && (await fetch(wpPhoto.replace(/^https?:\/\/[^/]+/, base))).headers.get('content-type')?.startsWith('image/')), 'photos are listed with a file type WordPress recognises, and that address works', wpPhoto)
+check(!/<script/i.test(wpXml), 'the WordPress file has no scripts')
+const wooCsv = await (await fetch(`${owner}/wordpress/products.csv`)).text()
+const wooRows = wooCsv.trim().split('\r\n')
+check(wooRows[0].startsWith('"Type","SKU","Name","Published"') && wooRows.some((row) => row.startsWith('"variable",') && /"Option","(S, M|M, S)"/.test(row)) && wooRows.some((row) => row.startsWith('"variation",') && row.includes('"1599","1299.5"') && row.includes('"3"')), 'products go to WooCommerce with sale prices, stock and options', wooCsv.slice(0, 600))
+check(wooRows.some((row) => row.startsWith('"variation",') && row.includes('"0","0"')), 'a sold out option stays sold out in WooCommerce')
+const redirectionFile = await (await fetch(`${owner}/wordpress/redirects.csv`)).text()
+check(redirectionFile.startsWith('"source","target","regex","code"') && redirectionFile.includes('"301"'), 'old links go to the Redirection plugin', redirectionFile)
 
 // Reading the old site
 check((await call('read_website_page', { url: 'https://example.test/', ownerConfirmed: false }).catch(() => ({ isError: true }))).isError, 'reading a site needs the owner to confirm it is theirs')
