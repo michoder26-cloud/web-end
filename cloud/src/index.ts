@@ -3,7 +3,8 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { handleAccount } from './account'
 import { handleApi } from './api'
 import { getCustomer } from './auth'
-import { handleOffice } from './cms'
+import { allows, handleOffice, ownerDesk, staffEntry } from './cms'
+import type { Desk } from './cms'
 import { loadPageRecords, receiveRecord } from './data'
 import { tellOwnerAboutEntry } from './email'
 import { validateEntry } from './forms'
@@ -67,21 +68,21 @@ async function showPage(request: Request, env: Env, url: URL, site: SiteRow, slu
   )
 }
 
-/** Shows the owner the unpublished copy of a page, with its menu links staying inside the preview. */
-async function showPreview(env: Env, url: URL, site: SiteRow, code: string, slug: string) {
+/** Shows the owner, or staff who edit pages, the unpublished copy of a page, with its menu links staying inside the preview. */
+async function showPreview(env: Env, url: URL, site: SiteRow, desk: Desk, slug: string) {
   const page = await findWorkingPage(env, site, slug)
   const t = officeText(site)
-  if (!page) return html(shell(t.previewTitle, `<h1>${t.previewMissing}</h1><p><a href="/owner/${escapeHtml(code)}/pages">${t.seeYourPages}</a></p>`, false, t.lang), 404, privateHeaders)
+  if (!page) return html(shell(t.previewTitle, `<h1>${t.previewMissing}</h1><p><a href="${escapeHtml(desk.base)}/pages">${t.seeYourPages}</a></p>`, false, t.lang), 404, privateHeaders)
   const blocks = JSON.parse(page.blocks) as Block[]
   const [items, records, { results }] = await Promise.all([
     loadItems(env, site.id, blocks),
     loadPageRecords(env, site.id, blocks, { admin: false, customer: null }),
     env.DB.prepare('SELECT slug FROM pages WHERE site_id = ?').bind(site.id).all<{ slug: string }>(),
   ])
-  const base = `/owner/${code}/preview`
+  const base = `${desk.base}/preview`
   const slugs = new Set(results.map((row) => row.slug))
   const rendered = renderPage(site, { ...page, blocks }, { canonical: `${url.origin}/`, customer: null, items, query: url.searchParams, records })
-  const banner = `<p class="preview-banner" role="status">${t.previewBanner(`/owner/${escapeHtml(code)}/publish`)}</p>`
+  const banner = `<p class="preview-banner" role="status">${t.previewBanner(`${escapeHtml(desk.base)}/publish`)}</p>`
   const body = rendered
     .replace(/href="\/([a-z0-9-]*)((?:[?#][^"]*)?)"/g, (match, target: string, rest: string) => (!target || slugs.has(target) ? `href="${base}${target ? `/${target}` : ''}${rest}"` : match))
     // A frame could read its own address, and this address holds the owner's secret.
@@ -181,7 +182,7 @@ async function answer(request: Request, env: Env): Promise<Response> {
     const site = liveSite(working)
     if (url.pathname === '/setup') return see(url, '/')
     if (url.pathname === '/robots.txt') {
-      return new Response(`User-agent: *\nDisallow: /owner/\nDisallow: /mcp/\nDisallow: /api/\nDisallow: /data/\nDisallow: /frame/\nDisallow: /account\nDisallow: /cart\nDisallow: /checkout\nDisallow: /order/\nDisallow: /login\nDisallow: /signup\nDisallow: /reset/\nSitemap: ${url.origin}/sitemap.xml\n`, { headers: { 'Content-Type': 'text/plain' } })
+      return new Response(`User-agent: *\nDisallow: /owner/\nDisallow: /staff\nDisallow: /mcp/\nDisallow: /api/\nDisallow: /data/\nDisallow: /frame/\nDisallow: /account\nDisallow: /cart\nDisallow: /checkout\nDisallow: /order/\nDisallow: /login\nDisallow: /signup\nDisallow: /reset/\nSitemap: ${url.origin}/sitemap.xml\n`, { headers: { 'Content-Type': 'text/plain' } })
     }
     if (url.pathname === '/sitemap.xml') return await sitemap(env, url, site)
 
@@ -189,8 +190,17 @@ async function answer(request: Request, env: Env): Promise<Response> {
       // A wrong code looks the same as a page that doesn't exist.
       if (!(await isOwner(env, parts[1]))) return notFound()
       if (parts[0] === 'mcp') return parts.length === 2 ? await handleMcp(request, env, url, parts[1]) : notFound()
-      if (parts[2] === 'preview' && parts.length <= 4 && request.method === 'GET') return await showPreview(env, url, working, parts[1], parts[3] ?? 'home')
-      return await handleOffice(request, env, url, working, parts[1], parts)
+      const desk = ownerDesk(parts[1])
+      if (parts[2] === 'preview' && parts.length <= 4 && request.method === 'GET') return await showPreview(env, url, working, desk, parts[3] ?? 'home')
+      return await handleOffice(request, env, url, working, desk, parts.slice(2))
+    }
+
+    // Staff log in on the website and see only the parts of the back office the owner gave them.
+    if (parts[0] === 'staff') {
+      const desk = await staffEntry(request, env, url, working)
+      if (desk instanceof Response) return desk
+      if (parts[1] === 'preview' && parts.length <= 3 && request.method === 'GET' && allows(desk, 'pages')) return await showPreview(env, url, working, desk, parts[2] ?? 'home')
+      return await handleOffice(request, env, url, working, desk, parts.slice(1))
     }
 
     if (parts[0] === 'api') return await handleApi(request, env, url, site, parts)

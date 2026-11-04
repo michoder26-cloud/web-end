@@ -6,6 +6,7 @@ import { canSendEmail } from './email'
 import { getProduct, isAvailable } from './items'
 import { parsePrice } from './money'
 import { canPayByCard, orderForApi, orderLines, orderStatuses, setOrderStatus, submitOrder } from './shop'
+import { staffPermissions } from './staff'
 import { startCardPayment } from './stripe'
 import type { Env, Item, Order, Settings, SiteRow, Variant } from './types'
 import { version } from './version'
@@ -185,7 +186,8 @@ async function handleData(request: Request, env: Env, url: URL, site: SiteRow, a
 }
 
 async function handleOrders(request: Request, env: Env, url: URL, site: SiteRow, settings: Settings, actor: Actor, id?: string) {
-  const staff = actor.admin || actor.customer?.role === 'staff'
+  // Staff see everyone's orders only if the owner gave them orders. Otherwise they are customers like any other.
+  const staff = actor.admin || (actor.customer?.role === 'staff' && (await staffPermissions(env, actor.customer.id)).includes('orders'))
   if (!id) {
     if (request.method === 'GET') {
       if (!staff && !actor.customer) return fail(401, 'not_logged_in', 'Please log in.')
@@ -226,7 +228,7 @@ async function handleOrders(request: Request, env: Env, url: URL, site: SiteRow,
   if (!staff || actor.readOnly) return forbidden()
   const status = (await readBody(request))?.status
   if (typeof status !== 'string' || !orderStatuses.includes(status)) return fail(400, 'bad_status', `Use one of: ${orderStatuses.join(', ')}.`)
-  const result = await setOrderStatus(env, site.id, order.id, status)
+  const result = await setOrderStatus(env, site.id, order.id, status, actor.admin ? { actor: 'api', origin: url.origin } : { actor: 'staff', origin: url.origin, staff: actor.customer })
   return result === 'ok' ? json({ id: order.id, status }) : fail(409, 'no_stock', 'There is no longer enough stock to restore this order.')
 }
 

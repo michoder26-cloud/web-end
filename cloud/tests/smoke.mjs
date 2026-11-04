@@ -799,6 +799,98 @@ check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd/data`)).st
 const staffButton = await fetch(`${owner}/customers/${bobCustomer.id}/role`, { body: new URLSearchParams({ role: 'staff' }), method: 'POST', redirect: 'manual' })
 check(staffButton.status === 303 && (await (await fetch(`${owner}/customers`)).text()).includes('bob · staff'), 'the back office can make someone staff')
 await call('set_customer_role', { id: bobCustomer.id, role: 'member' })
+
+// Staff back office: their own login, only the areas the owner gave them, checked on the server
+const staffGet = (path, cookie = bobCookie) => fetch(`${base}${path}`, { headers: cookie ? { Cookie: cookie } : {}, redirect: 'manual' })
+const staffPost = (path, values, headers = {}) => fetch(`${base}${path}`, { body: values instanceof URLSearchParams ? values : new URLSearchParams(values), headers: { Cookie: bobCookie, Origin: base, ...headers }, method: 'POST', redirect: 'manual' })
+const toLogin = await staffGet('/staff', null)
+check(toLogin.status === 303 && (toLogin.headers.get('location') ?? '').endsWith('/login?next=/staff'), 'a visitor is sent to log in before the staff back office')
+check((await staffGet('/staff')).status === 404 && (await staffGet('/staff/orders')).status === 404, 'a customer who is not staff finds no staff back office')
+const bobStaff = await call('set_customer_role', { id: bobCustomer.id, role: 'staff', areas: ['orders', 'products'] })
+check(JSON.stringify(bobStaff.data.areas) === '["orders","products"]' && bobStaff.data.staffBackOffice === `${base}/staff`, 'Claude can give staff chosen areas', bobStaff.text)
+check((await call('list_customers', {})).data.find((row) => row.id === bobCustomer.id)?.staffAreas?.join() === 'orders,products', 'Claude sees which areas each staff member has')
+const staffHome = await staffGet('/staff')
+const staffHomeHtml = await staffHome.text()
+check(staffHome.status === 200 && staffHomeHtml.includes('href="/staff/orders"') && staffHomeHtml.includes('href="/staff/items"') && staffHomeHtml.includes('href="/staff/media"'), 'staff see the areas they were given', staffHomeHtml.slice(0, 600))
+check(!['/staff/pages', '/staff/data', '/staff/customers', '/staff/publish', '/staff/settings', '/staff/connect', '/staff/system', '/staff/updates', '/staff/move', '/staff/wordpress'].some((path) => staffHomeHtml.includes(`href="${path}"`)) && !staffHomeHtml.includes(code) && !staffHomeHtml.includes('/owner/') && !staffHomeHtml.includes('/mcp/'), 'staff see no other areas and never the owner link')
+check(staffHome.headers.get('x-robots-tag') === 'noindex' && staffHome.headers.get('cache-control') === 'no-store', 'the staff back office stays private')
+const staffOrders = await (await staffGet('/staff/orders')).text()
+check(staffOrders.includes('Guest &lt;b&gt;Buyer&lt;/b&gt;') && staffOrders.includes(`action="/staff/orders/${orderId}"`), 'staff with orders see the orders')
+const ownerOnlyGets = ['/staff/pages', '/staff/page/home', '/staff/preview', '/staff/data', '/staff/data/classes', '/staff/data/classes/export.csv', '/staff/customers', '/staff/publish', '/staff/settings', '/staff/connect', '/staff/system', '/staff/updates', '/staff/move', '/staff/wordpress', '/staff/wordpress/site.xml', '/staff/export.json']
+const openedGets = []
+for (const path of ownerOnlyGets) if ((await staffGet(path)).status !== 403) openedGets.push(path)
+check(!openedGets.length, 'every area staff were not given is refused when typed in directly', openedGets.join(', '))
+const siteNameBefore = (await call('get_site')).data.settings.name
+const ownerOnlyPosts = [
+  ['/staff/settings', { name: 'Hacked by staff' }],
+  ['/staff/publish', { note: 'staff publish' }],
+  ['/staff/publish/1/restore', { confirm: 'on' }],
+  ['/staff/pages', { slug: 'staff-page', title: 'Staff page' }],
+  ['/staff/page/home', { op: 'save', count: '0', title: 'x', description: 'x' }],
+  ['/staff/customers/' + bobCustomer.id + '/role', { role: 'staff' }],
+  ['/staff/customers/' + bobCustomer.id + '/access', { area: 'publish' }],
+  ['/staff/customers/' + bobCustomer.id + '/reset', {}],
+  ['/staff/customers/' + bobCustomer.id + '/delete', { confirm: 'on' }],
+  ['/staff/connect/key', { name: 'staff key', scope: 'full' }],
+  ['/staff/system/test-email', {}],
+  ['/staff/updates', { repo: 'evil/repo' }],
+  ['/staff/entry/1', { status: 'delete' }],
+  ['/staff/data', { op: 'schema', name: 'staff_table', label: 'x' }],
+  ['/staff/data/classes', { op: 'add', title: 'Staff class' }],
+  ['/staff/data/classes/delete', { confirm: 'on' }],
+  ['/staff/move/check', {}],
+]
+const openedPosts = []
+for (const [path, values] of ownerOnlyPosts) if ((await staffPost(path, values)).status !== 403) openedPosts.push(path)
+check(!openedPosts.length, 'every change outside their areas is refused on the server', openedPosts.join(', '))
+const afterPosts = await call('get_site')
+check(afterPosts.data.settings.name === siteNameBefore && !(await call('get_page', { slug: 'staff-page' })).data?.slug && (await call('list_customers', {})).data.some((row) => row.id === bobCustomer.id) && (await call('list_tables', {})).data.some((table) => table.name === 'classes'), 'refused changes leave everything as it was')
+const staffPaid = await staffPost(`/staff/orders/${orderId}`, { status: 'done' })
+check(staffPaid.status === 303 && (staffPaid.headers.get('location') ?? '').endsWith('/staff/orders') && (await call('list_orders', {})).data.find((row) => row.id === orderId)?.status === 'done', 'staff with orders can change an order status')
+check((await (await fetch(`${owner}/orders`)).text()).includes('bob &lt;bob@example.test&gt;'), 'the owner sees which staff member changed an order')
+check((await apiJson('/orders', { token: bobToken })).body.orders.some((row) => row.id === p_orderId), 'staff with orders see every order through the API too')
+// Changes need to come from this site
+const crossSite = [await staffPost(`/staff/orders/${orderId}`, { status: 'shipped' }, { Origin: 'https://evil.example' }), await fetch(`${base}/staff/orders/${orderId}`, { body: new URLSearchParams({ status: 'shipped' }), headers: { Cookie: bobCookie }, method: 'POST', redirect: 'manual' }), await staffPost(`/staff/orders/${orderId}`, { status: 'shipped' }, { Origin: 'null', 'Sec-Fetch-Site': 'cross-site' })]
+check(crossSite.every((response) => response.status === 403) && (await call('list_orders', {})).data.find((row) => row.id === orderId)?.status === 'done', 'a change from another site, or with no sign of where it came from, is refused', crossSite.map((response) => response.status).join())
+check((await staffPost(`/staff/orders/${orderId}`, { status: 'done' }, { Origin: 'null', 'Sec-Fetch-Site': 'same-origin' })).status === 303, 'a browser that hides the origin but says the page is from this site is let through')
+check((await fetch(`${base}/staff/orders/${orderId}`, { body: new URLSearchParams({ status: 'shipped' }), headers: { Origin: base }, method: 'POST', redirect: 'manual' })).status === 404, 'a change with no login is refused')
+// Products and images
+const staffItem = await staffPost('/staff/items', { collection: 'staff-shop', title: 'Staff <mug>', price: '฿50', published: 'on' })
+check(staffItem.status === 303 && (await call('list_items', { collection: 'staff-shop' })).data.some((item) => item.title === 'Staff <mug>'), 'staff with products can add a product')
+check((await staffGet('/staff/media')).status === 200, 'staff with products can open the images')
+// The owner changes what they can do, and it works at once
+const access = new URLSearchParams([['area', 'pages'], ['area', 'data'], ['area', 'customers'], ['area', 'not-an-area']])
+check((await fetch(`${owner}/customers/${bobCustomer.id}/access`, { body: access, method: 'POST', redirect: 'manual' })).status === 303, 'the owner can change what a staff member can do')
+const ownerCustomers = await (await fetch(`${owner}/customers`)).text()
+check(ownerCustomers.includes(`action="/owner/${code}/customers/${bobCustomer.id}/access"`) && ownerCustomers.includes('value="pages" checked') && !ownerCustomers.includes('value="orders" checked') && ownerCustomers.includes(`${base}/staff`), 'the Customers page shows each staff member’s areas and the staff link')
+check((await staffGet('/staff/orders')).status === 403 && (await staffPost(`/staff/orders/${orderId}`, { status: 'shipped' })).status === 403 && (await staffGet('/staff/items')).status === 403, 'areas taken away are refused at once')
+check(!(await apiJson('/orders', { token: bobToken })).body.orders.some((row) => row.id === p_orderId), 'without orders, staff see only their own orders through the API')
+const staffPages = await staffGet('/staff/pages')
+check(staffPages.status === 200 && (await staffPages.text()).includes('href="/staff/page/home"'), 'areas given are open at once')
+const staffEditor = await (await staffGet('/staff/page/book')).text()
+check(staffEditor.includes('action="/staff/page/book"') && !staffEditor.includes('/owner/'), 'staff edit pages in the same editor')
+const staffEditorValues = formValues(staffEditor)
+staffEditorValues.set('op', 'save')
+staffEditorValues.set('title', 'Book a table today')
+check((await staffPost('/staff/page/book', staffEditorValues)).status === 303 && (await call('get_page', { slug: 'book' })).data.title === 'Book a table today', 'staff with pages can save a page')
+await call('save_page', { ...(await call('get_page', { slug: 'book' })).data, title: 'Book a table' })
+check((await staffGet('/staff/preview')).status === 200 && (await staffGet('/staff/publish')).status === 403 && (await staffPost('/staff/publish', { note: 'x' })).status === 403, 'staff with pages see the preview, but publishing stays with the owner')
+const staffData = await (await staffGet('/staff/data')).text()
+check(staffData.includes('href="/staff/data/classes"') && staffData.includes('href="/staff/data/bookings"') && !staffData.includes('href="/staff/data/messages"') && !staffData.includes('name="readAccess"'), 'staff see the tables open to staff, without the table editor')
+check((await staffGet('/staff/data/messages')).status === 404, 'an owner-only table stays hidden from staff')
+const staffClasses = await (await staffGet('/staff/data/classes')).text()
+check(staffClasses.includes('R-SECRET') && !staffClasses.includes('value="add"') && !staffClasses.includes('name="readAccess"') && !staffClasses.includes('/delete"'), 'a table only the owner may add to is read-only for staff')
+check((await staffPost('/staff/data/classes', { op: 'schema', name: 'classes', label: 'Hacked', readAccess: 'public', writeAccess: 'public', 'fields.count': '1', 'fields.0.name': 'title', 'fields.0.label': 'Title', 'fields.0.type': 'text' })).status === 403 && (await call('list_tables', {})).data.find((table) => table.name === 'classes')?.writeAccess !== 'public', "staff can't change a table's fields or who may use it")
+const staffBooking = await staffPost('/staff/data/bookings', { op: 'add', class_id: String(yogaId), contact: 'walkin@example.test' })
+check(staffBooking.status === 303 && (await call('list_records', { table: 'bookings' })).data.records.some((row) => row.contact === 'walkin@example.test'), 'staff with data can add records to tables open to staff')
+const staffCustomers = await (await staffGet('/staff/customers')).text()
+check(staffCustomers.includes('alice@example.test') && !staffCustomers.includes('/role"') && !staffCustomers.includes('/reset"') && !staffCustomers.includes('/delete"') && !staffCustomers.includes('/access"'), 'staff with customers only see the list')
+// Taking staff away
+await call('set_customer_role', { id: bobCustomer.id, role: 'member' })
+check((await staffGet('/staff')).status === 404 && (await staffGet('/staff/pages')).status === 404 && (await staffPost('/staff/pages', { slug: 'late', title: 'Late' })).status === 404, 'a removed staff member loses the back office at once, even while logged in')
+check((await call('set_customer_role', { id: bobCustomer.id, role: 'staff' })).data.areas.length === 0 && (await staffGet('/staff/pages')).status === 403 && (await (await staffGet('/staff')).text()).includes('not given you anything'), 'making someone staff again starts with no areas')
+await call('set_customer_role', { id: bobCustomer.id, role: 'member' })
+check((await call('set_customer_role', { id: 999999, role: 'staff', areas: ['orders'] })).isError && (await call('set_customer_role', { id: bobCustomer.id, role: 'staff', areas: ['settings'] })).isError, 'Claude can only give real areas to real customers')
 const editorHtml = await (await fetch(`${owner}/page/classes`)).text()
 const editorValues = formValues(editorHtml)
 editorValues.set('op', 'save')
@@ -1171,7 +1263,7 @@ check(!reading.text.includes('SCRIPT-TEXT') && !reading.text.includes('color:red
 }
 check((await call('get_guide', { topic: 'move_from_wix' })).text.includes('check_site') && (await call('get_guide', { topic: 'move_from_wix' })).text.includes('rebuild') && (await client.listPrompts()).prompts.some((item) => item.name === 'move_my_site'), 'Claude has a move guide and a ready prompt')
 
-// Email, tested against a stand-in for Resend on port 8823. Start the site with --var RESEND_API_KEY:re_test_fake --var RESEND_API_BASE:http://localhost:8823
+// Email, tested against a stand-in for Resend on port 8823, or EMAIL_TEST_PORT. Start the site with --var RESEND_API_KEY:re_test_fake --var RESEND_API_BASE:http://localhost:8823
 const hasEmailTest = process.env.EMAIL_TEST === '1'
 const postAs = (ip, path, values, cookie) => fetch(`${base}${path}`, { body: new URLSearchParams(values), headers: { 'CF-Connecting-IP': ip, ...(cookie ? { Cookie: cookie } : {}) }, method: 'POST', redirect: 'manual' })
 if (hasEmailTest) {
@@ -1192,7 +1284,7 @@ if (hasEmailTest) {
       response.end(JSON.stringify({ id: `email-${mail.length}` }))
     })
   })
-  await new Promise((done) => resend.listen(8823, done))
+  await new Promise((done) => resend.listen(Number(process.env.EMAIL_TEST_PORT || 8823), done))
   const settle = () => new Promise((done) => setTimeout(done, 1000))
   const mailTo = (address) => mail.filter((email) => email.to?.[0] === address)
 
@@ -1264,6 +1356,46 @@ if (hasEmailTest) {
   const ownerOrderMail = mailTo('owner@cafe.test')
   check(ownerOrderMail.length === 1 && ownerOrderMail[0].subject.startsWith('New order #') && ownerOrderMail[0].reply_to === 'buyer2@example.test' && ownerOrderMail[0].text.includes('0811111111') && ownerOrderMail[0].text.includes('Leave at the door'), 'the owner gets an email for each new order', JSON.stringify(ownerOrderMail.map((row) => row.subject)))
   check((await call('list_orders', {})).data.some((row) => row.email === 'buyer2@example.test'), 'the order keeps the email')
+
+  // The customer hears when their order moves on, once per real change
+  const mailOrderId = (await call('list_orders', {})).data.find((row) => row.email === 'buyer2@example.test').id
+  const setStatus = (status) => fetch(`${owner}/orders/${mailOrderId}`, { body: new URLSearchParams({ status }), method: 'POST', redirect: 'manual' })
+  mail.length = 0
+  await setStatus('paid')
+  await settle()
+  const paidMail = mailTo('buyer2@example.test')
+  check(paidMail.length === 1 && /^Your order #\d{4,}: Payment confirmed$/.test(paidMail[0].subject) && paidMail[0].text.includes('We have received your payment'), 'the customer gets an email when the owner confirms the payment', JSON.stringify(paidMail.map((row) => row.subject)))
+  const statusLink = paidMail[0]?.text.match(/https?:\/\/\S+\/order\/[0-9a-f]{64}/)?.[0] ?? ''
+  check(statusLink.startsWith(base) && new URL(statusLink).pathname !== mailOrderPath && paidMail[0].html.includes(statusLink) && paidMail[0].html.includes('Mail &lt;Mug&gt;'), 'the status email has a private order link and the items, escaped')
+  const statusPage = await (await fetch(statusLink || `${base}/order/x`)).text()
+  check(statusPage.includes('Payment confirmed') && (await (await fetch(`${base}${mailOrderPath}`)).text()).includes('Payment confirmed'), 'the new link and the first link both open the order')
+  await setStatus('paid')
+  await call('update_order', { id: mailOrderId, status: 'paid' })
+  await setStatus('pending')
+  await settle()
+  check(mailTo('buyer2@example.test').length === 1, 'choosing the same status again, or going back to pending, sends nothing', String(mailTo('buyer2@example.test').length))
+  await call('update_order', { id: mailOrderId, status: 'shipped' })
+  await settle()
+  check(mailTo('buyer2@example.test').length === 2 && mailTo('buyer2@example.test')[1].subject.endsWith(': Shipped'), 'Claude changing the status emails the customer too')
+  await call('set_customer_role', { id: bobCustomer.id, role: 'staff', areas: ['orders'] })
+  const bobAgain = await apiJson('/auth/login', { body: asJson({ email: 'bob@example.test', password: 'a-good-password' }), headers: { 'CF-Connecting-IP': '198.51.100.20' }, method: 'POST' })
+  const staffCancel = await fetch(`${base}/staff/orders/${mailOrderId}`, { body: new URLSearchParams({ status: 'cancelled' }), headers: { Cookie: `session=${bobAgain.body?.token}`, Origin: base }, method: 'POST', redirect: 'manual' })
+  await call('set_customer_role', { id: bobCustomer.id, role: 'member' })
+  await settle()
+  check(staffCancel.status === 303 && mailTo('buyer2@example.test').length === 3 && mailTo('buyer2@example.test')[2].subject.endsWith(': Cancelled'), 'staff changing the status emails the customer once', `${staffCancel.status} ${staffCancel.headers.get('location')} ${JSON.stringify(mailTo('buyer2@example.test').map((row) => row.subject))}`)
+  const noEmailOrder = (await call('list_orders', {})).data.find((row) => !row.email && ['pending', 'paid', 'shipped'].includes(row.status))
+  mail.length = 0
+  if (noEmailOrder) await call('update_order', { id: noEmailOrder.id, status: 'done' })
+  await settle()
+  check(mail.length === 0, 'an order without an email sends nothing')
+  await call('update_site', { language: 'th' })
+  await call('publish_site', { note: 'Thai status email' })
+  await setStatus('done')
+  await settle()
+  const thaiStatus = mailTo('buyer2@example.test')
+  check(thaiStatus.length === 1 && thaiStatus[0].subject.endsWith(': เสร็จสมบูรณ์') && thaiStatus[0].text.includes('ขอบคุณที่อุดหนุน'), "the status email is in the site's language", JSON.stringify(thaiStatus.map((row) => row.subject)))
+  await call('update_site', { language: 'en' })
+  await call('publish_site', { note: 'Back to English' })
 
   // Changes work at once, and failures never stop a visitor
   await call('update_site', { notifyEmail: 'owner2@cafe.test' })

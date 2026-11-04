@@ -1,3 +1,4 @@
+import type { StaffArea } from './staff'
 import type { Settings, SiteRow } from './types'
 
 // The words of the back office, the owner's private pages. Visitors' words are in text.ts.
@@ -51,6 +52,8 @@ const en = {
   orderState: (status: string) => status,
   orderAction: (status: string) => status,
   noStock: 'Not changed. There is no longer enough stock to restore this order.',
+  orderHistory: 'Status changes',
+  orderActor: (actor: string) => ({ api: 'API key', claude: 'Claude', owner: 'Owner' })[actor] ?? actor,
 
   // Pages
   hiddenPage: '(hidden)',
@@ -112,6 +115,19 @@ const en = {
   resetLinkHelp: 'Send this link to the customer yourself. It works once and expires in 24 hours:',
   resetEmailHelp: 'Customers can also get a reset email themselves, from "Forgot your password?" on the login page.',
   noCustomers: 'No customers yet.',
+  staffHelp: (href: string) => `Don't share your private links with your team. Ask each person to sign up on the website, make them staff here, and tick only what they need. They log in and open <a href="${href}">${href}</a>. Settings, Connect, System, Updates, Move here, WordPress, customer accounts and your private links stay yours alone.`,
+  staffAccess: 'What this person can do in the staff back office',
+  staffArea: { customers: 'Customers: see the list only', data: 'Data: records in tables open to staff', messages: 'Messages and bookings from forms', orders: 'Orders: see them and change their status', pages: 'Pages: edit, without making them live', products: 'Products and images', publish: 'Publish changes and go back to older versions' } as Record<StaffArea, string>,
+  saveAccess: 'Save access',
+
+  // Staff back office
+  staffLoggedIn: (name: string) => `Logged in as ${name}, staff.`,
+  logOut: 'Log out',
+  staffIntro: 'Choose what to work on from the menu. You see only what the owner gave you.',
+  staffNoAreas: 'The owner has not given you anything to work on yet. Ask them to tick what you need on their Customers page.',
+  staffRefusedTitle: 'Not available',
+  staffRefused: "You don't have access to this. Ask the owner if you need it.",
+  staffOtherSite: 'Nothing was changed, because this request did not come from a page of this website. Open the back office again and try once more.',
 
   // Settings
   siteName: 'Site name',
@@ -601,6 +617,8 @@ const th: OfficeWords = {
   orderState: (status: string) => thOrderState[status] ?? status,
   orderAction: (status: string) => thOrderAction[status] ?? status,
   noStock: 'ยังไม่ได้เปลี่ยน สต็อกสินค้าไม่พอที่จะคืนคำสั่งซื้อนี้แล้ว',
+  orderHistory: 'ประวัติการเปลี่ยนสถานะ',
+  orderActor: (actor: string) => ({ api: 'คีย์ API', claude: 'Claude', owner: 'เจ้าของเว็บ' })[actor] ?? actor,
 
   hiddenPage: '(ซ่อนอยู่)',
   noPages: 'ยังไม่มีหน้าเว็บ',
@@ -658,6 +676,18 @@ const th: OfficeWords = {
   resetLinkHelp: 'ส่งลิงก์นี้ให้ลูกค้าด้วยตัวเอง ลิงก์ใช้ได้ครั้งเดียวและหมดอายุใน 24 ชั่วโมง:',
   resetEmailHelp: 'ลูกค้าขออีเมลตั้งรหัสผ่านใหม่เองได้ด้วย จากลิงก์ "ลืมรหัสผ่าน?" ในหน้าเข้าสู่ระบบ',
   noCustomers: 'ยังไม่มีลูกค้า',
+  staffHelp: (href: string) => `อย่าแชร์ลิงก์ส่วนตัวของคุณให้ทีมงาน ให้แต่ละคนสมัครสมาชิกบนเว็บไซต์ ตั้งเป็นพนักงานที่หน้านี้ แล้วติ๊กเฉพาะส่วนที่เขาต้องใช้ จากนั้นให้เขาเข้าสู่ระบบแล้วเปิด <a href="${href}">${href}</a> หน้าตั้งค่า เชื่อมต่อ ระบบ อัปเดต ย้ายเว็บมาที่นี่ WordPress บัญชีลูกค้า และลิงก์ส่วนตัวของคุณ ยังเป็นของคุณคนเดียว`,
+  staffAccess: 'สิ่งที่คนนี้ทำได้ในหลังบ้านพนักงาน',
+  staffArea: { customers: 'ลูกค้า: ดูรายชื่อได้อย่างเดียว', data: 'ข้อมูล: รายการในตารางที่เปิดให้พนักงาน', messages: 'ข้อความและการจองจากฟอร์ม', orders: 'คำสั่งซื้อ: ดูและเปลี่ยนสถานะ', pages: 'หน้าเว็บ: แก้ไขได้ แต่ยังไม่เผยแพร่', products: 'สินค้าและรูปภาพ', publish: 'เผยแพร่การเปลี่ยนแปลงและย้อนกลับไปเวอร์ชันเก่า' },
+  saveAccess: 'บันทึกสิทธิ์',
+
+  staffLoggedIn: (name: string) => `เข้าสู่ระบบในชื่อ ${name} (พนักงาน)`,
+  logOut: 'ออกจากระบบ',
+  staffIntro: 'เลือกงานที่ต้องการจากเมนู คุณจะเห็นเฉพาะส่วนที่เจ้าของเว็บอนุญาต',
+  staffNoAreas: 'เจ้าของเว็บยังไม่ได้ให้สิทธิ์ส่วนใดกับคุณ ขอให้เขาติ๊กส่วนที่คุณต้องใช้ในหน้าลูกค้า',
+  staffRefusedTitle: 'เข้าไม่ได้',
+  staffRefused: 'คุณไม่มีสิทธิ์เข้าส่วนนี้ ถ้าต้องใช้ ขอสิทธิ์จากเจ้าของเว็บ',
+  staffOtherSite: 'ยังไม่ได้เปลี่ยนอะไร เพราะคำขอนี้ไม่ได้มาจากหน้าของเว็บไซต์นี้ เปิดหลังบ้านใหม่แล้วลองอีกครั้ง',
 
   siteName: 'ชื่อเว็บไซต์',
   tagline: 'คำโปรย',

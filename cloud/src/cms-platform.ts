@@ -1,9 +1,9 @@
 import { newApiKey } from './api'
 import { newToken, sha256 } from './auth'
-import { firstProblem, input, office, readField, spec } from './cms'
-import type { Notice } from './cms'
-import { accessLevels, createRecord, deleteRecord, fieldTypes, getRecord, getTable, listRecords, listTables, ownerActor, recordsCsv, saveTable, tableSchema, updateRecord } from './data'
-import type { DataField, DataTable } from './data'
+import { allows, firstProblem, input, office, readField, spec } from './cms'
+import type { Desk, Notice } from './cms'
+import { accessLevels, canChange, canCreate, createRecord, deleteRecord, fieldTypes, getRecord, getTable, listRecords, listTables, ownerActor, readScope, recordsCsv, saveTable, tableSchema, updateRecord } from './data'
+import type { Actor, DataField, DataTable } from './data'
 import { emailProblems, emailStatus, sendEmail } from './email'
 import { googleProblems, googleStatus } from './google'
 import { escapeHtml, notFound, see } from './http'
@@ -40,8 +40,8 @@ const fieldSpec = () =>
 
 const accessSelect = (name: string, label: string, value: string, t: OfficeWords) => `<label>${label}<select name="${name}">${accessLevels.map((level) => `<option${level === value ? ' selected' : ''} value="${level}">${t.access[level]}</option>`).join('')}</select></label>`
 
-const tableForm = (code: string, t: OfficeWords, table?: DataTable) =>
-  `<form action="/owner/${escapeHtml(code)}/data${table ? `/${escapeHtml(table.name)}` : ''}" class="contact-form cms-form" method="post"><input name="op" type="hidden" value="schema">
+const tableForm = (desk: Desk, t: OfficeWords, table?: DataTable) =>
+  `<form action="${escapeHtml(desk.base)}/data${table ? `/${escapeHtml(table.name)}` : ''}" class="contact-form cms-form" method="post"><input name="op" type="hidden" value="schema">
 ${table ? `<input name="name" type="hidden" value="${escapeHtml(table.name)}">` : `<label>${t.tableName}<input maxlength="40" name="name" pattern="[a-z][a-z0-9_]*" required></label>`}
 <label>${t.tableLabel}<input maxlength="80" name="label" required value="${escapeHtml(table?.label)}"></label>
 ${accessSelect('readAccess', t.whoCanRead, table?.read_access ?? 'owner', t)}${accessSelect('writeAccess', t.whoCanAdd, table?.write_access ?? 'owner', t)}
@@ -57,11 +57,14 @@ const readTable = (form: FormData) =>
     writeAccess: form.get('writeAccess'),
   })
 
-async function tablesPage(env: Env, site: SiteRow, code: string, notice?: Notice) {
+// Staff follow each table's own rules, the same as on the website and through the API. The owner sees everything.
+const deskActor = (desk: Desk): Actor => (desk.staff ? { admin: false, customer: desk.staff } : ownerActor)
+
+async function tablesPage(env: Env, site: SiteRow, desk: Desk, notice?: Notice) {
   const t = officeText(site)
-  const tables = await listTables(env, site.id)
-  const rows = tables.map((table) => `<li><a href="/owner/${escapeHtml(code)}/data/${escapeHtml(table.name)}">${escapeHtml(table.label)}</a> <small>${t.tableSummary(table.record_count, t.access[table.read_access], t.access[table.write_access])}</small></li>`).join('')
-  return office(site, code, t.nav.data, `<p>${t.dataIntro}</p><ul>${rows || `<li>${t.noTables}</li>`}</ul><h2>${t.createATable}</h2>${tableForm(code, t)}`, notice)
+  const tables = (await listTables(env, site.id)).filter((table) => readScope(table, deskActor(desk)))
+  const rows = tables.map((table) => `<li><a href="${escapeHtml(desk.base)}/data/${escapeHtml(table.name)}">${escapeHtml(table.label)}</a> <small>${t.tableSummary(table.record_count, t.access[table.read_access], t.access[table.write_access])}</small></li>`).join('')
+  return office(site, desk, t.nav.data, `<p>${t.dataIntro}</p><ul>${rows || `<li>${t.noTables}</li>`}</ul>${desk.staff ? '' : `<h2>${t.createATable}</h2>${tableForm(desk, t)}`}`, notice)
 }
 
 // The owner named these fields, so their labels and choices are shown as they are.
@@ -72,27 +75,36 @@ const recordFields = (field: DataField, value: unknown, t: OfficeWords) => {
   return input(field.name, spec(field.name, field.label), value, t, false)
 }
 
-async function tablePage(env: Env, site: SiteRow, code: string, table: DataTable, notice?: Notice) {
+async function tablePage(env: Env, site: SiteRow, desk: Desk, table: DataTable, notice?: Notice, status = 200) {
   const t = officeText(site)
-  const base = `/owner/${escapeHtml(code)}/data/${escapeHtml(table.name)}`
-  const list = await listRecords(env, table, ownerActor, { limit: 100, newestFirst: true })
+  const actor = deskActor(desk)
+  const base = `${escapeHtml(desk.base)}/data/${escapeHtml(table.name)}`
+  const list = await listRecords(env, table, actor, { limit: 100, newestFirst: true })
   const rows = (list.rows ?? [])
     .map((row) => {
       const data = JSON.parse(row.data) as Record<string, unknown>
       const summary = table.fields.slice(0, 3).map((field) => escapeHtml(data[field.name])).filter(Boolean).join(' · ')
-      return `<details class="card account__record"><summary>#${row.id} ${summary}</summary><form action="${base}/${row.id}" class="contact-form" method="post">${table.fields.map((field) => recordFields(field, data[field.name], t)).join('')}<button class="button button--small" type="submit">${t.save}</button></form><form action="${base}/${row.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmDeleteRecord}</label><button class="button button--small" type="submit">${t.delete}</button></form></details>`
+      const shown = canChange(table, actor, row)
+        ? `<form action="${base}/${row.id}" class="contact-form" method="post">${table.fields.map((field) => recordFields(field, data[field.name], t)).join('')}<button class="button button--small" type="submit">${t.save}</button></form><form action="${base}/${row.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmDeleteRecord}</label><button class="button button--small" type="submit">${t.delete}</button></form>`
+        : `<dl>${table.fields.map((field) => `<div><dt>${escapeHtml(field.label)}</dt><dd class="pre-line">${escapeHtml(data[field.name])}</dd></div>`).join('')}</dl>`
+      return `<details class="card account__record"><summary>#${row.id} ${summary}</summary>${shown}</details>`
     })
     .join('')
+  // Only the owner changes a table's fields, who may use it, or deletes it.
+  const ownerParts = desk.staff
+    ? ''
+    : `<h2>${t.fieldsAndAccess}</h2>${tableForm(desk, t, table)}
+<h2>${t.deleteThisTable}</h2><form action="${base}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmDeleteTable(table.record_count)}</label><button class="button button--small" type="submit">${t.deleteTable}</button></form>`
   return office(
     site,
-    code,
+    desk,
     t.dataTitle(table.label),
     `<p>${t.downloadCsv(`${base}/export.csv`, `/api/v1/data/${escapeHtml(table.name)}`)}</p>
-<h2>${t.addRecord}</h2><form action="${base}" class="contact-form" method="post"><input name="op" type="hidden" value="add">${table.fields.map((field) => recordFields(field, field.default, t)).join('')}<button class="button button--small" type="submit">${t.add}</button></form>
+${canCreate(table, actor) ? `<h2>${t.addRecord}</h2><form action="${base}" class="contact-form" method="post"><input name="op" type="hidden" value="add">${table.fields.map((field) => recordFields(field, field.default, t)).join('')}<button class="button button--small" type="submit">${t.add}</button></form>` : ''}
 <h2>${t.records(table.record_count)}</h2>${rows || `<p>${t.noneYet}</p>`}
-<h2>${t.fieldsAndAccess}</h2>${tableForm(code, t, table)}
-<h2>${t.deleteThisTable}</h2><form action="${base}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmDeleteTable(table.record_count)}</label><button class="button button--small" type="submit">${t.deleteTable}</button></form>`,
+${ownerParts}`,
     notice,
+    status,
   )
 }
 
@@ -102,47 +114,55 @@ const formRecord = (table: DataTable, form: FormData) => {
   return values
 }
 
-async function handleData(request: Request, env: Env, url: URL, site: SiteRow, code: string, name: string | undefined, id: string | undefined, action: string | undefined, saved?: Notice) {
+async function handleData(request: Request, env: Env, url: URL, site: SiteRow, desk: Desk, name: string | undefined, id: string | undefined, action: string | undefined, saved?: Notice) {
   const post = request.method === 'POST'
-  const owner = `/owner/${code}/data`
+  const owner = `${desk.base}/data`
+  const actor = deskActor(desk)
   if (!name) {
-    if (!post) return tablesPage(env, site, code, saved)
+    if (!post) return tablesPage(env, site, desk, saved)
+    if (desk.staff) return notFound()
     const parsed = readTable(await request.formData())
-    if (!parsed.success) return tablesPage(env, site, code, { error: officeText(site).notSaved(firstProblem(parsed.error)) })
+    if (!parsed.success) return tablesPage(env, site, desk, { error: officeText(site).notSaved(firstProblem(parsed.error)) })
     const problem = await saveTable(env, site.id, parsed.data)
-    return problem ? tablesPage(env, site, code, { error: problem }) : see(url, `${owner}/${parsed.data.name}?saved=1`)
+    return problem ? tablesPage(env, site, desk, { error: problem }) : see(url, `${owner}/${parsed.data.name}?saved=1`)
   }
   const table = await getTable(env, site.id, name)
-  if (!table) return notFound()
+  // A table staff may not read looks the same as one that doesn't exist.
+  if (!table || !readScope(table, actor)) return notFound()
   const path = `${owner}/${table.name}`
+  const refuse = () => tablePage(env, site, desk, table, { error: officeText(site).staffRefused }, 403)
   if (id === 'export.csv' && !action && !post) return new Response(await recordsCsv(env, table), { headers: { 'Cache-Control': 'no-store', 'Content-Disposition': `attachment; filename="${table.name}.csv"`, 'Content-Type': 'text/csv; charset=utf-8', 'X-Content-Type-Options': 'nosniff' } })
   if (id === 'delete' && post && !action) {
+    if (desk.staff) return refuse()
     if ((await request.formData()).get('confirm') === 'on') await env.DB.prepare('DELETE FROM data_tables WHERE id = ? AND site_id = ?').bind(table.id, site.id).run()
     return see(url, owner)
   }
   if (!id) {
-    if (!post) return tablePage(env, site, code, table, saved)
+    if (!post) return tablePage(env, site, desk, table, saved)
     const form = await request.formData()
     if (form.get('op') === 'schema') {
+      if (desk.staff) return refuse()
       const parsed = readTable(form)
-      if (!parsed.success) return tablePage(env, site, code, table, { error: officeText(site).notSaved(firstProblem(parsed.error)) })
+      if (!parsed.success) return tablePage(env, site, desk, table, { error: officeText(site).notSaved(firstProblem(parsed.error)) })
       const problem = await saveTable(env, site.id, { ...parsed.data, name: table.name })
-      return problem ? tablePage(env, site, code, table, { error: problem }) : see(url, `${path}?saved=1`)
+      return problem ? tablePage(env, site, desk, table, { error: problem }) : see(url, `${path}?saved=1`)
     }
-    const added = await createRecord(env, site.id, table, formRecord(table, form), ownerActor)
-    return added.row ? see(url, `${path}?saved=1`) : tablePage(env, site, code, table, { error: added.error })
+    if (!canCreate(table, actor)) return refuse()
+    const added = await createRecord(env, site.id, table, formRecord(table, form), actor)
+    return added.row ? see(url, `${path}?saved=1`) : tablePage(env, site, desk, table, { error: added.error })
   }
   if (!post || !/^\d{1,12}$/.test(id)) return notFound()
   const row = await getRecord(env, table, Number(id))
   if (!row) return notFound()
+  if (!canChange(table, actor, row)) return refuse()
   const form = await request.formData()
   if (action === 'delete') {
     if (form.get('confirm') === 'on') await deleteRecord(env, site.id, table, row)
     return see(url, path)
   }
   if (action) return notFound()
-  const changed = await updateRecord(env, site.id, table, row, formRecord(table, form), ownerActor)
-  return changed.row ? see(url, `${path}?saved=1`) : tablePage(env, site, code, table, { error: changed.error })
+  const changed = await updateRecord(env, site.id, table, row, formRecord(table, form), actor)
+  return changed.row ? see(url, `${path}?saved=1`) : tablePage(env, site, desk, table, { error: changed.error })
 }
 
 const checkCard = (report: MoveReport, t: OfficeWords) => {
@@ -308,9 +328,9 @@ async function handleConnect(request: Request, env: Env, url: URL, site: SiteRow
   return see(url, owner)
 }
 
-async function publishPage(env: Env, site: SiteRow, code: string, notice?: Notice) {
+async function publishPage(env: Env, site: SiteRow, desk: Desk, notice?: Notice) {
   const t = officeText(site)
-  const base = `/owner/${escapeHtml(code)}`
+  const base = escapeHtml(desk.base)
   const [versions, waiting] = await Promise.all([listVersions(env, site.id), unpublishedChanges(env, site)])
   const changes = waiting ? [...waiting.pages.map((slug) => t.pageChange(slug)), ...(waiting.settings ? [t.settingsChange] : [])] : []
   const state = !site.live_version
@@ -323,22 +343,22 @@ async function publishPage(env: Env, site: SiteRow, code: string, notice?: Notic
     .join('')
   return office(
     site,
-    code,
+    desk,
     t.nav.publish,
-    `${state}<p><a class="button button--small button--ghost" href="${base}/preview" target="_blank" rel="noopener">${t.openPreview}</a></p>
+    `${state}${allows(desk, 'pages') ? `<p><a class="button button--small button--ghost" href="${base}/preview" target="_blank" rel="noopener">${t.openPreview}</a></p>` : ''}
 <form action="${base}/publish" class="contact-form" method="post"><label>${t.whatChanged}<input maxlength="200" name="note"></label><button class="button" type="submit">${t.publishButton}</button></form>
 <h2>${t.versions}</h2><p>${t.versionsHelp}</p>${rows || `<p>${t.noneYet}</p>`}`,
     notice,
   )
 }
 
-async function handlePublish(request: Request, env: Env, url: URL, site: SiteRow, code: string, id: string | undefined, action: string | undefined, saved?: Notice) {
-  const owner = `/owner/${code}/publish`
-  if (request.method !== 'POST') return id ? notFound() : publishPage(env, site, code, saved)
+async function handlePublish(request: Request, env: Env, url: URL, site: SiteRow, desk: Desk, id: string | undefined, action: string | undefined, saved?: Notice) {
+  const owner = `${desk.base}/publish`
+  if (request.method !== 'POST') return id ? notFound() : publishPage(env, site, desk, saved)
   const form = await request.formData().catch((): null => null)
   if (!id) {
     const published = await publishVersion(env, site, String(form?.get('note') ?? '').trim())
-    return published.error ? publishPage(env, site, code, { error: published.error }) : see(url, `${owner}?saved=1`)
+    return published.error ? publishPage(env, site, desk, { error: published.error }) : see(url, `${owner}?saved=1`)
   }
   if (action === 'restore' && /^\d+$/.test(id) && form?.get('confirm') === 'on') await restoreVersion(env, site, Number(id))
   return see(url, owner)
@@ -444,10 +464,13 @@ ${plan.data.redirects.length ? `<li>${t.wpRedirects}</li>` : ''}
 }
 
 /** The back office areas for tables, connections, publishing and system status. Returns null for anything else. */
-export function handlePlatform(request: Request, env: Env, url: URL, site: SiteRow, code: string, area: string, id: string | undefined, action: string | undefined, extra: string | undefined, saved?: Notice) {
-  if (area === 'data') return handleData(request, env, url, site, code, id, action, extra, saved)
+export function handlePlatform(request: Request, env: Env, url: URL, site: SiteRow, desk: Desk, area: string, id: string | undefined, action: string | undefined, extra: string | undefined, saved?: Notice) {
+  if (area === 'data') return handleData(request, env, url, site, desk, id, action, extra, saved)
+  if (area === 'publish') return handlePublish(request, env, url, site, desk, id, action, saved)
+  // The rest is for the owner alone.
+  const code = desk.code
+  if (!code) return null
   if (area === 'connect') return handleConnect(request, env, url, site, code, id, action, extra, saved)
-  if (area === 'publish') return handlePublish(request, env, url, site, code, id, action, saved)
   if (area === 'system' && !id && request.method !== 'POST') return systemPage(env, url, site, code)
   if (area === 'system' && id === 'test-email' && !action && request.method === 'POST') return testEmail(env, url, site, code)
   if (area === 'export.json' && !id && request.method === 'GET') return exportEverything(env, site)

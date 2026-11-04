@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { createResetLink } from './auth'
+import { createResetLink, getCustomer } from './auth'
 import { handlePlatform } from './cms-platform'
 import { canSendEmail } from './email'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
@@ -9,10 +9,13 @@ import { blockSchema, itemSchema, maxBlocksBytes, maxPagesPerSite, pageSlugSchem
 import { officeText, officeWords } from './office-words'
 import type { OfficeWords } from './office-words'
 import { entryFields, shell } from './owner'
-import { orderDetails, orderLines, orderNumber, orderStatuses, paymentName, setOrderStatus } from './shop'
+import { orderDetails, orderHistory, orderLines, orderNumber, orderStatuses, paymentName, setOrderStatus } from './shop'
+import { setStaff, staffAreas, staffPermissions } from './staff'
+import type { StaffArea, StaffMember } from './staff'
 import { words } from './text'
 import { isNewer, latestRelease, repoPattern, updatesBody } from './updates'
 import { version } from './version'
+import { liveSite } from './versions'
 import { siteStyles } from './theme'
 import type { Block, Env, FormField, Item, Order, Settings, SiteRow, Variant } from './types'
 
@@ -23,6 +26,20 @@ type Kind = 'bool' | 'image' | 'lines' | 'list' | 'long' | 'number' | 'select' |
 type Spec = { fields?: Spec[]; key: string; kind: Kind; label: string; options?: string[] }
 
 export type Notice = { error?: string; saved?: string }
+
+/** Who is in the back office and where it lives: the owner's secret link, or /staff for a logged-in staff member. */
+export type Desk = { base: string; code: null | string; staff: null | StaffMember }
+export const ownerDesk = (code: string): Desk => ({ base: `/owner/${code}`, code, staff: null })
+export const staffDesk = (staff: StaffMember): Desk => ({ base: '/staff', code: null, staff })
+
+/** The owner can do everything. Staff only what they were given. */
+export const allows = (desk: Desk, area: StaffArea) => !desk.staff || desk.staff.permissions.includes(area)
+
+// The menu entries staff can see, with the area each one needs. Anything else in the menu is for the owner alone.
+const staffMenu: Record<string, StaffArea> = { '/customers': 'customers', '/data': 'data', '/items': 'products', '/media': 'products', '/orders': 'orders', '/pages': 'pages', '/publish': 'publish' }
+
+// Staff addresses hold no secret, and their changes are checked by where they come from, which needs the browser to say so.
+const staffHeaders = { ...privateHeaders, 'Referrer-Policy': 'same-origin' }
 
 export const spec = (key: string, label: string, kind: Kind = 'text', extra: Partial<Spec> = {}): Spec => ({ key, kind, label, ...extra })
 const tone = spec('tone', 'Background', 'select', { options: ['', 'plain', 'tint', 'dark'] })
@@ -54,22 +71,26 @@ const catalog: Record<string, { label: string; fields: Spec[]; start: Block }> =
   html: { label: 'Custom code', start: { code: '<p>New section</p>', type: 'html' }, fields: [spec('code', 'HTML, CSS and JavaScript', 'long'), spec('height', 'Height in pixels', 'number'), spec('title', 'Title'), tone] },
 }
 
-export const office = (site: SiteRow, code: string, title: string, body: string, notice?: Notice) => {
+/** One back office page. Owner-only pages may pass the owner's code instead of a desk. */
+export const office = (site: SiteRow, at: Desk | string, title: string, body: string, notice?: Notice, status = 200) => {
+  const desk = typeof at === 'string' ? ownerDesk(at) : at
   const settings = JSON.parse(site.settings) as Settings
   const t = officeText(site)
-  const base = `/owner/${escapeHtml(code)}`
+  const base = `${escapeHtml(desk.base)}`
   const links: [string, string][] = [['', t.nav.overview], ['/orders', t.nav.orders], ['/pages', t.nav.pages], ['/items', t.nav.products], ['/data', t.nav.data], ['/media', t.nav.images], ['/customers', t.nav.customers], ['/publish', t.nav.publish], ['/connect', t.nav.connect], ['/move', t.nav.move], ['/wordpress', t.nav.wordpress], ['/settings', t.nav.settings], ['/system', t.nav.system], ['/updates', t.nav.updates]]
+  const shown = desk.staff ? links.filter(([path]) => !path || (staffMenu[path] && allows(desk, staffMenu[path]))) : links
+  const who = desk.staff ? `<p class="cms-who">${t.staffLoggedIn(escapeHtml(desk.staff.name))}</p><form action="/logout" method="post"><button class="button button--small button--ghost" type="submit">${t.logOut}</button></form>` : ''
   return html(
     shell(
       `${settings.name}: ${title}`,
-      `<nav aria-label="${t.navLabel}" class="cms-nav">${links.map(([path, label]) => `<a href="${base}${path}">${label}</a>`).join('')}<a href="/" target="_blank" rel="noopener">${t.openWebsite}</a></nav>
+      `<nav aria-label="${t.navLabel}" class="cms-nav">${shown.map(([path, label]) => `<a href="${base}${path}">${label}</a>`).join('')}<a href="/" target="_blank" rel="noopener">${t.openWebsite}</a></nav>${who}
 <h1>${escapeHtml(title)}</h1>
 ${notice?.error ? `<p role="alert">${escapeHtml(t.problem(notice.error))}</p>` : ''}${notice?.saved ? `<p role="status">${escapeHtml(notice.saved)}</p>` : ''}${body}`,
       true,
       t.lang,
     ),
-    200,
-    privateHeaders,
+    status,
+    desk.staff ? staffHeaders : privateHeaders,
   )
 }
 
@@ -145,7 +166,7 @@ const mediaList = async (env: Env, site: SiteRow) => {
   return `<datalist id="media-list">${results.map((image) => `<option value="/media/${image.id}">${escapeHtml(image.name)}</option>`).join('')}</datalist>`
 }
 
-async function pageEditor(env: Env, site: SiteRow, code: string, slug: string, page: { blocks: Block[]; description: string; published: boolean; title: string }, notice?: { error?: string; saved?: string }) {
+async function pageEditor(env: Env, site: SiteRow, desk: Desk, slug: string, page: { blocks: Block[]; description: string; published: boolean; title: string }, notice?: { error?: string; saved?: string }) {
   const t = officeText(site)
   const blocks = page.blocks
     .map((block, index) => {
@@ -159,21 +180,21 @@ ${entry.fields.map((field) => input(`b${index}.${field.key}`, field, block[field
   const adders = Object.entries(catalog).map(([type, entry]) => `<button class="button button--small" name="op" type="submit" value="add:${type}">${escapeHtml(t.label(entry.label))}</button>`).join('')
   return office(
     site,
-    code,
+    desk,
     t.editPage(page.title),
-    `${await mediaList(env, site)}<form action="/owner/${escapeHtml(code)}/page/${escapeHtml(slug)}" class="contact-form cms-form" method="post"><input name="count" type="hidden" value="${page.blocks.length}">
+    `${await mediaList(env, site)}<form action="${escapeHtml(desk.base)}/page/${escapeHtml(slug)}" class="contact-form cms-form" method="post"><input name="count" type="hidden" value="${page.blocks.length}">
 <label>${t.pageTitle}<input maxlength="120" name="title" required value="${escapeHtml(page.title)}"></label>
 <label>${t.pageDescription}<textarea maxlength="300" name="description" required rows="2">${escapeHtml(page.description)}</textarea></label>
 <label class="check"><input name="published" type="checkbox"${page.published ? ' checked' : ''}> ${t.showPage}</label>
 ${blocks}
 <fieldset class="cms-block"><legend>${t.addSection}</legend><div class="cms-actions">${adders}</div></fieldset>
 <button class="button cms-save" name="op" type="submit" value="save">${t.savePage}</button></form>
-${slug === 'home' ? '' : `<form action="/owner/${escapeHtml(code)}/page/${escapeHtml(slug)}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmDeletePage}</label><button class="button button--small" type="submit">${t.deletePage}</button></form>`}`,
+${slug === 'home' ? '' : `<form action="${escapeHtml(desk.base)}/page/${escapeHtml(slug)}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmDeletePage}</label><button class="button button--small" type="submit">${t.deletePage}</button></form>`}`,
     notice,
   )
 }
 
-async function savePageFromForm(request: Request, env: Env, url: URL, site: SiteRow, code: string, slug: string) {
+async function savePageFromForm(request: Request, env: Env, url: URL, site: SiteRow, desk: Desk, slug: string) {
   const form = await request.formData()
   const blocks = readBlocks(form)
   const op = String(form.get('op') ?? 'save')
@@ -187,26 +208,25 @@ async function savePageFromForm(request: Request, env: Env, url: URL, site: Site
   const page = { blocks, description: String(form.get('description') ?? '').trim(), published: form.get('published') === 'on', title: String(form.get('title') ?? '').trim() }
   const invalid = z.object({ blocks: z.array(blockSchema).min(1).max(40), description: z.string().min(1).max(300), title: z.string().min(1).max(120) }).safeParse(page)
   const t = officeText(site)
-  if (!invalid.success) return pageEditor(env, site, code, slug, page, { error: t.notSaved(firstProblem(invalid.error)) })
+  if (!invalid.success) return pageEditor(env, site, desk, slug, page, { error: t.notSaved(firstProblem(invalid.error)) })
   const stored = JSON.stringify(invalid.data.blocks)
-  if (stored.length > maxBlocksBytes) return pageEditor(env, site, code, slug, page, { error: t.notSaved(t.pageTooLarge) })
+  if (stored.length > maxBlocksBytes) return pageEditor(env, site, desk, slug, page, { error: t.notSaved(t.pageTooLarge) })
   await env.DB.prepare(`INSERT INTO pages (site_id, slug, title, description, published, blocks) VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT (site_id, slug) DO UPDATE SET title = excluded.title, description = excluded.description, published = excluded.published, blocks = excluded.blocks, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`)
     .bind(site.id, slug, page.title, page.description, page.published ? 1 : 0, stored)
     .run()
-  return see(url, `/owner/${code}/page/${slug}?saved=1`)
+  return see(url, `${desk.base}/page/${slug}?saved=1`)
 }
 
-async function overview(env: Env, url: URL, site: SiteRow, code: string) {
+/** Messages and bookings sent through forms, with buttons to move them along. */
+async function messageList(env: Env, site: SiteRow, desk: Desk) {
   const [{ results: pages }, { results: entries }] = await Promise.all([
     env.DB.prepare('SELECT slug, blocks FROM pages WHERE site_id = ?').bind(site.id).all<{ blocks: string; slug: string }>(),
     env.DB.prepare('SELECT entries.id, form, page, data, status, entries.created_at, customers.email AS customer FROM entries LEFT JOIN customers ON customers.id = entries.customer_id WHERE entries.site_id = ? ORDER BY entries.id DESC LIMIT 200').bind(site.id).all<{ created_at: string; customer: null | string; data: string; form: string; id: number; page: string; status: string }>(),
   ])
   const t = officeText(site)
-  const latest = await latestRelease()
-  const newer = latest && isNewer(latest.version, version) ? `<p role="status">${t.versionAvailable(escapeHtml(latest.version), `/owner/${escapeHtml(code)}/updates`)}</p>` : ''
   const labels = entryFields(pages)
-  const rows = entries.length
+  return entries.length
     ? entries
         .map((entry) => {
           const data = JSON.parse(entry.data) as Record<string, unknown>
@@ -218,67 +238,78 @@ async function overview(env: Env, url: URL, site: SiteRow, code: string) {
           const buttons = [...statuses.filter((status) => status !== entry.status), 'delete']
             .map((status) => `<button class="button button--small" name="status" type="submit" value="${status}">${escapeHtml(t.entryAction(status))}</button> `)
             .join('')
-          return `<article class="card account__record"><h3>${escapeHtml(entry.form)} · ${escapeHtml(t.entryState(entry.status))}</h3><p class="post-date">${escapeHtml(entry.created_at.slice(0, 16).replace('T', ' '))} UTC${entry.customer ? ` · ${escapeHtml(entry.customer)}` : ''}</p><dl>${list}</dl><form action="/owner/${escapeHtml(code)}/entry/${entry.id}" method="post">${buttons}</form></article>`
+          return `<article class="card account__record"><h3>${escapeHtml(entry.form)} · ${escapeHtml(t.entryState(entry.status))}</h3><p class="post-date">${escapeHtml(entry.created_at.slice(0, 16).replace('T', ' '))} UTC${entry.customer ? ` · ${escapeHtml(entry.customer)}` : ''}</p><dl>${list}</dl><form action="${escapeHtml(desk.base)}/entry/${entry.id}" method="post">${buttons}</form></article>`
         })
         .join('')
     : `<p>${t.noEntries}</p>`
+}
+
+async function overview(env: Env, url: URL, site: SiteRow, desk: Desk) {
+  const t = officeText(site)
+  if (desk.staff) {
+    const intro = desk.staff.permissions.length ? `<p>${t.staffIntro}</p>` : `<p role="status">${t.staffNoAreas}</p>`
+    return office(site, desk, t.nav.overview, `${intro}${allows(desk, 'messages') ? `<h2>${t.messagesHeading}</h2>${await messageList(env, site, desk)}` : ''}`)
+  }
+  const latest = await latestRelease()
+  const newer = latest && isNewer(latest.version, version) ? `<p role="status">${t.versionAvailable(escapeHtml(latest.version), `${escapeHtml(desk.base)}/updates`)}</p>` : ''
   return office(
     site,
-    code,
+    desk,
     t.nav.overview,
-    `${newer}<h2>${t.messagesHeading}</h2>${rows}
-${site.live_version ? `<p>${t.seeWaiting(`/owner/${escapeHtml(code)}/publish`)}</p>` : ''}
+    `${newer}<h2>${t.messagesHeading}</h2>${await messageList(env, site, desk)}
+${site.live_version ? `<p>${t.seeWaiting(`${escapeHtml(desk.base)}/publish`)}</p>` : ''}
 <h2>${t.claudeHeading}</h2>
 <p>${t.claudeHelp}</p>
-<p><code style="overflow-wrap:anywhere">${escapeHtml(`${url.origin}/mcp/${code}`)}</code></p>`,
+<p><code style="overflow-wrap:anywhere">${escapeHtml(`${url.origin}/mcp/${desk.code}`)}</code></p>`,
   )
 }
 
-async function ordersPage(env: Env, site: SiteRow, code: string, error?: string) {
+async function ordersPage(env: Env, site: SiteRow, desk: Desk, error?: string) {
   const settings = JSON.parse(site.settings) as Settings
   const o = officeText(site)
   const t = words(o.lang)
   const { results: orders } = await env.DB.prepare('SELECT * FROM orders WHERE site_id = ? ORDER BY id DESC LIMIT 200').bind(site.id).all<Order>()
-  const lines = await orderLines(env, orders.map((order) => order.id))
+  const [lines, history] = await Promise.all([orderLines(env, orders.map((order) => order.id)), orderHistory(env, orders.map((order) => order.id))])
   const rows = orders
     .map((order) => {
       const buttons = orderStatuses
         .filter((status) => status !== order.status)
         .map((status) => `<button class="button button--small" name="status" type="submit" value="${status}">${escapeHtml(o.orderAction(status))}</button> `)
         .join('')
+      const changes = (history.get(order.id) ?? []).map((event) => `<li>${escapeHtml(event.created_at.slice(0, 16).replace('T', ' '))} UTC · ${escapeHtml(o.orderState(event.status))} · ${escapeHtml(event.actor_name || o.orderActor(event.actor))}</li>`).join('')
       return `<article class="card account__record"><h3>${orderNumber(order.id)} · ${escapeHtml(o.orderState(order.status))}</h3><p class="post-date">${escapeHtml(order.created_at.slice(0, 16).replace('T', ' '))} UTC · ${paymentName(t, order.payment)}</p>${orderDetails(order, lines.get(order.id) ?? [], t)}<p class="pre-line"><strong>${escapeHtml(order.name)}</strong>
 ${escapeHtml(order.phone)}${order.email ? `\n${escapeHtml(order.email)}` : ''}
-${escapeHtml(order.address)}${order.note ? `\n\n${o.orderNote}: ${escapeHtml(order.note)}` : ''}</p><form action="/owner/${escapeHtml(code)}/orders/${order.id}" method="post">${buttons}</form></article>`
+${escapeHtml(order.address)}${order.note ? `\n\n${o.orderNote}: ${escapeHtml(order.note)}` : ''}</p>${changes ? `<details class="order-history"><summary>${o.orderHistory}</summary><ul>${changes}</ul></details>` : ''}<form action="${escapeHtml(desk.base)}/orders/${order.id}" method="post">${buttons}</form></article>`
     })
     .join('')
-  return office(site, code, o.nav.orders, `${settings.cart ? '' : `<p role="alert">${o.cartOff}</p>`}<p>${o.ordersHelp}</p>${rows || `<p>${o.noOrders}</p>`}`, error ? { error } : undefined)
+  return office(site, desk, o.nav.orders, `${settings.cart ? '' : `<p role="alert">${o.cartOff}</p>`}<p>${o.ordersHelp}</p>${rows || `<p>${o.noOrders}</p>`}`, error ? { error } : undefined)
 }
 
-async function pagesList(env: Env, site: SiteRow, code: string, notice?: { error?: string }) {
+async function pagesList(env: Env, site: SiteRow, desk: Desk, notice?: { error?: string }) {
   const t = officeText(site)
   const { results } = await env.DB.prepare('SELECT slug, title, published FROM pages WHERE site_id = ? ORDER BY slug').bind(site.id).all<{ published: number; slug: string; title: string }>()
-  const rows = results.map((page) => `<li><a href="/owner/${escapeHtml(code)}/page/${escapeHtml(page.slug)}">${escapeHtml(page.title)}</a> ${page.published ? '' : t.hiddenPage} <small>/${page.slug === 'home' ? '' : escapeHtml(page.slug)}</small></li>`).join('')
+  const rows = results.map((page) => `<li><a href="${escapeHtml(desk.base)}/page/${escapeHtml(page.slug)}">${escapeHtml(page.title)}</a> ${page.published ? '' : t.hiddenPage} <small>/${page.slug === 'home' ? '' : escapeHtml(page.slug)}</small></li>`).join('')
   return office(
     site,
-    code,
+    desk,
     t.nav.pages,
-    `<ul>${rows || `<li>${t.noPages}</li>`}</ul><h2>${t.addPage}</h2><form action="/owner/${escapeHtml(code)}/pages" class="contact-form" method="post"><label>${t.pageTitle}<input maxlength="120" name="title" required></label><label>${t.pageAddress}<input maxlength="60" name="slug" pattern="[a-z0-9]+(-[a-z0-9]+)*" required></label><button class="button" type="submit">${t.createPage}</button></form>`,
+    `<ul>${rows || `<li>${t.noPages}</li>`}</ul><h2>${t.addPage}</h2><form action="${escapeHtml(desk.base)}/pages" class="contact-form" method="post"><label>${t.pageTitle}<input maxlength="120" name="title" required></label><label>${t.pageAddress}<input maxlength="60" name="slug" pattern="[a-z0-9]+(-[a-z0-9]+)*" required></label><button class="button" type="submit">${t.createPage}</button></form>`,
     notice,
   )
 }
 
-async function addPage(request: Request, env: Env, url: URL, site: SiteRow, code: string) {
+async function addPage(request: Request, env: Env, url: URL, site: SiteRow, desk: Desk) {
   const form = await request.formData()
   const title = String(form.get('title') ?? '').trim().slice(0, 120)
   const slug = pageSlugSchema.safeParse(String(form.get('slug') ?? '').trim())
   const t = officeText(site)
-  if (!title || !slug.success) return pagesList(env, site, code, { error: t.badPage })
+  if (!title || !slug.success) return pagesList(env, site, desk, { error: t.badPage })
   const count = await env.DB.prepare('SELECT COUNT(*) AS total FROM pages WHERE site_id = ?').bind(site.id).first<{ total: number }>()
-  if ((count?.total ?? 0) >= maxPagesPerSite) return pagesList(env, site, code, { error: t.pagesLimit(maxPagesPerSite) })
+  if ((count?.total ?? 0) >= maxPagesPerSite) return pagesList(env, site, desk, { error: t.pagesLimit(maxPagesPerSite) })
   await env.DB.prepare('INSERT INTO pages (site_id, slug, title, description, published, blocks) VALUES (?, ?, ?, ?, 0, ?) ON CONFLICT (site_id, slug) DO NOTHING')
     .bind(site.id, slug.data, title, title, JSON.stringify([{ heading: title, type: 'hero' }]))
     .run()
-  return see(url, `/owner/${code}/page/${slug.data}`)
+  return see(url, `${desk.base}/page/${slug.data}`)
 }
 
 const variantLines = (variants: Variant[] = []) => variants.map((variant) => [variant.name, variant.price, variant.compare_price, variant.stock ?? ''].join(' | ')).join('\n')
@@ -290,7 +321,7 @@ const readVariants = (text: string) =>
     .filter(([name]) => name)
     .map(([name, price, comparePrice, stock]) => ({ comparePrice: comparePrice || undefined, name, price: price || undefined, stock: stock ? Number(stock) : null }))
 
-const itemForm = (code: string, item: Partial<Item>, collections: string[], t: OfficeWords) => `<form action="/owner/${escapeHtml(code)}/items${item.id ? `/${item.id}` : ''}" class="contact-form cms-form" enctype="multipart/form-data" method="post">
+const itemForm = (desk: Desk, item: Partial<Item>, collections: string[], t: OfficeWords) => `<form action="${escapeHtml(desk.base)}/items${item.id ? `/${item.id}` : ''}" class="contact-form cms-form" enctype="multipart/form-data" method="post">
 <label>${t.itemName}<input maxlength="160" name="title" required value="${escapeHtml(item.title)}"></label>
 <label>${t.itemCollection}<input list="collections" maxlength="40" name="collection" pattern="[a-z0-9-]+" required value="${escapeHtml(item.collection ?? 'products')}"></label>
 <datalist id="collections">${collections.map((name) => `<option value="${escapeHtml(name)}"></option>`).join('')}</datalist>
@@ -309,7 +340,7 @@ const itemForm = (code: string, item: Partial<Item>, collections: string[], t: O
 <label class="check"><input name="published" type="checkbox"${item.published === 0 ? '' : ' checked'}> ${t.showToVisitors}</label>
 <button class="button" type="submit">${t.save}</button></form>`
 
-async function itemsPage(env: Env, site: SiteRow, code: string, notice?: { error?: string; saved?: string }) {
+async function itemsPage(env: Env, site: SiteRow, desk: Desk, notice?: { error?: string; saved?: string }) {
   const t = officeText(site)
   const { results } = await env.DB.prepare('SELECT * FROM items WHERE site_id = ? ORDER BY collection, sort, id LIMIT 500').bind(site.id).all<Item>()
   const { results: variants } = await env.DB.prepare('SELECT item_variants.* FROM item_variants JOIN items ON items.id = item_variants.item_id WHERE items.site_id = ? ORDER BY item_variants.sort, item_variants.id').bind(site.id).all<Variant>()
@@ -317,19 +348,19 @@ async function itemsPage(env: Env, site: SiteRow, code: string, notice?: { error
   const collections = [...new Set(results.map((item) => item.collection))]
   const rows = results
     .map(
-      (item) => `<details class="cms-item"><summary>${escapeHtml(item.title)}${item.price ? ` · ${escapeHtml(item.price)}` : ''} <small>${escapeHtml(item.collection)}${item.published ? '' : t.hiddenItem}</small></summary>${itemForm(code, item, collections, t)}<form action="/owner/${escapeHtml(code)}/items/${item.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmDeleteItem}</label><button class="button button--small" type="submit">${t.delete}</button></form></details>`,
+      (item) => `<details class="cms-item"><summary>${escapeHtml(item.title)}${item.price ? ` · ${escapeHtml(item.price)}` : ''} <small>${escapeHtml(item.collection)}${item.published ? '' : t.hiddenItem}</small></summary>${itemForm(desk, item, collections, t)}<form action="${escapeHtml(desk.base)}/items/${item.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmDeleteItem}</label><button class="button button--small" type="submit">${t.delete}</button></form></details>`,
     )
     .join('')
-  return office(site, code, t.nav.products, `${await mediaList(env, site)}${rows || `<p>${t.nothingYet}</p>`}<h2>${t.addNew}</h2>${itemForm(code, {}, collections, t)}`, notice)
+  return office(site, desk, t.nav.products, `${await mediaList(env, site)}${rows || `<p>${t.nothingYet}</p>`}<h2>${t.addNew}</h2>${itemForm(desk, {}, collections, t)}`, notice)
 }
 
-async function saveItemFromForm(request: Request, env: Env, url: URL, site: SiteRow, code: string, id?: number) {
+async function saveItemFromForm(request: Request, env: Env, url: URL, site: SiteRow, desk: Desk, id?: number) {
   const form = await request.formData()
   const file = form.get('file')
   let imageUrl = String(form.get('imageUrl') ?? '').trim()
   if (file instanceof File && file.size) {
     const saved = await saveImage(env, site.id, file)
-    if (saved.error) return itemsPage(env, site, code, { error: saved.error })
+    if (saved.error) return itemsPage(env, site, desk, { error: saved.error })
     imageUrl = saved.url!
   }
   const stock = String(form.get('stock') ?? '').trim()
@@ -349,9 +380,9 @@ async function saveItemFromForm(request: Request, env: Env, url: URL, site: Site
     sort: Number(form.get('sort')) || 0,
     title: String(form.get('title') ?? '').trim(),
   })
-  if (!item.success) return itemsPage(env, site, code, { error: officeText(site).notSaved(firstProblem(item.error)) })
+  if (!item.success) return itemsPage(env, site, desk, { error: officeText(site).notSaved(firstProblem(item.error)) })
   await writeItem(env, site.id, item.data, id)
-  return see(url, `/owner/${code}/items?saved=1`)
+  return see(url, `${desk.base}/items?saved=1`)
 }
 
 export async function writeItem(env: Env, siteId: number, item: z.infer<typeof itemSchema>, id?: number) {
@@ -381,48 +412,51 @@ export async function writeItem(env: Env, siteId: number, item: z.infer<typeof i
   return saved
 }
 
-async function mediaPage(env: Env, site: SiteRow, code: string, notice?: { error?: string; saved?: string }) {
+async function mediaPage(env: Env, site: SiteRow, desk: Desk, notice?: { error?: string; saved?: string }) {
   const t = officeText(site)
   const { results } = await env.DB.prepare('SELECT id, name, size FROM media WHERE site_id = ? ORDER BY id DESC LIMIT 200').bind(site.id).all<{ id: number; name: string; size: number }>()
   const rows = results
-    .map((image) => `<figure class="cms-media"><img alt="${escapeHtml(image.name)}" loading="lazy" src="/media/${image.id}"><figcaption><code>/media/${image.id}</code><br>${escapeHtml(image.name)}</figcaption><form action="/owner/${escapeHtml(code)}/media/${image.id}/delete" method="post"><button class="button button--small" type="submit">${t.delete}</button></form></figure>`)
+    .map((image) => `<figure class="cms-media"><img alt="${escapeHtml(image.name)}" loading="lazy" src="/media/${image.id}"><figcaption><code>/media/${image.id}</code><br>${escapeHtml(image.name)}</figcaption><form action="${escapeHtml(desk.base)}/media/${image.id}/delete" method="post"><button class="button button--small" type="submit">${t.delete}</button></form></figure>`)
     .join('')
   return office(
     site,
-    code,
+    desk,
     t.nav.images,
-    `<form action="/owner/${escapeHtml(code)}/media" class="contact-form" enctype="multipart/form-data" method="post"><label>${t.uploadImage}<input accept="image/png,image/jpeg,image/webp,image/gif" name="file" required type="file"></label><button class="button" type="submit">${t.upload}</button></form><div class="cms-gallery">${rows || `<p>${t.noImages}</p>`}</div>`,
+    `<form action="${escapeHtml(desk.base)}/media" class="contact-form" enctype="multipart/form-data" method="post"><label>${t.uploadImage}<input accept="image/png,image/jpeg,image/webp,image/gif" name="file" required type="file"></label><button class="button" type="submit">${t.upload}</button></form><div class="cms-gallery">${rows || `<p>${t.noImages}</p>`}</div>`,
     notice,
   )
 }
 
-async function customersPage(env: Env, url: URL, site: SiteRow, code: string, notice?: { error?: string; saved?: string }, resetLink?: string) {
+async function customersPage(env: Env, url: URL, site: SiteRow, desk: Desk, notice?: { error?: string; saved?: string }, resetLink?: string) {
   const settings = JSON.parse(site.settings) as Settings
   const t = officeText(site)
-  const { results } = await env.DB.prepare('SELECT id, email, name, role, created_at FROM customers WHERE site_id = ? ORDER BY id DESC LIMIT 500').bind(site.id).all<{ created_at: string; email: string; id: number; name: string; role: string }>()
+  const { results } = await env.DB.prepare('SELECT id, email, name, role, permissions, created_at FROM customers WHERE site_id = ? ORDER BY id DESC LIMIT 500').bind(site.id).all<{ created_at: string; email: string; id: number; name: string; permissions: string; role: string }>()
+  const base = escapeHtml(desk.base)
+  // Staff only look. Making links, changing roles and deleting accounts stay with the owner.
+  const actions = (customer: (typeof results)[number]) =>
+    desk.staff
+      ? ''
+      : `<form action="${base}/customers/${customer.id}/reset" method="post"><button class="button button--small" type="submit">${t.makeResetLink}</button></form><form action="${base}/customers/${customer.id}/role" method="post"><button class="button button--small" name="role" type="submit" value="${customer.role === 'staff' ? 'member' : 'staff'}">${customer.role === 'staff' ? t.removeStaff : t.makeStaff}</button></form>${
+          customer.role === 'staff'
+            ? `<form action="${base}/customers/${customer.id}/access" class="contact-form" method="post"><fieldset class="cms-block"><legend>${t.staffAccess}</legend>${staffAreas.map((area) => `<label class="check"><input name="area" type="checkbox" value="${area}"${customer.permissions.split(',').includes(area) ? ' checked' : ''}> ${t.staffArea[area]}</label>`).join('')}<button class="button button--small" type="submit">${t.saveAccess}</button></fieldset></form>`
+            : ''
+        }<form action="${base}/customers/${customer.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmDeleteAccount}</label><button class="button button--small" type="submit">${t.deleteAccount}</button></form>`
   const rows = results
-    .map(
-      (customer) => `<article class="card account__record"><h3>${escapeHtml(customer.name)}${customer.role === 'staff' ? t.staffTag : ''}</h3><p>${escapeHtml(customer.email)}<br><small>${t.joined(escapeHtml(customer.created_at.slice(0, 10)))}</small></p><form action="/owner/${escapeHtml(code)}/customers/${customer.id}/reset" method="post"><button class="button button--small" type="submit">${t.makeResetLink}</button></form><form action="/owner/${escapeHtml(code)}/customers/${customer.id}/role" method="post"><button class="button button--small" name="role" type="submit" value="${customer.role === 'staff' ? 'member' : 'staff'}">${customer.role === 'staff' ? t.removeStaff : t.makeStaff}</button></form><form action="/owner/${escapeHtml(code)}/customers/${customer.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmDeleteAccount}</label><button class="button button--small" type="submit">${t.deleteAccount}</button></form></article>`,
-    )
+    .map((customer) => `<article class="card account__record"><h3>${escapeHtml(customer.name)}${customer.role === 'staff' ? t.staffTag : ''}</h3><p>${escapeHtml(customer.email)}<br><small>${t.joined(escapeHtml(customer.created_at.slice(0, 10)))}</small></p>${actions(customer)}</article>`)
     .join('')
-  return office(
-    site,
-    code,
-    t.nav.customers,
-    `${settings.accounts ? '' : `<p role="alert">${t.accountsOff}</p>`}${settings.accounts && canSendEmail(env, settings) ? `<p>${t.resetEmailHelp}</p>` : ''}${resetLink ? `<p role="status">${t.resetLinkHelp}<br><code style="overflow-wrap:anywhere">${escapeHtml(`${url.origin}${resetLink}`)}</code></p>` : ''}${rows || `<p>${t.noCustomers}</p>`}`,
-    notice,
-  )
+  const help = desk.staff ? '' : `${settings.accounts ? `<p>${t.staffHelp(escapeHtml(`${url.origin}/staff`))}</p>` : `<p role="alert">${t.accountsOff}</p>`}${settings.accounts && canSendEmail(env, settings) ? `<p>${t.resetEmailHelp}</p>` : ''}`
+  return office(site, desk, t.nav.customers, `${help}${resetLink ? `<p role="status">${t.resetLinkHelp}<br><code style="overflow-wrap:anywhere">${escapeHtml(`${url.origin}${resetLink}`)}</code></p>` : ''}${rows || `<p>${t.noCustomers}</p>`}`, notice)
 }
 
-const settingsForm = (site: SiteRow, code: string, notice?: { error?: string; saved?: string }, draft?: Partial<Settings>) => {
+const settingsForm = (site: SiteRow, desk: Desk, notice?: { error?: string; saved?: string }, draft?: Partial<Settings>) => {
   const settings = { ...(JSON.parse(site.settings) as Settings), ...draft }
   const t = officeText(site)
   const text = (key: keyof Settings, label: string, kind = 'text') => `<label>${label}<input name="${key}" type="${kind}" value="${escapeHtml(settings[key])}"></label>`
   return office(
     site,
-    code,
+    desk,
     t.nav.settings,
-    `<form action="/owner/${escapeHtml(code)}/settings" class="contact-form cms-form" method="post">
+    `<form action="${escapeHtml(desk.base)}/settings" class="contact-form cms-form" method="post">
 ${text('name', t.siteName)}${text('tagline', t.tagline)}${text('language', t.siteLanguage)}
 <label>${t.officeLanguage}<select name="officeLanguage">${[['', t.officeLanguageSame], ['en', 'English'], ['th', 'ภาษาไทย']].map(([value, name]) => `<option value="${value}"${value === (settings.officeLanguage === 'auto' ? '' : (settings.officeLanguage ?? '')) ? ' selected' : ''}>${name}</option>`).join('')}</select></label>
 <label>${t.style}<select name="style">${siteStyles.map((style) => `<option${style === settings.style ? ' selected' : ''}>${style}</option>`).join('')}</select></label>
@@ -454,7 +488,7 @@ ${text('emailFrom', t.emailFrom, 'email')}${text('notifyEmail', t.notifyEmail, '
   )
 }
 
-async function saveSettings(request: Request, env: Env, url: URL, site: SiteRow, code: string) {
+async function saveSettings(request: Request, env: Env, url: URL, site: SiteRow, desk: Desk) {
   const form = await request.formData()
   const draft: Record<string, unknown> = {
     allowedOrigins: (JSON.parse(site.settings) as Settings).allowedOrigins,
@@ -481,24 +515,61 @@ async function saveSettings(request: Request, env: Env, url: URL, site: SiteRow,
     .map(([label, href]) => ({ href, label }))
   const parsed = z.object(settingsShape).safeParse(draft)
   const t = officeText(site)
-  if (!parsed.success || !draft.name) return settingsForm(site, code, { error: parsed.success ? t.needName : t.notSaved(firstProblem(parsed.error)) }, draft as Partial<Settings>)
+  if (!parsed.success || !draft.name) return settingsForm(site, desk, { error: parsed.success ? t.needName : t.notSaved(firstProblem(parsed.error)) }, draft as Partial<Settings>)
   await env.DB.prepare("UPDATE sites SET settings = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?").bind(JSON.stringify(parsed.data), site.id).run()
-  return see(url, `/owner/${code}/settings?saved=1`)
+  return see(url, `${desk.base}/settings?saved=1`)
 }
 
-/** The private back office. Its address holds the owner's secret, so anyone who reaches this is the owner. */
-export async function handleOffice(request: Request, env: Env, url: URL, site: SiteRow, code: string, parts: string[]) {
+/** Staff are recognised by their login cookie, so a change must come from a page of this site. SameSite=Lax already stops most cross-site posts. This also stops the rest. */
+const fromThisSite = (request: Request, url: URL) => {
+  const origin = request.headers.get('origin')
+  if (origin && origin !== 'null') return origin === url.origin
+  return request.headers.get('sec-fetch-site') === 'same-origin'
+}
+
+/** Lets a logged-in staff member into /staff, or says why not. Visitors are sent to log in, and other customers find nothing here. */
+export async function staffEntry(request: Request, env: Env, url: URL, working: SiteRow): Promise<Desk | Response> {
+  const site = liveSite(working)
+  if (!(JSON.parse(site.settings) as Settings).accounts) return notFound()
+  const customer = await getCustomer(request, env, site.id)
+  if (!customer) return request.method === 'POST' ? notFound() : see(url, '/login?next=/staff')
+  if (customer.role !== 'staff') return notFound()
+  const desk = staffDesk({ ...customer, permissions: await staffPermissions(env, customer.id) })
+  const t = officeText(working)
+  if (request.method === 'POST' && !fromThisSite(request, url)) return office(working, desk, t.staffRefusedTitle, `<p>${t.staffOtherSite}</p>`, undefined, 403)
+  return desk
+}
+
+/** Whether a staff member may open this address of the back office. Anything not named here is for the owner alone. */
+export function staffMay(staff: StaffMember, post: boolean, area?: string, id?: string, action?: string, extra?: string) {
+  const has = (need: StaffArea) => staff.permissions.includes(need)
+  if (!area) return !post
+  if (area === 'orders') return has('orders')
+  if (area === 'items' || area === 'media') return has('products')
+  if (area === 'pages' || area === 'page' || area === 'preview') return has('pages')
+  if (area === 'publish') return has('publish')
+  if (area === 'entry') return has('messages')
+  if (area === 'customers') return has('customers') && !post
+  // Records only. Creating or deleting a table stays with the owner, and so does changing its fields, which the data area checks itself.
+  if (area === 'data') return has('data') && !(post && (!id || (action === 'delete' && !extra)))
+  return false
+}
+
+/** The back office, for the owner through their secret link, or for staff through /staff with the areas the owner gave them. */
+export async function handleOffice(request: Request, env: Env, url: URL, site: SiteRow, desk: Desk, parts: string[]) {
   const post = request.method === 'POST'
   if (!post && request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405 })
   const t = officeText(site)
   if (Number(request.headers.get('content-length') || 0) > maxOfficeBytes) return new Response(t.tooLarge, { status: 413 })
   const saved = url.searchParams.has('saved') ? { saved: t.saved } : undefined
-  const [area, id, action, extra] = parts.slice(2)
-  const owner = `/owner/${code}`
+  const [area, id, action, extra] = parts
+  const owner = desk.base
+  // Checked here, before any page or change, so hiding a menu entry is never the only thing in the way.
+  if (desk.staff && !staffMay(desk.staff, post, area, id, action, extra)) return office(site, desk, t.staffRefusedTitle, `<p>${t.staffRefused}</p>`, undefined, 403)
 
-  if (!area) return post ? notFound() : overview(env, url, site, code)
+  if (!area) return post ? notFound() : overview(env, url, site, desk)
 
-  const platform = handlePlatform(request, env, url, site, code, area, id, action, extra, saved)
+  const platform = handlePlatform(request, env, url, site, desk, area, id, action, extra, saved)
   if (platform) return platform
 
   if (area === 'entry' && post && /^\d+$/.test(id ?? '') && !action) {
@@ -513,17 +584,17 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
   }
 
   if (area === 'orders') {
-    if (!id) return post ? notFound() : ordersPage(env, site, code)
+    if (!id) return post ? notFound() : ordersPage(env, site, desk)
     if (!post || action || !/^\d+$/.test(id)) return notFound()
     const status = (await request.formData().catch((): null => null))?.get('status')
     if (typeof status === 'string' && orderStatuses.includes(status)) {
-      const result = await setOrderStatus(env, site.id, Number(id), status)
-      if (result === 'no-stock') return ordersPage(env, site, code, t.noStock)
+      const result = await setOrderStatus(env, site.id, Number(id), status, { actor: desk.staff ? 'staff' : 'owner', origin: url.origin, staff: desk.staff })
+      if (result === 'no-stock') return ordersPage(env, site, desk, t.noStock)
     }
     return see(url, `${owner}/orders`)
   }
 
-  if (area === 'pages' && !id) return post ? addPage(request, env, url, site, code) : pagesList(env, site, code)
+  if (area === 'pages' && !id) return post ? addPage(request, env, url, site, desk) : pagesList(env, site, desk)
 
   if (area === 'page' && id) {
     const page = await env.DB.prepare('SELECT title, description, published, blocks FROM pages WHERE site_id = ? AND slug = ?').bind(site.id, id).first<{ blocks: string; description: string; published: number; title: string }>()
@@ -534,14 +605,14 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
       return see(url, `${owner}/pages`)
     }
     if (action) return notFound()
-    if (post) return savePageFromForm(request, env, url, site, code, id)
-    return pageEditor(env, site, code, id, { blocks: JSON.parse(page.blocks) as Block[], description: page.description, published: Boolean(page.published), title: page.title }, saved)
+    if (post) return savePageFromForm(request, env, url, site, desk, id)
+    return pageEditor(env, site, desk, id, { blocks: JSON.parse(page.blocks) as Block[], description: page.description, published: Boolean(page.published), title: page.title }, saved)
   }
 
   if (area === 'items') {
-    if (!id) return post ? saveItemFromForm(request, env, url, site, code) : itemsPage(env, site, code, saved)
+    if (!id) return post ? saveItemFromForm(request, env, url, site, desk) : itemsPage(env, site, desk, saved)
     if (!/^\d+$/.test(id) || !post) return notFound()
-    if (!action) return saveItemFromForm(request, env, url, site, code, Number(id))
+    if (!action) return saveItemFromForm(request, env, url, site, desk, Number(id))
     if (action === 'delete') {
       const form = await request.formData()
       if (form.get('confirm') === 'on') await env.DB.prepare('DELETE FROM items WHERE id = ? AND site_id = ?').bind(Number(id), site.id).run()
@@ -552,11 +623,11 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
 
   if (area === 'media') {
     if (!id) {
-      if (!post) return mediaPage(env, site, code, saved)
+      if (!post) return mediaPage(env, site, desk, saved)
       const file = (await request.formData()).get('file')
-      if (!(file instanceof File) || !file.size) return mediaPage(env, site, code, { error: t.chooseImage })
+      if (!(file instanceof File) || !file.size) return mediaPage(env, site, desk, { error: t.chooseImage })
       const stored = await saveImage(env, site.id, file)
-      return stored.error ? mediaPage(env, site, code, { error: stored.error }) : see(url, `${owner}/media?saved=1`)
+      return stored.error ? mediaPage(env, site, desk, { error: stored.error }) : see(url, `${owner}/media?saved=1`)
     }
     if (post && action === 'delete' && /^\d+$/.test(id)) {
       await env.DB.prepare('DELETE FROM media WHERE id = ? AND site_id = ?').bind(Number(id), site.id).run()
@@ -566,17 +637,22 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
   }
 
   if (area === 'customers') {
-    if (!id) return post ? notFound() : customersPage(env, url, site, code, saved)
-    if (!post || !/^\d+$/.test(id)) return notFound()
-    const customer = await env.DB.prepare('SELECT id FROM customers WHERE id = ? AND site_id = ?').bind(Number(id), site.id).first<{ id: number }>()
+    if (!id) return post ? notFound() : customersPage(env, url, site, desk, saved)
+    // Changing accounts is for the owner alone.
+    if (!post || !/^\d+$/.test(id) || !desk.code) return notFound()
+    const customer = await env.DB.prepare('SELECT id, role FROM customers WHERE id = ? AND site_id = ?').bind(Number(id), site.id).first<{ id: number; role: string }>()
     if (!customer) return notFound()
     if (action === 'reset') {
-      return customersPage(env, url, site, code, undefined, await createResetLink(env, customer.id))
+      return customersPage(env, url, site, desk, undefined, await createResetLink(env, customer.id))
     }
     if (action === 'role') {
       const role = (await request.formData()).get('role')
-      if (role === 'staff' || role === 'member') await env.DB.prepare('UPDATE customers SET role = ? WHERE id = ?').bind(role, customer.id).run()
+      if (role === 'staff' || role === 'member') await setStaff(env, site.id, customer.id, role)
       return see(url, `${owner}/customers`)
+    }
+    if (action === 'access' && customer.role === 'staff') {
+      await setStaff(env, site.id, customer.id, 'staff', (await request.formData()).getAll('area').map(String))
+      return see(url, `${owner}/customers?saved=1`)
     }
     if (action === 'delete') {
       const form = await request.formData()
@@ -586,17 +662,21 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
     return notFound()
   }
 
+  // Everything below is for the owner alone.
+  const code = desk.code
+  if (!code) return notFound()
+
   if (area === 'updates' && !id) {
     const settings = JSON.parse(site.settings) as Settings
     if (post) {
       const repo = String((await request.formData().catch((): null => null))?.get('repo') ?? '').trim()
-      if (!repoPattern.test(repo)) return office(site, code, t.nav.updates, updatesBody(code, settings.githubRepo, await latestRelease(), t), { error: t.badRepo })
+      if (!repoPattern.test(repo)) return office(site, desk, t.nav.updates, updatesBody(code, settings.githubRepo, await latestRelease(), t), { error: t.badRepo })
       await env.DB.prepare("UPDATE sites SET settings = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?").bind(JSON.stringify({ ...settings, githubRepo: repo }), site.id).run()
       return see(url, `${owner}/updates?saved=1`)
     }
-    return office(site, code, t.nav.updates, updatesBody(code, settings.githubRepo, await latestRelease(), t), saved)
+    return office(site, desk, t.nav.updates, updatesBody(code, settings.githubRepo, await latestRelease(), t), saved)
   }
 
-  if (area === 'settings' && !id) return post ? saveSettings(request, env, url, site, code) : settingsForm(site, code, saved)
+  if (area === 'settings' && !id) return post ? saveSettings(request, env, url, site, desk) : settingsForm(site, desk, saved)
   return notFound()
 }

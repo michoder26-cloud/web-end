@@ -3,10 +3,12 @@ import { canSendEmail, isEmail, later, sendEmail, tellOwner } from './email'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { getProduct, getProducts, isAvailable } from './items'
 import { formatMoney, parsePrice } from './money'
+import { getSite } from './owner'
 import { pageImage, renderLayout } from './render'
 import { startCardPayment } from './stripe'
 import { words } from './text'
 import type { Customer, Env, Item, Order, OrderLine, Settings, SiteRow, Variant } from './types'
+import { liveSite } from './versions'
 import { fireEvent } from './webhooks'
 
 const cookieName = 'cart'
@@ -295,23 +297,88 @@ async function placeOrder(request: Request, env: Env, url: URL, site: SiteRow, c
   return payUrl ? new Response(null, { headers: { 'Cache-Control': 'no-store', Location: payUrl, 'Set-Cookie': empty }, status: 303 }) : see(url, `${orderPath}?payfail=1`, empty)
 }
 
+/** Who changed an order: for its history, and for the link in the customer's email. */
+export type OrderChange = { actor: 'api' | 'claude' | 'owner' | 'staff'; origin: string; staff?: Customer | null }
+
+// Customers hear about these. Going back to pending is someone fixing a mistake, so it stays quiet.
+const emailedStatuses = ['paid', 'shipped', 'done', 'cancelled']
+
 /** Changes an order's status. Cancelling puts its items back in stock, and un-cancelling takes them out again. */
-export async function setOrderStatus(env: Env, siteId: number, id: number, status: string) {
+export async function setOrderStatus(env: Env, siteId: number, id: number, status: string, change?: OrderChange) {
   const order = await env.DB.prepare('SELECT status FROM orders WHERE id = ? AND site_id = ?').bind(id, siteId).first<{ status: string }>()
   if (!order) return 'missing'
+  // Choosing the status an order already has changes nothing, so nothing is logged, sent or emailed.
+  if (order.status === status) return 'ok'
   const direction = order.status !== 'cancelled' && status === 'cancelled' ? -1 : order.status === 'cancelled' && status !== 'cancelled' ? 1 : 0
   const lines = direction ? ((await orderLines(env, [id])).get(id) ?? []) : []
+  let changed = 0
   try {
-    await env.DB.batch([
-      env.DB.prepare("UPDATE orders SET status = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND site_id = ?").bind(status, id, siteId),
+    // Only from the status just read, so two people pressing at the same moment can't both email the customer.
+    const [result] = await env.DB.batch([
+      env.DB.prepare("UPDATE orders SET status = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND site_id = ? AND status = ?").bind(status, id, siteId, order.status),
       ...lines.filter((line) => line.item_id !== null).map((line) => takeStock(env, line.item_id!, line.variant_id, line.quantity * direction)),
     ])
+    changed = result.meta.changes
   } catch (error) {
     if (String(error).includes('CHECK constraint')) return 'no-stock'
     throw error
   }
+  if (!changed) return 'ok'
+  if (change) {
+    const name = change.staff ? `${change.staff.name} <${change.staff.email}>` : ''
+    await env.DB.prepare('INSERT INTO order_events (order_id, status, actor, customer_id, actor_name) VALUES (?, ?, ?, ?, ?)').bind(id, status, change.actor, change.staff?.id ?? null, name).run()
+  }
   await fireEvent(env, siteId, 'order.updated', { id, status })
+  if (change && emailedStatuses.includes(status)) await emailStatus(env, change.origin, id)
   return 'ok'
+}
+
+/** Tells the customer their order moved on. Only a hash of the first private link is kept, so the email brings a new link to the same order. */
+async function emailStatus(env: Env, origin: string, id: number) {
+  // Without a key there is nothing to send, so skip even reading the order.
+  if (!env.RESEND_API_KEY) return
+  await later(
+    env,
+    (async () => {
+      const site = await getSite(env)
+      if (!site) return
+      const settings = JSON.parse(liveSite(site).settings) as Settings
+      const order = await env.DB.prepare('SELECT * FROM orders WHERE id = ? AND site_id = ?').bind(id, site.id).first<Order>()
+      if (!order || !isEmail(order.email) || !canSendEmail(env, settings)) return
+      const t = words(settings.language)
+      const token = newToken()
+      await env.DB.prepare('INSERT INTO order_links (token_hash, order_id) VALUES (?, ?)').bind(await sha256(token), order.id).run()
+      const lines = (await orderLines(env, [order.id])).get(order.id) ?? []
+      const number = orderNumber(order.id)
+      const state = t.orderState[order.status] ?? order.status
+      await sendEmail(env, settings, order.email, {
+        after: [t.orderEmailKeep],
+        facts: [[t.orderStatus, state], ...orderFacts(order, lines, t)],
+        heading: `${t.order} ${number}: ${state}`,
+        lines: [t.statusEmail[order.status] ?? ''],
+        link: { href: `${origin}/order/${token}`, label: t.orderEmailLink },
+        replyTo: settings.email,
+        subject: t.statusEmailSubject.replace('{number}', number).replace('{status}', state),
+      })
+    })(),
+  )
+}
+
+/** Finds an order by a private link: the one from checkout, or one sent later in a status email. */
+async function orderByToken(env: Env, siteId: number, token: string, extra = '') {
+  const hash = await sha256(token)
+  return env.DB.prepare(`SELECT * FROM orders WHERE site_id = ? AND (token_hash = ? OR id = (SELECT order_id FROM order_links WHERE token_hash = ?))${extra}`).bind(siteId, hash, hash).first<Order>()
+}
+
+export type OrderEvent = { actor: string; actor_name: string; created_at: string; order_id: number; status: string }
+
+/** Each order's status changes, oldest first, for the back office. */
+export async function orderHistory(env: Env, ids: number[]) {
+  const history = new Map<number, OrderEvent[]>()
+  if (!ids.length) return history
+  const { results } = await env.DB.prepare(`SELECT order_id, status, actor, actor_name, created_at FROM order_events WHERE order_id IN (${ids.map(() => '?').join(',')}) ORDER BY id`).bind(...ids).all<OrderEvent>()
+  for (const event of results) history.set(event.order_id, [...(history.get(event.order_id) ?? []), event])
+  return history
 }
 
 export async function orderLines(env: Env, ids: number[]) {
@@ -335,7 +402,7 @@ export { paymentName }
 async function orderPage(request: Request, env: Env, url: URL, site: SiteRow, customer: Customer | null, token: string) {
   const settings = JSON.parse(site.settings) as Settings
   const t = words(settings.language)
-  const order = await env.DB.prepare('SELECT * FROM orders WHERE token_hash = ? AND site_id = ?').bind(await sha256(token), site.id).first<Order>()
+  const order = await orderByToken(env, site.id, token)
   // A wrong link looks the same as a page that doesn't exist.
   if (!order) return notFound()
   const lines = (await orderLines(env, [order.id])).get(order.id) ?? []
@@ -361,7 +428,7 @@ ${customer ? '' : `<p role="alert">${t.keepOrderLink}</p>`}
 
 async function payAgain(env: Env, url: URL, site: SiteRow, token: string) {
   const settings = JSON.parse(site.settings) as Settings
-  const order = await env.DB.prepare("SELECT * FROM orders WHERE token_hash = ? AND site_id = ? AND payment = 'card' AND status = 'pending'").bind(await sha256(token), site.id).first<Order>()
+  const order = await orderByToken(env, site.id, token, " AND payment = 'card' AND status = 'pending'")
   if (!order || !canPayByCard(env, settings)) return see(url, `/order/${token}`)
   const lines = (await orderLines(env, [order.id])).get(order.id) ?? []
   const payUrl = await startCardPayment(env, url, settings, order, lines, `/order/${token}`)

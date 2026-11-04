@@ -31,13 +31,14 @@ Claude asks about your business, then writes the pages, chooses the design, and 
 - **Limits nothing can get around:** seats and other places can't be overbooked, even by two people at the same moment, and one customer can't book the same thing twice
 - **Your data can leave with you:** download all your content and data in one file at any time
 - **Notifications:** get an email for each new order, form entry and booking through your own Resend account, get them in Discord, Slack or Telegram for free, or send signed webhooks to other services
-- **Email:** order confirmations with the customer's private order link, and password reset emails, in your site's language when it's English or Thai
-- **Build guides for Claude:** planning, data design, access rules, screens, design, copy, shop, publishing, Wix and launch checks, built in, so there's nothing extra to install
+- **Email:** order confirmations with the customer's private order link, an email when an order is paid, shipped, done or cancelled, and password reset emails, in your site's language when it's English or Thai
+- **Build guides for Claude:** planning, data design, access rules, screens, design, copy, shop, publishing, Wix, staff and launch checks, built in, so there's nothing extra to install
 - **System page:** hosting, version, publishing, database use, login, payments, email and connections in one place
 - **Shop:** product pages, categories, sale prices, sizes and colours, stock that can't oversell, a cart, free delivery thresholds, private order links and order status. Prices are always set on the server.
 - **Payments:** bank transfer and pay on delivery, plus cards through your own Stripe account
 - **Phone-first shopping:** a bottom tab bar and two-column product grid on phones, with no scripts on your pages
 - **Back office (CMS):** a private page to edit pages and sections, products, photos, menus, colours, orders and customers, with or without Claude. It's in Thai or English: a Thai site gets a Thai back office, and you can choose either one in Settings.
+- **Staff logins:** your team logs in with their own accounts and sees only the parts of the back office you tick for each person, such as orders, products, pages or messages. Settings, connections and your private links stay yours.
 - **Photo upload:** PNG, JPEG, WebP or GIF, up to 1 MB each, stored in your own database
 - **Search basics:** page titles, descriptions, a sitemap and structured data
 - **Full control:** the code is yours, in your own GitHub account. Claude can add custom CSS and custom code in a sandbox, and a developer can change anything.
@@ -57,7 +58,8 @@ Nobody hosts your site but you. There's no central server, and web-end never see
 ## What it can't do yet
 
 - Send email without an email account of your own. Emails go through your own Resend account, which you set up once, as shown below. Until then there are no emails, and if a customer forgets a password, you make a reset link in the back office and send it yourself.
-- Send newsletters, or email customers when you change an order's status. Customers see the status on their order page.
+- Send newsletters. Customers get an email when their order is placed and when its status changes, but nothing else.
+- Give staff finer access than whole areas, such as one table or only some orders, or show staff the full history of who changed what outside orders
 - Check bank transfers automatically or take payment slips. You check each transfer and confirm it in the back office.
 - Create product photos. Upload your own, or use images you have the right to use.
 - Show customer reviews as a ready-made feature
@@ -67,7 +69,30 @@ Nobody hosts your site but you. There's no central server, and web-end never see
 
 Passing our tests means common mistakes weren't found. It isn't a security audit or legal advice. Customer passwords use PBKDF2 with 100,000 rounds, the most Cloudflare Workers allow, which is below the 600,000 that security guides recommend. You're responsible for the customer data your site holds. Don't collect health data, ID numbers or card details through forms, and have legal pages checked for your country.
 
-Your Claude link and back office link work like passwords. If you lose them, you can reset the site's owner from your Cloudflare account, so keep them safe.
+Your Claude link and back office link work like passwords. If you lose them, you can reset the site's owner from your Cloudflare account, so keep them safe. Don't share them with your team. Give each person their own staff login instead, as shown below.
+
+## Giving your team their own login
+
+Staff log in on your website with their own email and password and open `/staff`, a back office that shows only what you allow. You never share your private links.
+
+1. Turn on customer accounts in **Settings**, if they're off.
+2. Ask each person to sign up on your website.
+3. In your back office, open **Customers**, press **Make staff** next to them, tick what they may do and press **Save access**. Or ask Claude: "Make Somchai staff for orders and products."
+4. They log in on your website and open `your-site/staff`. Staff also see a link to it on their account page.
+
+What you can give, one by one:
+
+- **Orders:** see orders with the customer's details and change their status. The orders page shows who changed each status.
+- **Products and images**
+- **Pages:** edit pages and see the preview. Changes stay private until someone with **Publish** makes them live. Before your first publish, page changes show at once.
+- **Publish:** make changes live and go back to older versions
+- **Data:** add, change and delete records in tables open to staff. Owner-only tables stay hidden, and only you change a table's fields or delete it.
+- **Messages and bookings** from your forms
+- **Customers:** see the list of names and emails, nothing more
+
+Settings, Connect, System, Updates, Move here, WordPress, the full download of your data, customer accounts, staff access and your private links always stay yours alone. Every page and every change is checked on the server, not just hidden from the menu, and a change must come from a page of your own site. Press **Remove staff access** and it stops at once, even if they're logged in. Making them staff again starts with nothing ticked.
+
+The staff role on its own still lets a person read and change tables you open to staff, on your pages and through the API, as it did before. Orders through the API need **Orders**.
 
 ## Updating your site
 
@@ -134,6 +159,7 @@ Emails go out through your own [Resend](https://resend.com) account, so they com
 
 - Customers can click **Forgot your password?** on the login page and get a link to choose a new one. The page never says whether an account uses that email.
 - Customers get an order confirmation with their private order link, if they enter an email at checkout or are logged in.
+- Customers get an email, with a private link to their order, when you, your staff or Claude mark it paid, shipped, done or cancelled. Choosing the status it already has sends nothing, going back to pending stays quiet, and a card payment Stripe confirms doesn't send one, because the customer sees it on screen.
 - You get an email for each new order, form entry and record that visitors add.
 
 You need your own domain, such as `your-shop.com`, because Resend only sends from domains you've verified.

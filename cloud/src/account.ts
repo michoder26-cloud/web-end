@@ -98,7 +98,7 @@ async function accountPage(env: Env, site: SiteRow, url: URL, customer: Customer
     url,
     t.account,
     `<h1>${t.account}</h1><p>${escapeHtml(customer.name)}<br>${escapeHtml(customer.email)}</p>
-<form action="/logout" method="post"><button class="button button--small" type="submit">${t.logOut}</button></form>
+${customer.role === 'staff' ? `<p><a class="button button--small" href="/staff">${t.staffOffice}</a></p>` : ''}<form action="/logout" method="post"><button class="button button--small" type="submit">${t.logOut}</button></form>
 ${orderRows ? `<h2>${t.orders}</h2>${orderRows}` : ''}<h2>${t.history}</h2>${rows}`,
     customer,
   )

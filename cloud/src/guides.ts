@@ -59,7 +59,7 @@ Wix can't export a site to WordPress. web-end is the bridge: move the Wix site h
   access_rules: `# Who can see and change what
 readAccess: public (anyone), members (any logged-in customer), own (customers see only their own records), staff, owner.
 writeAccess: public or members or own (add new records, and logged-in customers can change or delete only their own), staff, owner.
-Customers with the staff role can read and change everything except owner tables. API keys and the back office act as the owner.
+Customers with the staff role can read and change everything except owner tables. API keys and the owner's back office act as the owner. The staff back office at /staff follows these same table rules, as the staff guide explains.
 
 Common recipes:
 - Listings anyone can read, only you edit: read public, write owner.
@@ -95,7 +95,9 @@ Members, own and login prompts need update_site accounts true. Customers who log
 - Turn on: update_site cart true, plus payTransfer with transferDetails, payCod, or payCard with currency and the owner's Stripe secrets.
 - Stock can't oversell, and cancelling an order restores it.
 - Bank transfers are not checked automatically. The owner confirms them in the back office.
-- Checkout asks for an optional email. With email set up, as the limits guide explains, the customer gets a confirmation with their private order link, and the owner gets an email for each new order.`,
+- Checkout asks for an optional email. With email set up, as the limits guide explains, the customer gets a confirmation with their private order link, and the owner gets an email for each new order.
+- When the owner, staff, Claude or an API key moves an order to paid, shipped, done or cancelled, a customer who gave an email gets one in the site's language, with a private link to the order. Choosing the status it already has sends nothing, and going back to pending stays quiet. Card payments that Stripe confirms don't send one, because the customer sees it on their screen.
+- The orders page shows who changed each status, including which staff member.`,
   publish: `# Publishing
 - Before the first publish, changes appear at once while the site is being built.
 - After the first publish_site, visitors keep seeing the published version. New changes to pages and settings stay private until the next publish_site. get_site shows the preview link and what's waiting.
@@ -146,6 +148,29 @@ Tell the owner this hasn't been tested inside a real Wix site by the web-end pro
 - Webhooks: save_webhook sends signed messages on record.created, record.updated, record.deleted, order.created, order.updated and customer.created. They go once with no retry, so don't rely on them alone for anything critical. The signature header is X-Web-End-Signature: t=<time>,v1=<HMAC-SHA256 of "<time>.<body>" with the signing secret>. The owner finds the secret on the Connect page.
 - Free notifications: the owner can paste a Discord, Slack or Telegram address on the Connect page, and new orders and bookings arrive in that chat. Those addresses hold a secret, so never ask for them in chat.
 - Email: once the owner has set up Resend, as the limits guide explains, the site emails the owner about new orders, form entries and records, and emails customers their order confirmation and password resets. For anything else, such as a newsletter, point a webhook at the owner's own automation account.`,
+  staff: `# Staff and their own logins
+The owner's Claude link and back office link work like passwords, so the owner must never share them. Staff get their own login and a back office at /staff that shows only what the owner allows.
+
+Setup:
+1. update_site accounts true, if it's off.
+2. Each person signs up on the website with their own email. list_customers shows their id.
+3. set_customer_role with role staff and only the areas they need. The list replaces what they had.
+4. They log in on the website and open /staff. Give the owner that link to pass on, from get_site staff_back_office.
+
+Areas:
+- orders: see every order with the customer's details and change its status. Each change is logged with the staff member's name, and the customer gets the status email.
+- products: products, prices, stock and images.
+- pages: add, edit and delete pages and see the preview. Changes stay private until someone with publish makes them live. Before the first publish, changes show at once, so only give pages to people you'd trust with the live site.
+- publish: make changes live and go back to older versions.
+- data: add, change and delete records in tables staff may use. Owner-only tables stay hidden, and only the owner changes a table's fields or deletes a table.
+- messages: form entries and bookings, and marking them done.
+- customers: see the list of names and emails, nothing more.
+
+Always the owner's alone: Settings, Connect (keys and webhooks), System, Updates, Move here, WordPress, the full data download, customer accounts and staff access, and the owner's links. Every area is checked on the server for every page and every change, not only hidden from the menu.
+
+Ask which areas each person needs, and suggest the fewest that do the job: a packer needs orders, a writer needs pages, a manager might need orders, products, messages and customers. To take everything away, set_customer_role with role member. It works at once, and making them staff again starts with no areas.
+
+The staff role on its own still lets that person read and change tables open to staff, through pages and the API, as the access_rules guide explains. Orders through the API need the orders area.`,
   test_before_launch: `# Before launch
 - Run check_site and fix everything.
 - Try each role through the preview or the live site: visitor, new customer, second customer, staff, owner. The second customer must not see the first one's "own" records.
