@@ -979,6 +979,11 @@ check(v1.data.published === true && v1.data.version > 0, 'the site can be publis
 const v1Id = v1.data.version
 const saveDraft = await call('save_page', { ...homeBefore, title: 'Version two', published: true })
 check(saveDraft.data.live === false && saveDraft.data.preview.includes('/preview'), 'after publishing, a saved page is a private change')
+const taglineBefore = (await call('get_site')).data.settings.tagline ?? ''
+const zoneNow = await call('update_site', { timeZone: 'Asia/Bangkok' })
+const nameLater = await call('update_site', { tagline: 'Waits for publishing' })
+check(zoneNow.data.live === true && nameLater.data.live === false, 'settings that work at once say so, and the rest wait for publishing', JSON.stringify([zoneNow.data.live, nameLater.data.live]))
+await call('update_site', { timeZone: 'UTC', tagline: taglineBefore })
 await call('save_page', { slug: 'draft-only', title: 'Draft only', description: 'A page that exists only in the working copy, to test that drafts stay private.', published: true, blocks: [{ type: 'hero', heading: 'Draft heading' }, { type: 'html', code: '<p>Draft code</p>' }] })
 await call('update_site', { name: 'New name' })
 check(!(await (await fetch(base)).text()).includes('Version two') && (await (await fetch(base)).text()).includes('Version one'), 'visitors keep the published page')

@@ -18,7 +18,7 @@ import { getSite as findSite } from './owner'
 import { orderLines, orderStatuses, setOrderStatus } from './shop'
 import { readPermissions, setStaff, staffAreas } from './staff'
 import { starterIds, starterLanguages, starterSites } from './starters'
-import { listVersions, liveSite, publishVersion, restoreVersion, unpublishedChanges } from './versions'
+import { listVersions, liveSite, publishVersion, restoreVersion, systemSettingKeys, unpublishedChanges } from './versions'
 import { version } from './version'
 import { eventNames, hiddenUrl, isChatUrl, validWebhookUrl } from './webhooks'
 import { contrast, isHexColor, isSafeHref, siteStyles } from './theme'
@@ -335,7 +335,9 @@ export function createMcpServer(env: Env, origin: string, code: string) {
       await db.prepare("UPDATE sites SET settings = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?").bind(JSON.stringify(settings), site.id).run()
       // Scheduled automations run on the site's clock, so a new time zone moves their next runs.
       if (changes.timeZone !== undefined && changes.timeZone !== zoneOf(JSON.parse(site.settings) as Settings)) await reschedule(env, site.id)
-      return reply({ updated: true, settings, ...waiting(site) })
+      // Email, time zone and similar settings skip publishing, so saying they wait for publish_site would mislead.
+      const atOnce = Object.keys(changes).every((key) => systemSettingKeys.includes(key))
+      return reply({ updated: true, settings, ...(atOnce ? { live: true, note: 'These settings work at once, without publishing.' } : waiting(site)) })
     }),
   )
 
