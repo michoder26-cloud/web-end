@@ -1,8 +1,10 @@
 import { z } from 'zod'
 
 import { createResetLink, getCustomer } from './auth'
+import { reschedule } from './automations'
 import { handleAutomationsOffice } from './automations-office'
 import { handlePlatform } from './cms-platform'
+import { zoneOf } from './clock'
 import { canSendEmail } from './email'
 import { checklist, claudeLinkField, connectGuide, firstSteps, handleStarters, isStarter } from './first-steps'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
@@ -464,6 +466,7 @@ const settingsForm = (site: SiteRow, desk: Desk, notice?: { error?: string; save
     t.nav.settings,
     `<form action="${escapeHtml(desk.base)}/settings" class="contact-form cms-form" method="post">
 ${text('name', t.siteName)}${text('tagline', t.tagline)}${text('language', t.siteLanguage)}
+${text('timeZone', t.timeZone)}
 <label>${t.officeLanguage}<select name="officeLanguage">${[['', t.officeLanguageSame], ['en', 'English'], ['th', 'ภาษาไทย']].map(([value, name]) => `<option value="${value}"${value === (settings.officeLanguage === 'auto' ? '' : (settings.officeLanguage ?? '')) ? ' selected' : ''}>${name}</option>`).join('')}</select></label>
 <label>${t.style}<select name="style">${siteStyles.map((style) => `<option${style === settings.style ? ' selected' : ''}>${style}</option>`).join('')}</select></label>
 ${text('accent', t.accent, 'color').replace('value=""', 'value="#1f4d3a"')}${text('background', t.background, 'color').replace('value=""', 'value="#fbfaf6"')}${text('text', t.textColour, 'color').replace('value=""', 'value="#16201b"')}
@@ -510,7 +513,7 @@ async function saveSettings(request: Request, env: Env, url: URL, site: SiteRow,
   if (fee) draft.shippingFee = Number(fee)
   const freeOver = String(form.get('freeShippingOver') ?? '').trim()
   if (freeOver) draft.freeShippingOver = Number(freeOver)
-  for (const key of ['name', 'tagline', 'language', 'officeLanguage', 'style', 'accent', 'background', 'text', 'headerButtonLabel', 'headerButtonHref', 'footerText', 'email', 'emailFrom', 'notifyEmail', 'phone', 'address', 'customCss', 'transferDetails', 'currency']) {
+  for (const key of ['name', 'tagline', 'language', 'officeLanguage', 'timeZone', 'style', 'accent', 'background', 'text', 'headerButtonLabel', 'headerButtonHref', 'footerText', 'email', 'emailFrom', 'notifyEmail', 'phone', 'address', 'customCss', 'transferDetails', 'currency']) {
     const value = String(form.get(key) ?? '').trim()
     if (value) draft[key] = value
   }
@@ -523,6 +526,8 @@ async function saveSettings(request: Request, env: Env, url: URL, site: SiteRow,
   const t = officeText(site)
   if (!parsed.success || !draft.name) return settingsForm(site, desk, { error: parsed.success ? t.needName : t.notSaved(firstProblem(parsed.error)) }, draft as Partial<Settings>)
   await env.DB.prepare("UPDATE sites SET settings = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?").bind(JSON.stringify(parsed.data), site.id).run()
+  // Scheduled automations run on the site's clock, so a new time zone moves their next runs.
+  if (zoneOf(parsed.data) !== zoneOf(JSON.parse(site.settings) as Settings)) await reschedule(env, site.id)
   return see(url, `${desk.base}/settings?saved=1`)
 }
 

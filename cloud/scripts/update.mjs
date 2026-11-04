@@ -34,7 +34,8 @@ if (!existsSync(wranglerFile) || !existsSync(newWrangler)) {
   process.exit(1)
 }
 
-// Keep this site's own values, and take everything else from the new version.
+// Keep this site's own name and database, and take everything else from the new version, such as the schedule
+// in "triggers" that runs scheduled automations. A site updated from before schedules existed gets it this way.
 const oldConfig = readFileSync(wranglerFile, 'utf8')
 const read = (key) => new RegExp(`"${key}"\\s*:\\s*"([^"]+)"`).exec(oldConfig)?.[1]
 const siteName = read('name')
@@ -48,6 +49,11 @@ const newConfig = readFileSync(newWrangler, 'utf8')
   .replace(/"name"\s*:\s*"[^"]+"/, `"name": "${siteName}"`)
   .replace(/"database_name"\s*:\s*"[^"]+"/, `"database_name": "${databaseName}"`)
   .replace(/"database_id"\s*:\s*"[^"]+"/, `"database_id": "${databaseId}"`)
+// Losing the database setting would point the site at an empty database, so check before changing anything.
+if (!newConfig.includes(`"database_id": "${databaseId}"`) || !newConfig.includes(`"database_name": "${databaseName}"`) || !newConfig.includes(`"name": "${siteName}"`)) {
+  console.error("The new version's settings could not keep this site's database, so nothing was changed.")
+  process.exit(1)
+}
 
 const names = (folder) => readdirSync(folder).filter((name) => !skipped.has(name))
 const keep = new Set(names(source))

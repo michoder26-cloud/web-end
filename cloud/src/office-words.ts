@@ -1,3 +1,4 @@
+import type { Weekday } from './clock'
 import type { StaffArea } from './staff'
 import type { Settings, SiteRow } from './types'
 
@@ -165,6 +166,7 @@ const en = {
   emailHelp: "Optional. Emails go out through your own Resend account: password reset emails and order confirmations for customers, and an email to you for each new order, form entry and record. First verify your domain in Resend and add its key as the RESEND_API_KEY secret in your Cloudflare Worker's settings. These two settings work at once, without publishing.",
   emailFrom: 'Send emails from, an address on the domain you verified in Resend',
   notifyEmail: 'Your address for new orders, forms and records',
+  timeZone: 'Time zone, such as Asia/Bangkok, for automations that run at a set time. UTC if empty.',
 
   // Updates
   couldNotCheck: (current: string) => `Couldn't check for a new version right now. You have version ${current}.`,
@@ -382,13 +384,14 @@ const en = {
   // Automations
   automations: {
     title: 'Automations',
-    intro: 'Rules that run on the server by themselves when something happens, such as emailing you when a booking comes in. Ask Claude to add or change one. Here you can switch them off, see what they did, or delete them.',
+    intro: 'Rules that run on the server by themselves when something happens, such as emailing you when a booking comes in, or at a set time, such as a summary every morning. Ask Claude to add or change one. Here you can switch them off, see what they did, or delete them.',
     none: 'No automations yet. Ask Claude, for example: "When a booking comes in, email me."',
     on: 'On',
     off: 'Off',
     switchOn: 'Turn on',
     switchOff: 'Turn off',
-    ran: (count: number, last: string) => (count ? `Ran ${count} ${count === 1 ? 'time' : 'times'}, last at ${last} UTC` : 'Has not run yet'),
+    ran: (count: number, last: string) => (count ? `Ran ${count} ${count === 1 ? 'time' : 'times'}, last at ${last}` : 'Has not run yet'),
+    nextRun: (time: string) => `Next run: ${time}. Runs happen within about 15 minutes of the time.`,
     lastRuns: 'Last runs',
     outcome: (outcome: string) => ({ done: 'Done', failed: 'Failed', skipped: 'Skipped', stopped: 'Stopped' })[outcome] ?? outcome,
     signingSecret: 'Signing secret for its webhook steps',
@@ -401,6 +404,17 @@ const en = {
       order_placed: () => 'When an order is placed',
       order_status: (status: string) => `When an order's status becomes ${status}`,
       customer_signed_up: () => 'When a customer signs up',
+      every_day: (at: string, zone: string, days: string[]) => `Every ${days.length ? (days.length > 1 ? `${days.slice(0, -1).join(', ')} and ${days.at(-1)}` : days[0]) : 'day'} at ${at} (${zone})`,
+      every_week: (day: string, at: string, zone: string) => `Every ${day} at ${at} (${zone})`,
+      every_month: (day: number, at: string, zone: string) => `Every month on day ${day}${day > 28 ? " (or the month's last day)" : ''} at ${at} (${zone})`,
+      date_field: (days: number, side: 'after' | 'before', field: string, table: string, at: string, zone: string) => `${days ? `${days} ${days === 1 ? 'day' : 'days'} ${side}` : 'On the day of'} ${field} of a record in ${table}, at ${at} (${zone})`,
+    },
+    weekday: { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' } as Record<Weekday, string>,
+    summary: {
+      orders: 'Orders',
+      count: (count: number, what: string) => (count ? `${what}: ${count} ${count === 1 ? 'matches' : 'match'}.` : `${what}: nothing matches.`),
+      atLeast: (count: number, what: string, checked: number) => `${what}: at least ${count} match. Only the newest ${checked} were checked.`,
+      more: (count: number) => `…and ${count} more.`,
     },
     is: {
       equals: (field: string, value: string) => `${field} is ${value}`,
@@ -419,6 +433,7 @@ const en = {
       email_customer: 'email the customer',
       email_field: (field: string) => `email the address in ${field}`,
       webhook: (host: string) => `send the details to ${host}`,
+      summary: (what: string) => `email the owner a summary of ${what}`,
       stop: 'stop',
     },
     setTo: (field: string, value: string) => `${field} to ${value}`,
@@ -434,6 +449,8 @@ const en = {
       linked: (table: string, id: string, fields: string) => `Changed ${fields} of the linked ${table} #${id}.`,
       nothingLinked: (field: string) => `Nothing is linked in ${field}, so that step was skipped.`,
       emailed: (to: string) => `Emailed ${to}.`,
+      summarised: (count: string, to: string) => `Emailed a summary of ${count} to ${to}.`,
+      nothingToSummarise: () => 'Nothing matched, so no summary was sent.',
       called: (host: string, status: string) => `Sent the details to ${host}, which answered ${status}.`,
       stopped: () => 'Stopped there, as the rule says.',
       skippedStep: (step: string) => `Skipped step ${step}, because its conditions didn't hold.`,
@@ -850,6 +867,7 @@ const th: OfficeWords = {
   emailHelp: 'ไม่บังคับ อีเมลจะส่งผ่านบัญชี Resend ของคุณเอง ได้แก่ อีเมลตั้งรหัสผ่านใหม่และอีเมลยืนยันคำสั่งซื้อสำหรับลูกค้า และอีเมลแจ้งคุณทุกครั้งที่มีคำสั่งซื้อ แบบฟอร์ม หรือรายการใหม่ ก่อนอื่นให้ยืนยันโดเมนของคุณใน Resend แล้วเพิ่มคีย์เป็น secret ชื่อ RESEND_API_KEY ในการตั้งค่า Worker บน Cloudflare การตั้งค่าสองช่องนี้มีผลทันทีโดยไม่ต้องกดเผยแพร่',
   emailFrom: 'อีเมลผู้ส่ง ต้องเป็นที่อยู่บนโดเมนที่คุณยืนยันใน Resend แล้ว',
   notifyEmail: 'อีเมลของคุณสำหรับรับแจ้งคำสั่งซื้อ แบบฟอร์ม และรายการใหม่',
+  timeZone: 'เขตเวลา เช่น Asia/Bangkok ใช้กับระบบอัตโนมัติที่ทำงานตามเวลา ถ้าเว้นว่างจะใช้ UTC',
 
   couldNotCheck: (current: string) => `ตอนนี้ยังตรวจหาเวอร์ชันใหม่ไม่ได้ คุณใช้เวอร์ชัน ${current} อยู่`,
   newVersion: (latest: string, current: string) => `<strong>มีเวอร์ชัน ${latest} ใหม่แล้ว</strong> คุณใช้เวอร์ชัน ${current} อยู่`,
@@ -1062,13 +1080,14 @@ const th: OfficeWords = {
 
   automations: {
     title: 'ระบบอัตโนมัติ',
-    intro: 'กฎที่ทำงานเองบนเซิร์ฟเวอร์เมื่อมีบางอย่างเกิดขึ้น เช่น ส่งอีเมลถึงคุณเมื่อมีการจองเข้ามา ขอให้ Claude เพิ่มหรือแก้ไขกฎได้ ที่นี่คุณปิดกฎ ดูว่ากฎทำอะไรไปบ้าง หรือลบกฎได้',
+    intro: 'กฎที่ทำงานเองบนเซิร์ฟเวอร์เมื่อมีบางอย่างเกิดขึ้น เช่น ส่งอีเมลถึงคุณเมื่อมีการจองเข้ามา หรือทำงานตามเวลา เช่น ส่งสรุปทุกเช้า ขอให้ Claude เพิ่มหรือแก้ไขกฎได้ ที่นี่คุณปิดกฎ ดูว่ากฎทำอะไรไปบ้าง หรือลบกฎได้',
     none: 'ยังไม่มีระบบอัตโนมัติ ลองบอก Claude เช่น "เมื่อมีการจองเข้ามา ให้ส่งอีเมลถึงฉัน"',
     on: 'เปิดอยู่',
     off: 'ปิดอยู่',
     switchOn: 'เปิดใช้',
     switchOff: 'ปิดใช้',
-    ran: (count: number, last: string) => (count ? `ทำงานแล้ว ${count} ครั้ง ล่าสุดเมื่อ ${last} UTC` : 'ยังไม่เคยทำงาน'),
+    ran: (count: number, last: string) => (count ? `ทำงานแล้ว ${count} ครั้ง ล่าสุดเมื่อ ${last}` : 'ยังไม่เคยทำงาน'),
+    nextRun: (time: string) => `ทำงานครั้งถัดไป: ${time} โดยจะทำงานภายในประมาณ 15 นาทีจากเวลานี้`,
     lastRuns: 'การทำงานล่าสุด',
     outcome: (outcome: string) => ({ done: 'สำเร็จ', failed: 'ไม่สำเร็จ', skipped: 'ข้าม', stopped: 'หยุด' })[outcome] ?? outcome,
     signingSecret: 'รหัสลับสำหรับลงชื่อข้อความ webhook ของกฎนี้',
@@ -1081,6 +1100,17 @@ const th: OfficeWords = {
       order_placed: () => 'เมื่อมีคำสั่งซื้อใหม่',
       order_status: (status: string) => `เมื่อสถานะคำสั่งซื้อเป็น ${status}`,
       customer_signed_up: () => 'เมื่อมีลูกค้าสมัครสมาชิก',
+      every_day: (at: string, zone: string, days: string[]) => `ทุกวัน${days.length ? days.join(' ') : ''} เวลา ${at} (${zone})`,
+      every_week: (day: string, at: string, zone: string) => `ทุกวัน${day} เวลา ${at} (${zone})`,
+      every_month: (day: number, at: string, zone: string) => `ทุกเดือน วันที่ ${day}${day > 28 ? ' (หรือวันสุดท้ายของเดือนที่สั้นกว่า)' : ''} เวลา ${at} (${zone})`,
+      date_field: (days: number, side: 'after' | 'before', field: string, table: string, at: string, zone: string) => `${days ? `${days} วัน${side === 'after' ? 'หลัง' : 'ก่อน'}` : 'ในวัน'} ${field} ของรายการใน ${table} เวลา ${at} (${zone})`,
+    },
+    weekday: { mon: 'จันทร์', tue: 'อังคาร', wed: 'พุธ', thu: 'พฤหัสบดี', fri: 'ศุกร์', sat: 'เสาร์', sun: 'อาทิตย์' },
+    summary: {
+      orders: 'คำสั่งซื้อ',
+      count: (count: number, what: string) => (count ? `${what}: ตรงเงื่อนไข ${count} รายการ` : `${what}: ไม่มีรายการที่ตรงเงื่อนไข`),
+      atLeast: (count: number, what: string, checked: number) => `${what}: ตรงเงื่อนไขอย่างน้อย ${count} รายการ ตรวจเฉพาะ ${checked} รายการล่าสุด`,
+      more: (count: number) => `…และอีก ${count} รายการ`,
     },
     is: {
       equals: (field: string, value: string) => `${field} เท่ากับ ${value}`,
@@ -1099,6 +1129,7 @@ const th: OfficeWords = {
       email_customer: 'ส่งอีเมลถึงลูกค้า',
       email_field: (field: string) => `ส่งอีเมลไปยังที่อยู่ใน ${field}`,
       webhook: (host: string) => `ส่งข้อมูลไปที่ ${host}`,
+      summary: (what: string) => `ส่งอีเมลสรุป ${what} ถึงเจ้าของ`,
       stop: 'หยุด',
     },
     setTo: (field: string, value: string) => `${field} เป็น ${value}`,
@@ -1114,6 +1145,8 @@ const th: OfficeWords = {
       linked: (table: string, id: string, fields: string) => `แก้ไข ${fields} ของ ${table} #${id} ที่เชื่อมอยู่แล้ว`,
       nothingLinked: (field: string) => `ไม่มีรายการที่เชื่อมอยู่ใน ${field} จึงข้ามขั้นตอนนี้`,
       emailed: (to: string) => `ส่งอีเมลถึง ${to} แล้ว`,
+      summarised: (count: string, to: string) => `ส่งสรุป ${count} รายการถึง ${to} แล้ว`,
+      nothingToSummarise: () => 'ไม่มีรายการที่ตรงเงื่อนไข จึงไม่ได้ส่งสรุป',
       called: (host: string, status: string) => `ส่งข้อมูลไปที่ ${host} แล้ว ได้รับคำตอบ ${status}`,
       stopped: () => 'หยุดตรงนี้ตามที่กฎกำหนด',
       skippedStep: (step: string) => `ข้ามขั้นตอนที่ ${step} เพราะเงื่อนไขไม่ตรง`,

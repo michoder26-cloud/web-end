@@ -1898,6 +1898,251 @@ if (process.env.GOOGLE_TEST === '1') {
   }
 }
 
+// Schedules: automations that run at a set time. Cloudflare starts them about every 15 minutes; `wrangler dev --test-scheduled`
+// starts one run at /__scheduled. With the test-only switch WEBHOOK_ALLOW_HTTP:1, a run can pretend it is another moment by adding
+// " now=<time>" to the cron text. With SCHEDULE_TEST=1, start the site with --test-scheduled --var WEBHOOK_ALLOW_HTTP:1
+// --var RESEND_API_KEY:re_test_fake --var RESEND_API_BASE:http://localhost:8874, and this part catches emails on port 8874.
+{
+  const hasScheduleTest = process.env.SCHEDULE_TEST === '1'
+  const settle = () => new Promise((done) => setTimeout(done, 1000))
+  const tick = async (at) => (await fetch(`${base}/__scheduled?cron=${encodeURIComponent(`*/15 * * * *${at === undefined ? '' : ` now=${new Date(at).toISOString()}`}`)}`)).text()
+  const canTick = (await tick().catch(() => '')).includes('Ran scheduled event')
+  const mail = []
+  let receiver = null
+  if (hasScheduleTest) {
+    const { createServer } = await import('node:http')
+    receiver = createServer((request, response) => {
+      let body = ''
+      request.on('data', (part) => (body += part))
+      request.on('end', () => {
+        if (request.url === '/emails') mail.push(JSON.parse(body))
+        response.setHeader('Content-Type', 'application/json')
+        response.end(JSON.stringify({ id: `email-${mail.length}` }))
+      })
+    })
+    await new Promise((done) => receiver.listen(8874, done))
+    await call('update_site', { emailFrom: 'shop@schedule.test', notifyEmail: 'owner@schedule.test' })
+  }
+  const save = (automation) => call('save_automation', automation)
+  const byId = async (id) => (await call('list_automations')).data.find((item) => item.id === id)
+  const logOf = async () => (await call('list_records', { table: 'sched_log', limit: 100 })).data.records.map((row) => row.note)
+  const localDate = (ms, zone = 'Asia/Bangkok') => new Date(ms).toLocaleDateString('en-CA', { timeZone: zone })
+  const weekdayIn = (ms, zone = 'Asia/Bangkok') => new Date(ms).toLocaleDateString('en-US', { timeZone: zone, weekday: 'short' })
+  const addDays = (date, days) => new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10)
+  const minutes = 60_000
+  const days = 86_400_000
+  // The test-only switch lets automations call http addresses, so a refused one shows it is off.
+  const testSwitch = !(await call('test_automation', { automation: { name: 'x', trigger: { on: 'order_placed' }, actions: [{ do: 'webhook', url: 'http://localhost:8874/probe' }] } })).text.includes('public https')
+
+  // The time zone
+  check((await call('update_site', { timeZone: 'Mars/Olympus' })).isError && (await call('update_site', { timeZone: 'Asia/Bangkok; DROP' })).isError, 'an unknown time zone is refused')
+  check(!(await call('update_site', { timeZone: 'Asia/Bangkok' })).isError && (await call('get_site')).data.settings.timeZone === 'Asia/Bangkok', 'the site gets a time zone')
+  const zoneSettings = formValues(await (await fetch(`${owner}/settings`)).text())
+  check(zoneSettings.get('timeZone') === 'Asia/Bangkok', 'the settings page shows the time zone')
+  zoneSettings.set('timeZone', 'Nowhere/Land')
+  const badZone = await fetch(`${owner}/settings`, { body: zoneSettings, method: 'POST', redirect: 'manual' })
+  check(badZone.status === 200 && (await badZone.text()).includes('role="alert"') && (await call('get_site')).data.settings.timeZone === 'Asia/Bangkok', 'the back office refuses an unknown time zone')
+
+  await call('save_table', {
+    name: 'sched_bookings',
+    label: 'Sched bookings',
+    readAccess: 'owner',
+    writeAccess: 'owner',
+    fields: [
+      { name: 'name', label: 'Name', type: 'text', required: true },
+      { name: 'email', label: 'Email', type: 'email' },
+      { name: 'day', label: 'Day', type: 'date' },
+      { name: 'status', label: 'Status', type: 'select', options: ['new', 'confirmed', 'cancelled'], default: 'new' },
+    ],
+  })
+  await call('save_table', { name: 'sched_log', label: 'Sched log', readAccess: 'owner', writeAccess: 'owner', fields: [{ name: 'note', label: 'Note', type: 'text', required: true }] })
+  const logStep = (note) => ({ do: 'add_record', table: 'sched_log', values: { note } })
+
+  // Saving checks schedules
+  const refused = async (automation, words) => {
+    const result = await save(automation)
+    return result.isError && result.text.includes(words)
+  }
+  check((await save({ name: 'x', trigger: { on: 'every_day', at: '25:00' }, actions: [logStep('x')] })).isError && (await save({ name: 'x', trigger: { on: 'every_day', at: '9am' }, actions: [logStep('x')] })).isError, 'a time that is not a 24-hour time is refused')
+  check((await save({ name: 'x', trigger: { on: 'every_day', at: '09:00', weekdays: ['funday'] }, actions: [logStep('x')] })).isError && (await save({ name: 'x', trigger: { on: 'every_month', day: 32, at: '09:00' }, actions: [logStep('x')] })).isError, 'unknown weekdays and days of the month are refused')
+  check(await refused({ name: 'x', trigger: { on: 'date_field', table: 'sched_bookings', field: 'name', days: 1 }, actions: [logStep('x')] }, 'not a date field'), 'a date reminder needs a date field')
+  check(await refused({ name: 'x', trigger: { on: 'date_field', table: 'nope', field: 'day', days: 1 }, actions: [logStep('x')] }, 'no table called "nope"'), 'a date reminder needs a real table')
+  check(await refused({ name: 'x', trigger: { on: 'every_day', at: '09:00' }, actions: [{ do: 'email', to: 'customer', subject: 'Hi', message: 'Hi' }] }, 'a schedule has no customer'), 'a schedule cannot email a customer')
+  check(await refused({ name: 'x', trigger: { on: 'every_day', at: '09:00' }, actions: [{ do: 'set_fields', values: { name: 'x' } }] }, 'or with a date reminder'), 'a schedule cannot change a record that started it')
+  check(await refused({ name: 'x', trigger: { on: 'every_day', at: '09:00' }, actions: [logStep('{{name}}')] }, '"name" is not something this automation can read'), 'a schedule reads only the time')
+  check(await refused({ name: 'x', trigger: { on: 'record_added', table: 'sched_bookings' }, actions: [{ do: 'summary', table: 'sched_bookings', subject: 'x' }] }, 'only works in a schedule'), 'a summary only works in a schedule')
+  check(await refused({ name: 'x', trigger: { on: 'every_day', at: '09:00' }, actions: [{ do: 'summary', subject: 'x' }] }, 'either a table or orders'), 'a summary needs a table or the orders')
+  check(await refused({ name: 'x', trigger: { on: 'every_day', at: '09:00' }, actions: [{ do: 'summary', table: 'sched_bookings', where: [{ field: 'colour', is: 'equals', value: 'red' }], subject: 'x' }] }, 'has no field "colour"'), "a summary's conditions are checked against its table")
+  check(await refused({ name: 'x', trigger: { on: 'every_day', at: '09:00' }, actions: [{ do: 'summary', orders: true, fields: ['secret'], subject: 'x' }] }, 'orders has no field "secret"'), "a summary's fields are checked")
+  check((await call('list_automations')).data.length === 0, 'no refused schedule was saved')
+
+  // A daily schedule, in plain words, on the site's clock
+  const daily = await save({ name: 'Daily note', trigger: { on: 'every_day', at: '09:00' }, actions: [logStep('Daily {{today}}')] })
+  check(!daily.isError && daily.data.says === 'Every day at 09:00 (Asia/Bangkok) → add a record to Sched log' && daily.data.warnings.some((warning) => warning.includes('within about 15 minutes')), 'a daily schedule is saved with a plain sentence', daily.text)
+  const firstNext = Date.parse((await byId(daily.data.saved)).nextRunAt)
+  check(new Date(firstNext).toISOString().endsWith('T02:00:00.000Z') && firstNext > Date.now() && firstNext <= Date.now() + days && daily.data.nextRun === `${localDate(firstNext)} 09:00 (Asia/Bangkok)`, '09:00 in Bangkok is 02:00 UTC, and the next run is within a day', `${new Date(firstNext).toISOString()} ${daily.data.nextRun}`)
+  await call('update_site', { timeZone: 'UTC' })
+  check((await byId(daily.data.saved)).nextRunAt.endsWith('T09:00:00.000Z'), 'a new time zone moves the next run')
+  await call('update_site', { timeZone: 'Asia/Bangkok' })
+  check((await byId(daily.data.saved)).nextRunAt === new Date(firstNext).toISOString(), 'and moving back moves it back')
+  const weekdays = (await save({ name: 'Mon and Fri', trigger: { on: 'every_day', at: '07:30', weekdays: ['mon', 'fri'] }, actions: [logStep('Weekday {{today}}')] })).data
+  const weekdayNext = Date.parse((await byId(weekdays.saved)).nextRunAt)
+  check(weekdays.says === 'Every Monday and Friday at 07:30 (Asia/Bangkok) → add a record to Sched log' && ['Mon', 'Fri'].includes(weekdayIn(weekdayNext)) && weekdays.nextRun.endsWith(' 07:30 (Asia/Bangkok)'), 'a schedule on chosen weekdays runs only on those days', `${weekdays.says} ${weekdays.nextRun}`)
+  const weekly = (await save({ name: 'Weekly', enabled: false, trigger: { on: 'every_week', weekday: 'wed', at: '18:00' }, actions: [logStep('Weekly')] })).data
+  const monthly = (await save({ name: 'Monthly', enabled: false, trigger: { on: 'every_month', day: 31, at: '08:00' }, actions: [logStep('Monthly')] })).data
+  check(weekly.says.startsWith('Every Wednesday at 18:00 (Asia/Bangkok)') && monthly.says.startsWith("Every month on day 31 (or the month's last day) at 08:00 (Asia/Bangkok)"), 'weekly and monthly schedules read plainly', `${weekly.says} | ${monthly.says}`)
+  const monthlyTry = await call('test_automation', { id: monthly.saved, at: '2027-02-10T10:00:00+07:00' })
+  check(!monthlyTry.isError && JSON.stringify(monthlyTry.data.nextRuns) === JSON.stringify(['2027-02-28 08:00 (Asia/Bangkok)', '2027-03-31 08:00 (Asia/Bangkok)', '2027-04-30 08:00 (Asia/Bangkok)']), 'day 31 runs on the last day of shorter months', JSON.stringify(monthlyTry.data.nextRuns))
+  const weeklyTry = await call('test_automation', { id: weekly.saved, at: '2027-01-06T18:30:00+07:00' })
+  check(weeklyTry.data.nextRuns?.[0] === '2027-01-13 18:00 (Asia/Bangkok)' && weeklyTry.data.steps?.[0]?.values?.note === 'Weekly' && weeklyTry.data.nothingWasChanged, 'test_automation shows the next runs of a schedule and what it would do', weeklyTry.text.slice(0, 300))
+  const officeEnglish = await (await fetch(`${owner}/automations`)).text()
+  check(officeEnglish.includes('Every day at 09:00 (Asia/Bangkok) → add a record to Sched log') && officeEnglish.includes(`Next run: ${localDate(firstNext)} 09:00 (Asia/Bangkok). Runs happen within about 15 minutes of the time.`) && officeEnglish.includes('or at a set time'), 'the back office shows a schedule and its next run in plain words')
+  const languageWas = (await call('get_site')).data.settings.language
+  await call('update_site', { language: 'th' })
+  const officeThai = await (await fetch(`${owner}/automations`)).text()
+  check(officeThai.includes('ทุกวัน เวลา 09:00 (Asia/Bangkok) → เพิ่มรายการใน Sched log') && officeThai.includes('ทุกวันจันทร์ ศุกร์ เวลา 07:30 (Asia/Bangkok)') && officeThai.includes(`ทำงานครั้งถัดไป: ${localDate(firstNext)} 09:00 (Asia/Bangkok)`) && officeThai.includes('ทุกเดือน วันที่ 31 (หรือวันสุดท้ายของเดือนที่สั้นกว่า)') && !officeThai.includes('Next run'), 'the schedule and its next run are in Thai')
+  check((await (await fetch(`${owner}/settings`)).text()).includes('เขตเวลา เช่น Asia/Bangkok'), 'the time zone setting is in Thai')
+  await call('update_site', { language: languageWas })
+
+  if (canTick && !testSwitch) {
+    // A live site always uses the real time.
+    await tick(firstNext + 5 * minutes)
+    check((await byId(daily.data.saved)).runs === 0 && (await logOf()).length === 0, 'without the test-only switch, a run cannot pretend to be another time')
+  }
+  if (canTick && testSwitch) {
+    await call('save_automation', { id: weekdays.saved, name: 'Mon and Fri', enabled: false, trigger: { on: 'every_day', at: '07:30', weekdays: ['mon', 'fri'] }, actions: [logStep('Weekday {{today}}')] })
+    // Due or not due
+    await tick(firstNext - 10 * minutes)
+    check((await logOf()).length === 0 && (await byId(daily.data.saved)).runs === 0, 'a schedule does not run before its time')
+    await tick(firstNext + 5 * minutes)
+    check(JSON.stringify(await logOf()) === JSON.stringify([`Daily ${localDate(firstNext)}`]), "a schedule runs once its time comes, with today's date in the site's time zone", JSON.stringify(await logOf()))
+    await tick(firstNext + 6 * minutes)
+    check((await logOf()).length === 1 && (await byId(daily.data.saved)).nextRunAt === new Date(firstNext + days).toISOString(), 'it runs once per time, and moves on to the next day')
+    // Down for three days: it runs once, not three times
+    await tick(firstNext + 3 * days + 2 * 60 * minutes)
+    await tick(firstNext + 3 * days + 2 * 60 * minutes + minutes)
+    check((await logOf()).length === 2 && (await byId(daily.data.saved)).nextRunAt === new Date(firstNext + 4 * days).toISOString(), 'runs missed while the site was down happen once, never in a burst', JSON.stringify(await logOf()))
+    check((await byId(daily.data.saved)).recentRuns[0]?.outcome === 'done', 'scheduled runs go in the run log')
+    await call('delete_automation', { id: daily.data.saved })
+
+    // Chosen weekdays
+    await fetch(`${owner}/automations/${weekdays.saved}/switch`, { body: new URLSearchParams({ enabled: '1' }), method: 'POST', redirect: 'manual' })
+    const weekdayAt = Date.parse((await byId(weekdays.saved)).nextRunAt)
+    await tick(weekdayAt - days + minutes)
+    check(!(await logOf()).some((note) => note.startsWith('Weekday')), 'a weekday schedule does not run on other days')
+    await tick(weekdayAt + minutes)
+    const afterWeekday = Date.parse((await byId(weekdays.saved)).nextRunAt)
+    check((await logOf()).includes(`Weekday ${localDate(weekdayAt)}`) && ['Mon', 'Fri'].includes(weekdayIn(afterWeekday)) && [3, 4].includes(Math.round((afterWeekday - weekdayAt) / days)), 'on a chosen day it runs, then waits for the next chosen day', `${weekdayIn(weekdayAt)} → ${weekdayIn(afterWeekday)}`)
+    await call('delete_automation', { id: weekdays.saved })
+  }
+  for (const id of [weekly.saved, monthly.saved]) await call('delete_automation', { id })
+
+  // Reminders the day before a date
+  const reminder = await save({
+    name: 'Day before',
+    trigger: { on: 'date_field', table: 'sched_bookings', field: 'day', days: 1, side: 'before' },
+    conditions: [{ field: 'status', is: 'not_equals', value: 'cancelled' }],
+    actions: [logStep('Reminder {{name}} {{day}}'), { do: 'email', to: 'field', field: 'email', subject: 'See you tomorrow, {{name}}', message: 'Your booking is on {{day}}.' }],
+  })
+  check(!reminder.isError && reminder.data.says === '1 day before Day of a record in Sched bookings, at 09:00 (Asia/Bangkok) and Status is not “cancelled” → add a record to Sched log; then email the address in Email', 'a date reminder reads plainly', reminder.text)
+  const remindAt = Date.parse((await byId(reminder.data.saved)).nextRunAt) + 5 * minutes
+  const dayOf = localDate(remindAt)
+  const booking = async (values) => (await call('save_record', { table: 'sched_bookings', values })).data.saved.id
+  const ann = await booking({ name: 'Ann', email: 'ann@schedule.test', day: addDays(dayOf, 1) })
+  await booking({ name: 'Bo', email: 'bo@schedule.test', day: addDays(dayOf, 2) })
+  await booking({ name: 'Cy', email: 'cy@schedule.test', day: addDays(dayOf, 1), status: 'cancelled' })
+  const preview = await call('test_automation', { id: reminder.data.saved, at: new Date(remindAt).toISOString() })
+  check(!preview.isError && preview.data.lookingFor?.date === addDays(dayOf, 1) && preview.data.wouldActOn === 1 && preview.data.records.length === 2 && preview.data.records.every((row) => !row.alreadyHandled) && preview.data.records.filter((row) => !row.conditionsHold).length === 1 && preview.data.firstRecord?.usedData?.name === 'Ann' && preview.data.firstRecord.steps[0].values?.note === `Reminder Ann ${addDays(dayOf, 1)}`, 'test_automation lists the records a date reminder would check, and which it would act on', preview.text.slice(0, 400))
+  if (canTick && testSwitch) {
+    await tick(remindAt - 10 * minutes)
+    check((await logOf()).every((note) => !note.startsWith('Reminder')), 'a date reminder waits for its time of day')
+    await tick(remindAt)
+    await tick(remindAt + minutes)
+    const reminded = (await logOf()).filter((note) => note.startsWith('Reminder'))
+    check(JSON.stringify(reminded) === JSON.stringify([`Reminder Ann ${addDays(dayOf, 1)}`]), 'a date reminder acts on records whose date is tomorrow and whose conditions hold, once, however often it runs', JSON.stringify(reminded))
+    // Switching it off and on lets it run again the same day; each record and date is still handled only once.
+    await fetch(`${owner}/automations/${reminder.data.saved}/switch`, { body: new URLSearchParams({ enabled: '0' }), method: 'POST', redirect: 'manual' })
+    await fetch(`${owner}/automations/${reminder.data.saved}/switch`, { body: new URLSearchParams({ enabled: '1' }), method: 'POST', redirect: 'manual' })
+    await tick(remindAt + 2 * minutes)
+    check((await logOf()).filter((note) => note.startsWith('Reminder')).length === 1, 'running the same day again never acts on a record twice')
+    const after = await call('test_automation', { id: reminder.data.saved, at: new Date(remindAt).toISOString() })
+    check(after.data.records.find((row) => row.id === ann)?.alreadyHandled === true && after.data.wouldActOn === 0, 'test_automation shows which records were already handled', JSON.stringify(after.data.records))
+    if (hasScheduleTest) {
+      await settle()
+      const sent = mail.filter((email) => email.subject?.startsWith('See you tomorrow'))
+      check(sent.length === 1 && sent[0].to[0] === 'ann@schedule.test' && sent[0].text.includes(`Your booking is on ${addDays(dayOf, 1)}.`), 'the reminder emails the address on the record, once', JSON.stringify(sent.map((email) => email.to)))
+    }
+    // A new date is a new reminder; a day the site missed is skipped, not sent late.
+    await call('save_record', { table: 'sched_bookings', id: ann, values: { day: addDays(dayOf, 2) } })
+    await booking({ name: 'Dee', day: addDays(dayOf, 3) })
+    await tick(remindAt + days)
+    const nextDay = (await logOf()).filter((note) => note.startsWith('Reminder'))
+    check(nextDay.length === 3 && nextDay.includes(`Reminder Bo ${addDays(dayOf, 2)}`) && nextDay.includes(`Reminder Ann ${addDays(dayOf, 2)}`), 'the next day it reminds the next day’s bookings, and a booking moved to a new date gets a new reminder', JSON.stringify(nextDay))
+    await tick(remindAt + 3 * days)
+    const late = (await logOf()).filter((note) => note.startsWith('Reminder'))
+    check(late.length === 3, 'a day missed while the site was down is not caught up, so nobody gets "tomorrow" on the day itself', JSON.stringify(late))
+    // A big day: ten at a time, the rest at the next run.
+    const bigDay = addDays(dayOf, 6)
+    for (let index = 0; index < 12; index++) await booking({ name: `Guest ${index}`, day: bigDay })
+    await tick(remindAt + 5 * days)
+    const firstBatch = (await logOf()).filter((note) => note.endsWith(bigDay)).length
+    await tick(remindAt + 5 * days + 15 * minutes)
+    const secondBatch = (await logOf()).filter((note) => note.endsWith(bigDay)).length
+    await tick(remindAt + 5 * days + 30 * minutes)
+    const thirdBatch = (await logOf()).filter((note) => note.endsWith(bigDay)).length
+    check(firstBatch === 10 && secondBatch === 12 && thirdBatch === 12, 'a date reminder handles ten records a run and carries on at the next run', `${firstBatch}, ${secondBatch}, ${thirdBatch}`)
+  }
+  await call('delete_automation', { id: reminder.data.saved })
+
+  // A summary for the owner
+  for (const name of ['Eve', 'Fay']) await booking({ name, day: dayOf })
+  await booking({ name: '<script>alert(1)</script> {{email}}', email: 'x@schedule.test', day: dayOf })
+  const summaryRule = {
+    name: 'Evening summary',
+    trigger: { on: 'every_day', at: '18:00' },
+    actions: [{ do: 'summary', table: 'sched_bookings', where: [{ field: 'status', is: 'equals', value: 'new' }], fields: ['name', 'day'], max: 3, subject: '{{count}} new bookings on {{today}}', message: 'Hello <b>owner</b>' }],
+  }
+  const summary = await save(summaryRule)
+  check(!summary.isError && summary.data.says === 'Every day at 18:00 (Asia/Bangkok) → email the owner a summary of Sched bookings', 'a summary reads plainly', summary.text)
+  const newCount = (await call('list_records', { table: 'sched_bookings', limit: 100 })).data.records.filter((row) => row.status === 'new').length
+  const summaryTry = await call('test_automation', { id: summary.data.saved })
+  const summaryStep = summaryTry.data.steps?.[0]
+  check(summaryStep?.count === newCount && summaryStep.subject.startsWith(`${newCount} new bookings on `) && summaryStep.text.includes(`Sched bookings: ${newCount} match.`) && summaryStep.text.includes(`…and ${newCount - 3} more.`) && summaryStep.text.includes('Name: <script>alert(1)</script> {{email}}'), 'test_automation shows the count and the list a summary would send', JSON.stringify(summaryStep).slice(0, 400))
+  const periods = async (added) => (await call('test_automation', { automation: { ...summaryRule, actions: [{ ...summaryRule.actions[0], where: undefined, added }] } })).data.steps?.[0]?.count
+  const total = (await call('list_records', { table: 'sched_bookings', limit: 100 })).data.records.length
+  check((await periods('today')) === total && (await periods('yesterday')) === 0 && (await periods('last_7_days')) === total, "a summary can count what was added today, yesterday or this week, on the site's clock")
+  const orderSummary = await call('test_automation', { automation: { name: 'Waiting', trigger: { on: 'every_week', weekday: 'mon', at: '08:00' }, actions: [{ do: 'summary', orders: true, where: [{ field: 'status', is: 'equals', value: 'pending' }], subject: 'Orders waiting: {{count}}', sendWhenEmpty: true }] } })
+  check(!orderSummary.isError && typeof orderSummary.data.steps?.[0]?.count === 'number' && orderSummary.data.steps[0].text.startsWith('Orders: '), 'a summary can count orders waiting for payment', orderSummary.text.slice(0, 300))
+  if (canTick && testSwitch) {
+    const summaryAt = Date.parse((await byId(summary.data.saved)).nextRunAt)
+    const empty = (await save({ name: 'Nothing', trigger: { on: 'every_day', at: '18:00' }, actions: [{ do: 'summary', table: 'sched_bookings', where: [{ field: 'name', is: 'equals', value: 'nobody' }], subject: 'Nothing' }] })).data.saved
+    await tick(summaryAt + minutes)
+    await settle()
+    check((await byId(empty)).recentRuns[0]?.notes?.includes('Nothing matched, so no summary was sent.'), 'a summary with nothing to say sends nothing')
+    if (hasScheduleTest) {
+      const sent = mail.filter((email) => email.to?.[0] === 'owner@schedule.test')
+      const html = sent[0]?.html ?? ''
+      check(sent.length === 1 && sent[0].subject === `${newCount} new bookings on ${localDate(summaryAt)}` && html.includes('&lt;script&gt;alert(1)&lt;/script&gt; {{email}}') && !html.includes('<script>') && html.includes('Hello &lt;b&gt;owner&lt;/b&gt;') && html.includes(`…and ${newCount - 3} more.`) && (sent[0].text.match(/^#\d+ · Name: /gm) ?? []).length === 3, 'the summary email lists at most the chosen number, escaped', html.slice(html.indexOf('<h1'), html.indexOf('<h1') + 600))
+      check((await byId(summary.data.saved)).recentRuns[0]?.notes?.includes(`Emailed a summary of ${newCount} to owner@schedule.test.`), 'the run log says the summary was sent')
+    } else check((await byId(summary.data.saved)).recentRuns[0]?.outcome === 'failed', 'a summary without email set up is logged as failed')
+    await call('delete_automation', { id: empty })
+  }
+  const guide = (await call('get_guide', { topic: 'automations' })).text
+  check(guide.includes('every_day') && guide.includes('date_field') && guide.includes('summary') && guide.includes('15 minutes'), 'the automations guide explains schedules')
+
+  for (const item of (await call('list_automations')).data) await call('delete_automation', { id: item.id })
+  for (const name of ['sched_bookings', 'sched_log']) await call('delete_table', { name })
+  const clearing = formValues(await (await fetch(`${owner}/settings`)).text())
+  clearing.set('timeZone', '')
+  if (receiver) {
+    await new Promise((done) => receiver.close(done))
+    clearing.set('emailFrom', '')
+    clearing.set('notifyEmail', '')
+  }
+  await fetch(`${owner}/settings`, { body: clearing, method: 'POST', redirect: 'manual' })
+  check((await call('get_site')).data.settings.timeZone === undefined, 'clearing the time zone goes back to UTC')
+}
+
 // The back office in Thai
 const officePage = async (area = '') => (await fetch(`${owner}${area}`)).text()
 const languageBefore = (await call('get_site')).data.settings.language

@@ -3,7 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { handleAccount } from './account'
 import { handleApi } from './api'
 import { getCustomer } from './auth'
-import { runAutomations } from './automations'
+import { runAutomations, runSchedules } from './automations'
 import { allows, handleOffice, ownerDesk, staffEntry } from './cms'
 import type { Desk } from './cms'
 import { loadPageRecords, receiveRecord } from './data'
@@ -247,4 +247,22 @@ export default {
     if (/^\/(owner|mcp|api)(\/|$)/.test(url.pathname)) return response
     return (await followRedirect(env, url).catch((): null => null)) ?? response
   },
+
+  /** Cloudflare calls this about every 15 minutes, as wrangler.jsonc says, to run scheduled automations that are due. */
+  async scheduled(controller: ScheduledController, plainEnv: Env, context: ExecutionContext): Promise<void> {
+    const env: Env = { ...plainEnv, defer: (work) => context.waitUntil(work) }
+    await runSchedules(env, testClock(env, controller.cron) ?? Date.now())
+  },
 } satisfies ExportedHandler<Env>
+
+/**
+ * Tests start a run through `wrangler dev --test-scheduled` at /__scheduled?cron=..., which passes on nothing but the cron text.
+ * So a test can add " now=2026-05-01T02:05:00Z" to it to pretend it is that moment. Only with the test-only switch on:
+ * a live site always uses the real time, and Cloudflare alone starts its scheduled runs.
+ */
+function testClock(env: Env, cron: string) {
+  if (env.WEBHOOK_ALLOW_HTTP !== '1') return null
+  const given = /(?:^|\s)now=(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?Z)(?:\s|$)/.exec(cron)?.[1]
+  const time = given ? Date.parse(given) : NaN
+  return Number.isFinite(time) ? time : null
+}

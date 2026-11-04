@@ -32,7 +32,7 @@ Claude asks a few short questions about your business, builds the pages and desi
 - **Limits nothing can get around:** seats and other places can't be overbooked, even by two people at the same moment, and one customer can't book the same thing twice
 - **Your data can leave with you:** download all your content and data in one file at any time
 - **Notifications:** get an email for each new order, form entry and booking through your own Resend account, get them in Discord, Slack or Telegram for free, or send signed webhooks to other services
-- **Automations:** "when this happens, do that" rules that run on your server without code, such as a booking confirmation email, a booking number, a seat taken from a class, a status workflow or a low-stock alert. Claude sets them up from what you say, and you can see them, switch them off and read what they did in the back office.
+- **Automations:** "when this happens, do that" rules that run on your server without code, such as a booking confirmation email, a booking number, a seat taken from a class, a status workflow or a low-stock alert, and schedules such as a summary every evening or a reminder the day before a booking. Claude sets them up from what you say, and you can see them, switch them off and read what they did in the back office.
 - **Email:** order confirmations with the customer's private order link, an email when an order is paid, shipped, done or cancelled, and password reset emails, in your site's language when it's English or Thai
 - **Starters:** five complete sample sites in English and Thai, ready in one click from the back office or through Claude: a café or restaurant, an online shop, classes and bookings with booking numbers, services or coaching, and a portfolio. Samples are labelled as samples, with no made-up reviews, figures, addresses or phone numbers.
 - **Build guides for Claude:** planning, data design, access rules, screens, design, copy, shop, publishing, Wix, staff, automations and launch checks, built in, so there's nothing extra to install
@@ -61,13 +61,13 @@ Nobody hosts your site but you. There's no central server, and web-end never see
 ## What it can't do yet
 
 - Send email without an email account of your own. Emails go through your own Resend account, which you set up once, as shown below. Until then there are no emails, and if a customer forgets a password, you make a reset link in the back office and send it yourself.
-- Send newsletters, or email many customers at once. Customers get an email when their order is placed and when its status changes, and the emails your automations send when something happens, but nothing else.
+- Send newsletters, or email many customers at once. Customers get an email when their order is placed and when its status changes, and the emails your automations send, such as a reminder before their booking, but nothing else.
 - Give staff finer access than whole areas, such as one table or only some orders, or show staff the full history of who changed what outside orders
 - Check bank transfers automatically or take payment slips. You check each transfer and confirm it in the back office.
 - Create product photos. Upload your own, or use images you have the right to use.
 - Show customer reviews as a ready-made feature
 - Add any feature you can describe. Claude builds with tables, rules, pages, automations, webhooks and sandboxed custom code. Automations are a fixed menu of steps, not code: anything they can't express, such as calculations across many records or calling another service and using its answer, still means a developer changing the source, and an update replaces such changes.
-- Run something on a schedule, such as a reminder the day before a booking. Automations only run when something happens on your site.
+- Run something at an exact minute, or more often than once a day. Schedules run within about 15 minutes of their time.
 - Log in with Facebook, Apple, LINE or other accounts. Google works once you set it up, as shown below. Google login works on your website, not yet through the API.
 - Show the back office in languages other than Thai and English
 
@@ -206,7 +206,15 @@ Automations are rules like "when a booking comes in, email me" or "when an order
 - **Only if:** simple checks on what happened, such as "seats left is less than 1" or "status is confirmed".
 - **Then:** fill in fields such as a booking number or today's date, add a record to another table, change a linked record such as taking a seat away from a class, email you, the customer or an address on the record, or send the details to another service.
 
-Open **Automations** in your back office to read each rule as a sentence, switch it off, see its last runs and what went wrong in plain words, or delete it. Rules work at once, without publishing.
+Automations can also run on a schedule, on your own clock. Set your time zone in **Settings**, such as Asia/Bangkok, or ask Claude to. Until you do, schedules use UTC.
+
+- **Every day** at a time, or only on the weekdays you choose, **every week** on a weekday, or **every month** on a day of the month. Day 31 means the last day of shorter months.
+- **Before or after a date** in a table, such as "the day before a booking, email the customer" or "3 days after a visit, ask for a review". Each booking is reminded once for its date. If the date changes, it gets a new reminder.
+- **Summary:** a scheduled rule can email you how many records match and a short list, such as today's new bookings, or orders still waiting for payment, or last month's bookings on the 1st.
+
+Cloudflare starts your site's scheduler about every 15 minutes, so a rule for 09:00 runs between 09:00 and about 09:15. You don't need to set anything up in Cloudflare: updates bring the schedule in for you. On the free plan, an account can have 5 of these, and each web-end site uses one. If your site was down when a rule was due, it runs once when the site is back, not once for every time it missed. A reminder for "tomorrow" that missed its whole day is skipped, so nobody gets it on the day itself. To fit the free plan, a date reminder handles 10 records at a time and carries on 15 minutes later, so a day with hundreds of bookings can take a few hours, and a summary looks at the newest 200 records and says so if there were more.
+
+Open **Automations** in your back office to read each rule as a sentence, see when a schedule runs next, switch it off, see its last runs and what went wrong in plain words, or delete it. Rules work at once, without publishing.
 
 They are safe by design: no code runs, what visitors type is only ever used as text, a rule that keeps starting itself stops after 3 rounds, and each rule runs at most 100 times an hour (500 for the whole site). A failed step never stops a visitor's booking or order. Emails need email set up, and automations send at most 100 an hour.
 

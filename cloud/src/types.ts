@@ -48,6 +48,7 @@ export type Settings = {
   style?: string
   tagline?: string
   text?: string
+  timeZone?: string
   transferDetails?: string
 }
 

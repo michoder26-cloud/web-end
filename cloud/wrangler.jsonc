@@ -8,6 +8,11 @@
     "directory": "public",
     "binding": "ASSETS",
   },
+  // Runs scheduled automations. One trigger every 15 minutes covers every rule, so nobody has to touch this.
+  // The free plan allows 5 cron triggers per account, and this site uses one.
+  "triggers": {
+    "crons": ["*/15 * * * *"],
+  },
   "d1_databases": [
     {
       "binding": "DB",

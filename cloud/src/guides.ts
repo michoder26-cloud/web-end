@@ -180,10 +180,14 @@ The staff role on its own still lets that person read and change tables open to 
 - Remove samples. Have legal text checked. Then publish_site.
 Tell the owner plainly what you could not test, such as real card payments or heavy traffic.`,
   automations: `# Automations: "when this happens, do that"
-Automations run on the server by themselves after something happens. They are rules made of fixed parts, never code. Use them when the owner says "when…, then…", "automatically", "notify me", "send a confirmation" or "every time".
+Automations run on the server by themselves after something happens, or at a set time. They are rules made of fixed parts, never code. Use them when the owner says "when…, then…", "automatically", "notify me", "send a confirmation", "every time", "every morning", "remind" or "the day before".
 
 How a rule is built (save_automation):
 - One trigger: record_added (table), record_changed (table, optionally only when one field changes, optionally to one value), form_sent (the form block's name), order_placed, order_status (pending, paid, shipped, done or cancelled), or customer_signed_up.
+- Or a schedule, on the site's time zone (timeZone with update_site, such as Asia/Bangkok, UTC until set):
+  - every_day at "09:00", optionally only on weekdays such as ["mon", "fri"]; every_week on a weekday at a time; every_month on day 1 to 31 at a time (31 is the last day in shorter months).
+  - date_field: once for each record of a table whose date field is days before (side "before", a reminder) or after (side "after", a follow-up) today, checked each day at "at" (09:00 by default). Each record is handled at most once per rule and date, so reruns never repeat it, and a booking moved to a new date gets a new reminder.
+  - Runs happen within about 15 minutes of the time. Times missed while the site was down run once when it is back, never in a burst. A date reminder only looks at today: a day it missed is skipped, so nobody gets "tomorrow" on the day itself.
 - conditions, which must all hold: equals, not_equals, contains, greater_than, less_than (numbers, dates such as 2026-05-01, and times such as 09:30), empty and not_empty. Compare with a value, {{today}} or another {{field}}.
 - Up to 10 steps, done in order. Each step can have its own when, checked when the step is reached.
   - set_fields: changes fields of the record that started it.
@@ -192,7 +196,8 @@ How a rule is built (save_automation):
   - email: to the owner (notifyEmail), the customer (the logged-in customer, or the email given with an order), or an email field. Needs email set up, as the limits guide explains.
   - webhook: sends the details to a public https address, signed with the automation's secret, which the owner copies from the Automations page.
   - stop: does nothing more. Give it a when.
-- A rule can read: the fields of the record or form, id, number (the id as 0042, or #0042 for an order), created_at, customer_name, customer_email, today and now (in UTC), and reference.field, such as class.title, for the record a reference field points to. Orders give number, name, email, phone, address, note, payment, status, total, subtotal, shipping, total_text and items. A new customer gives id, name and email.
+  - summary: only in every_day, every_week and every_month. Emails the owner how many records of a table (table) or orders (orders: true) match its where conditions, which read that table's own fields, and lists up to max of them (20 by default) with the chosen fields. added limits it to records added today, yesterday, last_7_days, last_30_days, this_month or last_month on the site's clock. The subject and message can use {{count}} and {{today}}. Nothing is sent when nothing matches, unless sendWhenEmpty is true. It reads the newest 200 records at most, and says so when there were more.
+- A rule can read: the fields of the record or form, id, number (the id as 0042, or #0042 for an order), created_at, customer_name, customer_email, today (the date in the site's time zone) and now (in UTC), and reference.field, such as class.title, for the record a reference field points to. Orders give number, name, email, phone, address, note, payment, status, total, subtotal, shipping, total_text and items. A new customer gives id, name and email.
 - Templates: "Thanks {{name}}, see you on {{date}}." A template that is only {{field}} keeps a number as a number. Values always go in as plain text and are escaped in emails, so what visitors type can never become code or another template.
 
 Patterns:
@@ -203,19 +208,24 @@ Patterns:
 - Assigning a number: record_added on bookings, then set_fields ref "BK-{{number}}". Make ref readOnly so customers can't change it.
 - Copying a form entry into a table: form_sent, then add_record with each field mapped, such as {"name": "{{name}}", "email": "{{email}}"}. A record-form block on the page may be simpler, so suggest that first.
 - Welcome email: customer_signed_up, then email the customer.
+- Daily summary: every_day at 18:00, then a summary of bookings with added today, or of orders where status equals pending, to see what waits for payment.
+- Reminder the day before a booking: date_field on bookings, field date, days 1, side before, at 09:00, with a condition that status is not cancelled, then email the email field: "See you tomorrow, {{name}}". Add set_fields reminded true if the owner wants to see it in the table.
+- Follow-up 3 days after an order or visit: orders are not a table, so use date_field on a table with a date field, such as visits with field date, days 3, side after, then email the customer or the email field asking for a review. For orders, a record_added rule can copy each order into a table first.
+- Monthly report: every_month on day 1 at 08:00, then a summary of bookings with added last_month and sendWhenEmpty true.
 
 Working method:
 1. Check the tables, fields and form names with list_tables and get_page. Add the fields a rule needs first, such as a status select or a readOnly ref.
-2. save_automation, then test_automation with its id, once with sample values that make the conditions hold and once with values that don't. Read every step. A test writes and sends nothing.
+2. save_automation, then test_automation with its id, once with sample values that make the conditions hold and once with values that don't. Read every step. A test writes and sends nothing. For a schedule it lists the next runs; for a date reminder, the records it would act on, and you can give at, such as the morning before a real booking, to try another day.
 3. Tell the owner in one plain sentence what it does, using the says line, and that they can switch it off and see its last runs on the Automations page of the back office.
 4. After real use, list_automations shows each run's outcome and any failure in plain words. check_site lists rules that point at tables, fields or forms that are gone.
 
 Safety and limits:
 - Automations work at once, without publishing. Up to 50 per site. Only the owner sees them in the back office. Staff never do, whatever areas they have.
 - A rule that changes what starts it starts itself again. Chains stop after 3 rounds, one visit starts at most 25 runs, one automation runs at most 100 times an hour, all of them together at most 500 times an hour, and they send at most 100 emails an hour. Add a field and value to record_changed, or a condition, to avoid loops.
+- Schedules run in small steps to fit the free plan: each run, about every 15 minutes, starts up to 10 due rules and 25 runs, and a date reminder handles 10 records and carries on at the next run, so a very busy day can take a few hours.
 - A failed step never stops the visitor. It goes in the run log and the steps after it are skipped. Emails and webhooks go after the visitor has their answer, once, with no retry.
 - Chat addresses such as Slack, Discord and Telegram hold a secret, so the owner adds them on the Connect page as webhooks, not in an automation.
-- There is no arbitrary code, no schedule such as "every Monday", no loop over many records and no sum across a table. Say so plainly and offer the closest rule, or a developer.`,
+- There is no arbitrary code, no schedule more often than daily, no exact minute, no sum or average across a table (a summary counts and lists), and no loop over many records except a date reminder's. Say so plainly and offer the closest rule, or a developer.`,
   limits: `# Honest limits
 - It runs on the owner's Cloudflare account. The free plan allows 100,000 requests and 5 million database rows read a day, 100,000 rows written a day, and 10 ms of processor time per request. At the limit it pauses until 00:00 UTC. Workers Paid starts at $5 a month.
 - 50 tables per site, 50,000 records per table, 20 KB per record. Filtering large tables reads many rows, so show short lists.

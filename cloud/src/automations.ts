@@ -3,9 +3,12 @@ import { z } from 'zod'
 import { withinLimit } from './auth'
 import { createRecord, getRecord, getTable, listTables, ownerActor, readInput, showRecord, writeGuards } from './data'
 import type { DataRow, DataTable } from './data'
+import { isSchedule, localTime, nextRun, nextRuns, period, shownTime, targetDate, timeOf, weekdays, zonedTime, zoneOf } from './clock'
+import type { Added, Schedule, Weekday } from './clock'
 import { canSendEmail, isEmail, later, sendEmail } from './email'
 import { formatMoney } from './money'
 import { safeWebUrl } from './moving'
+import { officeLanguage, officeWords } from './office-words'
 import type { OfficeWords } from './office-words'
 import { orderLines, orderNumber, orderStatuses } from './shop'
 import type { Block, Customer, Env, FormField, Order, Settings, SiteRow } from './types'
@@ -24,8 +27,16 @@ export const maxRunsPerHour = 500
 export const maxRunsPerRulePerHour = 100
 export const maxEmailsPerHour = 100
 const keptRuns = 20
+/** A date reminder handles at most this many records each time the schedule runs, about every 15 minutes, and carries on next time. */
+export const scheduleBatch = 10
+/** At most this many scheduled rules start in one run of the schedule. The rest wait for the next one. */
+const dueRulesPerRun = 10
+/** A summary reads at most this many of the newest records, so it stays within the free plan's processor time. */
+export const summaryScan = 200
+/** How long a date reminder remembers what it did. */
+const doneKeptDays = 400
 
-// Only zod and this file's own values are used while it loads, apart from onEvent from webhooks.ts, which imports nothing.
+// Only zod and this file's own values are used while it loads, apart from onEvent from webhooks.ts and clock.ts, which import nothing.
 const namePattern = /^[a-z][a-z0-9_]{0,39}$/
 const pathPattern = /^[a-z][a-z0-9_]{0,39}(\.[a-z][a-z0-9_]{0,39})?$/
 const tokenPattern = /\{\{\s*([a-z][a-z0-9_]{0,39}(?:\.[a-z][a-z0-9_]{0,39})?)\s*\}\}/g
@@ -45,6 +56,8 @@ const condition = z
   .strict()
 const conditions = z.array(condition).max(10)
 const when = conditions.optional().describe('Only do this step when all of these hold, checked when the step is reached')
+const clockTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use a 24-hour time such as 09:00.').describe("24-hour time in the site's time zone, such as 09:00")
+const addedPeriods = ['today', 'yesterday', 'last_7_days', 'last_30_days', 'this_month', 'last_month'] as const satisfies readonly Added[]
 
 export const triggerSchema = z.discriminatedUnion('on', [
   z.object({ on: z.literal('record_added'), table: fieldName }).strict(),
@@ -53,6 +66,20 @@ export const triggerSchema = z.discriminatedUnion('on', [
   z.object({ on: z.literal('order_placed') }).strict(),
   z.object({ on: z.literal('order_status'), status: z.string().describe('pending, paid, shipped, done or cancelled') }).strict(),
   z.object({ on: z.literal('customer_signed_up') }).strict(),
+  z.object({ on: z.literal('every_day'), at: clockTime, weekdays: z.array(z.enum(weekdays)).min(1).max(7).optional().describe('Only on these days, such as ["mon", "fri"]. Leave out for every day.') }).strict(),
+  z.object({ on: z.literal('every_week'), weekday: z.enum(weekdays), at: clockTime }).strict(),
+  z.object({ on: z.literal('every_month'), day: z.number().int().min(1).max(31).describe('Day of the month. 31 means the last day in shorter months.'), at: clockTime }).strict(),
+  z
+    .object({
+      on: z.literal('date_field'),
+      table: fieldName,
+      field: fieldName.describe('A date field of the table, such as the day of a booking'),
+      days: z.number().int().min(0).max(365).describe('How many days before or after that date. 0 is the day itself.'),
+      side: z.enum(['before', 'after']).optional().describe('before for reminders, after for follow-ups. before by default.'),
+      at: clockTime.optional().describe('When on that day to act. 09:00 by default.'),
+    })
+    .strict()
+    .describe('Once for each record whose date is that many days away, at most once per record and date'),
 ])
 
 export const actionSchema = z.discriminatedUnion('do', [
@@ -72,6 +99,22 @@ export const actionSchema = z.discriminatedUnion('do', [
     .describe("Sends an email through the owner's own Resend account"),
   z.object({ do: z.literal('webhook'), url: z.string().url().max(500), when }).strict().describe('Sends the details, signed, to a public https address'),
   z.object({ do: z.literal('stop'), when }).strict().describe('Does no further steps. Useful with when.'),
+  z
+    .object({
+      do: z.literal('summary'),
+      table: fieldName.optional().describe('The table whose records to count and list'),
+      orders: z.literal(true).optional().describe('Count and list orders instead of a table'),
+      where: conditions.optional().describe("Only records where all of these hold, read from the counted table's own fields, such as status equals pending"),
+      added: z.enum(addedPeriods).optional().describe("Only records added in this period of the site's time zone"),
+      fields: z.array(fieldName).min(1).max(6).optional().describe('Fields shown for each record. The first three by default.'),
+      max: z.number().int().min(1).max(50).optional().describe('At most this many records are listed. 20 by default.'),
+      subject: z.string().trim().min(1).max(200).describe('Can use {{count}} and {{today}}'),
+      message: z.string().trim().min(1).max(2000).optional(),
+      sendWhenEmpty: z.boolean().optional().describe('Also send when nothing matches. Off by default.'),
+      when,
+    })
+    .strict()
+    .describe('Only for schedules: emails the owner how many records match and a short list of them'),
 ])
 
 export const automationSchema = z.object({
@@ -88,7 +131,9 @@ type Action = Automation['actions'][number]
 type Condition = z.infer<typeof condition>
 type Value = z.infer<typeof value>
 type Facts = Record<string, unknown>
-export type Stored = { enabled: number; id: number; last_run_at: null | string; name: string; rule: Automation; runs: number; secret: string }
+type Summary = Extract<Action, { do: 'summary' }>
+export type Stored = { enabled: number; id: number; last_run_at: null | string; name: string; next_run_at: null | string; rule: Automation; runs: number; secret: string }
+const columns = 'id, name, rule, enabled, secret, runs, last_run_at, next_run_at'
 export type NoteKey = keyof OfficeWords['automations']['note']
 /** A line of the run log, kept as a key and its values, so the back office can show it in the owner's language. */
 export type Note = [NoteKey, ...string[]]
@@ -184,17 +229,35 @@ function rulePaths(rule: Automation) {
       scan(action.message)
       if (action.field) paths.add(action.field)
     }
+    // A summary's own conditions read the counted records, and its text can also use {{count}}.
+    if (action.do === 'summary') {
+      const own = new Set<string>()
+      for (const text of [action.subject, action.message]) if (text) for (const match of text.matchAll(tokenPattern)) own.add(match[1])
+      for (const path of own) if (path !== 'count') paths.add(path)
+    }
   }
   return [...paths]
 }
 
 // What happened
 
+/** The moment a rule runs, and the site's time zone, which {{today}} and schedules follow. */
+type Clock = { now: number; zone: string }
+
 type Happened = {
+  clock: Clock
   customer: Customer | null
   facts: Facts
   record?: { id: number; table: string }
 }
+
+const siteZone = async (env: Env, siteId: number) => {
+  const row = await env.DB.prepare('SELECT settings FROM sites WHERE id = ?').bind(siteId).first<{ settings: string }>()
+  return zoneOf(row ? (JSON.parse(row.settings) as Settings) : null)
+}
+
+/** The values every rule can read about when it runs. */
+const clockFacts = (clock: Clock) => ({ now: new Date(clock.now).toISOString(), today: localTime(clock.now, clock.zone).date })
 
 const watched = new Set(['record.created', 'record.updated', 'order.created', 'order.updated', 'customer.created', 'entry.created'])
 
@@ -218,6 +281,9 @@ function matches(trigger: Trigger, event: string, data: unknown, before?: Record
       return event === 'order.updated' && item.status === trigger.status
     case 'customer_signed_up':
       return event === 'customer.created'
+    default:
+      // Schedules start from the clock, never from something happening.
+      return false
   }
 }
 
@@ -253,7 +319,7 @@ async function orderFacts(env: Env, siteId: number, id: number) {
 }
 
 /** Turns an event into the values rules read, with a few values every rule can use. */
-async function whatHappened(env: Env, siteId: number, event: string, data: unknown): Promise<Happened | null> {
+async function whatHappened(env: Env, siteId: number, event: string, data: unknown, given?: Clock): Promise<Happened | null> {
   const item = (data ?? {}) as Record<string, any>
   let facts: Facts
   let customerId: null | number = null
@@ -278,10 +344,11 @@ async function whatHappened(env: Env, siteId: number, event: string, data: unkno
     customerId = item.id
   } else return null
   const customer = await findCustomer(env, siteId, customerId)
-  const now = new Date().toISOString()
+  const clock = given ?? { now: Date.now(), zone: await siteZone(env, siteId) }
   return {
+    clock,
     customer,
-    facts: { now, today: now.slice(0, 10), number: String(facts.id ?? '').padStart(4, '0'), customer_name: customer?.name ?? '', customer_email: orderEmail || customer?.email || '', ...facts },
+    facts: { ...clockFacts(clock), number: String(facts.id ?? '').padStart(4, '0'), customer_name: customer?.name ?? '', customer_email: orderEmail || customer?.email || '', ...facts },
     record,
   }
 }
@@ -429,6 +496,30 @@ async function doStep(context: Context, action: Action, facts: Facts): Promise<S
       }
     }
 
+    case 'summary': {
+      const settings = await liveSettings(env, siteId)
+      if (!settings) throw new Problem('crashed')
+      const found = await summarise(env, siteId, action, happened.clock, settings)
+      const withCount = { ...facts, count: found.count }
+      const subject = asText(fill(action.subject, withCount)).replace(/\s+/g, ' ').trim().slice(0, 200)
+      const intro = action.message ? asText(fill(action.message, withCount)).slice(0, 4000).split(/\n\s*\n/) : []
+      // The list is one paragraph, one record a line. Everything in it is escaped when the email is made.
+      const lines = [...intro, found.countLine, ...(found.lines.length ? [found.lines.join('\n')] : []), ...(found.moreLine ? [found.moreLine] : [])]
+      const sends = found.count > 0 || Boolean(action.sendWhenEmpty)
+      if (context.dry) return { preview: { to: settings.notifyEmail ?? null, subject, count: found.count, text: lines.join('\n\n'), wouldSend: sends, emailIsSetUp: canSendEmail(env, settings) } }
+      if (!sends) return { note: ['nothingToSummarise'] }
+      return {
+        later: async () => {
+          if (!canSendEmail(env, settings)) throw new Problem('emailOff')
+          if (!isEmail(settings.notifyEmail)) throw new Problem('noAddress')
+          if (!(await withinLimit(env, `automation-email:${siteId}`, maxEmailsPerHour, 3600))) throw new Problem('emailBusy', String(maxEmailsPerHour))
+          const sent = await sendEmail(env, settings, settings.notifyEmail, { heading: subject, lines, replyTo: settings.email, subject })
+          if (!sent.ok) throw new Problem('emailFailed', sent.problem ?? '')
+          return ['summarised', String(found.count), settings.notifyEmail]
+        },
+      }
+    }
+
     case 'webhook': {
       const body = JSON.stringify({ at: new Date().toISOString(), automation: { id: item.id, name: item.name }, event: item.rule.trigger.on, data: facts })
       if (context.dry) return { preview: { url: action.url, body: JSON.parse(body) as unknown } }
@@ -456,6 +547,50 @@ async function doStep(context: Context, action: Action, facts: Facts): Promise<S
         },
       }
     }
+  }
+}
+
+const orderSummaryFields = ['id', 'number', 'name', 'email', 'phone', 'payment', 'status', 'total', 'total_text', 'created_at']
+
+/** Counts and lists the records a summary step is about: the newest of the period, checked against its conditions here. */
+async function summarise(env: Env, siteId: number, action: Summary, clock: Clock, settings: Settings) {
+  const range = action.added ? period(action.added, clock.now, clock.zone) : null
+  const between = range ? ' AND created_at >= ? AND created_at < ?' : ''
+  const base = clockFacts(clock)
+  const short = (text: string, limit: number) => (text.length > limit ? `${text.slice(0, limit - 1)}…` : text)
+  let rows: { facts: Facts; line: (names?: string[]) => string }[]
+  let what: string
+  const t = officeWords(officeLanguage(settings)).automations.summary
+  if (action.orders) {
+    what = t.orders
+    const { results } = await env.DB.prepare(`SELECT id, name, email, phone, payment, status, total, money_prefix, money_suffix, created_at FROM orders WHERE site_id = ?${between} ORDER BY id DESC LIMIT ?`)
+      .bind(siteId, ...(range ?? []), summaryScan + 1)
+      .all<Pick<Order, 'created_at' | 'email' | 'id' | 'money_prefix' | 'money_suffix' | 'name' | 'payment' | 'phone' | 'status' | 'total'>>()
+    rows = results.map((order) => {
+      const facts: Facts = { id: order.id, number: orderNumber(order.id), name: order.name, email: order.email, phone: order.phone, payment: order.payment, status: order.status, total: order.total / 100, total_text: formatMoney(order.total, order.money_prefix, order.money_suffix), created_at: order.created_at }
+      return { facts, line: (names = ['name', 'total_text', 'status']) => [asText(facts.number), ...names.filter((name) => name !== 'number').map((name) => short(asText(facts[name]), 100))].join(' · ') }
+    })
+  } else {
+    const table = await getTable(env, siteId, action.table ?? '')
+    if (!table) throw new Problem('missingTable', action.table ?? '')
+    what = table.label
+    const { results } = await env.DB.prepare(`SELECT id, data, created_at, updated_at FROM data_records WHERE table_id = ?${between} ORDER BY id DESC LIMIT ?`)
+      .bind(table.id, ...(range ?? []), summaryScan + 1)
+      .all<{ created_at: string; data: string; id: number; updated_at: string }>()
+    rows = results.map((row) => {
+      const facts: Facts = { id: row.id, created_at: row.created_at, updated_at: row.updated_at, ...(JSON.parse(row.data) as Facts) }
+      const label = (name: string) => table.fields.find((field) => field.name === name)?.label ?? name
+      return { facts, line: (names = table.fields.slice(0, 3).map((field) => field.name)) => [`#${row.id}`, ...names.filter((name) => name !== 'id').map((name) => `${label(name)}: ${short(asText(facts[name]), 100)}`)].join(' · ') }
+    })
+  }
+  const checkedAll = rows.length <= summaryScan
+  const matching = rows.slice(0, summaryScan).filter((row) => allHold(action.where, { ...base, ...row.facts }))
+  const shown = matching.slice(0, action.max ?? 20)
+  return {
+    count: matching.length,
+    countLine: checkedAll ? t.count(matching.length, what) : t.atLeast(matching.length, what, summaryScan),
+    lines: shown.map((row) => short(row.line(action.fields), 300)),
+    moreLine: matching.length > shown.length ? t.more(matching.length - shown.length) : '',
   }
 }
 
@@ -534,7 +669,7 @@ const parse = (row: Omit<Stored, 'rule'> & { rule: string }): Stored => ({ ...ro
 export async function runAutomations(env: Env, siteId: number, event: string, data: unknown, before?: Record<string, unknown>) {
   if (!watched.has(event)) return
   try {
-    const { results } = await env.DB.prepare('SELECT id, name, rule, enabled, secret, runs, last_run_at FROM automations WHERE site_id = ? AND enabled = 1 ORDER BY id').bind(siteId).all<Omit<Stored, 'rule'> & { rule: string }>()
+    const { results } = await env.DB.prepare(`SELECT ${columns} FROM automations WHERE site_id = ? AND enabled = 1 ORDER BY id`).bind(siteId).all<Omit<Stored, 'rule'> & { rule: string }>()
     const due = results.map(parse).filter((item) => matches(item.rule.trigger, event, data, before))
     if (!due.length) return
     const happened = await whatHappened(env, siteId, event, data)
@@ -559,15 +694,106 @@ export async function runAutomations(env: Env, siteId: number, event: string, da
 // Every event other systems hear about also reaches automations. index.ts imports this file, so this runs at startup.
 onEvent(runAutomations)
 
+// Schedules
+
+const iso = (ms: null | number) => (ms === null ? null : new Date(ms).toISOString())
+
+/**
+ * Works out when scheduled rules next run, after a rule is saved or switched on, or the time zone changes.
+ * Times that passed while a rule was off are not made up for.
+ */
+export async function reschedule(env: Env, siteId: number, id?: number, now = Date.now()) {
+  const zone = await siteZone(env, siteId)
+  const { results } = await env.DB.prepare('SELECT id, rule FROM automations WHERE site_id = ? AND (? IS NULL OR id = ?)').bind(siteId, id ?? null, id ?? null).all<{ id: number; rule: string }>()
+  const updates = results.map((row) => {
+    const trigger = (JSON.parse(row.rule) as Automation).trigger
+    return env.DB.prepare('UPDATE automations SET next_run_at = ? WHERE id = ?').bind(isSchedule(trigger) ? iso(nextRun(trigger, zone, now)) : null, row.id)
+  })
+  if (updates.length) await env.DB.batch(updates)
+}
+
+/** One record as a date reminder reads it, the same as when a record is added. */
+const recordHappening = (env: Env, siteId: number, table: DataTable, row: DataRow, clock: Clock) => whatHappened(env, siteId, 'record.created', { table: table.name, record: showRecord(table, row, ownerActor) }, clock)
+
+/** Records whose date field holds this date, the ones a date reminder has not handled yet first. */
+const dueRecords = (env: Env, table: DataTable, item: Pick<Stored, 'id'>, field: string, date: string, limit: number) =>
+  env.DB.prepare('SELECT id, customer_id, data, created_at, updated_at, EXISTS (SELECT 1 FROM automation_done WHERE automation_id = ? AND record_id = data_records.id AND date_value = ?) AS done FROM data_records WHERE table_id = ? AND json_extract(data, ?) = ? ORDER BY done, id LIMIT ?')
+    .bind(item.id, date, table.id, `$.${field}`, date, limit)
+    .all<DataRow & { done: number }>()
+
+async function runDue(env: Env, deeper: Env, siteId: number, item: Stored, clock: Clock, budget: { left: number }) {
+  const trigger = item.rule.trigger
+  if (!isSchedule(trigger)) {
+    await env.DB.prepare('UPDATE automations SET next_run_at = NULL WHERE id = ?').bind(item.id).run()
+    return
+  }
+  // Moving the next time on first is the claim: when two runs of the schedule overlap, only one changes it, and only that one goes on.
+  // Times missed while the site was down count once, so nothing is sent in a burst.
+  const claimed = await env.DB.prepare('UPDATE automations SET next_run_at = ? WHERE id = ? AND next_run_at = ?').bind(iso(nextRun(trigger, clock.zone, clock.now)), item.id, item.next_run_at).run()
+  if (!claimed.meta.changes) return
+  if (trigger.on !== 'date_field') return runOne(deeper, siteId, item, { clock, customer: null, facts: clockFacts(clock) }, 0, budget)
+
+  // Only today counts, once today's time has come. A reminder for "tomorrow" sent a day late would be wrong,
+  // so a day the site missed is skipped, not caught up.
+  const today = localTime(clock.now, clock.zone).date
+  if (zonedTime(today, timeOf(trigger), clock.zone) > clock.now) return
+  const table = await getTable(env, siteId, trigger.table)
+  if (!table) return logRun(env, item.id, 'failed', [], ['missingTable', trigger.table])
+  const date = targetDate(trigger, today)
+  const { results } = await dueRecords(env, table, item, trigger.field, date, scheduleBatch + 1)
+  const waiting = results.filter((row) => !row.done)
+  let handled = 0
+  for (const row of waiting.slice(0, scheduleBatch)) {
+    if (budget.left <= 0) break
+    handled++
+    // Each record and date is claimed before anything is done, so a rerun or an overlapping run never acts twice.
+    const claim = await env.DB.prepare('INSERT OR IGNORE INTO automation_done (automation_id, record_id, date_value, at) VALUES (?, ?, ?, ?)').bind(item.id, row.id, date, iso(clock.now)).run()
+    if (!claim.meta.changes) continue
+    const happened = await recordHappening(env, siteId, table, row, clock)
+    if (happened) await runOne(deeper, siteId, item, happened, 0, budget)
+  }
+  // More are waiting, so carry on at the next run of the schedule, on the same day.
+  if (waiting.length > handled) await env.DB.prepare('UPDATE automations SET next_run_at = ? WHERE id = ?').bind(iso(clock.now), item.id).run()
+}
+
+/**
+ * Runs the scheduled rules that are due. Cloudflare starts this about every 15 minutes, so rules run within about
+ * 15 minutes of their time. It does a little at a time, to stay within the free plan's processor time, and never throws.
+ */
+export async function runSchedules(env: Env, now = Date.now()) {
+  try {
+    const site = await env.DB.prepare('SELECT id, settings FROM sites LIMIT 1').first<{ id: number; settings: string }>()
+    if (!site) return
+    const clock = { now, zone: zoneOf(JSON.parse(site.settings) as Settings) }
+    const { results } = await env.DB.prepare(`SELECT ${columns} FROM automations WHERE site_id = ? AND enabled = 1 AND next_run_at <= ? ORDER BY next_run_at LIMIT ?`).bind(site.id, iso(now), dueRulesPerRun).all<Omit<Stored, 'rule'> & { rule: string }>()
+    // One run of the schedule has the same limits as one visitor's request, including the runs its writes start.
+    const budget = { left: maxRunsPerRequest }
+    const deeper: Env = { ...env, automationBudget: budget, automationDepth: 1 }
+    for (const row of results) {
+      if (budget.left <= 0) break
+      const item = parse(row)
+      try {
+        await runDue(env, deeper, site.id, item, clock, budget)
+      } catch (error) {
+        console.error('A scheduled automation failed', error)
+        await logRun(env, item.id, 'failed', [], ['crashed'])
+      }
+    }
+    await env.DB.prepare('DELETE FROM automation_done WHERE rowid IN (SELECT rowid FROM automation_done WHERE at < ? LIMIT 500)').bind(iso(now - doneKeptDays * 86_400_000)).run()
+  } catch (error) {
+    console.error('Schedules could not run', error)
+  }
+}
+
 // Reading and saving rules
 
 export async function listAutomations(env: Env, siteId: number) {
-  const { results } = await env.DB.prepare('SELECT id, name, rule, enabled, secret, runs, last_run_at FROM automations WHERE site_id = ? ORDER BY id').bind(siteId).all<Omit<Stored, 'rule'> & { rule: string }>()
+  const { results } = await env.DB.prepare(`SELECT ${columns} FROM automations WHERE site_id = ? ORDER BY id`).bind(siteId).all<Omit<Stored, 'rule'> & { rule: string }>()
   return results.map(parse)
 }
 
 export async function getAutomation(env: Env, siteId: number, id: number) {
-  const row = await env.DB.prepare('SELECT id, name, rule, enabled, secret, runs, last_run_at FROM automations WHERE site_id = ? AND id = ?').bind(siteId, id).first<Omit<Stored, 'rule'> & { rule: string }>()
+  const row = await env.DB.prepare(`SELECT ${columns} FROM automations WHERE site_id = ? AND id = ?`).bind(siteId, id).first<Omit<Stored, 'rule'> & { rule: string }>()
   return row ? parse(row) : null
 }
 
@@ -602,11 +828,19 @@ const orderShape: [string, string][] = [['id', 'number'], ['number', 'text'], ['
 
 /** What a trigger gives rules to read. Returns a problem instead when the trigger points at something that doesn't exist. */
 async function shapeOf(env: Env, site: Pick<SiteRow, 'id' | 'live_version'>, trigger: Trigger, tables: Map<string, DataTable>): Promise<Shape | string> {
-  const fields = new Map<string, Known>([['now', { label: 'now', type: 'date' }], ['today', { label: 'today', type: 'date' }], ['number', { label: 'number', type: 'text' }], ['customer_name', { label: 'customer_name', type: 'text' }], ['customer_email', { label: 'customer_email', type: 'email' }]])
+  const fields = new Map<string, Known>([['now', { label: 'now', type: 'date' }], ['today', { label: 'today', type: 'date' }]])
   const linked = new Map<string, DataTable>()
-  if (trigger.on === 'record_added' || trigger.on === 'record_changed') {
+  // A schedule that runs at a time has no record and no customer, only the time.
+  if (isSchedule(trigger) && trigger.on !== 'date_field') return { fields, linked }
+  for (const [name, type] of [['number', 'text'], ['customer_name', 'text'], ['customer_email', 'email']]) fields.set(name, { label: name, type })
+  if (trigger.on === 'record_added' || trigger.on === 'record_changed' || trigger.on === 'date_field') {
     const table = tables.get(trigger.table)
     if (!table) return `There is no table called "${trigger.table}". Create it with save_table first.`
+    if (trigger.on === 'date_field') {
+      const field = table.fields.find((one) => one.name === trigger.field)
+      if (!field) return `The table "${table.name}" has no field "${trigger.field}". Its date fields are: ${table.fields.filter((one) => one.type === 'date').map((one) => one.name).join(', ') || 'none yet'}.`
+      if (field.type !== 'date') return `"${trigger.field}" is not a date field, so it can't be counted down to. Use a field of type date.`
+    }
     fields.set('id', { label: 'id', type: 'number' })
     fields.set('created_at', { label: 'created_at', type: 'date' })
     fields.set('updated_at', { label: 'updated_at', type: 'date' })
@@ -671,6 +905,8 @@ export async function automationProblems(env: Env, site: Pick<SiteRow, 'id' | 'l
   const checkTests = (where: string, tests?: Condition[]) => {
     for (const test of tests ?? []) if (!['empty', 'not_empty'].includes(test.is) && test.value === undefined) problems.push(`${where}: the condition on "${test.field}" needs a value to compare with.`)
   }
+  const timed = isSchedule(rule.trigger) && rule.trigger.on !== 'date_field'
+  if (rule.trigger.on === 'every_day' && rule.trigger.weekdays && new Set(rule.trigger.weekdays).size !== rule.trigger.weekdays.length) problems.push('The trigger names a weekday twice.')
   checkTests('Conditions', rule.conditions)
   if (rule.trigger.on === 'record_changed' && rule.trigger.field) {
     const field = shape.table?.fields.find((one) => one.name === (rule.trigger as { field: string }).field)
@@ -681,7 +917,9 @@ export async function automationProblems(env: Env, site: Pick<SiteRow, 'id' | 'l
     const where = `Step ${index + 1} (${action.do})`
     checkTests(where, action.when)
     if (action.do === 'stop' && !action.when?.length && index < rule.actions.length - 1) problems.push(`${where}: it always stops, so the steps after it never run. Give it a when, or remove the later steps.`)
-    if ((action.do === 'set_fields' || action.do === 'change_linked') && !shape.table) problems.push(`${where}: this step changes the record that started the automation, so it only works when a record is added or changed.`)
+    if ((action.do === 'set_fields' || action.do === 'change_linked') && !shape.table) problems.push(`${where}: this step changes the record that started the automation, so it only works when a record is added or changed, or with a date reminder.`)
+    if (action.do === 'email' && action.to === 'customer' && timed) problems.push(`${where}: a schedule has no customer. Email the owner, use a summary, or use a date reminder on a table with an email field.`)
+    if (action.do === 'summary') checkSummary(problems, where, action, tables, timed)
     if (action.do === 'set_fields' && shape.table) checkValues(problems, where, shape.table, action.values, readable, true)
     if (action.do === 'change_linked' && shape.table) {
       const through = shape.table.fields.find((field) => field.name === action.through)
@@ -715,15 +953,41 @@ export async function automationProblems(env: Env, site: Pick<SiteRow, 'id' | 'l
   return problems
 }
 
+/** A summary counts a table or the orders, with conditions on that table's own fields. */
+function checkSummary(problems: string[], where: string, action: Summary, tables: Map<string, DataTable>, timed: boolean) {
+  if (!timed) problems.push(`${where}: a summary only works in a schedule: every_day, every_week or every_month.`)
+  if (Boolean(action.table) === Boolean(action.orders)) {
+    problems.push(`${where}: give either a table or orders: true.`)
+    return
+  }
+  const table = action.table ? tables.get(action.table) : undefined
+  if (action.table && !table) {
+    problems.push(`${where}: there is no table called "${action.table}".`)
+    return
+  }
+  const readable = table ? ['id', 'created_at', 'updated_at', ...table.fields.map((field) => field.name)] : orderSummaryFields
+  const what = table ? `the table "${table.name}"` : 'orders'
+  for (const name of action.fields ?? []) if (!readable.includes(name)) problems.push(`${where}: ${what} has no field "${name}". It has: ${readable.join(', ')}.`)
+  for (const test of action.where ?? []) {
+    if (!readable.includes(test.field)) problems.push(`${where}: ${what} has no field "${test.field}" to check. It has: ${readable.join(', ')}.`)
+    if (!['empty', 'not_empty'].includes(test.is) && test.value === undefined) problems.push(`${where}: the condition on "${test.field}" needs a value to compare with.`)
+    if (typeof test.value === 'string') for (const match of test.value.matchAll(tokenPattern)) if (!['today', 'now'].includes(match[1])) problems.push(`${where}: a summary's conditions can use {{today}} and {{now}}, not "{{${match[1]}}}".`)
+  }
+}
+
+export const sendsEmail = (action: Action) => action.do === 'email' || action.do === 'summary'
+
 /** Things worth telling the owner that don't stop a rule from being saved. */
 export function automationWarnings(env: Env, settings: Settings, rule: Automation) {
   const warnings: string[] = []
-  const emails = rule.actions.filter((action) => action.do === 'email')
+  const emails = rule.actions.filter((action) => action.do === 'email' || action.do === 'summary')
   if (emails.length && !canSendEmail(env, settings)) warnings.push('Email is not set up yet, so its email steps will fail until the owner sets it up. Read the limits guide.')
-  if (emails.some((action) => action.do === 'email' && action.to === 'owner') && !isEmail(settings.notifyEmail)) warnings.push("There is no notifyEmail yet, so emails to the owner have nowhere to go. Set it with update_site.")
+  if (emails.some((action) => action.do === 'summary' || action.to === 'owner') && !isEmail(settings.notifyEmail)) warnings.push("There is no notifyEmail yet, so emails to the owner have nowhere to go. Set it with update_site.")
   const startsOn = 'table' in rule.trigger ? rule.trigger.table : null
   const loops = rule.actions.some((action) => (action.do === 'set_fields' && rule.trigger.on === 'record_changed' && !rule.trigger.field) || (action.do === 'add_record' && action.table === startsOn))
   if (loops) warnings.push(`This automation changes the table that starts it, so it starts itself again. It stops after ${maxDepth} rounds, but a field and value on the trigger, or a condition, usually stops it at once.`)
+  if (isSchedule(rule.trigger) && !settings.timeZone) warnings.push("The site's time zone is not set, so this runs on UTC time. If the owner is elsewhere, set timeZone with update_site, such as Asia/Bangkok.")
+  if (isSchedule(rule.trigger)) warnings.push('Schedules run within about 15 minutes of their time.')
   return warnings
 }
 
@@ -736,12 +1000,18 @@ export async function storedAutomationProblems(env: Env, site: SiteRow) {
   const problems: string[] = []
   for (const item of all.filter((one) => one.enabled)) {
     for (const problem of await automationProblems(env, site, item.rule, tables)) problems.push(`The automation "${item.name}" (${item.id}): ${problem}`)
-    if (item.rule.actions.some((action) => action.do === 'email') && !canSendEmail(env, settings)) problems.push(`The automation "${item.name}" (${item.id}) sends email, but email is not set up, so those emails fail.`)
+    if (item.rule.actions.some(sendsEmail) && !canSendEmail(env, settings)) problems.push(`The automation "${item.name}" (${item.id}) sends email, but email is not set up, so those emails fail.`)
   }
   return problems
 }
 
 // Trying a rule without changing anything
+
+/** Nothing real to try with yet: only the time, and the sample values given. */
+async function emptyHappening(env: Env, siteId: number, record?: Happened['record']): Promise<Happened> {
+  const clock = { now: Date.now(), zone: await siteZone(env, siteId) }
+  return { clock, customer: null, facts: { ...clockFacts(clock), customer_name: '', customer_email: '' }, record }
+}
 
 /** The newest real thing of the trigger's kind, with sample values on top, for a dry run. */
 async function sampleHappening(env: Env, site: SiteRow, trigger: Trigger, sample: Facts = {}): Promise<Happened | null> {
@@ -751,7 +1021,7 @@ async function sampleHappening(env: Env, site: SiteRow, trigger: Trigger, sample
     const table = await getTable(env, site.id, trigger.table)
     if (!table) return null
     const row = id ? await getRecord(env, table, id) : await env.DB.prepare('SELECT id, customer_id, data, created_at, updated_at FROM data_records WHERE table_id = ? ORDER BY id DESC LIMIT 1').bind(table.id).first<DataRow>()
-    happened = row ? await whatHappened(env, site.id, 'record.created', { table: table.name, record: showRecord(table, row, ownerActor) }) : { customer: null, facts: {}, record: { id: id ?? 0, table: table.name } }
+    happened = row ? await whatHappened(env, site.id, 'record.created', { table: table.name, record: showRecord(table, row, ownerActor) }) : await emptyHappening(env, site.id, { id: id ?? 0, table: table.name })
   } else if (trigger.on === 'form_sent') {
     const entry = await env.DB.prepare('SELECT id, data, customer_id, created_at FROM entries WHERE site_id = ? AND form = ? ORDER BY id DESC LIMIT 1').bind(site.id, trigger.form).first<{ created_at: string; customer_id: null | number; data: string; id: number }>()
     happened = entry ? await whatHappened(env, site.id, 'entry.created', { ...entry, data: JSON.parse(entry.data) }) : null
@@ -763,8 +1033,7 @@ async function sampleHappening(env: Env, site: SiteRow, trigger: Trigger, sample
     happened = customer ? await whatHappened(env, site.id, 'customer.created', customer) : null
   }
   if (!happened && !Object.keys(sample).length) return null
-  const now = new Date().toISOString()
-  happened ??= { customer: null, facts: { now, today: now.slice(0, 10), customer_name: '', customer_email: '' } }
+  happened ??= await emptyHappening(env, site.id)
   return { ...happened, facts: { ...happened.facts, ...sample } }
 }
 
@@ -782,9 +1051,55 @@ export async function dryRun(env: Env, site: SiteRow, item: Pick<Stored, 'id' | 
   return { usedData: facts, triggerWouldStart: starts, conditions: conditionResults, wouldRun, steps: outcome?.previews ?? [], nothingWasChanged: true }
 }
 
+/**
+ * Shows what a scheduled rule would do at a given moment, now by default: when it runs next, and for a date reminder which
+ * records it would act on. Nothing is written, sent or called.
+ */
+export async function dryRunSchedule(env: Env, site: SiteRow, item: Pick<Stored, 'id' | 'name' | 'rule' | 'secret'>, at = Date.now(), sample: Facts = {}) {
+  const trigger = item.rule.trigger as Schedule
+  const clock = { now: at, zone: await siteZone(env, site.id) }
+  const local = localTime(at, clock.zone)
+  const timing = { timeZone: clock.zone, triedAt: shownTime(at, clock.zone), nextRuns: nextRuns(trigger, clock.zone, at).map((time) => shownTime(time, clock.zone)), note: 'Runs happen within about 15 minutes of these times.' }
+  const trySteps = async (happened: Happened) => {
+    const facts = { ...happened.facts, ...sample }
+    await addLinked(env, site.id, happened, facts, rulePaths(item.rule))
+    const conditionResults = (item.rule.conditions ?? []).map((test) => ({ ...test, holds: holds(test, facts) }))
+    const wouldRun = conditionResults.every((test) => test.holds)
+    const outcome = wouldRun ? await runSteps({ dry: true, env, happened, item, siteId: site.id }, facts) : null
+    return { usedData: facts, conditions: conditionResults, wouldRun, steps: outcome?.previews ?? [] }
+  }
+  if (trigger.on !== 'date_field') return { ...timing, ...(await trySteps({ clock, customer: null, facts: clockFacts(clock) })), nothingWasChanged: true }
+  const table = await getTable(env, site.id, trigger.table)
+  if (!table) return null
+  const date = targetDate(trigger, local.date)
+  const { results } = await dueRecords(env, table, item, trigger.field, date, 21)
+  const records = await Promise.all(
+    results.slice(0, 20).map(async (row) => {
+      const happened = await recordHappening(env, site.id, table, row, clock)
+      const facts = { ...happened?.facts }
+      if (happened) await addLinked(env, site.id, happened, facts, rulePaths(item.rule))
+      return { happened, id: row.id, alreadyHandled: Boolean(row.done), conditionsHold: allHold(item.rule.conditions, facts) }
+    }),
+  )
+  const acting = records.filter((row) => !row.alreadyHandled && row.conditionsHold)
+  const first = (acting[0] ?? records.find((row) => !row.alreadyHandled))?.happened
+  return {
+    ...timing,
+    checksAt: `${timeOf(trigger)} (${clock.zone})`,
+    // On that day, records with this date are the ones it checks, once each. It acts on those whose conditions hold.
+    lookingFor: { field: trigger.field, date, onDay: local.date },
+    records: records.map(({ happened: _happened, ...row }) => ({ ...row, [trigger.field]: date })),
+    wouldActOn: results.length > 20 ? `${acting.length} of the first 20, and more` : acting.length,
+    alreadyHandled: 'Each record is checked once per date, whether or not its conditions held then.',
+    batch: `It handles up to ${scheduleBatch} records each run, about every 15 minutes, and carries on with the rest.`,
+    ...(first ? { firstRecord: await trySteps(first) } : {}),
+    nothingWasChanged: true,
+  }
+}
+
 // Plain sentences for the owner and Claude
 
-type Names = { field: (path: string) => string; form: (name: string) => string; table: (name: string) => string }
+type Names = { field: (path: string) => string; form: (name: string) => string; table: (name: string) => string; zone: string }
 
 export async function namesFor(env: Env, site: Pick<SiteRow, 'id' | 'live_version'>, rule?: Automation): Promise<Names> {
   const tables = new Map((await listTables(env, site.id)).map((table) => [table.name, table]))
@@ -800,7 +1115,7 @@ export async function namesFor(env: Env, site: Pick<SiteRow, 'id' | 'live_versio
     }
     return field?.label ?? startForm?.fields.get(prefix)?.label ?? prefix
   }
-  return { field: label, form: (name) => forms.get(name)?.heading ?? name, table: (name) => tables.get(name)?.label ?? name }
+  return { field: label, form: (name) => forms.get(name)?.heading ?? name, table: (name) => tables.get(name)?.label ?? name, zone: await siteZone(env, site.id) }
 }
 
 /** One plain sentence for a rule, such as "When a record is added to Bookings and Seats is less than 1 → email the owner". */
@@ -818,7 +1133,15 @@ export function sentence(rule: Automation, names: Names, t: OfficeWords) {
           ? words.when.form_sent(names.form(trigger.form))
           : trigger.on === 'order_status'
             ? words.when.order_status(t.orderState(trigger.status))
-            : words.when[trigger.on]()
+            : trigger.on === 'every_day'
+              ? words.when.every_day(trigger.at, names.zone, (trigger.weekdays ?? []).map((day: Weekday) => words.weekday[day]))
+              : trigger.on === 'every_week'
+                ? words.when.every_week(words.weekday[trigger.weekday], trigger.at, names.zone)
+                : trigger.on === 'every_month'
+                  ? words.when.every_month(trigger.day, trigger.at, names.zone)
+                  : trigger.on === 'date_field'
+                    ? words.when.date_field(trigger.days, trigger.side ?? 'before', names.field(trigger.field), names.table(trigger.table), timeOf(trigger), names.zone)
+                    : words.when[trigger.on]()
   // A linked record's fields are named without the reference in front, because the step already says which record.
   const changes = (given: Record<string, Value>, through = '') => {
     const label = (name: string) => (through ? names.field(`${through}.${name}`).split(' › ').pop()! : names.field(name))
@@ -840,7 +1163,9 @@ export function sentence(rule: Automation, names: Names, t: OfficeWords) {
                 : words.step[action.to === 'owner' ? 'email_owner' : 'email_customer']
               : action.do === 'webhook'
                 ? words.step.webhook(new URL(action.url).host)
-                : words.step.stop
+                : action.do === 'summary'
+                  ? words.step.summary(action.orders ? words.summary.orders : names.table(action.table ?? ''))
+                  : words.step.stop
     return action.when?.length ? `${what} ${words.onlyIf(action.when.map(test).join(words.and))}` : what
   }
   return `${start}${rule.conditions?.length ? `${words.and}${rule.conditions.map(test).join(words.and)}` : ''}${words.arrow}${rule.actions.map(step).join(words.then)}`
