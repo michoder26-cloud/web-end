@@ -236,7 +236,10 @@ export async function findProblems(env: Env, site: SiteRow) {
       if (block.type === 'html' && /<a\s[^>]*href/i.test(String(block.code))) problems.push(`${where} has links inside custom code. They open inside the frame and can't reach this site's pages. Use buttons, the menu or the footer text instead.`)
       if (block.type === 'hero' && block.layout === 'cover' && !block.imageUrl) problems.push(`${where} has a cover hero with no photo.`)
       if (block.imageUrl && block.type === 'hero' && !block.imageAlt) problems.push(`${where} has a hero photo with no description.`)
-      if (index > 0 && block.type === blocks[index - 1].type) problems.push(`${where} has two ${block.type} blocks in a row. Vary the rhythm.`)
+      // The same kind of block twice is fine when it looks different, such as a split with its photo on the other side or another background.
+      const before = blocks[index - 1]
+      const looksSame = before && block.type === before.type && (block.tone || 'plain') === (before.tone || 'plain') && (block.type !== 'split' || (block.imageSide || 'right') === (before.imageSide || 'right'))
+      if (looksSame) problems.push(`${where} has two ${block.type} blocks in a row that look the same. Change the background or the photo side, or use a different block.`)
       if (block.type === 'collection' && !collections.has(block.collection)) problems.push(`${where} shows the collection "${block.collection}", which has no published items.`)
       if (block.type === 'form' && block.membersOnly && !settings.accounts) problems.push(`${where} has a members-only form, but customer accounts are off.`)
       if (block.type === 'form') {
@@ -331,7 +334,7 @@ export function createMcpServer(env: Env, origin: string, code: string) {
     'save_page',
     {
       title: 'Create or replace a page',
-      description: 'Creates a page, or replaces the page with the same slug. The home page has the slug "home". Blocks: hero (top of page, one per page), text, split (words beside a photo), features, steps, stats, pricing, testimonials, team, gallery, info (rows such as opening hours), faq, cta, form, collection (cards from the database, such as products), and html (custom code in a sandbox). Separate paragraphs with a blank line.',
+      description: 'Creates a page, or replaces the page with the same slug. The home page has the slug "home". Blocks: hero (top of page, one per page), text, split (words beside a photo), features, steps, stats, pricing, testimonials, team, gallery, info (rows such as opening hours), faq, links (a sub-menu, footer links, resources or downloads), cta, form, collection (cards from the database, such as products), records and record-form (the records of a table, and a form to add one), and html (custom code in a sandbox). Separate paragraphs with a blank line.',
       inputSchema: {
         slug: pageSlugSchema,
         title: text(120),

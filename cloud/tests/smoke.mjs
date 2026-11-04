@@ -115,6 +115,10 @@ const afterMenu = (await call('check_site')).data.problems
 check(!unreachable(afterMenu, 'hub') && !unreachable(afterMenu, 'guide') && unreachable(afterMenu, 'lost'), 'a page linked from a reachable page counts as reachable', JSON.stringify(afterMenu))
 await call('update_site', { nav: [{ label: 'Book', href: '/book' }] })
 for (const slug of ['hub', 'guide', 'lost']) await call('delete_page', { slug })
+await call('save_page', { slug: 'rhythm', title: 'Rhythm', description: linkDescription, published: true, blocks: [{ type: 'hero', heading: 'Rhythm' }, { type: 'split', body: 'A', imageUrl: 'https://example.com/a.jpg', imageAlt: 'A' }, { type: 'split', body: 'B', imageUrl: 'https://example.com/b.jpg', imageAlt: 'B', imageSide: 'left' }, { type: 'text', body: 'C', tone: 'tint' }, { type: 'text', body: 'D', tone: 'tint' }] })
+const rhythm = (await call('check_site')).data.problems.filter((problem) => problem.startsWith('Page "rhythm" has two'))
+check(rhythm.length === 1 && rhythm[0].includes('two text blocks'), 'repeated blocks are fine when they look different, and reported when they look the same', JSON.stringify(rhythm))
+await call('delete_page', { slug: 'rhythm' })
 
 const home = await fetch(base)
 const body = await home.text()
