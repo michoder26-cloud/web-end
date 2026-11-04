@@ -11,6 +11,7 @@ import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { loadItems, showImage } from './items'
 import { createMcpServer } from './mcp'
 import { followRedirect } from './moving'
+import { browserWords, officeText } from './office-words'
 import { claimedPage, claimSite, getSite, isOwner, setupPage, shell } from './owner'
 import { renderPage } from './render'
 import { cartCount, handleShop } from './shop'
@@ -69,7 +70,8 @@ async function showPage(request: Request, env: Env, url: URL, site: SiteRow, slu
 /** Shows the owner the unpublished copy of a page, with its menu links staying inside the preview. */
 async function showPreview(env: Env, url: URL, site: SiteRow, code: string, slug: string) {
   const page = await findWorkingPage(env, site, slug)
-  if (!page) return html(shell('Preview', `<h1>This page doesn't exist yet.</h1><p><a href="/owner/${escapeHtml(code)}/pages">See your pages</a></p>`), 404, privateHeaders)
+  const t = officeText(site)
+  if (!page) return html(shell(t.previewTitle, `<h1>${t.previewMissing}</h1><p><a href="/owner/${escapeHtml(code)}/pages">${t.seeYourPages}</a></p>`, false, t.lang), 404, privateHeaders)
   const blocks = JSON.parse(page.blocks) as Block[]
   const [items, records, { results }] = await Promise.all([
     loadItems(env, site.id, blocks),
@@ -79,11 +81,11 @@ async function showPreview(env: Env, url: URL, site: SiteRow, code: string, slug
   const base = `/owner/${code}/preview`
   const slugs = new Set(results.map((row) => row.slug))
   const rendered = renderPage(site, { ...page, blocks }, { canonical: `${url.origin}/`, customer: null, items, query: url.searchParams, records })
-  const banner = `<p class="preview-banner" role="status">Private preview of unpublished changes. Forms, login and buying use the live site. <a href="/owner/${escapeHtml(code)}/publish">Publish</a></p>`
+  const banner = `<p class="preview-banner" role="status">${t.previewBanner(`/owner/${escapeHtml(code)}/publish`)}</p>`
   const body = rendered
     .replace(/href="\/([a-z0-9-]*)((?:[?#][^"]*)?)"/g, (match, target: string, rest: string) => (!target || slugs.has(target) ? `href="${base}${target ? `/${target}` : ''}${rest}"` : match))
     // A frame could read its own address, and this address holds the owner's secret.
-    .replace(/<iframe class="custom-html"[^>]*><\/iframe>/g, '<p role="status">Custom code runs after you publish.</p>')
+    .replace(/<iframe class="custom-html"[^>]*><\/iframe>/g, `<p role="status">${t.customCodeLater}</p>`)
     .replace(/(<body[^>]*>)/, `$1${banner}`)
   return html(body, 200, privateHeaders)
 }
@@ -170,9 +172,9 @@ async function answer(request: Request, env: Env): Promise<Response> {
     if (!working) {
       if (url.pathname === '/setup' && request.method === 'POST') {
         const code = await claimSite(env)
-        return code ? html(claimedPage(url.origin, code), 200, privateHeaders) : see(url, '/')
+        return code ? html(claimedPage(url.origin, code, browserWords(request)), 200, privateHeaders) : see(url, '/')
       }
-      return url.pathname === '/' ? html(setupPage(), 200, privateHeaders) : notFound()
+      return url.pathname === '/' ? html(setupPage(browserWords(request)), 200, privateHeaders) : notFound()
     }
 
     // Visitors get the published copy. Only the owner's routes below see the working copy.

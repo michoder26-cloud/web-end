@@ -137,6 +137,7 @@ export const settingsShape = {
   name: text(80).optional(),
   tagline: optional(160),
   language: z.string().regex(/^[a-zA-Z-]{2,12}$/).optional().describe('Such as en, de or th'),
+  officeLanguage: z.enum(['auto', 'en', 'th']).optional().describe("Language of the owner's back office: th for Thai, en for English, or auto to follow the site's language, which is the default"),
   style: z.enum(siteStyles).optional(),
   accent: color.optional(),
   background: color.optional(),
@@ -308,7 +309,7 @@ export function createMcpServer(env: Env, origin: string, code: string) {
     'update_site',
     {
       title: 'Change site settings and design',
-      description: 'Changes the name, language, style, colours, customer accounts, custom CSS, navigation, header button, footer or contact details. Only the given settings change.',
+      description: 'Changes the name, language, back office language, style, colours, customer accounts, custom CSS, navigation, header button, footer or contact details. Only the given settings change.',
       inputSchema: { ...settingsShape },
     },
     safely(async ({ ...changes }) => {

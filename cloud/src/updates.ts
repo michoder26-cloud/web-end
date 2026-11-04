@@ -1,4 +1,6 @@
 import { escapeHtml } from './http'
+import { officeWords } from './office-words'
+import type { OfficeWords } from './office-words'
 import { version } from './version'
 
 const latestUrl = 'https://raw.githubusercontent.com/michoder26-cloud/web-end/main/cloud/latest.json'
@@ -50,25 +52,25 @@ export async function latestRelease() {
 
 export const repoPattern = /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/
 
-export function updatesBody(code: string, repo: string | undefined, latest: Awaited<ReturnType<typeof latestRelease>>) {
+export function updatesBody(code: string, repo: string | undefined, latest: Awaited<ReturnType<typeof latestRelease>>, t: OfficeWords = officeWords()) {
   const action = `/owner/${escapeHtml(code)}/updates`
   const status = !latest
-    ? `<p role="alert">Couldn't check for a new version right now. You have version ${version}.</p>`
+    ? `<p role="alert">${t.couldNotCheck(version)}</p>`
     : isNewer(latest.version, version)
-      ? `<p role="status"><strong>Version ${escapeHtml(latest.version)} is available.</strong> You have version ${version}.${latest.notes ? `<br>${escapeHtml(latest.notes)}` : ''}</p>`
-      : `<p role="status">You have the latest version, ${version}.</p>`
-  const repoForm = `<form action="${action}" class="contact-form" method="post"><label>Your site's GitHub repository, such as your-name/my-website<input name="repo" pattern="[A-Za-z0-9\\-]+/[A-Za-z0-9._\\-]+" required value="${escapeHtml(repo)}"></label><button class="button button--small" type="submit">Save</button></form>`
-  if (!repo) return `${status}<h2>Set up updates</h2><p>Enter the GitHub repository Cloudflare created for your site. You can see it in Cloudflare under your Worker's Settings, Build.</p>${repoForm}`
+      ? `<p role="status">${t.newVersion(escapeHtml(latest.version), version)}${latest.notes ? `<br>${escapeHtml(latest.notes)}` : ''}</p>`
+      : `<p role="status">${t.latestVersion(version)}</p>`
+  const repoForm = `<form action="${action}" class="contact-form" method="post"><label>${t.repoLabel}<input name="repo" pattern="[A-Za-z0-9\\-]+/[A-Za-z0-9._\\-]+" required value="${escapeHtml(repo)}"></label><button class="button button--small" type="submit">${t.save}</button></form>`
+  if (!repo) return `${status}<h2>${t.setUpUpdates}</h2><p>${t.setUpUpdatesHelp}</p>${repoForm}`
   const addUrl = `https://github.com/${repo}/new/main?filename=${encodeURIComponent(`.github/workflows/${workflowFile}`)}&value=${encodeURIComponent(workflow)}`
   const runUrl = `https://github.com/${repo}/actions/workflows/${workflowFile}`
   return `${status}
-<h2>How to update</h2>
+<h2>${t.howToUpdate}</h2>
 <ol class="cms-steps">
-<li><strong>First time only:</strong> <a href="${escapeHtml(addUrl)}" rel="noopener noreferrer" target="_blank">add the updater to GitHub</a>, then press <em>Commit changes</em>.</li>
-<li><a href="${escapeHtml(runUrl)}" rel="noopener noreferrer" target="_blank">Open the updater</a>, press <em>Run workflow</em>, then <em>Run workflow</em> again.</li>
-<li>Wait while Cloudflare rebuilds your site. It usually takes a few minutes, and it can wait in a queue for 10 minutes or more. Refresh this page and the version number changes.</li>
-<li>Start a new chat with Claude. New abilities can take a while to appear there. If one is missing, turn the connector off and on in Claude's settings.</li>
+<li>${t.updateStep1(escapeHtml(addUrl))}</li>
+<li>${t.updateStep2(escapeHtml(runUrl))}</li>
+<li>${t.updateStep3}</li>
+<li>${t.updateStep4}</li>
 </ol>
-<p>Your pages, products, orders, customers and private links stay as they are. If a developer changed your site's code, those changes get replaced, but they stay in your GitHub history.</p>
-<h2>Repository</h2>${repoForm}`
+<p>${t.updateKeeps}</p>
+<h2>${t.repository}</h2>${repoForm}`
 }

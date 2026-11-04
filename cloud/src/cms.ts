@@ -6,6 +6,8 @@ import { canSendEmail } from './email'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { saveImage } from './items'
 import { blockSchema, itemSchema, maxBlocksBytes, maxPagesPerSite, pageSlugSchema, settingsShape } from './mcp'
+import { officeText, officeWords } from './office-words'
+import type { OfficeWords } from './office-words'
 import { entryFields, shell } from './owner'
 import { orderDetails, orderLines, orderNumber, orderStatuses, paymentName, setOrderStatus } from './shop'
 import { words } from './text'
@@ -54,36 +56,39 @@ const catalog: Record<string, { label: string; fields: Spec[]; start: Block }> =
 
 export const office = (site: SiteRow, code: string, title: string, body: string, notice?: Notice) => {
   const settings = JSON.parse(site.settings) as Settings
+  const t = officeText(site)
   const base = `/owner/${escapeHtml(code)}`
-  const links: [string, string][] = [['', 'Overview'], ['/orders', 'Orders'], ['/pages', 'Pages'], ['/items', 'Products'], ['/data', 'Data'], ['/media', 'Images'], ['/customers', 'Customers'], ['/publish', 'Publish'], ['/connect', 'Connect'], ['/move', 'Move here'], ['/wordpress', 'WordPress'], ['/settings', 'Settings'], ['/system', 'System'], ['/updates', 'Updates']]
+  const links: [string, string][] = [['', t.nav.overview], ['/orders', t.nav.orders], ['/pages', t.nav.pages], ['/items', t.nav.products], ['/data', t.nav.data], ['/media', t.nav.images], ['/customers', t.nav.customers], ['/publish', t.nav.publish], ['/connect', t.nav.connect], ['/move', t.nav.move], ['/wordpress', t.nav.wordpress], ['/settings', t.nav.settings], ['/system', t.nav.system], ['/updates', t.nav.updates]]
   return html(
     shell(
       `${settings.name}: ${title}`,
-      `<nav aria-label="Back office" class="cms-nav">${links.map(([path, label]) => `<a href="${base}${path}">${label}</a>`).join('')}<a href="/" target="_blank" rel="noopener">Open website</a></nav>
+      `<nav aria-label="${t.navLabel}" class="cms-nav">${links.map(([path, label]) => `<a href="${base}${path}">${label}</a>`).join('')}<a href="/" target="_blank" rel="noopener">${t.openWebsite}</a></nav>
 <h1>${escapeHtml(title)}</h1>
-${notice?.error ? `<p role="alert">${escapeHtml(notice.error)}</p>` : ''}${notice?.saved ? `<p role="status">${escapeHtml(notice.saved)}</p>` : ''}${body}`,
+${notice?.error ? `<p role="alert">${escapeHtml(t.problem(notice.error))}</p>` : ''}${notice?.saved ? `<p role="status">${escapeHtml(notice.saved)}</p>` : ''}${body}`,
       true,
+      t.lang,
     ),
     200,
     privateHeaders,
   )
 }
 
-export const input = (name: string, field: Spec, value: unknown): string => {
-  const label = escapeHtml(field.label)
+/** One field of a form. `translate` is false for names the owner chose, such as the fields of their tables. */
+export const input = (name: string, field: Spec, value: unknown, t: OfficeWords = officeWords(), translate = true): string => {
+  const label = escapeHtml(translate ? t.label(field.label) : field.label)
   const key = escapeHtml(name)
   if (field.kind === 'bool') return `<label class="check"><input name="${key}" type="checkbox"${value ? ' checked' : ''}> ${label}</label>`
   if (field.kind === 'long') return `<label>${label}<textarea name="${key}" rows="4">${escapeHtml(value)}</textarea></label>`
   if (field.kind === 'lines') return `<label>${label}<textarea name="${key}" rows="3">${escapeHtml(Array.isArray(value) ? value.join('\n') : '')}</textarea></label>`
   if (field.kind === 'number') return `<label>${label}<input name="${key}" type="number" value="${escapeHtml(value)}"></label>`
-  if (field.kind === 'image') return `<label>${label}<input list="media-list" name="${key}" placeholder="https:// or /media/1" value="${escapeHtml(value)}"></label>`
-  if (field.kind === 'select') return `<label>${label}<select name="${key}">${(field.options ?? []).map((option) => `<option value="${escapeHtml(option)}"${option === (value ?? '') ? ' selected' : ''}>${escapeHtml(option || 'Default')}</option>`).join('')}</select></label>`
+  if (field.kind === 'image') return `<label>${label}<input list="media-list" name="${key}" placeholder="${escapeHtml(t.imagePlaceholder)}" value="${escapeHtml(value)}"></label>`
+  if (field.kind === 'select') return `<label>${label}<select name="${key}">${(field.options ?? []).map((option) => `<option value="${escapeHtml(option)}"${option === (value ?? '') ? ' selected' : ''}>${escapeHtml(translate || !option ? t.option(option) : option)}</option>`).join('')}</select></label>`
   if (field.kind === 'list') {
     const rows = Array.isArray(value) ? (value as Record<string, unknown>[]) : []
     // One empty row at the end adds an item. Clearing a row removes it.
     const shown = [...rows, {}]
     return `<fieldset class="cms-list"><legend>${label}</legend><input name="${key}.count" type="hidden" value="${shown.length}">${shown
-      .map((row, index) => `<div class="cms-row">${(field.fields ?? []).map((sub) => input(`${name}.${index}.${sub.key}`, sub, row[sub.key])).join('')}</div>`)
+      .map((row, index) => `<div class="cms-row">${(field.fields ?? []).map((sub) => input(`${name}.${index}.${sub.key}`, sub, row[sub.key], t, translate)).join('')}</div>`)
       .join('')}</fieldset>`
   }
   return `<label>${label}<input name="${key}" value="${escapeHtml(value)}"></label>`
@@ -141,28 +146,29 @@ const mediaList = async (env: Env, site: SiteRow) => {
 }
 
 async function pageEditor(env: Env, site: SiteRow, code: string, slug: string, page: { blocks: Block[]; description: string; published: boolean; title: string }, notice?: { error?: string; saved?: string }) {
+  const t = officeText(site)
   const blocks = page.blocks
     .map((block, index) => {
       const entry = catalog[block.type]
       if (!entry) return ''
-      return `<fieldset class="cms-block"><legend>${escapeHtml(entry.label)}</legend><input name="b${index}.type" type="hidden" value="${escapeHtml(block.type)}">
-${entry.fields.map((field) => input(`b${index}.${field.key}`, field, block[field.key])).join('')}
-<div class="cms-actions"><button class="button button--small" name="op" type="submit" value="up:${index}">Move up</button><button class="button button--small" name="op" type="submit" value="down:${index}">Move down</button><button class="button button--small" name="op" type="submit" value="delete:${index}">Delete section</button></div></fieldset>`
+      return `<fieldset class="cms-block"><legend>${escapeHtml(t.label(entry.label))}</legend><input name="b${index}.type" type="hidden" value="${escapeHtml(block.type)}">
+${entry.fields.map((field) => input(`b${index}.${field.key}`, field, block[field.key], t)).join('')}
+<div class="cms-actions"><button class="button button--small" name="op" type="submit" value="up:${index}">${t.moveUp}</button><button class="button button--small" name="op" type="submit" value="down:${index}">${t.moveDown}</button><button class="button button--small" name="op" type="submit" value="delete:${index}">${t.deleteSection}</button></div></fieldset>`
     })
     .join('')
-  const adders = Object.entries(catalog).map(([type, entry]) => `<button class="button button--small" name="op" type="submit" value="add:${type}">${escapeHtml(entry.label)}</button>`).join('')
+  const adders = Object.entries(catalog).map(([type, entry]) => `<button class="button button--small" name="op" type="submit" value="add:${type}">${escapeHtml(t.label(entry.label))}</button>`).join('')
   return office(
     site,
     code,
-    `Edit page: ${page.title}`,
+    t.editPage(page.title),
     `${await mediaList(env, site)}<form action="/owner/${escapeHtml(code)}/page/${escapeHtml(slug)}" class="contact-form cms-form" method="post"><input name="count" type="hidden" value="${page.blocks.length}">
-<label>Page title<input maxlength="120" name="title" required value="${escapeHtml(page.title)}"></label>
-<label>Description for search results<textarea maxlength="300" name="description" required rows="2">${escapeHtml(page.description)}</textarea></label>
-<label class="check"><input name="published" type="checkbox"${page.published ? ' checked' : ''}> Show this page to visitors</label>
+<label>${t.pageTitle}<input maxlength="120" name="title" required value="${escapeHtml(page.title)}"></label>
+<label>${t.pageDescription}<textarea maxlength="300" name="description" required rows="2">${escapeHtml(page.description)}</textarea></label>
+<label class="check"><input name="published" type="checkbox"${page.published ? ' checked' : ''}> ${t.showPage}</label>
 ${blocks}
-<fieldset class="cms-block"><legend>Add a section</legend><div class="cms-actions">${adders}</div></fieldset>
-<button class="button cms-save" name="op" type="submit" value="save">Save page</button></form>
-${slug === 'home' ? '' : `<form action="/owner/${escapeHtml(code)}/page/${escapeHtml(slug)}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> Yes, delete this page</label><button class="button button--small" type="submit">Delete page</button></form>`}`,
+<fieldset class="cms-block"><legend>${t.addSection}</legend><div class="cms-actions">${adders}</div></fieldset>
+<button class="button cms-save" name="op" type="submit" value="save">${t.savePage}</button></form>
+${slug === 'home' ? '' : `<form action="/owner/${escapeHtml(code)}/page/${escapeHtml(slug)}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmDeletePage}</label><button class="button button--small" type="submit">${t.deletePage}</button></form>`}`,
     notice,
   )
 }
@@ -180,9 +186,10 @@ async function savePageFromForm(request: Request, env: Env, url: URL, site: Site
 
   const page = { blocks, description: String(form.get('description') ?? '').trim(), published: form.get('published') === 'on', title: String(form.get('title') ?? '').trim() }
   const invalid = z.object({ blocks: z.array(blockSchema).min(1).max(40), description: z.string().min(1).max(300), title: z.string().min(1).max(120) }).safeParse(page)
-  if (!invalid.success) return pageEditor(env, site, code, slug, page, { error: `Not saved. ${firstProblem(invalid.error)}` })
+  const t = officeText(site)
+  if (!invalid.success) return pageEditor(env, site, code, slug, page, { error: t.notSaved(firstProblem(invalid.error)) })
   const stored = JSON.stringify(invalid.data.blocks)
-  if (stored.length > maxBlocksBytes) return pageEditor(env, site, code, slug, page, { error: 'Not saved. This page is too large. Split it into smaller pages.' })
+  if (stored.length > maxBlocksBytes) return pageEditor(env, site, code, slug, page, { error: t.notSaved(t.pageTooLarge) })
   await env.DB.prepare(`INSERT INTO pages (site_id, slug, title, description, published, blocks) VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT (site_id, slug) DO UPDATE SET title = excluded.title, description = excluded.description, published = excluded.published, blocks = excluded.blocks, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`)
     .bind(site.id, slug, page.title, page.description, page.published ? 1 : 0, stored)
@@ -195,8 +202,9 @@ async function overview(env: Env, url: URL, site: SiteRow, code: string) {
     env.DB.prepare('SELECT slug, blocks FROM pages WHERE site_id = ?').bind(site.id).all<{ blocks: string; slug: string }>(),
     env.DB.prepare('SELECT entries.id, form, page, data, status, entries.created_at, customers.email AS customer FROM entries LEFT JOIN customers ON customers.id = entries.customer_id WHERE entries.site_id = ? ORDER BY entries.id DESC LIMIT 200').bind(site.id).all<{ created_at: string; customer: null | string; data: string; form: string; id: number; page: string; status: string }>(),
   ])
+  const t = officeText(site)
   const latest = await latestRelease()
-  const newer = latest && isNewer(latest.version, version) ? `<p role="status">Version ${escapeHtml(latest.version)} is available. <a href="/owner/${escapeHtml(code)}/updates">See how to update</a>.</p>` : ''
+  const newer = latest && isNewer(latest.version, version) ? `<p role="status">${t.versionAvailable(escapeHtml(latest.version), `/owner/${escapeHtml(code)}/updates`)}</p>` : ''
   const labels = entryFields(pages)
   const rows = entries.length
     ? entries
@@ -205,54 +213,56 @@ async function overview(env: Env, url: URL, site: SiteRow, code: string) {
           const fields = labels.get(`${entry.page}/${entry.form}`) ?? Object.keys(data).map((name) => ({ label: name, name }) as FormField)
           const list = fields
             .filter((field) => data[field.name] !== undefined)
-            .map((field) => `<div><dt>${escapeHtml(field.label)}</dt><dd class="pre-line">${escapeHtml(data[field.name] === true ? 'Yes' : data[field.name] === false ? 'No' : data[field.name])}</dd></div>`)
+            .map((field) => `<div><dt>${escapeHtml(field.label)}</dt><dd class="pre-line">${escapeHtml(data[field.name] === true ? t.yes : data[field.name] === false ? t.no : data[field.name])}</dd></div>`)
             .join('')
           const buttons = [...statuses.filter((status) => status !== entry.status), 'delete']
-            .map((status) => `<button class="button button--small" name="status" type="submit" value="${status}">${status}</button> `)
+            .map((status) => `<button class="button button--small" name="status" type="submit" value="${status}">${escapeHtml(t.entryAction(status))}</button> `)
             .join('')
-          return `<article class="card account__record"><h3>${escapeHtml(entry.form)} · ${escapeHtml(entry.status)}</h3><p class="post-date">${escapeHtml(entry.created_at.slice(0, 16).replace('T', ' '))} UTC${entry.customer ? ` · ${escapeHtml(entry.customer)}` : ''}</p><dl>${list}</dl><form action="/owner/${escapeHtml(code)}/entry/${entry.id}" method="post">${buttons}</form></article>`
+          return `<article class="card account__record"><h3>${escapeHtml(entry.form)} · ${escapeHtml(t.entryState(entry.status))}</h3><p class="post-date">${escapeHtml(entry.created_at.slice(0, 16).replace('T', ' '))} UTC${entry.customer ? ` · ${escapeHtml(entry.customer)}` : ''}</p><dl>${list}</dl><form action="/owner/${escapeHtml(code)}/entry/${entry.id}" method="post">${buttons}</form></article>`
         })
         .join('')
-    : '<p>Nothing yet. Orders, messages and bookings from your forms will appear here.</p>'
+    : `<p>${t.noEntries}</p>`
   return office(
     site,
     code,
-    'Overview',
-    `${newer}<h2>Messages and bookings</h2>${rows}
-${site.live_version ? `<p><a href="/owner/${escapeHtml(code)}/publish">See what is waiting to be published</a>. Changes stay private until you publish them.</p>` : ''}
-<h2>Change your site with Claude</h2>
-<p>Add this link as a custom connector in Claude, with no sign-in. Keep it private.</p>
+    t.nav.overview,
+    `${newer}<h2>${t.messagesHeading}</h2>${rows}
+${site.live_version ? `<p>${t.seeWaiting(`/owner/${escapeHtml(code)}/publish`)}</p>` : ''}
+<h2>${t.claudeHeading}</h2>
+<p>${t.claudeHelp}</p>
 <p><code style="overflow-wrap:anywhere">${escapeHtml(`${url.origin}/mcp/${code}`)}</code></p>`,
   )
 }
 
 async function ordersPage(env: Env, site: SiteRow, code: string, error?: string) {
   const settings = JSON.parse(site.settings) as Settings
-  const t = words(settings.language)
+  const o = officeText(site)
+  const t = words(o.lang)
   const { results: orders } = await env.DB.prepare('SELECT * FROM orders WHERE site_id = ? ORDER BY id DESC LIMIT 200').bind(site.id).all<Order>()
   const lines = await orderLines(env, orders.map((order) => order.id))
   const rows = orders
     .map((order) => {
       const buttons = orderStatuses
         .filter((status) => status !== order.status)
-        .map((status) => `<button class="button button--small" name="status" type="submit" value="${status}">${escapeHtml(status)}</button> `)
+        .map((status) => `<button class="button button--small" name="status" type="submit" value="${status}">${escapeHtml(o.orderAction(status))}</button> `)
         .join('')
-      return `<article class="card account__record"><h3>${orderNumber(order.id)} · ${escapeHtml(order.status)}</h3><p class="post-date">${escapeHtml(order.created_at.slice(0, 16).replace('T', ' '))} UTC · ${paymentName(words('en'), order.payment)}</p>${orderDetails(order, lines.get(order.id) ?? [], t)}<p class="pre-line"><strong>${escapeHtml(order.name)}</strong>
+      return `<article class="card account__record"><h3>${orderNumber(order.id)} · ${escapeHtml(o.orderState(order.status))}</h3><p class="post-date">${escapeHtml(order.created_at.slice(0, 16).replace('T', ' '))} UTC · ${paymentName(t, order.payment)}</p>${orderDetails(order, lines.get(order.id) ?? [], t)}<p class="pre-line"><strong>${escapeHtml(order.name)}</strong>
 ${escapeHtml(order.phone)}${order.email ? `\n${escapeHtml(order.email)}` : ''}
-${escapeHtml(order.address)}${order.note ? `\n\nNote: ${escapeHtml(order.note)}` : ''}</p><form action="/owner/${escapeHtml(code)}/orders/${order.id}" method="post">${buttons}</form></article>`
+${escapeHtml(order.address)}${order.note ? `\n\n${o.orderNote}: ${escapeHtml(order.note)}` : ''}</p><form action="/owner/${escapeHtml(code)}/orders/${order.id}" method="post">${buttons}</form></article>`
     })
     .join('')
-  return office(site, code, 'Orders', `${settings.cart ? '' : '<p role="alert">The cart is off. Turn it on in Settings.</p>'}<p>Check each bank transfer yourself before confirming it. Card payments confirm themselves. Cancelling an order puts its items back in stock.</p>${rows || '<p>No orders yet.</p>'}`, error ? { error } : undefined)
+  return office(site, code, o.nav.orders, `${settings.cart ? '' : `<p role="alert">${o.cartOff}</p>`}<p>${o.ordersHelp}</p>${rows || `<p>${o.noOrders}</p>`}`, error ? { error } : undefined)
 }
 
 async function pagesList(env: Env, site: SiteRow, code: string, notice?: { error?: string }) {
+  const t = officeText(site)
   const { results } = await env.DB.prepare('SELECT slug, title, published FROM pages WHERE site_id = ? ORDER BY slug').bind(site.id).all<{ published: number; slug: string; title: string }>()
-  const rows = results.map((page) => `<li><a href="/owner/${escapeHtml(code)}/page/${escapeHtml(page.slug)}">${escapeHtml(page.title)}</a> ${page.published ? '' : '(hidden)'} <small>/${page.slug === 'home' ? '' : escapeHtml(page.slug)}</small></li>`).join('')
+  const rows = results.map((page) => `<li><a href="/owner/${escapeHtml(code)}/page/${escapeHtml(page.slug)}">${escapeHtml(page.title)}</a> ${page.published ? '' : t.hiddenPage} <small>/${page.slug === 'home' ? '' : escapeHtml(page.slug)}</small></li>`).join('')
   return office(
     site,
     code,
-    'Pages',
-    `<ul>${rows || '<li>No pages yet.</li>'}</ul><h2>Add a page</h2><form action="/owner/${escapeHtml(code)}/pages" class="contact-form" method="post"><label>Page title<input maxlength="120" name="title" required></label><label>Page address, English letters, such as about<input maxlength="60" name="slug" pattern="[a-z0-9]+(-[a-z0-9]+)*" required></label><button class="button" type="submit">Create page</button></form>`,
+    t.nav.pages,
+    `<ul>${rows || `<li>${t.noPages}</li>`}</ul><h2>${t.addPage}</h2><form action="/owner/${escapeHtml(code)}/pages" class="contact-form" method="post"><label>${t.pageTitle}<input maxlength="120" name="title" required></label><label>${t.pageAddress}<input maxlength="60" name="slug" pattern="[a-z0-9]+(-[a-z0-9]+)*" required></label><button class="button" type="submit">${t.createPage}</button></form>`,
     notice,
   )
 }
@@ -261,9 +271,10 @@ async function addPage(request: Request, env: Env, url: URL, site: SiteRow, code
   const form = await request.formData()
   const title = String(form.get('title') ?? '').trim().slice(0, 120)
   const slug = pageSlugSchema.safeParse(String(form.get('slug') ?? '').trim())
-  if (!title || !slug.success) return pagesList(env, site, code, { error: 'Use a title, and an address with only small English letters, numbers and dashes.' })
+  const t = officeText(site)
+  if (!title || !slug.success) return pagesList(env, site, code, { error: t.badPage })
   const count = await env.DB.prepare('SELECT COUNT(*) AS total FROM pages WHERE site_id = ?').bind(site.id).first<{ total: number }>()
-  if ((count?.total ?? 0) >= maxPagesPerSite) return pagesList(env, site, code, { error: `A site can have up to ${maxPagesPerSite} pages.` })
+  if ((count?.total ?? 0) >= maxPagesPerSite) return pagesList(env, site, code, { error: t.pagesLimit(maxPagesPerSite) })
   await env.DB.prepare('INSERT INTO pages (site_id, slug, title, description, published, blocks) VALUES (?, ?, ?, ?, 0, ?) ON CONFLICT (site_id, slug) DO NOTHING')
     .bind(site.id, slug.data, title, title, JSON.stringify([{ heading: title, type: 'hero' }]))
     .run()
@@ -279,36 +290,37 @@ const readVariants = (text: string) =>
     .filter(([name]) => name)
     .map(([name, price, comparePrice, stock]) => ({ comparePrice: comparePrice || undefined, name, price: price || undefined, stock: stock ? Number(stock) : null }))
 
-const itemForm = (code: string, item: Partial<Item>, collections: string[]) => `<form action="/owner/${escapeHtml(code)}/items${item.id ? `/${item.id}` : ''}" class="contact-form cms-form" enctype="multipart/form-data" method="post">
-<label>Name<input maxlength="160" name="title" required value="${escapeHtml(item.title)}"></label>
-<label>Collection<input list="collections" maxlength="40" name="collection" pattern="[a-z0-9-]+" required value="${escapeHtml(item.collection ?? 'products')}"></label>
+const itemForm = (code: string, item: Partial<Item>, collections: string[], t: OfficeWords) => `<form action="/owner/${escapeHtml(code)}/items${item.id ? `/${item.id}` : ''}" class="contact-form cms-form" enctype="multipart/form-data" method="post">
+<label>${t.itemName}<input maxlength="160" name="title" required value="${escapeHtml(item.title)}"></label>
+<label>${t.itemCollection}<input list="collections" maxlength="40" name="collection" pattern="[a-z0-9-]+" required value="${escapeHtml(item.collection ?? 'products')}"></label>
 <datalist id="collections">${collections.map((name) => `<option value="${escapeHtml(name)}"></option>`).join('')}</datalist>
-<label>Category, optional<input maxlength="60" name="category" value="${escapeHtml(item.category)}"></label>
-<label>Price<input maxlength="40" name="price" value="${escapeHtml(item.price)}"></label>
-<label>Original price, shown crossed out for a sale<input maxlength="40" name="comparePrice" value="${escapeHtml(item.compare_price)}"></label>
-<label>Stock, leave empty for unlimited<input min="0" name="stock" type="number" value="${escapeHtml(item.stock)}"></label>
-<label>Options such as size or colour, one per line: Name | price | original price | stock<textarea name="variants" rows="3">${escapeHtml(variantLines(item.variants))}</textarea></label>
-<label>Description<textarea maxlength="4000" name="body" rows="3">${escapeHtml(item.body)}</textarea></label>
-<label>Upload a photo, up to 1 MB<input accept="image/png,image/jpeg,image/webp,image/gif" name="file" type="file"></label>
-<label>Or photo link<input list="media-list" maxlength="1000" name="imageUrl" value="${escapeHtml(item.image_url)}"></label>
-<label>Photo description<input maxlength="200" name="imageAlt" value="${escapeHtml(item.image_alt)}"></label>
-<label>Button text, optional<input maxlength="60" name="linkLabel" value="${escapeHtml(item.link_label)}"></label>
-<label>Button link, optional<input maxlength="500" name="linkHref" value="${escapeHtml(item.link_href)}"></label>
-<label>Order, smaller shows first<input name="sort" type="number" value="${escapeHtml(item.sort ?? 0)}"></label>
-<label class="check"><input name="published" type="checkbox"${item.published === 0 ? '' : ' checked'}> Show to visitors</label>
-<button class="button" type="submit">Save</button></form>`
+<label>${t.itemCategory}<input maxlength="60" name="category" value="${escapeHtml(item.category)}"></label>
+<label>${t.itemPrice}<input maxlength="40" name="price" value="${escapeHtml(item.price)}"></label>
+<label>${t.itemComparePrice}<input maxlength="40" name="comparePrice" value="${escapeHtml(item.compare_price)}"></label>
+<label>${t.itemStock}<input min="0" name="stock" type="number" value="${escapeHtml(item.stock)}"></label>
+<label>${t.itemVariants}<textarea name="variants" rows="3">${escapeHtml(variantLines(item.variants))}</textarea></label>
+<label>${t.itemDescription}<textarea maxlength="4000" name="body" rows="3">${escapeHtml(item.body)}</textarea></label>
+<label>${t.itemUpload}<input accept="image/png,image/jpeg,image/webp,image/gif" name="file" type="file"></label>
+<label>${t.itemImageUrl}<input list="media-list" maxlength="1000" name="imageUrl" value="${escapeHtml(item.image_url)}"></label>
+<label>${t.itemImageAlt}<input maxlength="200" name="imageAlt" value="${escapeHtml(item.image_alt)}"></label>
+<label>${t.itemLinkLabel}<input maxlength="60" name="linkLabel" value="${escapeHtml(item.link_label)}"></label>
+<label>${t.itemLinkHref}<input maxlength="500" name="linkHref" value="${escapeHtml(item.link_href)}"></label>
+<label>${t.itemSort}<input name="sort" type="number" value="${escapeHtml(item.sort ?? 0)}"></label>
+<label class="check"><input name="published" type="checkbox"${item.published === 0 ? '' : ' checked'}> ${t.showToVisitors}</label>
+<button class="button" type="submit">${t.save}</button></form>`
 
 async function itemsPage(env: Env, site: SiteRow, code: string, notice?: { error?: string; saved?: string }) {
+  const t = officeText(site)
   const { results } = await env.DB.prepare('SELECT * FROM items WHERE site_id = ? ORDER BY collection, sort, id LIMIT 500').bind(site.id).all<Item>()
   const { results: variants } = await env.DB.prepare('SELECT item_variants.* FROM item_variants JOIN items ON items.id = item_variants.item_id WHERE items.site_id = ? ORDER BY item_variants.sort, item_variants.id').bind(site.id).all<Variant>()
   for (const item of results) item.variants = variants.filter((variant) => variant.item_id === item.id)
   const collections = [...new Set(results.map((item) => item.collection))]
   const rows = results
     .map(
-      (item) => `<details class="cms-item"><summary>${escapeHtml(item.title)}${item.price ? ` · ${escapeHtml(item.price)}` : ''} <small>${escapeHtml(item.collection)}${item.published ? '' : ', hidden'}</small></summary>${itemForm(code, item, collections)}<form action="/owner/${escapeHtml(code)}/items/${item.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> Yes, delete this</label><button class="button button--small" type="submit">Delete</button></form></details>`,
+      (item) => `<details class="cms-item"><summary>${escapeHtml(item.title)}${item.price ? ` · ${escapeHtml(item.price)}` : ''} <small>${escapeHtml(item.collection)}${item.published ? '' : t.hiddenItem}</small></summary>${itemForm(code, item, collections, t)}<form action="/owner/${escapeHtml(code)}/items/${item.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmDeleteItem}</label><button class="button button--small" type="submit">${t.delete}</button></form></details>`,
     )
     .join('')
-  return office(site, code, 'Products', `${await mediaList(env, site)}${rows || '<p>Nothing yet.</p>'}<h2>Add new</h2>${itemForm(code, {}, collections)}`, notice)
+  return office(site, code, t.nav.products, `${await mediaList(env, site)}${rows || `<p>${t.nothingYet}</p>`}<h2>${t.addNew}</h2>${itemForm(code, {}, collections, t)}`, notice)
 }
 
 async function saveItemFromForm(request: Request, env: Env, url: URL, site: SiteRow, code: string, id?: number) {
@@ -337,7 +349,7 @@ async function saveItemFromForm(request: Request, env: Env, url: URL, site: Site
     sort: Number(form.get('sort')) || 0,
     title: String(form.get('title') ?? '').trim(),
   })
-  if (!item.success) return itemsPage(env, site, code, { error: `Not saved. ${firstProblem(item.error)}` })
+  if (!item.success) return itemsPage(env, site, code, { error: officeText(site).notSaved(firstProblem(item.error)) })
   await writeItem(env, site.id, item.data, id)
   return see(url, `/owner/${code}/items?saved=1`)
 }
@@ -370,70 +382,74 @@ export async function writeItem(env: Env, siteId: number, item: z.infer<typeof i
 }
 
 async function mediaPage(env: Env, site: SiteRow, code: string, notice?: { error?: string; saved?: string }) {
+  const t = officeText(site)
   const { results } = await env.DB.prepare('SELECT id, name, size FROM media WHERE site_id = ? ORDER BY id DESC LIMIT 200').bind(site.id).all<{ id: number; name: string; size: number }>()
   const rows = results
-    .map((image) => `<figure class="cms-media"><img alt="${escapeHtml(image.name)}" loading="lazy" src="/media/${image.id}"><figcaption><code>/media/${image.id}</code><br>${escapeHtml(image.name)}</figcaption><form action="/owner/${escapeHtml(code)}/media/${image.id}/delete" method="post"><button class="button button--small" type="submit">Delete</button></form></figure>`)
+    .map((image) => `<figure class="cms-media"><img alt="${escapeHtml(image.name)}" loading="lazy" src="/media/${image.id}"><figcaption><code>/media/${image.id}</code><br>${escapeHtml(image.name)}</figcaption><form action="/owner/${escapeHtml(code)}/media/${image.id}/delete" method="post"><button class="button button--small" type="submit">${t.delete}</button></form></figure>`)
     .join('')
   return office(
     site,
     code,
-    'Images',
-    `<form action="/owner/${escapeHtml(code)}/media" class="contact-form" enctype="multipart/form-data" method="post"><label>Upload a PNG, JPEG, WebP or GIF, up to 1 MB<input accept="image/png,image/jpeg,image/webp,image/gif" name="file" required type="file"></label><button class="button" type="submit">Upload</button></form><div class="cms-gallery">${rows || '<p>No images yet.</p>'}</div>`,
+    t.nav.images,
+    `<form action="/owner/${escapeHtml(code)}/media" class="contact-form" enctype="multipart/form-data" method="post"><label>${t.uploadImage}<input accept="image/png,image/jpeg,image/webp,image/gif" name="file" required type="file"></label><button class="button" type="submit">${t.upload}</button></form><div class="cms-gallery">${rows || `<p>${t.noImages}</p>`}</div>`,
     notice,
   )
 }
 
 async function customersPage(env: Env, url: URL, site: SiteRow, code: string, notice?: { error?: string; saved?: string }, resetLink?: string) {
   const settings = JSON.parse(site.settings) as Settings
+  const t = officeText(site)
   const { results } = await env.DB.prepare('SELECT id, email, name, role, created_at FROM customers WHERE site_id = ? ORDER BY id DESC LIMIT 500').bind(site.id).all<{ created_at: string; email: string; id: number; name: string; role: string }>()
   const rows = results
     .map(
-      (customer) => `<article class="card account__record"><h3>${escapeHtml(customer.name)}${customer.role === 'staff' ? ' · staff' : ''}</h3><p>${escapeHtml(customer.email)}<br><small>Joined ${escapeHtml(customer.created_at.slice(0, 10))}</small></p><form action="/owner/${escapeHtml(code)}/customers/${customer.id}/reset" method="post"><button class="button button--small" type="submit">Make a password reset link</button></form><form action="/owner/${escapeHtml(code)}/customers/${customer.id}/role" method="post"><button class="button button--small" name="role" type="submit" value="${customer.role === 'staff' ? 'member' : 'staff'}">${customer.role === 'staff' ? 'Remove staff access' : 'Make staff'}</button></form><form action="/owner/${escapeHtml(code)}/customers/${customer.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> Yes, delete this account</label><button class="button button--small" type="submit">Delete account</button></form></article>`,
+      (customer) => `<article class="card account__record"><h3>${escapeHtml(customer.name)}${customer.role === 'staff' ? t.staffTag : ''}</h3><p>${escapeHtml(customer.email)}<br><small>${t.joined(escapeHtml(customer.created_at.slice(0, 10)))}</small></p><form action="/owner/${escapeHtml(code)}/customers/${customer.id}/reset" method="post"><button class="button button--small" type="submit">${t.makeResetLink}</button></form><form action="/owner/${escapeHtml(code)}/customers/${customer.id}/role" method="post"><button class="button button--small" name="role" type="submit" value="${customer.role === 'staff' ? 'member' : 'staff'}">${customer.role === 'staff' ? t.removeStaff : t.makeStaff}</button></form><form action="/owner/${escapeHtml(code)}/customers/${customer.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmDeleteAccount}</label><button class="button button--small" type="submit">${t.deleteAccount}</button></form></article>`,
     )
     .join('')
   return office(
     site,
     code,
-    'Customers',
-    `${settings.accounts ? '' : '<p role="alert">Customer accounts are off. Turn them on in Settings.</p>'}${settings.accounts && canSendEmail(env, settings) ? '<p>Customers can also get a reset email themselves, from "Forgot your password?" on the login page.</p>' : ''}${resetLink ? `<p role="status">Send this link to the customer yourself. It works once and expires in 24 hours:<br><code style="overflow-wrap:anywhere">${escapeHtml(`${url.origin}${resetLink}`)}</code></p>` : ''}${rows || '<p>No customers yet.</p>'}`,
+    t.nav.customers,
+    `${settings.accounts ? '' : `<p role="alert">${t.accountsOff}</p>`}${settings.accounts && canSendEmail(env, settings) ? `<p>${t.resetEmailHelp}</p>` : ''}${resetLink ? `<p role="status">${t.resetLinkHelp}<br><code style="overflow-wrap:anywhere">${escapeHtml(`${url.origin}${resetLink}`)}</code></p>` : ''}${rows || `<p>${t.noCustomers}</p>`}`,
     notice,
   )
 }
 
 const settingsForm = (site: SiteRow, code: string, notice?: { error?: string; saved?: string }, draft?: Partial<Settings>) => {
   const settings = { ...(JSON.parse(site.settings) as Settings), ...draft }
+  const t = officeText(site)
   const text = (key: keyof Settings, label: string, kind = 'text') => `<label>${label}<input name="${key}" type="${kind}" value="${escapeHtml(settings[key])}"></label>`
   return office(
     site,
     code,
-    'Settings',
+    t.nav.settings,
     `<form action="/owner/${escapeHtml(code)}/settings" class="contact-form cms-form" method="post">
-${text('name', 'Site name')}${text('tagline', 'Tagline')}${text('language', 'Language, such as en or th')}
-<label>Style<select name="style">${siteStyles.map((style) => `<option${style === settings.style ? ' selected' : ''}>${style}</option>`).join('')}</select></label>
-${text('accent', 'Main colour', 'color').replace('value=""', 'value="#1f4d3a"')}${text('background', 'Background colour', 'color').replace('value=""', 'value="#fbfaf6"')}${text('text', 'Text colour', 'color').replace('value=""', 'value="#16201b"')}
-<label class="check"><input name="accounts" type="checkbox"${settings.accounts ? ' checked' : ''}> Let customers sign up and log in</label>
-<fieldset class="cms-block"><legend>Shop</legend>
-<label class="check"><input name="cart" type="checkbox"${settings.cart ? ' checked' : ''}> Turn on the cart and checkout</label>
-<label class="check"><input name="cartMembersOnly" type="checkbox"${settings.cartMembersOnly ? ' checked' : ''}> Only logged-in customers can check out</label>
-<label class="check"><input name="payTransfer" type="checkbox"${settings.payTransfer ? ' checked' : ''}> Accept bank transfer</label>
-<label>Bank transfer instructions, such as bank, account name and number<textarea maxlength="1000" name="transferDetails" rows="3">${escapeHtml(settings.transferDetails)}</textarea></label>
-<label class="check"><input name="payCod" type="checkbox"${settings.payCod ? ' checked' : ''}> Accept pay on delivery</label>
-<label>Delivery fee per order<input min="0" name="shippingFee" step="any" type="number" value="${escapeHtml(settings.shippingFee)}"></label>
-<label>Free delivery on orders of this amount or more, optional<input min="0" name="freeShippingOver" step="any" type="number" value="${escapeHtml(settings.freeShippingOver)}"></label>
-<label>Currency code, such as thb or eur<input maxlength="3" name="currency" value="${escapeHtml(settings.currency)}"></label>
-<label class="check"><input name="payCard" type="checkbox"${settings.payCard ? ' checked' : ''}> Accept cards through your own Stripe account</label>
-<p>Cards also need a currency code, plus the STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET secrets in your Cloudflare account. Point the Stripe webhook at <code>/stripe/webhook</code>.</p>
+${text('name', t.siteName)}${text('tagline', t.tagline)}${text('language', t.siteLanguage)}
+<label>${t.officeLanguage}<select name="officeLanguage">${[['', t.officeLanguageSame], ['en', 'English'], ['th', 'ภาษาไทย']].map(([value, name]) => `<option value="${value}"${value === (settings.officeLanguage === 'auto' ? '' : (settings.officeLanguage ?? '')) ? ' selected' : ''}>${name}</option>`).join('')}</select></label>
+<label>${t.style}<select name="style">${siteStyles.map((style) => `<option${style === settings.style ? ' selected' : ''}>${style}</option>`).join('')}</select></label>
+${text('accent', t.accent, 'color').replace('value=""', 'value="#1f4d3a"')}${text('background', t.background, 'color').replace('value=""', 'value="#fbfaf6"')}${text('text', t.textColour, 'color').replace('value=""', 'value="#16201b"')}
+<label class="check"><input name="accounts" type="checkbox"${settings.accounts ? ' checked' : ''}> ${t.accounts}</label>
+<fieldset class="cms-block"><legend>${t.shop}</legend>
+<label class="check"><input name="cart" type="checkbox"${settings.cart ? ' checked' : ''}> ${t.cart}</label>
+<label class="check"><input name="cartMembersOnly" type="checkbox"${settings.cartMembersOnly ? ' checked' : ''}> ${t.cartMembersOnly}</label>
+<label class="check"><input name="payTransfer" type="checkbox"${settings.payTransfer ? ' checked' : ''}> ${t.payTransfer}</label>
+<label>${t.transferDetails}<textarea maxlength="1000" name="transferDetails" rows="3">${escapeHtml(settings.transferDetails)}</textarea></label>
+<label class="check"><input name="payCod" type="checkbox"${settings.payCod ? ' checked' : ''}> ${t.payCod}</label>
+<label>${t.shippingFee}<input min="0" name="shippingFee" step="any" type="number" value="${escapeHtml(settings.shippingFee)}"></label>
+<label>${t.freeShippingOver}<input min="0" name="freeShippingOver" step="any" type="number" value="${escapeHtml(settings.freeShippingOver)}"></label>
+<label>${t.currency}<input maxlength="3" name="currency" value="${escapeHtml(settings.currency)}"></label>
+<label class="check"><input name="payCard" type="checkbox"${settings.payCard ? ' checked' : ''}> ${t.payCard}</label>
+<p>${t.stripeHelp}</p>
 </fieldset>
-<label>Menu, one per line: Name | link<textarea name="nav" rows="5">${escapeHtml((settings.nav ?? []).map((item) => `${item.label} | ${item.href}`).join('\n'))}</textarea></label>
-${text('headerButtonLabel', 'Header button text')}${text('headerButtonHref', 'Header button link')}
-<label>Footer text<textarea name="footerText" rows="3">${escapeHtml(settings.footerText)}</textarea></label>
-${text('email', 'Email', 'email')}${text('phone', 'Phone')}<label>Address<textarea name="address" rows="2">${escapeHtml(settings.address)}</textarea></label>
-<fieldset class="cms-block"><legend>Email</legend>
-<p>Optional. Emails go out through your own Resend account: password reset emails and order confirmations for customers, and an email to you for each new order, form entry and record. First verify your domain in Resend and add its key as the RESEND_API_KEY secret in your Cloudflare Worker's settings. These two settings work at once, without publishing.</p>
-${text('emailFrom', 'Send emails from, an address on the domain you verified in Resend', 'email')}${text('notifyEmail', 'Your address for new orders, forms and records', 'email')}
+<label>${t.menu}<textarea name="nav" rows="5">${escapeHtml((settings.nav ?? []).map((item) => `${item.label} | ${item.href}`).join('\n'))}</textarea></label>
+${text('headerButtonLabel', t.headerButtonLabel)}${text('headerButtonHref', t.headerButtonHref)}
+<label>${t.footerText}<textarea name="footerText" rows="3">${escapeHtml(settings.footerText)}</textarea></label>
+${text('email', t.email, 'email')}${text('phone', t.phone)}<label>${t.address}<textarea name="address" rows="2">${escapeHtml(settings.address)}</textarea></label>
+<fieldset class="cms-block"><legend>${t.emailHeading}</legend>
+<p>${t.emailHelp}</p>
+${text('emailFrom', t.emailFrom, 'email')}${text('notifyEmail', t.notifyEmail, 'email')}
 </fieldset>
-<label>Extra CSS<textarea name="customCss" rows="6">${escapeHtml(settings.customCss)}</textarea></label>
-<button class="button" type="submit">Save settings</button></form>`,
+<label>${t.customCss}<textarea name="customCss" rows="6">${escapeHtml(settings.customCss)}</textarea></label>
+<button class="button" type="submit">${t.saveSettings}</button></form>`,
     notice,
   )
 }
@@ -454,7 +470,7 @@ async function saveSettings(request: Request, env: Env, url: URL, site: SiteRow,
   if (fee) draft.shippingFee = Number(fee)
   const freeOver = String(form.get('freeShippingOver') ?? '').trim()
   if (freeOver) draft.freeShippingOver = Number(freeOver)
-  for (const key of ['name', 'tagline', 'language', 'style', 'accent', 'background', 'text', 'headerButtonLabel', 'headerButtonHref', 'footerText', 'email', 'emailFrom', 'notifyEmail', 'phone', 'address', 'customCss', 'transferDetails', 'currency']) {
+  for (const key of ['name', 'tagline', 'language', 'officeLanguage', 'style', 'accent', 'background', 'text', 'headerButtonLabel', 'headerButtonHref', 'footerText', 'email', 'emailFrom', 'notifyEmail', 'phone', 'address', 'customCss', 'transferDetails', 'currency']) {
     const value = String(form.get(key) ?? '').trim()
     if (value) draft[key] = value
   }
@@ -464,7 +480,8 @@ async function saveSettings(request: Request, env: Env, url: URL, site: SiteRow,
     .filter(([label, href]) => label && href)
     .map(([label, href]) => ({ href, label }))
   const parsed = z.object(settingsShape).safeParse(draft)
-  if (!parsed.success || !draft.name) return settingsForm(site, code, { error: parsed.success ? 'Give your site a name.' : `Not saved. ${firstProblem(parsed.error)}` }, draft as Partial<Settings>)
+  const t = officeText(site)
+  if (!parsed.success || !draft.name) return settingsForm(site, code, { error: parsed.success ? t.needName : t.notSaved(firstProblem(parsed.error)) }, draft as Partial<Settings>)
   await env.DB.prepare("UPDATE sites SET settings = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?").bind(JSON.stringify(parsed.data), site.id).run()
   return see(url, `/owner/${code}/settings?saved=1`)
 }
@@ -473,8 +490,9 @@ async function saveSettings(request: Request, env: Env, url: URL, site: SiteRow,
 export async function handleOffice(request: Request, env: Env, url: URL, site: SiteRow, code: string, parts: string[]) {
   const post = request.method === 'POST'
   if (!post && request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405 })
-  if (Number(request.headers.get('content-length') || 0) > maxOfficeBytes) return new Response('That is too large.', { status: 413 })
-  const saved = url.searchParams.has('saved') ? { saved: 'Saved.' } : undefined
+  const t = officeText(site)
+  if (Number(request.headers.get('content-length') || 0) > maxOfficeBytes) return new Response(t.tooLarge, { status: 413 })
+  const saved = url.searchParams.has('saved') ? { saved: t.saved } : undefined
   const [area, id, action, extra] = parts.slice(2)
   const owner = `/owner/${code}`
 
@@ -500,7 +518,7 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
     const status = (await request.formData().catch((): null => null))?.get('status')
     if (typeof status === 'string' && orderStatuses.includes(status)) {
       const result = await setOrderStatus(env, site.id, Number(id), status)
-      if (result === 'no-stock') return ordersPage(env, site, code, 'Not changed. There is no longer enough stock to restore this order.')
+      if (result === 'no-stock') return ordersPage(env, site, code, t.noStock)
     }
     return see(url, `${owner}/orders`)
   }
@@ -536,7 +554,7 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
     if (!id) {
       if (!post) return mediaPage(env, site, code, saved)
       const file = (await request.formData()).get('file')
-      if (!(file instanceof File) || !file.size) return mediaPage(env, site, code, { error: 'Choose an image first.' })
+      if (!(file instanceof File) || !file.size) return mediaPage(env, site, code, { error: t.chooseImage })
       const stored = await saveImage(env, site.id, file)
       return stored.error ? mediaPage(env, site, code, { error: stored.error }) : see(url, `${owner}/media?saved=1`)
     }
@@ -572,11 +590,11 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
     const settings = JSON.parse(site.settings) as Settings
     if (post) {
       const repo = String((await request.formData().catch((): null => null))?.get('repo') ?? '').trim()
-      if (!repoPattern.test(repo)) return office(site, code, 'Updates', updatesBody(code, settings.githubRepo, await latestRelease()), { error: 'Enter it like this: your-name/my-website' })
+      if (!repoPattern.test(repo)) return office(site, code, t.nav.updates, updatesBody(code, settings.githubRepo, await latestRelease(), t), { error: t.badRepo })
       await env.DB.prepare("UPDATE sites SET settings = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?").bind(JSON.stringify({ ...settings, githubRepo: repo }), site.id).run()
       return see(url, `${owner}/updates?saved=1`)
     }
-    return office(site, code, 'Updates', updatesBody(code, settings.githubRepo, await latestRelease()), saved)
+    return office(site, code, t.nav.updates, updatesBody(code, settings.githubRepo, await latestRelease(), t), saved)
   }
 
   if (area === 'settings' && !id) return post ? saveSettings(request, env, url, site, code) : settingsForm(site, code, saved)

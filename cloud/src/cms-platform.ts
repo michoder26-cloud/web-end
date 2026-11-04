@@ -8,14 +8,14 @@ import { emailProblems, emailStatus, sendEmail } from './email'
 import { escapeHtml, notFound, see } from './http'
 import { checkMove, cleanPath, finishMove, importProducts, moveStatus, safeWebUrl, saveRedirects } from './moving'
 import type { MoveReport } from './moving'
+import { officeText } from './office-words'
+import type { OfficeWords } from './office-words'
 import { latestRelease } from './updates'
 import { listVersions, publishVersion, restoreVersion, unpublishedChanges } from './versions'
 import { version } from './version'
 import { eventNames, validWebhookUrl } from './webhooks'
 import { redirectionCsv, woocommerceCsv, wordpressPlan, wordpressXml } from './wordpress'
 import type { Env, Settings, SiteRow } from './types'
-
-const accessNames: Record<string, string> = { members: 'Logged-in customers', own: 'Logged-in customers, their own only', owner: 'Only you', public: 'Anyone', staff: 'Staff and you' }
 
 const fieldSpec = () =>
   spec('fields', 'Fields', 'list', {
@@ -37,15 +37,15 @@ const fieldSpec = () =>
     ],
   })
 
-const accessSelect = (name: string, label: string, value: string) => `<label>${label}<select name="${name}">${accessLevels.map((level) => `<option${level === value ? ' selected' : ''} value="${level}">${accessNames[level]}</option>`).join('')}</select></label>`
+const accessSelect = (name: string, label: string, value: string, t: OfficeWords) => `<label>${label}<select name="${name}">${accessLevels.map((level) => `<option${level === value ? ' selected' : ''} value="${level}">${t.access[level]}</option>`).join('')}</select></label>`
 
-const tableForm = (code: string, table?: DataTable) =>
+const tableForm = (code: string, t: OfficeWords, table?: DataTable) =>
   `<form action="/owner/${escapeHtml(code)}/data${table ? `/${escapeHtml(table.name)}` : ''}" class="contact-form cms-form" method="post"><input name="op" type="hidden" value="schema">
-${table ? `<input name="name" type="hidden" value="${escapeHtml(table.name)}">` : '<label>Table name, English letters, such as bookings<input maxlength="40" name="name" pattern="[a-z][a-z0-9_]*" required></label>'}
-<label>Label<input maxlength="80" name="label" required value="${escapeHtml(table?.label)}"></label>
-${accessSelect('readAccess', 'Who can read', table?.read_access ?? 'owner')}${accessSelect('writeAccess', 'Who can add', table?.write_access ?? 'owner')}
-${input('fields', fieldSpec(), table?.fields)}
-<button class="button" type="submit">${table ? 'Save table' : 'Create table'}</button></form>`
+${table ? `<input name="name" type="hidden" value="${escapeHtml(table.name)}">` : `<label>${t.tableName}<input maxlength="40" name="name" pattern="[a-z][a-z0-9_]*" required></label>`}
+<label>${t.tableLabel}<input maxlength="80" name="label" required value="${escapeHtml(table?.label)}"></label>
+${accessSelect('readAccess', t.whoCanRead, table?.read_access ?? 'owner', t)}${accessSelect('writeAccess', t.whoCanAdd, table?.write_access ?? 'owner', t)}
+${input('fields', fieldSpec(), table?.fields, t)}
+<button class="button" type="submit">${table ? t.saveTable : t.createTable}</button></form>`
 
 const readTable = (form: FormData) =>
   tableSchema.safeParse({
@@ -57,37 +57,40 @@ const readTable = (form: FormData) =>
   })
 
 async function tablesPage(env: Env, site: SiteRow, code: string, notice?: Notice) {
+  const t = officeText(site)
   const tables = await listTables(env, site.id)
-  const rows = tables.map((table) => `<li><a href="/owner/${escapeHtml(code)}/data/${escapeHtml(table.name)}">${escapeHtml(table.label)}</a> <small>${table.record_count} records · read: ${accessNames[table.read_access]} · add: ${accessNames[table.write_access]}</small></li>`).join('')
-  return office(site, code, 'Data', `<p>Your own database tables. Show them on a page with the Records and Add record sections, or use them from other systems through the API.</p><ul>${rows || '<li>No tables yet. Ask Claude for one, or create it here.</li>'}</ul><h2>Create a table</h2>${tableForm(code)}`, notice)
+  const rows = tables.map((table) => `<li><a href="/owner/${escapeHtml(code)}/data/${escapeHtml(table.name)}">${escapeHtml(table.label)}</a> <small>${t.tableSummary(table.record_count, t.access[table.read_access], t.access[table.write_access])}</small></li>`).join('')
+  return office(site, code, t.nav.data, `<p>${t.dataIntro}</p><ul>${rows || `<li>${t.noTables}</li>`}</ul><h2>${t.createATable}</h2>${tableForm(code, t)}`, notice)
 }
 
-const recordFields = (field: DataField, value: unknown) => {
-  if (field.type === 'boolean') return input(field.name, spec(field.name, field.label, 'bool'), value)
-  if (field.type === 'textarea') return input(field.name, spec(field.name, field.label, 'long'), value)
-  if (field.type === 'select') return input(field.name, spec(field.name, field.label, 'select', { options: ['', ...(field.options ?? [])] }), value)
-  return input(field.name, spec(field.name, field.label), value)
+// The owner named these fields, so their labels and choices are shown as they are.
+const recordFields = (field: DataField, value: unknown, t: OfficeWords) => {
+  if (field.type === 'boolean') return input(field.name, spec(field.name, field.label, 'bool'), value, t, false)
+  if (field.type === 'textarea') return input(field.name, spec(field.name, field.label, 'long'), value, t, false)
+  if (field.type === 'select') return input(field.name, spec(field.name, field.label, 'select', { options: ['', ...(field.options ?? [])] }), value, t, false)
+  return input(field.name, spec(field.name, field.label), value, t, false)
 }
 
 async function tablePage(env: Env, site: SiteRow, code: string, table: DataTable, notice?: Notice) {
+  const t = officeText(site)
   const base = `/owner/${escapeHtml(code)}/data/${escapeHtml(table.name)}`
   const list = await listRecords(env, table, ownerActor, { limit: 100, newestFirst: true })
   const rows = (list.rows ?? [])
     .map((row) => {
       const data = JSON.parse(row.data) as Record<string, unknown>
       const summary = table.fields.slice(0, 3).map((field) => escapeHtml(data[field.name])).filter(Boolean).join(' · ')
-      return `<details class="card account__record"><summary>#${row.id} ${summary}</summary><form action="${base}/${row.id}" class="contact-form" method="post">${table.fields.map((field) => recordFields(field, data[field.name])).join('')}<button class="button button--small" type="submit">Save</button></form><form action="${base}/${row.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> Yes, delete this record</label><button class="button button--small" type="submit">Delete</button></form></details>`
+      return `<details class="card account__record"><summary>#${row.id} ${summary}</summary><form action="${base}/${row.id}" class="contact-form" method="post">${table.fields.map((field) => recordFields(field, data[field.name], t)).join('')}<button class="button button--small" type="submit">${t.save}</button></form><form action="${base}/${row.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmDeleteRecord}</label><button class="button button--small" type="submit">${t.delete}</button></form></details>`
     })
     .join('')
   return office(
     site,
     code,
-    `Data: ${table.label}`,
-    `<p><a href="${base}/export.csv">Download as a spreadsheet file (CSV)</a>. Other systems read it at <code>/api/v1/data/${escapeHtml(table.name)}</code>.</p>
-<h2>Add a record</h2><form action="${base}" class="contact-form" method="post"><input name="op" type="hidden" value="add">${table.fields.map((field) => recordFields(field, field.default)).join('')}<button class="button button--small" type="submit">Add</button></form>
-<h2>Records (${table.record_count})</h2>${rows || '<p>None yet.</p>'}
-<h2>Fields and access</h2>${tableForm(code, table)}
-<h2>Delete this table</h2><form action="${base}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> Yes, delete this table and its ${table.record_count} records</label><button class="button button--small" type="submit">Delete table</button></form>`,
+    t.dataTitle(table.label),
+    `<p>${t.downloadCsv(`${base}/export.csv`, `/api/v1/data/${escapeHtml(table.name)}`)}</p>
+<h2>${t.addRecord}</h2><form action="${base}" class="contact-form" method="post"><input name="op" type="hidden" value="add">${table.fields.map((field) => recordFields(field, field.default, t)).join('')}<button class="button button--small" type="submit">${t.add}</button></form>
+<h2>${t.records(table.record_count)}</h2>${rows || `<p>${t.noneYet}</p>`}
+<h2>${t.fieldsAndAccess}</h2>${tableForm(code, t, table)}
+<h2>${t.deleteThisTable}</h2><form action="${base}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmDeleteTable(table.record_count)}</label><button class="button button--small" type="submit">${t.deleteTable}</button></form>`,
     notice,
   )
 }
@@ -104,7 +107,7 @@ async function handleData(request: Request, env: Env, url: URL, site: SiteRow, c
   if (!name) {
     if (!post) return tablesPage(env, site, code, saved)
     const parsed = readTable(await request.formData())
-    if (!parsed.success) return tablesPage(env, site, code, { error: `Not saved. ${firstProblem(parsed.error)}` })
+    if (!parsed.success) return tablesPage(env, site, code, { error: officeText(site).notSaved(firstProblem(parsed.error)) })
     const problem = await saveTable(env, site.id, parsed.data)
     return problem ? tablesPage(env, site, code, { error: problem }) : see(url, `${owner}/${parsed.data.name}?saved=1`)
   }
@@ -121,7 +124,7 @@ async function handleData(request: Request, env: Env, url: URL, site: SiteRow, c
     const form = await request.formData()
     if (form.get('op') === 'schema') {
       const parsed = readTable(form)
-      if (!parsed.success) return tablePage(env, site, code, table, { error: `Not saved. ${firstProblem(parsed.error)}` })
+      if (!parsed.success) return tablePage(env, site, code, table, { error: officeText(site).notSaved(firstProblem(parsed.error)) })
       const problem = await saveTable(env, site.id, { ...parsed.data, name: table.name })
       return problem ? tablePage(env, site, code, table, { error: problem }) : see(url, `${path}?saved=1`)
     }
@@ -141,30 +144,31 @@ async function handleData(request: Request, env: Env, url: URL, site: SiteRow, c
   return changed.row ? see(url, `${path}?saved=1`) : tablePage(env, site, code, table, { error: changed.error })
 }
 
-const checkCard = (report: MoveReport) => {
+const checkCard = (report: MoveReport, t: OfficeWords) => {
   const group = (title: string, lines: string[]) => (lines.length ? `<h4>${escapeHtml(title)} (${lines.length})</h4><ul>${lines.map((line) => `<li style="overflow-wrap:anywhere">${escapeHtml(line)}</li>`).join('')}</ul>` : '')
-  const facts = [...(report.titleKept ? [] : ['The page title changed.']), ...(report.descriptionKept ? [] : ['The search description changed.']), ...(report.oldPageWasCut ? ['The old page was too long to read in full.'] : [])]
-  return `<article class="card account__record"><h3>${report.problems ? `${report.problems} differences` : 'No differences found'} · /${escapeHtml(report.newPage)}</h3><p style="overflow-wrap:anywhere"><small>Compared with ${escapeHtml(report.oldUrl)}. ${report.linesOnOldPage} lines of text and ${report.imagesFoundOnOldPage} photos on the old page.</small></p>${facts.map((fact) => `<p>${escapeHtml(fact)}</p>`).join('')}${group('Text not found', report.textMissing)}${group('Link or button text not found', report.linkTextMissing)}${group('Photos not copied', report.imagesNotCopied)}${group('Photos copied but not used here', report.imagesCopiedNotUsed)}${group('Photos still loading from the old site', report.imagesStillOnOldHost)}</article>`
+  const facts = [...(report.titleKept ? [] : [t.titleChanged]), ...(report.descriptionKept ? [] : [t.descriptionChanged]), ...(report.oldPageWasCut ? [t.oldPageCut] : [])]
+  return `<article class="card account__record"><h3>${report.problems ? t.differences(report.problems) : t.noDifferences} · /${escapeHtml(report.newPage)}</h3><p style="overflow-wrap:anywhere"><small>${t.comparedWith(escapeHtml(report.oldUrl), report.linesOnOldPage, report.imagesFoundOnOldPage)}</small></p>${facts.map((fact) => `<p>${escapeHtml(fact)}</p>`).join('')}${group(t.textMissing, report.textMissing)}${group(t.linkTextMissing, report.linkTextMissing)}${group(t.imagesNotCopied, report.imagesNotCopied)}${group(t.imagesNotUsed, report.imagesCopiedNotUsed)}${group(t.imagesOnOldHost, report.imagesStillOnOldHost)}</article>`
 }
 
 async function movePage(env: Env, site: SiteRow, code: string, notice?: Notice) {
+  const t = officeText(site)
   const base = `/owner/${escapeHtml(code)}/move`
   const [status, { results: pages }] = await Promise.all([moveStatus(env, site), env.DB.prepare('SELECT slug FROM pages WHERE site_id = ? ORDER BY slug').bind(site.id).all<{ slug: string }>()])
   const { results } = await env.DB.prepare('SELECT from_path, to_path FROM redirects WHERE site_id = ? ORDER BY from_path LIMIT 2000').bind(site.id).all<{ from_path: string; to_path: string }>()
   return office(
     site,
     code,
-    'Move your site here',
-    `<p>Moving from Wix or another host? Start a chat with Claude and say "Move my website here". It rebuilds your pages from your own content. Keep your old site running until the new one is checked.</p>
-<h2>Check the move yourself</h2><p>This compares a page here with your old page and lists what didn't come across. It reads what's on the two pages, so it doesn't depend on anything Claude said. It can't judge how a page looks, or whether a difference was a good choice.</p>
-<form action="${base}/check" class="contact-form" method="post"><label>Old page address<input maxlength="500" name="url" placeholder="https://" required type="url"></label><label>Page here<select name="page">${pages.map((page) => `<option>${escapeHtml(page.slug)}</option>`).join('')}</select></label><button class="button button--small" type="submit">Compare</button></form>
-${status.notRebuilt.length ? `<article class="card account__record"><h3>Old pages not rebuilt yet (${status.notRebuilt.length})</h3><ul>${status.notRebuilt.map((address) => `<li style="overflow-wrap:anywhere">${escapeHtml(address)}</li>`).join('')}</ul></article>` : ''}
-${[...status.pages].sort((a, b) => b.problems - a.problems).map(checkCard).join('')}
-${status.pages.length || status.notRebuilt.length ? `<form action="${base}/finish" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> The move is finished, so stop comparing with the old site</label><button class="button button--small" type="submit">Finish the move</button></form>` : ''}
-<h2>Products from Wix</h2><p>In Wix, open Store Products, then More Actions, Import, Export Products. Upload that file here. Products already here by name are skipped, so it's safe to do this twice. Photos stay on the old site until Claude copies them.</p>
-<form action="${base}/products" class="contact-form" enctype="multipart/form-data" method="post"><label>Product file (CSV)<input accept=".csv,text/csv" name="file" required type="file"></label><button class="button button--small" type="submit">Import products</button></form>
-<h2>Old links</h2><p>Each line sends an old address to its new page, so links and search results keep working once your domain points here. Example: /product-page/blue-mug | /product/12</p>
-<form action="${base}/redirects" class="contact-form" method="post"><label>Old address | new address, one per line<textarea name="redirects" rows="8">${escapeHtml(results.map((row) => `${row.from_path} | ${row.to_path}`).join('\n'))}</textarea></label><button class="button button--small" type="submit">Save old links</button></form>`,
+    t.moveTitle,
+    `<p>${t.moveIntro}</p>
+<h2>${t.checkHeading}</h2><p>${t.checkHelp}</p>
+<form action="${base}/check" class="contact-form" method="post"><label>${t.oldPageAddress}<input maxlength="500" name="url" placeholder="https://" required type="url"></label><label>${t.pageHere}<select name="page">${pages.map((page) => `<option>${escapeHtml(page.slug)}</option>`).join('')}</select></label><button class="button button--small" type="submit">${t.compare}</button></form>
+${status.notRebuilt.length ? `<article class="card account__record"><h3>${t.notRebuilt(status.notRebuilt.length)}</h3><ul>${status.notRebuilt.map((address) => `<li style="overflow-wrap:anywhere">${escapeHtml(address)}</li>`).join('')}</ul></article>` : ''}
+${[...status.pages].sort((a, b) => b.problems - a.problems).map((report) => checkCard(report, t)).join('')}
+${status.pages.length || status.notRebuilt.length ? `<form action="${base}/finish" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmFinishMove}</label><button class="button button--small" type="submit">${t.finishMove}</button></form>` : ''}
+<h2>${t.wixProducts}</h2><p>${t.wixProductsHelp}</p>
+<form action="${base}/products" class="contact-form" enctype="multipart/form-data" method="post"><label>${t.productFile}<input accept=".csv,text/csv" name="file" required type="file"></label><button class="button button--small" type="submit">${t.importProducts}</button></form>
+<h2>${t.oldLinks}</h2><p>${t.oldLinksHelp}</p>
+<form action="${base}/redirects" class="contact-form" method="post"><label>${t.oldLinksLabel}<textarea name="redirects" rows="8">${escapeHtml(results.map((row) => `${row.from_path} | ${row.to_path}`).join('\n'))}</textarea></label><button class="button button--small" type="submit">${t.saveOldLinks}</button></form>`,
     notice,
   )
 }
@@ -174,30 +178,31 @@ async function handleMove(request: Request, env: Env, url: URL, site: SiteRow, c
   if (request.method !== 'POST') return notFound()
   const form = await request.formData().catch((): null => null)
   if (!form) return see(url, `/owner/${code}/move`)
+  const t = officeText(site)
   if (kind === 'finish') {
     if (form.get('confirm') === 'on') await finishMove(env, site.id)
     return see(url, `/owner/${code}/move?saved=1`)
   }
   if (kind === 'check') {
     const target = safeWebUrl(env, String(form.get('url') ?? '').trim())
-    if (!target) return movePage(env, site, code, { error: 'Use a public https address.' })
+    if (!target) return movePage(env, site, code, { error: t.usePublicHttps })
     const result = await checkMove(env, site, target, String(form.get('page') ?? ''))
     return result.error ? movePage(env, site, code, { error: result.error }) : see(url, `/owner/${code}/move?saved=1`)
   }
   if (kind === 'products') {
     const file = form.get('file')
-    if (!(file instanceof File) || !file.size) return movePage(env, site, code, { error: 'Choose the file first.' })
-    if (file.size > 2_000_000) return movePage(env, site, code, { error: 'That file is larger than 2 MB. Please split it.' })
+    if (!(file instanceof File) || !file.size) return movePage(env, site, code, { error: t.chooseFile })
+    if (file.size > 2_000_000) return movePage(env, site, code, { error: t.fileTooLarge })
     const result = await importProducts(env, site, await file.text())
     if (result.error) return movePage(env, site, code, { error: result.error })
-    const notes = [`Imported ${result.imported} products.`, result.skippedAlreadyThere ? `${result.skippedAlreadyThere} were already here.` : '', result.skippedNoRoom ? `${result.skippedNoRoom} didn't fit, because a site can have up to 500 products.` : '', result.notImportedExtraImages ? `${result.notImportedExtraImages} extra photos weren't imported, because each product has one photo here.` : '', result.imagesStillOnOldHost ? 'Photos still load from the old site, so ask Claude to copy them before you close it.' : '']
+    const notes = [t.imported(result.imported ?? 0), result.skippedAlreadyThere ? t.alreadyThere(result.skippedAlreadyThere) : '', result.skippedNoRoom ? t.noRoom(result.skippedNoRoom) : '', result.notImportedExtraImages ? t.extraImages(result.notImportedExtraImages) : '', result.imagesStillOnOldHost ? t.photosOnOldHost : '']
     return movePage(env, site, code, { saved: notes.filter(Boolean).join(' ') })
   }
   if (kind === 'redirects') {
     const pairs = String(form.get('redirects') ?? '').split('\n').map((line) => line.split('|').map((part) => part.trim())).filter(([from]) => from).map(([from, to]) => ({ from, to: to ?? '' }))
     const result = await saveRedirects(env, site.id, pairs)
     if (result.error) return movePage(env, site, code, { error: result.error })
-    if (result.problems?.length) return movePage(env, site, code, { error: `Saved ${result.saved}. These couldn't be used, because the new address must start with / and can't be the same as the old one: ${result.problems.slice(0, 5).join(', ')}` })
+    if (result.problems?.length) return movePage(env, site, code, { error: t.redirectProblems(result.saved ?? 0, result.problems.slice(0, 5).join(', ')) })
     await env.DB.prepare(`DELETE FROM redirects WHERE site_id = ?${pairs.length ? ` AND from_path NOT IN (${pairs.map(() => '?').join(',')})` : ''}`).bind(site.id, ...pairs.map((pair) => cleanPath(pair.from) ?? '')).run()
     return see(url, `/owner/${code}/move?saved=1`)
   }
@@ -236,6 +241,7 @@ export const listRecords = webMethod(Permissions.Anyone, async () => {
 })`
 
 async function connectPage(env: Env, url: URL, site: SiteRow, code: string, notice?: Notice, newKey?: string) {
+  const t = officeText(site)
   const base = `/owner/${escapeHtml(code)}/connect`
   const settings = JSON.parse(site.settings) as Settings
   const [{ results: keys }, { results: hooks }] = await Promise.all([
@@ -245,19 +251,19 @@ async function connectPage(env: Env, url: URL, site: SiteRow, code: string, noti
   return office(
     site,
     code,
-    'Connect',
-    `${newKey ? `<p role="status">Copy this key now, because it won't be shown again. Keep it in server code only, such as the Wix Secrets Manager. Never put it in a web page or a chat.<br><code style="overflow-wrap:anywhere">${escapeHtml(newKey)}</code></p>` : ''}
-<h2>Your API</h2><p>Other systems, such as a Wix site, use your data, logins and orders here:</p><p><code style="overflow-wrap:anywhere">${escapeHtml(url.origin)}/api/v1</code></p><p>Full description for developers and AI tools: <a href="/api/v1/openapi.json" target="_blank" rel="noopener">openapi.json</a></p>
-<h2>Secret keys</h2><p>A key has the same power over your data as you do. Each system should have its own, so you can remove one without affecting the rest.</p>
-${keys.map((key) => `<article class="card account__record"><h3>${escapeHtml(key.name)} · ${key.scope === 'read' ? 'read only' : 'full access'}</h3><p><small>Created ${escapeHtml(key.created_at.slice(0, 10))} · ${key.last_used_at ? `last used ${escapeHtml(key.last_used_at.slice(0, 10))}` : 'never used'}</small></p><form action="${base}/key/${key.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> Yes, remove this key</label><button class="button button--small" type="submit">Remove key</button></form></article>`).join('')}
-<form action="${base}/key" class="contact-form" method="post"><label>What is it for, such as My Wix site<input maxlength="80" name="name" required></label><label>Access<select name="scope"><option value="full">Full access</option><option value="read">Read only</option></select></label><button class="button button--small" type="submit">Create a key</button></form>
-<h2>Websites that may call from a browser</h2><p>Only needed when a page calls the API directly, for public data or logged-in customers. Server code doesn't need this.</p>
-<form action="${base}/origins" class="contact-form" method="post"><label>One per line, such as https://www.example.com<textarea name="origins" rows="3">${escapeHtml((settings.allowedOrigins ?? []).join('\n'))}</textarea></label><button class="button button--small" type="submit">Save</button></form>
-<h2>Connect with Wix</h2><p>Keep your Wix pages and use this as the backend. This example hasn't been tested inside a real Wix site yet, so try it on a copy first. Claude can write the rest for you: ask it to read the connect_wix guide.</p><pre style="overflow:auto"><code>${escapeHtml(wixExample(url.origin))}</code></pre>
-<h2>Get told about new orders for free</h2><p>Paste a Discord, Slack or Telegram address below, and new orders and bookings arrive in that chat. Treat that address like a password. This hasn't been tried with real chat accounts yet, so check it with a test order.</p>
-<h2>Webhooks</h2><p>Sends a signed message to another service when something happens. Each message is sent once with no retry.</p>
-${hooks.map((hook) => `<article class="card account__record"><h3 style="overflow-wrap:anywhere">${escapeHtml(hook.url)}</h3><p>${escapeHtml((JSON.parse(hook.events) as string[]).join(', '))}<br><small>${hook.last_at ? `Last message ${escapeHtml(hook.last_at.slice(0, 16).replace('T', ' '))} UTC: ${hook.last_status ? `answered ${hook.last_status}` : 'could not be reached'}` : 'Nothing sent yet'}</small></p><details><summary>Signing secret</summary><code style="overflow-wrap:anywhere">${escapeHtml(hook.secret)}</code></details><form action="${base}/webhook/${hook.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> Yes, remove this webhook</label><button class="button button--small" type="submit">Remove</button></form></article>`).join('')}
-<form action="${base}/webhook" class="contact-form" method="post"><label>Address<input maxlength="500" name="url" required type="url"></label><fieldset class="cms-block"><legend>Send when</legend>${eventNames.map((event) => `<label class="check"><input name="events" type="checkbox" value="${event}"> ${event}</label>`).join('')}</fieldset><button class="button button--small" type="submit">Add webhook</button></form>`,
+    t.nav.connect,
+    `${newKey ? `<p role="status">${t.newKeyHelp}<br><code style="overflow-wrap:anywhere">${escapeHtml(newKey)}</code></p>` : ''}
+<h2>${t.yourApi}</h2><p>${t.apiHelp}</p><p><code style="overflow-wrap:anywhere">${escapeHtml(url.origin)}/api/v1</code></p><p>${t.apiDocs} <a href="/api/v1/openapi.json" target="_blank" rel="noopener">openapi.json</a></p>
+<h2>${t.secretKeys}</h2><p>${t.keysHelp}</p>
+${keys.map((key) => `<article class="card account__record"><h3>${escapeHtml(key.name)} · ${key.scope === 'read' ? t.readOnly : t.fullAccess}</h3><p><small>${t.created(escapeHtml(key.created_at.slice(0, 10)))} · ${key.last_used_at ? t.lastUsed(escapeHtml(key.last_used_at.slice(0, 10))) : t.neverUsed}</small></p><form action="${base}/key/${key.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmRemoveKey}</label><button class="button button--small" type="submit">${t.removeKey}</button></form></article>`).join('')}
+<form action="${base}/key" class="contact-form" method="post"><label>${t.keyName}<input maxlength="80" name="name" required></label><label>${t.keyAccess}<select name="scope"><option value="full">${t.fullAccessOption}</option><option value="read">${t.readOnlyOption}</option></select></label><button class="button button--small" type="submit">${t.createKey}</button></form>
+<h2>${t.browserSites}</h2><p>${t.browserSitesHelp}</p>
+<form action="${base}/origins" class="contact-form" method="post"><label>${t.originsLabel}<textarea name="origins" rows="3">${escapeHtml((settings.allowedOrigins ?? []).join('\n'))}</textarea></label><button class="button button--small" type="submit">${t.save}</button></form>
+<h2>${t.connectWix}</h2><p>${t.connectWixHelp}</p><pre style="overflow:auto"><code>${escapeHtml(wixExample(url.origin))}</code></pre>
+<h2>${t.chatHeading}</h2><p>${t.chatHelp}</p>
+<h2>${t.webhooks}</h2><p>${t.webhooksHelp}</p>
+${hooks.map((hook) => `<article class="card account__record"><h3 style="overflow-wrap:anywhere">${escapeHtml(hook.url)}</h3><p>${escapeHtml((JSON.parse(hook.events) as string[]).join(', '))}<br><small>${hook.last_at ? t.lastMessage(escapeHtml(hook.last_at.slice(0, 16).replace('T', ' ')), hook.last_status ? t.answered(hook.last_status) : t.unreachable) : t.nothingSent}</small></p><details><summary>${t.signingSecret}</summary><code style="overflow-wrap:anywhere">${escapeHtml(hook.secret)}</code></details><form action="${base}/webhook/${hook.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmRemoveWebhook}</label><button class="button button--small" type="submit">${t.remove}</button></form></article>`).join('')}
+<form action="${base}/webhook" class="contact-form" method="post"><label>${t.webhookAddress}<input maxlength="500" name="url" required type="url"></label><fieldset class="cms-block"><legend>${t.sendWhen}</legend>${eventNames.map((event) => `<label class="check"><input name="events" type="checkbox" value="${event}"> ${event}</label>`).join('')}</fieldset><button class="button button--small" type="submit">${t.addWebhook}</button></form>`,
     notice,
   )
 }
@@ -268,17 +274,18 @@ async function handleConnect(request: Request, env: Env, url: URL, site: SiteRow
   if (request.method !== 'POST') return notFound()
   const form = await request.formData().catch((): null => null)
   if (!form) return see(url, owner)
+  const t = officeText(site)
   if (kind === 'origins' && !id) {
     const origins = String(form.get('origins') ?? '').split('\n').map((line) => line.trim().replace(/\/$/, '')).filter(Boolean)
-    if (origins.length > 20 || origins.some((origin) => !/^(https:\/\/(\*\.)?[a-z0-9.-]+(:\d+)?|http:\/\/localhost(:\d+)?)$/.test(origin))) return connectPage(env, url, site, code, { error: 'Enter addresses like https://www.example.com, one per line.' })
+    if (origins.length > 20 || origins.some((origin) => !/^(https:\/\/(\*\.)?[a-z0-9.-]+(:\d+)?|http:\/\/localhost(:\d+)?)$/.test(origin))) return connectPage(env, url, site, code, { error: t.badOrigins })
     await env.DB.prepare("UPDATE sites SET settings = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?").bind(JSON.stringify({ ...(JSON.parse(site.settings) as Settings), allowedOrigins: origins }), site.id).run()
     return see(url, `${owner}?saved=1`)
   }
   if (kind === 'key' && !id) {
     const name = String(form.get('name') ?? '').trim().slice(0, 80)
-    if (!name) return connectPage(env, url, site, code, { error: 'Give the key a name.' })
+    if (!name) return connectPage(env, url, site, code, { error: t.needKeyName })
     const count = await env.DB.prepare('SELECT COUNT(*) AS total FROM api_keys WHERE site_id = ?').bind(site.id).first<{ total: number }>()
-    if ((count?.total ?? 0) >= 20) return connectPage(env, url, site, code, { error: 'A site can have up to 20 keys. Remove one first.' })
+    if ((count?.total ?? 0) >= 20) return connectPage(env, url, site, code, { error: t.tooManyKeys })
     const key = newApiKey()
     await env.DB.prepare('INSERT INTO api_keys (site_id, name, key_hash, scope) VALUES (?, ?, ?, ?)').bind(site.id, name, await sha256(key), form.get('scope') === 'read' ? 'read' : 'full').run()
     return connectPage(env, url, site, code, undefined, key)
@@ -286,10 +293,10 @@ async function handleConnect(request: Request, env: Env, url: URL, site: SiteRow
   if (kind === 'webhook' && !id) {
     const target = String(form.get('url') ?? '').trim()
     const events = form.getAll('events').map(String).filter((event) => (eventNames as readonly string[]).includes(event))
-    if (target.length > 500 || !validWebhookUrl(env, target)) return connectPage(env, url, site, code, { error: 'Use an https address.' })
-    if (!events.length) return connectPage(env, url, site, code, { error: 'Choose at least one event.' })
+    if (target.length > 500 || !validWebhookUrl(env, target)) return connectPage(env, url, site, code, { error: t.useHttps })
+    if (!events.length) return connectPage(env, url, site, code, { error: t.chooseEvent })
     const count = await env.DB.prepare('SELECT COUNT(*) AS total FROM webhooks WHERE site_id = ?').bind(site.id).first<{ total: number }>()
-    if ((count?.total ?? 0) >= 10) return connectPage(env, url, site, code, { error: 'A site can have up to 10 webhooks.' })
+    if ((count?.total ?? 0) >= 10) return connectPage(env, url, site, code, { error: t.tooManyWebhooks })
     await env.DB.prepare('INSERT INTO webhooks (site_id, url, events, secret) VALUES (?, ?, ?, ?)').bind(site.id, target, JSON.stringify(events), newToken()).run()
     return see(url, `${owner}?saved=1`)
   }
@@ -301,24 +308,25 @@ async function handleConnect(request: Request, env: Env, url: URL, site: SiteRow
 }
 
 async function publishPage(env: Env, site: SiteRow, code: string, notice?: Notice) {
+  const t = officeText(site)
   const base = `/owner/${escapeHtml(code)}`
   const [versions, waiting] = await Promise.all([listVersions(env, site.id), unpublishedChanges(env, site)])
-  const changes = waiting ? [...waiting.pages.map((slug) => `Page: ${slug}`), ...(waiting.settings ? ['Settings and design'] : [])] : []
+  const changes = waiting ? [...waiting.pages.map((slug) => t.pageChange(slug)), ...(waiting.settings ? [t.settingsChange] : [])] : []
   const state = !site.live_version
-    ? '<p>Nothing is published yet, so changes appear on your site at once. After your first publish, changes stay private until you publish them.</p>'
+    ? `<p>${t.neverPublished}</p>`
     : changes.length
-      ? `<p role="status">Waiting to be published:</p><ul>${changes.map((change) => `<li>${escapeHtml(change)}</li>`).join('')}</ul>`
-      : '<p>Your site matches the published version.</p>'
+      ? `<p role="status">${t.waiting}</p><ul>${changes.map((change) => `<li>${escapeHtml(change)}</li>`).join('')}</ul>`
+      : `<p>${t.upToDate}</p>`
   const rows = versions
-    .map((item) => `<article class="card account__record"><h3>Version ${item.id}${item.id === site.live_version ? ' · live' : ''}</h3><p>${escapeHtml(item.note)}<br><small>${escapeHtml(item.created_at.slice(0, 16).replace('T', ' '))} UTC</small></p>${item.id === site.live_version ? '' : `<form action="${base}/publish/${item.id}/restore" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> Yes, go back to this version. Unpublished changes will be lost.</label><button class="button button--small" type="submit">Go back</button></form>`}</article>`)
+    .map((item) => `<article class="card account__record"><h3>${t.version(item.id)}${item.id === site.live_version ? t.liveTag : ''}</h3><p>${escapeHtml(item.note)}<br><small>${escapeHtml(item.created_at.slice(0, 16).replace('T', ' '))} UTC</small></p>${item.id === site.live_version ? '' : `<form action="${base}/publish/${item.id}/restore" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmRestore}</label><button class="button button--small" type="submit">${t.goBack}</button></form>`}</article>`)
     .join('')
   return office(
     site,
     code,
-    'Publish',
-    `${state}<p><a class="button button--small button--ghost" href="${base}/preview" target="_blank" rel="noopener">Open the private preview</a></p>
-<form action="${base}/publish" class="contact-form" method="post"><label>What changed, optional<input maxlength="200" name="note"></label><button class="button" type="submit">Publish to my website</button></form>
-<h2>Versions</h2><p>The last 20 are kept. Going back changes pages and settings only. Orders, customers, products and records stay as they are.</p>${rows || '<p>None yet.</p>'}`,
+    t.nav.publish,
+    `${state}<p><a class="button button--small button--ghost" href="${base}/preview" target="_blank" rel="noopener">${t.openPreview}</a></p>
+<form action="${base}/publish" class="contact-form" method="post"><label>${t.whatChanged}<input maxlength="200" name="note"></label><button class="button" type="submit">${t.publishButton}</button></form>
+<h2>${t.versions}</h2><p>${t.versionsHelp}</p>${rows || `<p>${t.noneYet}</p>`}`,
     notice,
   )
 }
@@ -368,22 +376,23 @@ export async function systemStatus(env: Env, site: SiteRow, origin: string) {
 async function systemPage(env: Env, url: URL, site: SiteRow, code: string, notice?: Notice) {
   const status = await systemStatus(env, site, url.origin)
   const settings = JSON.parse(site.settings) as Settings
+  const t = officeText(site)
   const base = `/owner/${escapeHtml(code)}`
-  const row = (label: string, value: unknown, href?: string) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}${href ? ` <a href="${base}${href}">Open</a>` : ''}</dd></div>`
-  const on = (value: boolean) => (value ? 'On' : 'Off')
+  const row = (label: string, value: unknown, href?: string) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}${href ? ` <a href="${base}${href}">${t.open}</a>` : ''}</dd></div>`
+  const on = (value: boolean) => (value ? t.on : t.off)
   const waiting = status.publishing.waiting
   return office(
     site,
     code,
-    'System',
-    `<p>Everything about your system in one place.</p>
-<article class="card account__record"><h2>Hosting</h2><dl>${row('Address', status.address)}${row('Where it runs', status.hosting)}${row('Version', `${status.version}${status.latestVersion === 'unknown' || status.latestVersion === status.version ? '' : `, ${status.latestVersion} is available`}`, '/updates')}</dl></article>
-<article class="card account__record"><h2>Publishing</h2><dl>${row('Live version', status.publishing.liveVersion ?? 'Not published yet, so changes show at once', '/publish')}${row('Waiting to publish', waiting ? waiting.pages.length + (waiting.settings ? 1 : 0) : 0)}</dl></article>
-<article class="card account__record"><h2>Database</h2><dl>${row('Pages', status.database.pages, '/pages')}${row('Tables', status.database.tables, '/data')}${row('Records', status.database.records)}${row('Customers', status.database.customers, '/customers')}${row('Orders', status.database.orders, '/orders')}${row('Images', `${(status.database.imageBytes / 1_000_000).toFixed(1)} MB of 200 MB`, '/media')}</dl></article>
-<article class="card account__record"><h2>Login and payments</h2><dl>${row('Customer accounts', on(status.login.customerAccounts), '/settings')}${row('Cart', on(status.payments.cart))}${row('Bank transfer', on(status.payments.bankTransfer))}${row('Pay on delivery', on(status.payments.payOnDelivery))}${row('Cards', on(status.payments.card))}${row('Stripe secrets in Cloudflare', status.payments.cardSecretsSet ? 'Set' : 'Not set')}</dl></article>
-<article class="card account__record"><h2>Email</h2><dl>${row('Resend key in Cloudflare', status.email.resendKeySet ? 'Set' : 'Not set')}${row('Send from', status.email.senderAddress ?? 'Not set', '/settings')}${row('Your address for new orders, forms and records', status.email.ownerAddress ?? 'Not set', '/settings')}${row('Emails', status.email.sending ? 'On' : 'Off')}</dl>${emailProblems(env, settings).map((problem) => `<p role="alert">${escapeHtml(problem)}</p>`).join('')}${status.email.ownerNotices ? `<form action="${base}/system/test-email" method="post"><button class="button button--small" type="submit">Send me a test email</button></form>` : ''}</article>
-<article class="card account__record"><h2>Your data is yours</h2><p>Your code is in your GitHub, and your database is in your Cloudflare account. You can also download all your content and data in one file at any time.</p><p><a class="button button--small" href="${base}/export.json">Download everything</a> <a class="button button--small" href="${base}/wordpress">Move to WordPress</a></p></article>
-<article class="card account__record"><h2>Connections</h2><dl>${row('Secret keys', status.connections.apiKeys, '/connect')}${row('Webhooks', status.connections.webhooks)}${row('Websites allowed to call from a browser', status.connections.browserSites.join(', ') || 'None')}</dl></article>`,
+    t.nav.system,
+    `<p>${t.systemIntro}</p>
+<article class="card account__record"><h2>${t.hosting}</h2><dl>${row(t.siteAddress, status.address)}${row(t.whereItRuns, t.hostingText)}${row(t.versionLabel, `${status.version}${status.latestVersion === 'unknown' || status.latestVersion === status.version ? '' : t.isAvailable(status.latestVersion)}`, '/updates')}</dl></article>
+<article class="card account__record"><h2>${t.publishing}</h2><dl>${row(t.liveVersion, status.publishing.liveVersion ?? t.notPublishedYet, '/publish')}${row(t.waitingToPublish, waiting ? waiting.pages.length + (waiting.settings ? 1 : 0) : 0)}</dl></article>
+<article class="card account__record"><h2>${t.database}</h2><dl>${row(t.nav.pages, status.database.pages, '/pages')}${row(t.tables, status.database.tables, '/data')}${row(t.recordsLabel, status.database.records)}${row(t.nav.customers, status.database.customers, '/customers')}${row(t.nav.orders, status.database.orders, '/orders')}${row(t.nav.images, t.imageSpace((status.database.imageBytes / 1_000_000).toFixed(1)), '/media')}</dl></article>
+<article class="card account__record"><h2>${t.loginAndPayments}</h2><dl>${row(t.customerAccounts, on(status.login.customerAccounts), '/settings')}${row(t.cartLabel, on(status.payments.cart))}${row(t.bankTransfer, on(status.payments.bankTransfer))}${row(t.payOnDelivery, on(status.payments.payOnDelivery))}${row(t.cards, on(status.payments.card))}${row(t.stripeSecrets, status.payments.cardSecretsSet ? t.isSet : t.notSet)}</dl></article>
+<article class="card account__record"><h2>${t.emailHeading}</h2><dl>${row(t.resendKey, status.email.resendKeySet ? t.isSet : t.notSet)}${row(t.sendFrom, status.email.senderAddress ?? t.notSet, '/settings')}${row(t.notifyEmail, status.email.ownerAddress ?? t.notSet, '/settings')}${row(t.emails, status.email.sending ? t.on : t.off)}</dl>${emailProblems(env, settings).map((problem) => `<p role="alert">${escapeHtml(t.problem(problem))}</p>`).join('')}${status.email.ownerNotices ? `<form action="${base}/system/test-email" method="post"><button class="button button--small" type="submit">${t.sendTestEmail}</button></form>` : ''}</article>
+<article class="card account__record"><h2>${t.yourData}</h2><p>${t.yourDataHelp}</p><p><a class="button button--small" href="${base}/export.json">${t.downloadEverything}</a> <a class="button button--small" href="${base}/wordpress">${t.moveToWordpress}</a></p></article>
+<article class="card account__record"><h2>${t.connections}</h2><dl>${row(t.secretKeys, status.connections.apiKeys, '/connect')}${row(t.webhooks, status.connections.webhooks)}${row(t.browserSitesRow, status.connections.browserSites.join(', ') || t.none)}</dl></article>`,
     notice,
   )
 }
@@ -391,13 +400,14 @@ async function systemPage(env: Env, url: URL, site: SiteRow, code: string, notic
 /** Lets the owner see that their email setup works, and what Resend said if it doesn't. */
 async function testEmail(env: Env, url: URL, site: SiteRow, code: string) {
   const settings = JSON.parse(site.settings) as Settings
-  if (!settings.notifyEmail) return systemPage(env, url, site, code, { error: 'Add your own address in Settings first.' })
+  const t = officeText(site)
+  if (!settings.notifyEmail) return systemPage(env, url, site, code, { error: t.needNotifyEmail })
   const sent = await sendEmail(env, settings, settings.notifyEmail, {
-    heading: 'Your email works',
-    lines: [`This test came from ${url.origin}. New orders, form entries and records that visitors add will arrive at this address, and customers can get password reset emails and order confirmations.`],
-    subject: `Test email from ${settings.name}`,
+    heading: t.testEmailHeading,
+    lines: [t.testEmailText(url.origin)],
+    subject: t.testEmailSubject(settings.name),
   })
-  return systemPage(env, url, site, code, sent.ok ? { saved: `Sent to ${settings.notifyEmail}. If it doesn't arrive in a few minutes, check your spam folder and the Logs page in Resend.` } : { error: `Not sent. ${sent.problem ?? ''}` })
+  return systemPage(env, url, site, code, sent.ok ? { saved: t.testEmailSent(settings.notifyEmail) } : { error: t.notSent(t.problem(sent.problem ?? '')) })
 }
 
 const download = (body: string, name: string, type: string) =>
@@ -406,27 +416,27 @@ const download = (body: string, name: string, type: string) =>
 /** The steps and files for moving this site to WordPress. A Wix site moves here first, so this is also the way from Wix to WordPress. */
 async function wordpressPage(env: Env, url: URL, site: SiteRow, code: string) {
   const plan = await wordpressPlan(env, site, url.origin)
+  const t = officeText(site)
   const base = `/owner/${escapeHtml(code)}/wordpress`
   const file = (href: string, label: string, note: string) => `<p><a class="button button--small" href="${base}/${href}">${label}</a> ${note}</p>`
   return office(
     site,
     code,
-    'Move to WordPress',
-    `<p>Your site can move to WordPress whenever you like. If your site is on Wix, move it here first with <a href="/owner/${escapeHtml(code)}/move">Move here</a>, check it, then come back to this page.</p>
-<article class="card account__record"><h2>1. Download your files</h2>
-${file('site.xml', 'WordPress file', `${plan.pages.length} pages, their photos and your menu.`)}
-${plan.products.length ? file('products.csv', 'WooCommerce products', `${plan.products.length} products with prices, sale prices, stock, categories, photos and options.`) : ''}
-${plan.data.redirects.length ? file('redirects.csv', 'Old links', `${plan.data.redirects.length} old addresses, so links to your old site keep working.`) : ''}</article>
-<article class="card account__record"><h2>2. Bring them into WordPress</h2><ol>
-<li>Set up WordPress with your host.</li>
-<li>In WordPress, open <b>Tools</b>, <b>Import</b>, <b>WordPress</b>. Install the importer if it asks, then upload the WordPress file. Tick <b>Download and import file attachments</b> so your photos are copied.</li>
-<li>In <b>Settings</b>, <b>Reading</b>, choose <b>A static page</b> and pick <b>Home</b> as your homepage.</li>
-<li>Your menu arrives as <b>Main menu</b>. Choose it in your theme's menu or navigation settings.</li>
-${plan.products.length ? `<li>Now add the WooCommerce plugin. Adding it after the WordPress file lets it use your Shop page instead of making a second one. In <b>WooCommerce</b>, <b>Settings</b>, <b>General</b>, set the currency${plan.currency ? ` to <b>${escapeHtml(plan.currency)}</b>` : ''}.</li>
-<li>In <b>Products</b>, choose <b>Import</b> and upload the WooCommerce products file. Shop sections on your pages already show your WooCommerce products. A new WooCommerce shop shows visitors a Coming soon page until you choose <b>Live</b> in <b>WooCommerce</b>, <b>Settings</b>, <b>Site visibility</b>.</li>` : ''}
-${plan.data.redirects.length ? '<li>Add the Redirection plugin, open <b>Tools</b>, <b>Redirection</b> and finish its short setup. Then in <b>Import/Export</b>, upload the old links file.</li>' : ''}
-</ol><p>Keep this site online until WordPress has copied your photos. Your design comes from your WordPress theme, so pages look different there.</p></article>
-<article class="card account__record"><h2>3. What needs your attention</h2>${plan.todo.length ? `<ul>${plan.todo.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>` : '<p>Nothing. Everything on your pages has a place in WordPress.</p>'}</article>`,
+    t.moveToWordpress,
+    `<p>${t.wordpressIntro(`/owner/${escapeHtml(code)}/move`)}</p>
+<article class="card account__record"><h2>${t.downloadFiles}</h2>
+${file('site.xml', t.wordpressFile, t.wordpressFileNote(plan.pages.length))}
+${plan.products.length ? file('products.csv', t.woocommerceFile, t.woocommerceFileNote(plan.products.length)) : ''}
+${plan.data.redirects.length ? file('redirects.csv', t.redirectsFile, t.redirectsFileNote(plan.data.redirects.length)) : ''}</article>
+<article class="card account__record"><h2>${t.bringIn}</h2><ol>
+<li>${t.wpSetUp}</li>
+<li>${t.wpImport}</li>
+<li>${t.wpHome}</li>
+<li>${t.wpMenu}</li>
+${plan.products.length ? `<li>${t.wpWoo(plan.currency ? escapeHtml(plan.currency) : '')}</li><li>${t.wpProducts}</li>` : ''}
+${plan.data.redirects.length ? `<li>${t.wpRedirects}</li>` : ''}
+</ol><p>${t.wpKeepOnline}</p></article>
+<article class="card account__record"><h2>${t.needsAttention}</h2>${plan.todo.length ? `<ul>${plan.todo.map((line) => `<li>${escapeHtml(t.wordpressTodo(line))}</li>`).join('')}</ul>` : `<p>${t.nothingToDo}</p>`}</article>`,
   )
 }
 

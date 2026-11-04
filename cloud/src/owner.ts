@@ -1,5 +1,7 @@
 import { sha256 } from './auth'
 import { escapeHtml } from './http'
+import { officeWords } from './office-words'
+import type { OfficeWords } from './office-words'
 import type { Block, Env, FormField, Settings, SiteRow } from './types'
 
 export const hashCode = sha256
@@ -28,8 +30,8 @@ export async function claimSite(env: Env) {
   return result.meta.changes ? code : null
 }
 
-export const shell = (title: string, body: string, wide = false) => `<!doctype html>
-<html lang="en">
+export const shell = (title: string, body: string, wide = false, lang = 'en') => `<!doctype html>
+<html lang="${escapeHtml(lang)}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -43,28 +45,32 @@ export const shell = (title: string, body: string, wide = false) => `<!doctype h
 </body>
 </html>`
 
-export const setupPage = () =>
+export const setupPage = (t: OfficeWords = officeWords()) =>
   shell(
-    'Set up your website',
-    `<h1>Your website is installed.</h1>
-<p class="lead">One step left. Get your private link to connect Claude.</p>
-<p role="alert">The next page shows your private links only once. Be ready to copy them.</p>
-<form action="/setup" method="post"><button class="button" type="submit">Get my Claude link</button></form>`,
+    t.setupTitle,
+    `<h1>${t.installed}</h1>
+<p class="lead">${t.oneStepLeft}</p>
+<p role="alert">${t.shownOnce}</p>
+<form action="/setup" method="post"><button class="button" type="submit">${t.getLink}</button></form>`,
+    false,
+    t.lang,
   )
 
-export const claimedPage = (origin: string, code: string) =>
+export const claimedPage = (origin: string, code: string, t: OfficeWords = officeWords()) =>
   shell(
-    'Your Claude link',
-    `<h1>You're the owner.</h1>
-<p role="alert">Save these two links now. They are shown only once, and anyone who has them can change your site.</p>
-<h2>1. Connect Claude</h2>
-<p>In Claude's connector settings, add a custom connector, paste this link and choose no sign-in:</p>
+    t.claimedTitle,
+    `<h1>${t.youOwnIt}</h1>
+<p role="alert">${t.saveLinks}</p>
+<h2>${t.connectClaude}</h2>
+<p>${t.connectClaudeHelp}</p>
 <p><code style="overflow-wrap:anywhere">${escapeHtml(`${origin}/mcp/${code}`)}</code></p>
-<h2>2. Say what you want</h2>
-<p>Start a new chat with the connector on and try: "Build a website for my coffee shop."</p>
-<h2>3. Your back office</h2>
-<p>Edit your site and see orders, messages and customers here at any time:</p>
+<h2>${t.sayWhatYouWant}</h2>
+<p>${t.sayWhatYouWantHelp}</p>
+<h2>${t.yourBackOffice}</h2>
+<p>${t.yourBackOfficeHelp}</p>
 <p><a href="/owner/${escapeHtml(code)}" style="overflow-wrap:anywhere">${escapeHtml(`${origin}/owner/${code}`)}</a></p>`,
+    false,
+    t.lang,
   )
 
 /** Maps each form to its fields, so saved entries can be shown with their labels. */

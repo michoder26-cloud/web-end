@@ -37,7 +37,7 @@ Claude asks about your business, then writes the pages, chooses the design, and 
 - **Shop:** product pages, categories, sale prices, sizes and colours, stock that can't oversell, a cart, free delivery thresholds, private order links and order status. Prices are always set on the server.
 - **Payments:** bank transfer and pay on delivery, plus cards through your own Stripe account
 - **Phone-first shopping:** a bottom tab bar and two-column product grid on phones, with no scripts on your pages
-- **Back office (CMS):** a private page to edit pages and sections, products, photos, menus, colours, orders and customers, with or without Claude
+- **Back office (CMS):** a private page to edit pages and sections, products, photos, menus, colours, orders and customers, with or without Claude. It's in Thai or English: a Thai site gets a Thai back office, and you can choose either one in Settings.
 - **Photo upload:** PNG, JPEG, WebP or GIF, up to 1 MB each, stored in your own database
 - **Search basics:** page titles, descriptions, a sitemap and structured data
 - **Full control:** the code is yours, in your own GitHub account. Claude can add custom CSS and custom code in a sandbox, and a developer can change anything.
@@ -63,7 +63,7 @@ Nobody hosts your site but you. There's no central server, and web-end never see
 - Show customer reviews as a ready-made feature
 - Add any feature you can describe. Claude builds with tables, rules, pages, webhooks and sandboxed custom code. Custom server logic still means a developer changing the source, and an update replaces such changes.
 - Log in with Google or other accounts
-- Show the back office in other languages. It's in English for now.
+- Show the back office in languages other than Thai and English
 
 Passing our tests means common mistakes weren't found. It isn't a security audit or legal advice. Customer passwords use PBKDF2 with 100,000 rounds, the most Cloudflare Workers allow, which is below the 600,000 that security guides recommend. You're responsible for the customer data your site holds. Don't collect health data, ID numbers or card details through forms, and have legal pages checked for your country.
 

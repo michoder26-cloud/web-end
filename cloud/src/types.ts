@@ -33,6 +33,7 @@ export type Settings = {
   name: string
   nav?: Nav[]
   notifyEmail?: string
+  officeLanguage?: string
   payCard?: boolean
   payCod?: boolean
   payTransfer?: boolean
