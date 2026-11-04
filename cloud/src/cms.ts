@@ -1,7 +1,8 @@
 import { z } from 'zod'
 
-import { newToken, sha256 } from './auth'
+import { createResetLink } from './auth'
 import { handlePlatform } from './cms-platform'
+import { canSendEmail } from './email'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { saveImage } from './items'
 import { blockSchema, itemSchema, maxBlocksBytes, maxPagesPerSite, pageSlugSchema, settingsShape } from './mcp'
@@ -237,7 +238,7 @@ async function ordersPage(env: Env, site: SiteRow, code: string, error?: string)
         .map((status) => `<button class="button button--small" name="status" type="submit" value="${status}">${escapeHtml(status)}</button> `)
         .join('')
       return `<article class="card account__record"><h3>${orderNumber(order.id)} · ${escapeHtml(order.status)}</h3><p class="post-date">${escapeHtml(order.created_at.slice(0, 16).replace('T', ' '))} UTC · ${paymentName(words('en'), order.payment)}</p>${orderDetails(order, lines.get(order.id) ?? [], t)}<p class="pre-line"><strong>${escapeHtml(order.name)}</strong>
-${escapeHtml(order.phone)}
+${escapeHtml(order.phone)}${order.email ? `\n${escapeHtml(order.email)}` : ''}
 ${escapeHtml(order.address)}${order.note ? `\n\nNote: ${escapeHtml(order.note)}` : ''}</p><form action="/owner/${escapeHtml(code)}/orders/${order.id}" method="post">${buttons}</form></article>`
     })
     .join('')
@@ -394,7 +395,7 @@ async function customersPage(env: Env, url: URL, site: SiteRow, code: string, no
     site,
     code,
     'Customers',
-    `${settings.accounts ? '' : '<p role="alert">Customer accounts are off. Turn them on in Settings.</p>'}${resetLink ? `<p role="status">Send this link to the customer yourself. It works once and expires in 24 hours:<br><code style="overflow-wrap:anywhere">${escapeHtml(`${url.origin}${resetLink}`)}</code></p>` : ''}${rows || '<p>No customers yet.</p>'}`,
+    `${settings.accounts ? '' : '<p role="alert">Customer accounts are off. Turn them on in Settings.</p>'}${settings.accounts && canSendEmail(env, settings) ? '<p>Customers can also get a reset email themselves, from "Forgot your password?" on the login page.</p>' : ''}${resetLink ? `<p role="status">Send this link to the customer yourself. It works once and expires in 24 hours:<br><code style="overflow-wrap:anywhere">${escapeHtml(`${url.origin}${resetLink}`)}</code></p>` : ''}${rows || '<p>No customers yet.</p>'}`,
     notice,
   )
 }
@@ -427,6 +428,10 @@ ${text('accent', 'Main colour', 'color').replace('value=""', 'value="#1f4d3a"')}
 ${text('headerButtonLabel', 'Header button text')}${text('headerButtonHref', 'Header button link')}
 <label>Footer text<textarea name="footerText" rows="3">${escapeHtml(settings.footerText)}</textarea></label>
 ${text('email', 'Email', 'email')}${text('phone', 'Phone')}<label>Address<textarea name="address" rows="2">${escapeHtml(settings.address)}</textarea></label>
+<fieldset class="cms-block"><legend>Email</legend>
+<p>Optional. Emails go out through your own Resend account: password reset emails and order confirmations for customers, and an email to you for each new order, form entry and record. First verify your domain in Resend and add its key as the RESEND_API_KEY secret in your Cloudflare Worker's settings. These two settings work at once, without publishing.</p>
+${text('emailFrom', 'Send emails from, an address on the domain you verified in Resend', 'email')}${text('notifyEmail', 'Your address for new orders, forms and records', 'email')}
+</fieldset>
 <label>Extra CSS<textarea name="customCss" rows="6">${escapeHtml(settings.customCss)}</textarea></label>
 <button class="button" type="submit">Save settings</button></form>`,
     notice,
@@ -449,7 +454,7 @@ async function saveSettings(request: Request, env: Env, url: URL, site: SiteRow,
   if (fee) draft.shippingFee = Number(fee)
   const freeOver = String(form.get('freeShippingOver') ?? '').trim()
   if (freeOver) draft.freeShippingOver = Number(freeOver)
-  for (const key of ['name', 'tagline', 'language', 'style', 'accent', 'background', 'text', 'headerButtonLabel', 'headerButtonHref', 'footerText', 'email', 'phone', 'address', 'customCss', 'transferDetails', 'currency']) {
+  for (const key of ['name', 'tagline', 'language', 'style', 'accent', 'background', 'text', 'headerButtonLabel', 'headerButtonHref', 'footerText', 'email', 'emailFrom', 'notifyEmail', 'phone', 'address', 'customCss', 'transferDetails', 'currency']) {
     const value = String(form.get(key) ?? '').trim()
     if (value) draft[key] = value
   }
@@ -548,12 +553,7 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
     const customer = await env.DB.prepare('SELECT id FROM customers WHERE id = ? AND site_id = ?').bind(Number(id), site.id).first<{ id: number }>()
     if (!customer) return notFound()
     if (action === 'reset') {
-      const token = newToken()
-      await env.DB.batch([
-        env.DB.prepare('DELETE FROM password_resets WHERE customer_id = ?').bind(customer.id),
-        env.DB.prepare('INSERT INTO password_resets (token_hash, customer_id, expires_at) VALUES (?, ?, ?)').bind(await sha256(token), customer.id, new Date(Date.now() + 86_400_000).toISOString()),
-      ])
-      return customersPage(env, url, site, code, undefined, `/reset/${token}`)
+      return customersPage(env, url, site, code, undefined, await createResetLink(env, customer.id))
     }
     if (action === 'role') {
       const role = (await request.formData()).get('role')

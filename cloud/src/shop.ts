@@ -1,4 +1,5 @@
 import { allowAttempt, getCustomer, newToken, sha256 } from './auth'
+import { canSendEmail, isEmail, later, sendEmail, tellOwner } from './email'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { getProduct, getProducts, isAvailable } from './items'
 import { formatMoney, parsePrice } from './money'
@@ -171,6 +172,7 @@ ${totals(t, money, priced.subtotal, priced.shipping, priced.total)}
 <form action="/checkout" class="contact-form" method="post">
 <label>${t.name}<input autocomplete="name" maxlength="120" name="name" required value="${escapeHtml(values.name ?? customer?.name)}"></label>
 <label>${t.phone}<input autocomplete="tel" maxlength="30" name="phone" required type="tel" value="${escapeHtml(values.phone)}"></label>
+<label>${canSendEmail(env, settings) ? t.emailForOrder : t.emailOptional}<input autocomplete="email" maxlength="254" name="email" type="email" value="${escapeHtml(values.email ?? customer?.email)}"></label>
 <label>${t.address}<textarea autocomplete="street-address" maxlength="1000" name="address" required rows="3">${escapeHtml(values.address)}</textarea></label>
 <label>${t.note}<textarea maxlength="1000" name="note" rows="2">${escapeHtml(values.note)}</textarea></label>
 <fieldset class="cart-payment"><legend>${t.payment}</legend>${choices.map((choice) => `<label class="check"><input${choice === payment ? ' checked' : ''} name="payment" required type="radio" value="${choice}"> ${paymentName(t, choice)}</label>`).join('')}</fieldset>
@@ -186,12 +188,15 @@ const takeStock = (env: Env, itemId: number, variantId: null | number, quantity:
     ? env.DB.prepare('UPDATE item_variants SET stock = stock - ? WHERE id = ? AND stock IS NOT NULL').bind(quantity, variantId)
     : env.DB.prepare('UPDATE items SET stock = stock - ? WHERE id = ? AND stock IS NOT NULL').bind(quantity, itemId)
 
-export type OrderValues = { address: string; name: string; note: string; payment: string; phone: string }
+export type OrderValues = { address: string; email?: string; name: string; note: string; payment: string; phone: string }
 
 /** Checks and records an order. The checkout page and the API both come through here, so prices and stock follow one set of rules. */
 export async function submitOrder(request: Request, env: Env, site: SiteRow, cart: Map<string, number>, values: OrderValues, customer: Customer | null) {
   const settings = JSON.parse(site.settings) as Settings
   if (!values.name || values.name.length > 120 || !values.address || values.address.length > 1000 || values.note.length > 1000 || !/^[+\d][\d\s()-]{4,29}$/.test(values.phone)) return { problem: 'details' as const }
+  if (values.email && !isEmail(values.email)) return { problem: 'details' as const }
+  // A logged-in customer who leaves it empty still gets the confirmation, at their account's address.
+  const email = values.email || customer?.email || ''
   if (!paymentChoices(env, settings).includes(values.payment)) return { problem: 'details' as const }
   if (!(await allowAttempt(request, env, 'order', 20, 3600))) return { problem: 'busy' as const }
   const since = new Date(Date.now() - 3_600_000).toISOString()
@@ -207,7 +212,7 @@ export async function submitOrder(request: Request, env: Env, site: SiteRow, car
   // One batch, so a line that would oversell cancels the whole order.
   try {
     await env.DB.batch([
-      env.DB.prepare('INSERT INTO orders (site_id, customer_id, token_hash, name, phone, address, note, payment, subtotal, shipping, total, money_prefix, money_suffix) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(site.id, customer?.id ?? null, tokenHash, values.name, values.phone, values.address, values.note, values.payment, priced.subtotal, priced.shipping, priced.total, priced.prefix, priced.suffix),
+      env.DB.prepare('INSERT INTO orders (site_id, customer_id, token_hash, name, phone, email, address, note, payment, subtotal, shipping, total, money_prefix, money_suffix) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(site.id, customer?.id ?? null, tokenHash, values.name, values.phone, email, values.address, values.note, values.payment, priced.subtotal, priced.shipping, priced.total, priced.prefix, priced.suffix),
       ...priced.lines.flatMap((line) => [
         env.DB.prepare(`INSERT INTO order_lines (order_id, item_id, variant_id, title, variant, unit_price, quantity) VALUES (${orderId}, ?, ?, ?, ?, ?, ?)`).bind(tokenHash, line.item.id, line.variant?.id ?? null, line.item.title, line.variant?.name ?? '', line.price.amount, line.quantity),
         takeStock(env, line.item.id, line.variant?.id ?? null, line.quantity),
@@ -220,7 +225,46 @@ export async function submitOrder(request: Request, env: Env, site: SiteRow, car
   const order = await env.DB.prepare('SELECT * FROM orders WHERE token_hash = ?').bind(tokenHash).first<Order>()
   const lines = (await orderLines(env, [order!.id])).get(order!.id) ?? []
   await fireEvent(env, site.id, 'order.created', orderForApi(order!, lines))
+  await emailOrder(env, settings, new URL(request.url).origin, order!, lines, token)
   return { lines, order: order!, token }
+}
+
+/** An order's items, delivery, total and payment, as label and value pairs for an email. */
+function orderFacts(order: Order, lines: OrderLine[], t: ReturnType<typeof words>): [string, string][] {
+  const money = (amount: number) => formatMoney(amount, order.money_prefix, order.money_suffix)
+  return [
+    ...lines.map((line): [string, string] => [`${line.title}${line.variant ? ` · ${line.variant}` : ''} × ${line.quantity}`, money(line.unit_price * line.quantity)]),
+    [t.shipping, order.shipping ? money(order.shipping) : t.free],
+    [t.total, money(order.total)],
+    [t.payment, paymentName(t, order.payment)],
+  ]
+}
+
+/** The customer gets their private order link, and the owner hears about the order. Both go after the customer has their answer. */
+async function emailOrder(env: Env, settings: Settings, origin: string, order: Order, lines: OrderLine[], token: string) {
+  const number = orderNumber(order.id)
+  if (isEmail(order.email) && canSendEmail(env, settings)) {
+    const t = words(settings.language)
+    await later(
+      env,
+      sendEmail(env, settings, order.email, {
+        after: [...(order.payment === 'transfer' && settings.transferDetails ? [`${t.transferHow}\n${settings.transferDetails}`] : []), `${t.deliverTo}\n${order.name}\n${order.phone}\n${order.address}`, t.orderEmailKeep],
+        facts: orderFacts(order, lines, t),
+        heading: `${t.order} ${number}`,
+        lines: [t.orderPlaced],
+        link: { href: `${origin}/order/${token}`, label: t.orderEmailLink },
+        replyTo: settings.email,
+        subject: t.orderEmailSubject.replace('{number}', number),
+      }),
+    )
+  }
+  await tellOwner(env, (_settings, t) => ({
+    after: [t.ownerEmailMore],
+    facts: [...orderFacts(order, lines, t), [t.name, order.name], [t.phone, order.phone], [t.email, order.email], [t.address, order.address], [t.orderNote, order.note]],
+    heading: t.newOrder.replace('{number}', number),
+    replyTo: order.email,
+    subject: t.newOrder.replace('{number}', number),
+  }))
 }
 
 /** An order as other systems see it. Its secret link hash stays in the database. */
@@ -237,7 +281,7 @@ async function placeOrder(request: Request, env: Env, url: URL, site: SiteRow, c
   if (!form) return see(url, '/checkout')
   // Bots fill in the hidden field. Send them away and keep nothing.
   if (form.get('website')) return see(url, '/')
-  const values = Object.fromEntries(['name', 'phone', 'address', 'note', 'payment'].map((key) => [key, String(form.get(key) ?? '').trim()])) as OrderValues
+  const values = Object.fromEntries(['name', 'phone', 'email', 'address', 'note', 'payment'].map((key) => [key, String(form.get(key) ?? '').trim()])) as OrderValues
   const placed = await submitOrder(request, env, site, readCart(request), values, customer)
   if (placed.problem === 'details') return checkoutPage(request, env, url, site, customer, t.checkDetails, values)
   if (placed.problem === 'busy') return checkoutPage(request, env, url, site, customer, t.busy, values)

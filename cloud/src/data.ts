@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { allowAttempt } from './auth'
+import { tellOwnerAboutRecord } from './email'
 import { see } from './http'
 import { isSafeHref } from './theme'
 import type { Block, Customer, Env, SiteRow } from './types'
@@ -284,6 +285,8 @@ export async function createRecord(env: Env, siteId: number, table: DataTable, i
   if (!row) return refused(env, guards)
   await env.DB.prepare('UPDATE data_tables SET record_count = record_count + 1 WHERE id = ?').bind(table.id).run()
   await fireEvent(env, siteId, 'record.created', { table: table.name, record: showRecord(table, row, ownerActor) })
+  // The owner already knows about records they add in the back office or through Claude. Visitors, customers and connected sites count.
+  if (actor !== ownerActor) await tellOwnerAboutRecord(env, table, row)
   return { row }
 }
 

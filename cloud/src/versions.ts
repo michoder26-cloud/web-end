@@ -3,8 +3,8 @@ import type { Env, PageRow, Settings, SiteRow } from './types'
 const keptVersions = 20
 const now = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"
 
-// These connect the site to the outside world, so a rollback must not undo them.
-const systemSettings = (settings: Settings) => ({ allowedOrigins: settings.allowedOrigins, githubRepo: settings.githubRepo })
+// These connect the site to the outside world, so they work at once and a rollback must not undo them.
+const systemSettings = (settings: Settings) => ({ allowedOrigins: settings.allowedOrigins, emailFrom: settings.emailFrom, githubRepo: settings.githubRepo, notifyEmail: settings.notifyEmail })
 
 /** What visitors see. Once something is published they get that copy, and changes wait until the next publish. */
 export function liveSite(site: SiteRow): SiteRow {
@@ -25,7 +25,7 @@ export const liveSlugs = async (env: Env, site: SiteRow) => {
 }
 
 const comparable = (settings: string) => {
-  const { allowedOrigins: _origins, githubRepo: _repo, ...rest } = JSON.parse(settings) as Settings
+  const { allowedOrigins: _origins, emailFrom: _from, githubRepo: _repo, notifyEmail: _notify, ...rest } = JSON.parse(settings) as Settings
   return JSON.stringify(Object.entries(rest).sort(([a], [b]) => a.localeCompare(b)))
 }
 

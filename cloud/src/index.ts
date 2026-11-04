@@ -5,6 +5,7 @@ import { handleApi } from './api'
 import { getCustomer } from './auth'
 import { handleOffice } from './cms'
 import { loadPageRecords, receiveRecord } from './data'
+import { tellOwnerAboutEntry } from './email'
 import { validateEntry } from './forms'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { loadItems, showImage } from './items'
@@ -123,6 +124,7 @@ async function receiveForm(request: Request, env: Env, url: URL, site: SiteRow, 
   await env.DB.prepare('INSERT INTO entries (site_id, form, page, data, customer_id) VALUES (?, ?, ?, ?, ?)')
     .bind(site.id, formName, pageSlug, JSON.stringify(data), customer?.id ?? null)
     .run()
+  await tellOwnerAboutEntry(env, { fields: block.fields as FormField[], heading: block.heading, name: formName }, data)
   return back('sent')
 }
 

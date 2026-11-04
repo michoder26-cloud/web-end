@@ -1,4 +1,5 @@
-import { allowAttempt, endCookie, endSession, getCustomer, hashPassword, registerCustomer, sha256, startSession, verifyLogin } from './auth'
+import { allowAttempt, createResetLink, endCookie, endSession, getCustomer, hashPassword, registerCustomer, sha256, startSession, verifyLogin, withinLimit } from './auth'
+import { canSendEmail, isEmail, later, sendEmail } from './email'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { entryFields } from './owner'
 import { renderLayout } from './render'
@@ -26,8 +27,9 @@ const page = (site: SiteRow, url: URL, title: string, body: string, customer: Cu
 
 const message = (text?: string, role = 'alert') => (text ? `<p role="${role}">${escapeHtml(text)}</p>` : '')
 
-function loginPage(site: SiteRow, url: URL, error?: string) {
-  const t = words((JSON.parse(site.settings) as Settings).language)
+function loginPage(env: Env, site: SiteRow, url: URL, error?: string) {
+  const settings = JSON.parse(site.settings) as Settings
+  const t = words(settings.language)
   const next = safeNext(url.searchParams.get('next'))
   return page(
     site,
@@ -38,6 +40,7 @@ function loginPage(site: SiteRow, url: URL, error?: string) {
 <label>${t.email}<input autocomplete="email" maxlength="254" name="email" required type="email"></label>
 <label>${t.password}<input autocomplete="current-password" maxlength="200" name="password" required type="password"></label>
 <button class="button" type="submit">${t.logIn}</button></form>
+${canSendEmail(env, settings) ? `<p class="account__alt"><a href="/reset">${t.forgotPassword}</a></p>` : ''}
 <p class="account__alt">${t.noAccount} <a href="/signup?next=${encodeURIComponent(next)}">${t.signUp}</a></p>`,
   )
 }
@@ -103,10 +106,10 @@ async function receive(request: Request) {
 
 async function login(request: Request, env: Env, url: URL, site: SiteRow) {
   const t = words((JSON.parse(site.settings) as Settings).language)
-  if (!(await allowAttempt(request, env, 'login', 10, 900))) return loginPage(site, url, t.busy)
+  if (!(await allowAttempt(request, env, 'login', 10, 900))) return loginPage(env, site, url, t.busy)
   const form = await receive(request)
   const id = await verifyLogin(env, site.id, String(form?.get('email') ?? ''), String(form?.get('password') ?? ''))
-  if (!id) return loginPage(site, url, t.badLogin)
+  if (!id) return loginPage(env, site, url, t.badLogin)
   return see(url, safeNext(form?.get('next')), await startSession(env, url, id))
 }
 
@@ -127,7 +130,10 @@ async function resetPassword(request: Request, env: Env, url: URL, site: SiteRow
   const reset = await env.DB.prepare('SELECT password_resets.customer_id AS id FROM password_resets JOIN customers ON customers.id = password_resets.customer_id WHERE password_resets.token_hash = ? AND password_resets.expires_at > ? AND customers.site_id = ?')
     .bind(tokenHash, new Date().toISOString(), site.id)
     .first<{ id: number }>()
-  if (!reset) return page(site, url, t.changePassword, `<h1>${t.changePassword}</h1>${message(t.invalidReset)}`)
+  if (!reset) {
+    const again = canSendEmail(env, JSON.parse(site.settings) as Settings)
+    return page(site, url, t.changePassword, `<h1>${t.changePassword}</h1>${message(again ? t.resetExpired : t.invalidReset)}${again ? `<p><a href="/reset">${t.getNewLink}</a></p>` : ''}`)
+  }
   const form_ = (error?: string) =>
     page(
       site,
@@ -148,6 +154,55 @@ async function resetPassword(request: Request, env: Env, url: URL, site: SiteRow
   return see(url, '/login?changed=1')
 }
 
+/** Emails a reset link if an account uses this address. It runs after the answer, so how long the answer takes can't reveal who has an account. */
+export async function emailResetLink(env: Env, site: SiteRow, origin: string, address: string) {
+  const settings = JSON.parse(site.settings) as Settings
+  const email = address.trim().toLowerCase()
+  if (!settings.accounts || !canSendEmail(env, settings) || !isEmail(email)) return
+  await later(
+    env,
+    (async () => {
+      // A few emails an hour per address, so nobody can fill someone's inbox with reset links.
+      if (!(await withinLimit(env, `reset-email:${(await sha256(`${site.id}:${email}`)).slice(0, 32)}`, 3, 3600))) return
+      const customer = await env.DB.prepare('SELECT id FROM customers WHERE site_id = ? AND email = ?').bind(site.id, email).first<{ id: number }>()
+      if (!customer) return
+      const t = words(settings.language)
+      await sendEmail(env, settings, email, {
+        after: [t.resetEmailIgnore],
+        heading: t.changePassword,
+        lines: [t.resetEmailBody.replace('{site}', settings.name)],
+        link: { href: `${origin}${await createResetLink(env, customer.id)}`, label: t.changePassword },
+        replyTo: settings.email,
+        subject: t.resetEmailSubject,
+      })
+    })(),
+  )
+}
+
+function askResetPage(site: SiteRow, url: URL, notice?: { error?: string; sent?: boolean }) {
+  const t = words((JSON.parse(site.settings) as Settings).language)
+  return page(
+    site,
+    url,
+    t.forgotPassword,
+    `<h1>${t.forgotPassword}</h1>${message(notice?.error)}${notice?.sent ? message(t.resetSent, 'status') : `<p>${t.resetIntro}</p>`}
+<form action="/reset" class="contact-form" method="post">
+<label>${t.email}<input autocomplete="email" maxlength="254" name="email" required type="email"></label>
+<label aria-hidden="true" class="trap">Leave this empty<input autocomplete="off" name="website" tabindex="-1"></label>
+<button class="button" type="submit">${t.sendResetLink}</button></form>
+<p class="account__alt"><a href="/login">${t.logIn}</a></p>`,
+  )
+}
+
+async function askReset(request: Request, env: Env, url: URL, site: SiteRow) {
+  const t = words((JSON.parse(site.settings) as Settings).language)
+  if (!(await allowAttempt(request, env, 'reset', 5, 900))) return askResetPage(site, url, { error: t.busy })
+  const form = await receive(request)
+  // Bots fill in the hidden field. They get the same answer as everyone, and nothing is sent.
+  if (form && !form.get('website')) await emailResetLink(env, site, url.origin, String(form.get('email') ?? ''))
+  return askResetPage(site, url, { sent: true })
+}
+
 /** Handles the customer account pages. They exist only when the site turns accounts on. */
 export async function handleAccount(request: Request, env: Env, url: URL, site: SiteRow, parts: string[]) {
   if (!(JSON.parse(site.settings) as Settings).accounts) return notFound()
@@ -163,7 +218,9 @@ export async function handleAccount(request: Request, env: Env, url: URL, site: 
   const customer = await getCustomer(request, env, site.id)
   if (parts[0] === 'account') return customer ? accountPage(env, site, url, customer) : see(url, '/login?next=/account')
   if (customer && !post) return see(url, '/account')
-  if (parts[0] === 'login') return post ? login(request, env, url, site) : loginPage(site, url)
+  if (parts[0] === 'login') return post ? login(request, env, url, site) : loginPage(env, site, url)
   if (parts[0] === 'signup') return post ? signup(request, env, url, site) : signupPage(site, url)
+  // Asking for a reset email only exists while the site can send one.
+  if (parts[0] === 'reset' && canSendEmail(env, JSON.parse(site.settings) as Settings)) return post ? askReset(request, env, url, site) : askResetPage(site, url)
   return notFound()
 }

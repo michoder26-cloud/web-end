@@ -1151,6 +1151,130 @@ check(!reading.text.includes('SCRIPT-TEXT') && !reading.text.includes('color:red
 }
 check((await call('get_guide', { topic: 'move_from_wix' })).text.includes('check_site') && (await call('get_guide', { topic: 'move_from_wix' })).text.includes('rebuild') && (await client.listPrompts()).prompts.some((item) => item.name === 'move_my_site'), 'Claude has a move guide and a ready prompt')
 
+// Email, tested against a stand-in for Resend on port 8823. Start the site with --var RESEND_API_KEY:re_test_fake --var RESEND_API_BASE:http://localhost:8823
+const hasEmailTest = process.env.EMAIL_TEST === '1'
+const postAs = (ip, path, values, cookie) => fetch(`${base}${path}`, { body: new URLSearchParams(values), headers: { 'CF-Connecting-IP': ip, ...(cookie ? { Cookie: cookie } : {}) }, method: 'POST', redirect: 'manual' })
+if (hasEmailTest) {
+  const { createServer } = await import('node:http')
+  const mail = []
+  let refuseMail = false
+  const resend = createServer((request, response) => {
+    let body = ''
+    request.on('data', (part) => (body += part))
+    request.on('end', () => {
+      response.setHeader('Content-Type', 'application/json')
+      if (refuseMail) {
+        response.statusCode = 403
+        response.end(JSON.stringify({ message: 'The cafe.test domain is not verified <b>', name: 'validation_error', statusCode: 403 }))
+        return
+      }
+      mail.push({ auth: request.headers.authorization, path: request.url, ...JSON.parse(body) })
+      response.end(JSON.stringify({ id: `email-${mail.length}` }))
+    })
+  })
+  await new Promise((done) => resend.listen(8823, done))
+  const settle = () => new Promise((done) => setTimeout(done, 1000))
+  const mailTo = (address) => mail.filter((email) => email.to?.[0] === address)
+
+  check((await call('check_site', {})).data.problems.some((problem) => problem.includes('no sender address')), 'check_site finds a Resend key with no sender address')
+  check(!(await (await fetch(`${base}/login`)).text()).includes('href="/reset"') && (await fetch(`${base}/reset`)).status === 404, 'reset emails stay off until email is set up')
+  check((await call('update_site', { emailFrom: 'not an address' })).isError, 'a bad sender address is refused')
+  await call('update_site', { emailFrom: 'shop@cafe.test', notifyEmail: 'owner@cafe.test' })
+  const emailState = await call('get_status', {})
+  check(emailState.data.email?.sending === true && emailState.data.email.ownerNotices === true && emailState.data.email.resendKeySet === true && !emailState.text.includes('re_test_fake'), 'get_status shows email is on, never the key', JSON.stringify(emailState.data.email))
+  check(!(await call('check_site', {})).data.problems.some((problem) => problem.includes('RESEND')), 'a full email setup has no problems')
+  const systemHtml = await (await fetch(`${owner}/system`)).text()
+  check(systemHtml.includes('Resend key in Cloudflare') && systemHtml.includes('shop@cafe.test') && !systemHtml.includes('re_test_fake'), 'the System page shows the email setup, never the key')
+
+  // Customers reset their own password
+  check((await (await fetch(`${base}/login`)).text()).includes('href="/reset"'), 'the login page offers a reset email at once, without publishing')
+  check((await (await fetch(`${base}/reset`)).text()).includes('action="/reset"'), 'customers can ask for a reset email')
+  check((await postAs('198.51.100.1', '/signup', { email: 'forgetful@example.test', name: 'Forgetful', password: 'first-pass-123' })).status === 303, 'a customer signs up for the reset test')
+  const askKnown = await (await postAs('198.51.100.2', '/reset', { email: 'Forgetful@example.test' })).text()
+  const askUnknown = await (await postAs('198.51.100.2', '/reset', { email: 'nobody-here@example.test' })).text()
+  check(askKnown.includes('role="status"') && askKnown === askUnknown, 'asking for a reset says the same whether or not the account exists')
+  await settle()
+  const resetMail = mailTo('forgetful@example.test')
+  check(resetMail.length === 1 && mailTo('nobody-here@example.test').length === 0, 'only an existing account gets a reset email', String(resetMail.length))
+  check(resetMail[0]?.auth === 'Bearer re_test_fake' && resetMail[0].path === '/emails' && resetMail[0].from.endsWith('<shop@cafe.test>') && resetMail[0].subject === 'Choose a new password', "the reset email goes through Resend from the owner's address", JSON.stringify(resetMail[0]?.from))
+  const mailedLink = resetMail[0]?.text.match(/https?:\/\/\S+\/reset\/[0-9a-f]{64}/)?.[0] ?? ''
+  check(mailedLink.startsWith(base) && resetMail[0].html.includes(mailedLink), 'the reset email has the link in its text and HTML')
+  const mailedPath = mailedLink ? new URL(mailedLink).pathname : '/reset/x'
+  check((await postForm(mailedPath, { password: 'second-pass-123' })).status === 303 && (await postAs('198.51.100.3', '/login', { email: 'forgetful@example.test', password: 'second-pass-123' })).status === 303, 'the emailed link sets a new password')
+  check((await (await fetch(`${base}${mailedPath}`)).text()).includes('href="/reset"'), 'a used link offers to send a new one')
+  for (const ip of ['198.51.100.4', '198.51.100.5', '198.51.100.6']) await postAs(ip, '/reset', { email: 'forgetful@example.test' })
+  await settle()
+  check(mailTo('forgetful@example.test').length === 3, 'one address gets at most three reset emails an hour', String(mailTo('forgetful@example.test').length))
+  let resetBusy = false
+  for (let i = 0; i < 7 && !resetBusy; i++) resetBusy = (await (await postAs('198.51.100.7', '/reset', { email: `flood${i}@example.test` })).text()).includes('Too many')
+  check(resetBusy, 'asking for reset emails is slowed down like logging in')
+  check((await apiJson('/auth/reset', { body: asJson({ email: 'nobody-else@example.test' }), headers: { 'CF-Connecting-IP': '198.51.100.8' }, method: 'POST' })).body?.ok === true, 'the API can ask for a reset email too')
+
+  // The owner hears about orders, form entries and records
+  await call('save_page', { slug: 'write-us', title: 'Write to us', description: 'A page with a contact form, used to test that the owner gets an email for each message.', published: true, blocks: [{ type: 'hero', heading: 'Write to us' }, { type: 'form', name: 'contact', heading: 'Contact <us>', fields: [{ name: 'who', label: 'Name', type: 'text', required: true }, { name: 'reply', label: 'Your email', type: 'email' }, { name: 'message', label: 'Message', type: 'textarea' }] }] })
+  await call('save_table', { name: 'wishes', label: 'Wishes', readAccess: 'owner', writeAccess: 'public', fields: [{ name: 'wish', label: 'Wish', type: 'text', required: true }, { name: 'contact', label: 'Contact', type: 'email' }] })
+  await call('update_site', { cart: true, payCod: true })
+  const mailMug = (await call('save_item', { collection: 'mail-shop', title: 'Mail <Mug>', price: '฿100', sort: 1 })).data.id
+  await call('publish_site', { note: 'Email test' })
+  mail.length = 0
+  const sentForm = await postAs('198.51.100.9', '/form/write-us/contact', { message: 'Hello\nthere <script>x</script>', reply: 'ann@example.test', who: '<b>Ann</b>' })
+  check((sentForm.headers.get('location') ?? '').includes('sent=contact'), 'forms work with email on')
+  await settle()
+  const entryMail = mailTo('owner@cafe.test')
+  check(entryMail.length === 1 && entryMail[0].subject === 'New entry: Contact <us>' && entryMail[0].reply_to === 'ann@example.test', 'the owner gets an email for a form entry and can reply to the visitor', JSON.stringify(entryMail.map((row) => row.subject)))
+  check(entryMail[0]?.html.includes('&lt;b&gt;Ann&lt;/b&gt;') && !entryMail[0]?.html.includes('<b>Ann') && !entryMail[0]?.html.includes('<script>x') && entryMail[0]?.text.includes('Name: <b>Ann</b>'), 'what visitors type is escaped in the HTML email')
+  mail.length = 0
+  await postAs('198.51.100.9', '/data/wishes', { contact: 'cake@example.test', next: '/write-us', wish: 'More cake' })
+  await call('save_record', { table: 'wishes', values: { wish: 'Owner wish' } })
+  await settle()
+  const recordMail = mailTo('owner@cafe.test')
+  check(recordMail.length === 1 && recordMail[0].subject === 'New in Wishes' && recordMail[0].text.includes('More cake') && recordMail[0].reply_to === 'cake@example.test', 'the owner gets an email for a record a visitor adds, but not for their own', JSON.stringify(recordMail.map((row) => row.subject)))
+  mail.length = 0
+  const mailCart = cartCookieOf(await addToCart(mailMug))
+  const checkoutHtml = await (await fetch(`${base}/checkout`, { headers: { Cookie: mailCart } })).text()
+  check(checkoutHtml.includes('name="email"') && checkoutHtml.includes('order confirmation'), 'checkout asks for an email for the confirmation')
+  const mailOrder = { address: '9 Mail Road', name: 'Mail <Buyer>', note: 'Leave at the door', payment: 'cod', phone: '0811111111' }
+  check((await (await postAs('198.51.100.10', '/checkout', { ...mailOrder, email: 'not-an-email' }, mailCart)).text()).includes('role="alert"'), 'checkout refuses a bad email')
+  const mailPlaced = await postAs('198.51.100.10', '/checkout', { ...mailOrder, email: 'buyer2@example.test' }, mailCart)
+  const mailOrderPath = new URL(mailPlaced.headers.get('location') ?? '/', base).pathname
+  await settle()
+  const confirmation = mailTo('buyer2@example.test')
+  check(mailPlaced.status === 303 && confirmation.length === 1 && /^Your order #\d{4,}$/.test(confirmation[0].subject), 'the customer gets an order confirmation', JSON.stringify(confirmation.map((row) => row.subject)))
+  check(confirmation[0]?.text.includes(`${base}${mailOrderPath}`) && /^\/order\/[0-9a-f]{64}$/.test(mailOrderPath) && confirmation[0]?.text.includes('฿100') && confirmation[0]?.html.includes('Mail &lt;Mug&gt;'), 'the confirmation has the private order link and the items, escaped')
+  const ownerOrderMail = mailTo('owner@cafe.test')
+  check(ownerOrderMail.length === 1 && ownerOrderMail[0].subject.startsWith('New order #') && ownerOrderMail[0].reply_to === 'buyer2@example.test' && ownerOrderMail[0].text.includes('0811111111') && ownerOrderMail[0].text.includes('Leave at the door'), 'the owner gets an email for each new order', JSON.stringify(ownerOrderMail.map((row) => row.subject)))
+  check((await call('list_orders', {})).data.some((row) => row.email === 'buyer2@example.test'), 'the order keeps the email')
+
+  // Changes work at once, and failures never stop a visitor
+  await call('update_site', { notifyEmail: 'owner2@cafe.test' })
+  mail.length = 0
+  await postAs('198.51.100.11', '/form/write-us/contact', { who: 'Ben' })
+  await settle()
+  check(mailTo('owner2@cafe.test').length === 1, 'a new owner address works at once, without publishing')
+  refuseMail = true
+  check(((await postAs('198.51.100.11', '/form/write-us/contact', { who: 'Cy' })).headers.get('location') ?? '').includes('sent=contact'), 'a failed email never stops a form')
+  const failedTest = await (await fetch(`${owner}/system/test-email`, { method: 'POST' })).text()
+  check(failedTest.includes('Not sent. Resend answered 403: The cafe.test domain is not verified &lt;b&gt;'), 'a failed test email shows what Resend said, safely')
+  await settle()
+  refuseMail = false
+  check((await (await fetch(`${owner}/system/test-email`, { method: 'POST' })).text()).includes('Sent to owner2@cafe.test') && mailTo('owner2@cafe.test').some((row) => row.subject.startsWith('Test email')), 'the owner can send a test email')
+  const emailSettings = formValues(await (await fetch(`${owner}/settings`)).text())
+  check(emailSettings.get('emailFrom') === 'shop@cafe.test' && emailSettings.get('notifyEmail') === 'owner2@cafe.test', 'the back office shows the email settings')
+  emailSettings.set('emailFrom', '')
+  check((await fetch(`${owner}/settings`, { body: emailSettings, method: 'POST', redirect: 'manual' })).status === 303, 'the back office saves the email settings')
+  check((await call('check_site', {})).data.problems.some((problem) => problem.includes('no sender address')) && !(await (await fetch(`${base}/login`)).text()).includes('href="/reset"'), 'clearing the sender turns email off, and check_site says why')
+  await call('update_site', { cart: false })
+  await new Promise((done) => resend.close(done))
+} else {
+  check(!(await (await fetch(`${base}/login`)).text()).includes('href="/reset"') && (await fetch(`${base}/reset`)).status === 404 && (await apiJson('/auth/reset', { body: asJson({ email: 'x@example.test' }), method: 'POST' })).status === 404, 'without email, customers are not offered reset emails')
+  await call('update_site', { emailFrom: 'shop@cafe.test' })
+  check((await call('check_site', {})).data.problems.some((problem) => problem.includes('RESEND_API_KEY secret is missing')) && (await call('get_status', {})).data.email.sending === false, 'check_site finds a sender address with no Resend key')
+  const clearing = formValues(await (await fetch(`${owner}/settings`)).text())
+  clearing.set('emailFrom', '')
+  await fetch(`${owner}/settings`, { body: clearing, method: 'POST', redirect: 'manual' })
+  check(!(await call('check_site', {})).data.problems.some((problem) => problem.includes('RESEND')), 'the owner can clear the sender address')
+}
+
 let attempts = 0
 let limited = false
 while (attempts < 15 && !limited) {

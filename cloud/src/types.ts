@@ -2,6 +2,8 @@ export type Env = {
   ASSETS: Fetcher
   DB: D1Database
   defer?: (work: Promise<unknown>) => void
+  RESEND_API_BASE?: string
+  RESEND_API_KEY?: string
   STRIPE_API_BASE?: string
   STRIPE_SECRET_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
@@ -21,6 +23,7 @@ export type Settings = {
   currency?: string
   customCss?: string
   email?: string
+  emailFrom?: string
   footerText?: string
   freeShippingOver?: number
   githubRepo?: string
@@ -29,6 +32,7 @@ export type Settings = {
   language?: string
   name: string
   nav?: Nav[]
+  notifyEmail?: string
   payCard?: boolean
   payCod?: boolean
   payTransfer?: boolean
@@ -86,6 +90,7 @@ export type Order = {
   address: string
   created_at: string
   customer_id: null | number
+  email: string
   id: number
   money_prefix: string
   money_suffix: string

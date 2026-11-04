@@ -25,14 +25,15 @@ Claude asks about your business, then writes the pages, chooses the design, and 
 - **Design:** 19 kinds of sections, including link lists for sub-menus and resources, five design styles, phone-friendly layouts, and fonts that cover Latin and Thai
 - **Database:** your own tables with text, numbers, dates, choices, images and links between tables, plus products, orders and messages. Up to 50 tables of 50,000 records each. Download any table as a spreadsheet file.
 - **Access rules:** for each table, choose who can read and add: anyone, logged-in customers, customers' own records only, staff, or only you. Fields can be staff-only, and every rule is enforced on the server.
-- **Customer accounts:** sign up, log in, log out, staff roles, and a page where customers see their own orders. Turn it on when you need it.
+- **Customer accounts:** sign up, log in, log out, staff roles, a page where customers see their own orders, and password reset emails once email is set up. Turn it on when you need it.
 - **API:** other systems and front ends can use your data, logins and orders, with secret keys and an OpenAPI description at `/api/v1/openapi.json`
 - **Publishing:** after your first publish, changes stay private with a preview link until you publish them. Go back to any of the last 20 versions. Version history covers pages and settings, while data changes at once.
 - **Limits nothing can get around:** seats and other places can't be overbooked, even by two people at the same moment, and one customer can't book the same thing twice
 - **Your data can leave with you:** download all your content and data in one file at any time
-- **Notifications:** get new orders and bookings in Discord, Slack or Telegram for free, or send signed webhooks to other services
+- **Notifications:** get an email for each new order, form entry and booking through your own Resend account, get them in Discord, Slack or Telegram for free, or send signed webhooks to other services
+- **Email:** order confirmations with the customer's private order link, and password reset emails, in your site's language when it's English or Thai
 - **Build guides for Claude:** planning, data design, access rules, screens, design, copy, shop, publishing, Wix and launch checks, built in, so there's nothing extra to install
-- **System page:** hosting, version, publishing, database use, login, payments and connections in one place
+- **System page:** hosting, version, publishing, database use, login, payments, email and connections in one place
 - **Shop:** product pages, categories, sale prices, sizes and colours, stock that can't oversell, a cart, free delivery thresholds, private order links and order status. Prices are always set on the server.
 - **Payments:** bank transfer and pay on delivery, plus cards through your own Stripe account
 - **Phone-first shopping:** a bottom tab bar and two-column product grid on phones, with no scripts on your pages
@@ -55,7 +56,8 @@ Nobody hosts your site but you. There's no central server, and web-end never see
 
 ## What it can't do yet
 
-- Send email. There are no notifications when a form is sent. If a customer forgets a password, you make a reset link in the back office and send it yourself.
+- Send email without an email account of your own. Emails go through your own Resend account, which you set up once, as shown below. Until then there are no emails, and if a customer forgets a password, you make a reset link in the back office and send it yourself.
+- Send newsletters, or email customers when you change an order's status. Customers see the status on their order page.
 - Check bank transfers automatically or take payment slips. You check each transfer and confirm it in the back office.
 - Create product photos. Upload your own, or use images you have the right to use.
 - Show customer reviews as a ready-made feature
@@ -126,6 +128,25 @@ Card payments use your own Stripe account, and card details stay on Stripe's pag
 
 Stripe charges its own fees. web-end adds none.
 
+## Sending email with Resend
+
+Emails go out through your own [Resend](https://resend.com) account, so they come from your own address. Once it's set up:
+
+- Customers can click **Forgot your password?** on the login page and get a link to choose a new one. The page never says whether an account uses that email.
+- Customers get an order confirmation with their private order link, if they enter an email at checkout or are logged in.
+- You get an email for each new order, form entry and record that visitors add.
+
+You need your own domain, such as `your-shop.com`, because Resend only sends from domains you've verified.
+
+1. Sign up at Resend. Its free plan sends up to 100 emails a day and 3,000 a month.
+2. In Resend, open **Domains**, add your domain, and add the records it shows at the company where you bought the domain. Wait until Resend says it's verified.
+3. In Resend, open **API Keys** and create a key with **Sending access**.
+4. In Cloudflare, open your Worker, then **Settings**, **Variables and Secrets**. Add a secret named `RESEND_API_KEY` and paste the key.
+5. In your back office's **Settings**, under **Email**, enter the address to send from, such as `orders@your-shop.com`, and your own address for new orders and messages. Save.
+6. Open **System** and press **Send me a test email**.
+
+If only part of this is done, **System** and Claude's site check tell you what's missing. Emails pass through Resend, so their terms apply to them. web-end itself still never sees your data. Each email is sent once, with no retry, and you get at most 60 notices an hour, so a flood of spam can't use up your allowance. This has been tested against a stand-in for Resend, but not yet with a real Resend account, so send a test email and place a test order before you rely on it.
+
 ## For developers
 
 The site is in [`cloud/`](cloud): a Cloudflare Worker with a D1 database and an MCP server at `/mcp/<secret>`. No build step or framework.
@@ -151,6 +172,8 @@ Then, in a second terminal, test a fresh install. It needs an empty local databa
 ```bash
 BASE_URL=http://localhost:8799 npm test
 ```
+
+To test email against a stand-in for Resend on port 8823, start the site with `--var WEBHOOK_ALLOW_HTTP:1 --var RESEND_API_KEY:re_test_fake --var RESEND_API_BASE:http://localhost:8823`, and run the tests with `EMAIL_TEST=1`. The Resend address can only be changed while `WEBHOOK_ALLOW_HTTP` is on, which is for local tests only.
 
 [`template/`](template) is an earlier, heavier version built on Payload CMS for developers who want a full CMS. It needs a paid Cloudflare plan and a Payload release that isn't out yet, and it isn't the recommended way to use web-end.
 

@@ -1,6 +1,8 @@
+import { emailResetLink } from './account'
 import { allowAttempt, customerFromToken, endToken, newToken, openSession, registerCustomer, sha256, verifyLogin } from './auth'
 import { canChange, canCreate, createRecord, deleteRecord, getRecord, getTable, listRecords, listTables, readScope, showRecord, spotsLeft, updateRecord } from './data'
 import type { Actor, DataField, DataTable } from './data'
+import { canSendEmail } from './email'
 import { getProduct, isAvailable } from './items'
 import { parsePrice } from './money'
 import { canPayByCard, orderForApi, orderLines, orderStatuses, setOrderStatus, submitOrder } from './shop'
@@ -113,6 +115,13 @@ async function handleAuth(request: Request, env: Env, site: SiteRow, settings: S
   if (!body) return fail(400, 'bad_body', 'Send a JSON object.')
   const email = typeof body.email === 'string' ? body.email : ''
   const password = typeof body.password === 'string' ? body.password : ''
+  if (action === 'reset') {
+    if (!canSendEmail(env, settings)) return fail(404, 'email_off', 'This site does not send emails yet.')
+    if (!(await allowAttempt(request, env, 'reset', 5, 900))) return fail(429, 'too_many', 'Too many attempts. Please wait a while.')
+    await emailResetLink(env, site, new URL(request.url).origin, email)
+    // The same answer whether or not an account uses this email.
+    return json({ ok: true })
+  }
   let customerId: number | null | undefined
   if (action === 'login') {
     if (!(await allowAttempt(request, env, 'login', 10, 900))) return fail(429, 'too_many', 'Too many attempts. Please wait a while.')
@@ -199,9 +208,9 @@ async function handleOrders(request: Request, env: Env, url: URL, site: SiteRow,
       cart.set(variant ? `${item}_${variant}` : String(item), quantity)
     }
     const text = (key: string) => (typeof body[key] === 'string' ? (body[key] as string).trim() : '')
-    const values = { address: text('address'), name: text('name'), note: text('note'), payment: text('payment'), phone: text('phone') }
+    const values = { address: text('address'), email: text('email'), name: text('name'), note: text('note'), payment: text('payment'), phone: text('phone') }
     const placed = await submitOrder(request, env, site, cart, values, actor.customer)
-    if (placed.problem === 'details') return fail(400, 'bad_details', 'Check the name, phone, address and payment method.')
+    if (placed.problem === 'details') return fail(400, 'bad_details', 'Check the name, phone, email, address and payment method.')
     if (placed.problem === 'busy') return fail(429, 'too_many', 'Too many orders right now. Please try again soon.')
     if (placed.problem || !placed.order) return fail(409, 'unavailable', 'Something in this order is no longer on sale or in stock.')
     const orderPath = `/order/${placed.token}`
@@ -244,9 +253,10 @@ function openApi(url: URL, settings: Settings, tables: DataTable[], actor: Actor
     '/auth/login': { post: { summary: 'Log a customer in and get a token' } },
     '/auth/logout': { post: { summary: 'End the session of this token' } },
     '/auth/me': { get: { summary: 'The logged-in customer' } },
+    '/auth/reset': { post: { summary: 'Email a link to choose a new password, if an account uses this email. The answer is the same either way. Only works once the site sends emails.' } },
     '/products': { get: { summary: 'Published products. Filter with ?collection=' } },
     '/products/{id}': { get: { summary: 'One product with its options' } },
-    '/orders': { get: { summary: "The customer's own orders, or all orders for a key" }, post: { summary: 'Place an order. Prices and stock always come from the database.' } },
+    '/orders': { get: { summary: "The customer's own orders, or all orders for a key" }, post: { summary: 'Place an order with lines, name, phone, address, payment and an optional email for the confirmation. Prices and stock always come from the database.' } },
     '/orders/{id}': { get: { summary: 'One order' }, patch: { summary: 'Change the status. Staff or key only.' } },
   }
   const schemas: Record<string, object> = {}

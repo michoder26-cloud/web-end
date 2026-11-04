@@ -5,6 +5,7 @@ import { newToken } from './auth'
 import { writeItem } from './cms'
 import { systemStatus } from './cms-platform'
 import { createRecord, deleteRecord, getRecord, getTable, listRecords, listTables, ownerActor, saveTable, showRecord, tableBase, tableSchema, updateRecord } from './data'
+import { emailProblems } from './email'
 import { guides, guideTopics } from './guides'
 import { parsePrice } from './money'
 import { checkMove, cleanPath, copyImage, importProducts, moveGate, moveStatus, readWebPage, rememberReading, saveRedirects, safeWebUrl, scanWebsite } from './moving'
@@ -50,7 +51,8 @@ Limits to explain honestly:
 - The owner has the full source code in their own GitHub account. A developer can change anything there. New versions are installed from the Updates page in the back office.
 - Photos can be uploaded in the back office, up to 1 MB each. Otherwise use public https links they have the right to use.
 - Secret API keys are created only by the owner on the Connect page of the back office. Never ask for one in chat.
-- It cannot check bank transfers automatically or send emails, though a webhook can trigger the owner's own automation. The owner confirms transfers in the back office and needs to check it for new orders. Card payments need the owner's own Stripe account and its secrets added in Cloudflare. Bookings can't be overbooked or doubled when the table uses capacityField and unique, as the screens guide shows. A customer who forgets a password needs a reset link from the owner's back office.
+- It cannot check bank transfers automatically. The owner confirms transfers in the back office. Card payments need the owner's own Stripe account and its secrets added in Cloudflare. Bookings can't be overbooked or doubled when the table uses capacityField and unique, as the screens guide shows.
+- Email is optional and uses the owner's own Resend account: they add the RESEND_API_KEY secret in Cloudflare themselves, and you set emailFrom and notifyEmail with update_site. Then customers can get a password reset email from the login page and an order confirmation, and the owner gets an email for each new order, form entry and record visitors add. Without it, a customer who forgets a password needs a reset link from the back office, and the owner checks the back office or a chat notification for new orders.
 - Don't collect health data, ID numbers or card details through forms, and never add a password field to a form. Customer passwords belong only to the built-in login.
 - Don't build sites that imitate another business or trick people.
 - Many countries require legal pages such as a privacy notice or imprint. Tell them to have legal text checked.`
@@ -144,7 +146,9 @@ export const settingsShape = {
   headerButtonLabel: optional(40),
   headerButtonHref: href.optional(),
   footerText: optional(500),
-  email: z.string().email().optional(),
+  email: z.string().email().optional().describe('The public contact email shown on the site. Customer emails use it as the reply address.'),
+  emailFrom: z.string().email().max(254).optional().describe("The address the site's emails come from, on a domain the owner verified in their own Resend account, such as orders@their-shop.com. Emails also need the owner to add the RESEND_API_KEY secret in Cloudflare. Takes effect at once, without publishing."),
+  notifyEmail: z.string().email().max(254).optional().describe('Where the owner gets an email for each new order, form entry and record that visitors add. Needs email set up. Takes effect at once, without publishing.'),
   phone: optional(40),
   address: optional(300),
 }
@@ -178,6 +182,7 @@ export async function findProblems(env: Env, site: SiteRow) {
     const contact = table.fields.find((field) => ['email', 'phone'].includes(field.type) && !field.staffOnly)
     if (contact && table.read_access === 'public') problems.push(`Anyone can read the "${contact.name}" field of the table "${table.name}". Set staffOnly on it unless that is intended.`)
   }
+  problems.push(...emailProblems(env, settings))
   if (settings.cart) {
     if (!settings.payTransfer && !settings.payCod && !settings.payCard) problems.push('The cart is on, but no payment method is on. Turn on bank transfer, pay on delivery or cards.')
     if (settings.payCard && (!settings.currency || !env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET)) problems.push('Card payments are on, but the currency or the Stripe secrets are missing, so customers will not see this option.')
@@ -447,8 +452,8 @@ export function createMcpServer(env: Env, origin: string, code: string) {
     safely(async ({ limit, status }) => {
       const site = await getSite()
       const query = status
-        ? db.prepare('SELECT id, customer_id, name, phone, address, note, payment, status, subtotal, shipping, total, money_prefix, money_suffix, created_at FROM orders WHERE site_id = ? AND status = ? ORDER BY id DESC LIMIT ?').bind(site.id, status, limit)
-        : db.prepare('SELECT id, customer_id, name, phone, address, note, payment, status, subtotal, shipping, total, money_prefix, money_suffix, created_at FROM orders WHERE site_id = ? ORDER BY id DESC LIMIT ?').bind(site.id, limit)
+        ? db.prepare('SELECT id, customer_id, name, phone, email, address, note, payment, status, subtotal, shipping, total, money_prefix, money_suffix, created_at FROM orders WHERE site_id = ? AND status = ? ORDER BY id DESC LIMIT ?').bind(site.id, status, limit)
+        : db.prepare('SELECT id, customer_id, name, phone, email, address, note, payment, status, subtotal, shipping, total, money_prefix, money_suffix, created_at FROM orders WHERE site_id = ? ORDER BY id DESC LIMIT ?').bind(site.id, limit)
       const { results } = await query.all<Omit<Order, 'site_id'>>()
       const lines = await orderLines(env, results.map((order) => order.id))
       return reply(results.map((order) => ({ ...order, lines: lines.get(order.id) ?? [] })))

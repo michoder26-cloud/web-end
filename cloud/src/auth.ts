@@ -99,14 +99,31 @@ export async function endSession(request: Request, env: Env) {
   if (token) await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256(token)).run()
 }
 
-/** Counts attempts per visitor. Returns false once the limit for this time window is used up. */
-export async function allowAttempt(request: Request, env: Env, action: string, limit: number, seconds: number) {
-  const visitor = await sha256(request.headers.get('cf-connecting-ip') ?? 'local')
+/** Counts uses of one key in the current time window. Returns false once the limit is used up. */
+export async function withinLimit(env: Env, name: string, limit: number, seconds: number) {
   const now = Date.now()
-  const key = `${action}:${visitor.slice(0, 32)}:${Math.floor(now / (seconds * 1000))}`
+  const key = `${name}:${Math.floor(now / (seconds * 1000))}`
   const row = await env.DB.prepare('INSERT INTO throttle (key, count, expires_at) VALUES (?, 1, ?) ON CONFLICT (key) DO UPDATE SET count = count + 1 RETURNING count')
     .bind(key, now + seconds * 1000)
     .first<{ count: number }>()
   if (Math.random() < 0.02) await env.DB.prepare('DELETE FROM throttle WHERE expires_at < ?').bind(now).run()
   return (row?.count ?? 0) <= limit
+}
+
+/** Counts attempts per visitor. Returns false once the limit for this time window is used up. */
+export async function allowAttempt(request: Request, env: Env, action: string, limit: number, seconds: number) {
+  const visitor = await sha256(request.headers.get('cf-connecting-ip') ?? 'local')
+  return withinLimit(env, `${action}:${visitor.slice(0, 32)}`, limit, seconds)
+}
+
+const resetSeconds = 24 * 3600
+
+/** Makes a one-time link to choose a new password. Only the newest link of a customer works. */
+export async function createResetLink(env: Env, customerId: number) {
+  const token = newToken()
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM password_resets WHERE customer_id = ?').bind(customerId),
+    env.DB.prepare('INSERT INTO password_resets (token_hash, customer_id, expires_at) VALUES (?, ?, ?)').bind(await sha256(token), customerId, new Date(Date.now() + resetSeconds * 1000).toISOString()),
+  ])
+  return `/reset/${token}`
 }

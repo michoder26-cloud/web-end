@@ -94,7 +94,8 @@ Members, own and login prompts need update_site accounts true. Default to the ti
 - Products: save_item with price, comparePrice only for a real former price, category, stock and variants. Show them with a collection block with an id, filters true and no button link.
 - Turn on: update_site cart true, plus payTransfer with transferDetails, payCod, or payCard with currency and the owner's Stripe secrets.
 - Stock can't oversell, and cancelling an order restores it.
-- Bank transfers are not checked automatically. The owner confirms them in the back office.`,
+- Bank transfers are not checked automatically. The owner confirms them in the back office.
+- Checkout asks for an optional email. With email set up, as the limits guide explains, the customer gets a confirmation with their private order link, and the owner gets an email for each new order.`,
   publish: `# Publishing
 - Before the first publish, changes appear at once while the site is being built.
 - After the first publish_site, visitors keep seeing the published version. New changes to pages and settings stay private until the next publish_site. get_site shows the preview link and what's waiting.
@@ -144,7 +145,7 @@ Tell the owner this hasn't been tested inside a real Wix site by the web-end pro
 - Browser calls from another site need that exact address in allowedOrigins.
 - Webhooks: save_webhook sends signed messages on record.created, record.updated, record.deleted, order.created, order.updated and customer.created. They go once with no retry, so don't rely on them alone for anything critical. The signature header is X-Web-End-Signature: t=<time>,v1=<HMAC-SHA256 of "<time>.<body>" with the signing secret>. The owner finds the secret on the Connect page.
 - Free notifications: the owner can paste a Discord, Slack or Telegram address on the Connect page, and new orders and bookings arrive in that chat. Those addresses hold a secret, so never ask for them in chat.
-- For email, point a webhook at the owner's own automation account.`,
+- Email: once the owner has set up Resend, as the limits guide explains, the site emails the owner about new orders, form entries and records, and emails customers their order confirmation and password resets. For anything else, such as a newsletter, point a webhook at the owner's own automation account.`,
   test_before_launch: `# Before launch
 - Run check_site and fix everything.
 - Try each role through the preview or the live site: visitor, new customer, second customer, staff, owner. The second customer must not see the first one's "own" records.
@@ -157,7 +158,7 @@ Tell the owner plainly what you could not test, such as real card payments or he
 - It runs on the owner's Cloudflare account. The free plan allows 100,000 requests and 5 million database rows read a day, 100,000 rows written a day, and 10 ms of processor time per request. At the limit it pauses until 00:00 UTC. Workers Paid starts at $5 a month.
 - 50 tables per site, 50,000 records per table, 20 KB per record. Filtering large tables reads many rows, so show short lists.
 - The owner can download all content and data from the System page, and move the site to WordPress from the Move to WordPress page. Their code is in their GitHub and their database in their Cloudflare account.
-- No built-in email, so a forgotten password needs a reset link from the back office. No automatic bank transfer checks. No built-in logic beyond tables, rules, webhooks and sandboxed custom code. Anything else means a developer changing the code in the owner's GitHub repository, and an update replaces such changes, though they stay in GitHub history.
+- Email needs the owner's own Resend account. Resend's free plan allows 100 emails a day and 3,000 a month. The owner verifies a domain in Resend, adds the RESEND_API_KEY secret in Cloudflare, and the sender address and their own address go in with update_site emailFrom and notifyEmail. Then customers can ask for a password reset email on the login page and get an order confirmation with their private order link, and the owner gets an email for each new order, form entry and record visitors add, up to 60 an hour. Emails go once, with no retry. Without email, a forgotten password needs a reset link from the back office. No automatic bank transfer checks. No built-in logic beyond tables, rules, webhooks and sandboxed custom code. Anything else means a developer changing the code in the owner's GitHub repository, and an update replaces such changes, though they stay in GitHub history.
 - No Google or social login yet.
 - Claude can't create secret keys, change Cloudflare secrets, or connect a domain. The owner does those.`,
 }

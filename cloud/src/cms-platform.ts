@@ -4,6 +4,7 @@ import { firstProblem, input, office, readField, spec } from './cms'
 import type { Notice } from './cms'
 import { accessLevels, createRecord, deleteRecord, fieldTypes, getRecord, getTable, listRecords, listTables, ownerActor, recordsCsv, saveTable, tableSchema, updateRecord } from './data'
 import type { DataField, DataTable } from './data'
+import { emailProblems, emailStatus, sendEmail } from './email'
 import { escapeHtml, notFound, see } from './http'
 import { checkMove, cleanPath, finishMove, importProducts, moveStatus, safeWebUrl, saveRedirects } from './moving'
 import type { MoveReport } from './moving'
@@ -214,7 +215,7 @@ async function exportEverything(env: Env, site: SiteRow) {
     all('SELECT * FROM items WHERE site_id = ?'),
     all('SELECT item_variants.* FROM item_variants JOIN items ON items.id = item_variants.item_id WHERE items.site_id = ?'),
     all('SELECT id, email, name, role, created_at FROM customers WHERE site_id = ?'),
-    all('SELECT id, customer_id, name, phone, address, note, payment, status, subtotal, shipping, total, money_prefix, money_suffix, created_at, updated_at FROM orders WHERE site_id = ?'),
+    all('SELECT id, customer_id, name, phone, email, address, note, payment, status, subtotal, shipping, total, money_prefix, money_suffix, created_at, updated_at FROM orders WHERE site_id = ?'),
     all('SELECT order_lines.* FROM order_lines JOIN orders ON orders.id = order_lines.order_id WHERE orders.site_id = ?'),
     all('SELECT id, form, page, data, status, created_at, customer_id FROM entries WHERE site_id = ?'),
     all('SELECT id, name, type, size, created_at FROM media WHERE site_id = ?'),
@@ -359,12 +360,14 @@ export async function systemStatus(env: Env, site: SiteRow, origin: string) {
     database: { imageBytes, customers, orders, pages, records, tables },
     login: { customerAccounts: Boolean(settings.accounts) },
     payments: { bankTransfer: Boolean(settings.payTransfer), card: Boolean(settings.payCard), cardSecretsSet: Boolean(env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET), payOnDelivery: Boolean(settings.payCod), cart: Boolean(settings.cart) },
+    email: emailStatus(env, settings),
     connections: { apiKeys: keys, browserSites: settings.allowedOrigins ?? [], webhooks: hooks },
   }
 }
 
-async function systemPage(env: Env, url: URL, site: SiteRow, code: string) {
+async function systemPage(env: Env, url: URL, site: SiteRow, code: string, notice?: Notice) {
   const status = await systemStatus(env, site, url.origin)
+  const settings = JSON.parse(site.settings) as Settings
   const base = `/owner/${escapeHtml(code)}`
   const row = (label: string, value: unknown, href?: string) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}${href ? ` <a href="${base}${href}">Open</a>` : ''}</dd></div>`
   const on = (value: boolean) => (value ? 'On' : 'Off')
@@ -378,9 +381,23 @@ async function systemPage(env: Env, url: URL, site: SiteRow, code: string) {
 <article class="card account__record"><h2>Publishing</h2><dl>${row('Live version', status.publishing.liveVersion ?? 'Not published yet, so changes show at once', '/publish')}${row('Waiting to publish', waiting ? waiting.pages.length + (waiting.settings ? 1 : 0) : 0)}</dl></article>
 <article class="card account__record"><h2>Database</h2><dl>${row('Pages', status.database.pages, '/pages')}${row('Tables', status.database.tables, '/data')}${row('Records', status.database.records)}${row('Customers', status.database.customers, '/customers')}${row('Orders', status.database.orders, '/orders')}${row('Images', `${(status.database.imageBytes / 1_000_000).toFixed(1)} MB of 200 MB`, '/media')}</dl></article>
 <article class="card account__record"><h2>Login and payments</h2><dl>${row('Customer accounts', on(status.login.customerAccounts), '/settings')}${row('Cart', on(status.payments.cart))}${row('Bank transfer', on(status.payments.bankTransfer))}${row('Pay on delivery', on(status.payments.payOnDelivery))}${row('Cards', on(status.payments.card))}${row('Stripe secrets in Cloudflare', status.payments.cardSecretsSet ? 'Set' : 'Not set')}</dl></article>
+<article class="card account__record"><h2>Email</h2><dl>${row('Resend key in Cloudflare', status.email.resendKeySet ? 'Set' : 'Not set')}${row('Send from', status.email.senderAddress ?? 'Not set', '/settings')}${row('Your address for new orders, forms and records', status.email.ownerAddress ?? 'Not set', '/settings')}${row('Emails', status.email.sending ? 'On' : 'Off')}</dl>${emailProblems(env, settings).map((problem) => `<p role="alert">${escapeHtml(problem)}</p>`).join('')}${status.email.ownerNotices ? `<form action="${base}/system/test-email" method="post"><button class="button button--small" type="submit">Send me a test email</button></form>` : ''}</article>
 <article class="card account__record"><h2>Your data is yours</h2><p>Your code is in your GitHub, and your database is in your Cloudflare account. You can also download all your content and data in one file at any time.</p><p><a class="button button--small" href="${base}/export.json">Download everything</a> <a class="button button--small" href="${base}/wordpress">Move to WordPress</a></p></article>
 <article class="card account__record"><h2>Connections</h2><dl>${row('Secret keys', status.connections.apiKeys, '/connect')}${row('Webhooks', status.connections.webhooks)}${row('Websites allowed to call from a browser', status.connections.browserSites.join(', ') || 'None')}</dl></article>`,
+    notice,
   )
+}
+
+/** Lets the owner see that their email setup works, and what Resend said if it doesn't. */
+async function testEmail(env: Env, url: URL, site: SiteRow, code: string) {
+  const settings = JSON.parse(site.settings) as Settings
+  if (!settings.notifyEmail) return systemPage(env, url, site, code, { error: 'Add your own address in Settings first.' })
+  const sent = await sendEmail(env, settings, settings.notifyEmail, {
+    heading: 'Your email works',
+    lines: [`This test came from ${url.origin}. New orders, form entries and records that visitors add will arrive at this address, and customers can get password reset emails and order confirmations.`],
+    subject: `Test email from ${settings.name}`,
+  })
+  return systemPage(env, url, site, code, sent.ok ? { saved: `Sent to ${settings.notifyEmail}. If it doesn't arrive in a few minutes, check your spam folder and the Logs page in Resend.` } : { error: `Not sent. ${sent.problem ?? ''}` })
 }
 
 const download = (body: string, name: string, type: string) =>
@@ -418,6 +435,7 @@ export function handlePlatform(request: Request, env: Env, url: URL, site: SiteR
   if (area === 'connect') return handleConnect(request, env, url, site, code, id, action, extra, saved)
   if (area === 'publish') return handlePublish(request, env, url, site, code, id, action, saved)
   if (area === 'system' && !id && request.method !== 'POST') return systemPage(env, url, site, code)
+  if (area === 'system' && id === 'test-email' && !action && request.method === 'POST') return testEmail(env, url, site, code)
   if (area === 'export.json' && !id && request.method === 'GET') return exportEverything(env, site)
   if (area === 'move' && !action) return handleMove(request, env, url, site, code, id, saved)
   if (area === 'wordpress' && !action && request.method === 'GET') {
