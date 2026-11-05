@@ -46,32 +46,74 @@ export const sign = async (secret: string, text: string) => {
   return [...new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(text)))].map((byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
-async function deliver(env: Env, siteId: number, event: string, data: unknown) {
+type Delivery = { attempts: number; data: string; event: string; id: number; secret: string; url: string; webhook_id: number }
+
+const nowIso = () => new Date().toISOString()
+
+const retryAt = (attempt: number) => new Date(Date.now() + Math.min(1_800_000, 30_000 * 2 ** Math.max(0, attempt - 1))).toISOString()
+
+async function enqueue(env: Env, siteId: number, event: string, data: unknown) {
   try {
-    const { results } = await env.DB.prepare('SELECT id, url, events, secret FROM webhooks WHERE site_id = ?').bind(siteId).all<{ events: string; id: number; secret: string; url: string }>()
+    const { results } = await env.DB.prepare('SELECT id, events FROM webhooks WHERE site_id = ?').bind(siteId).all<{ events: string; id: number }>()
     const wanted = results.filter((hook) => (JSON.parse(hook.events) as string[]).includes(event))
-    await Promise.all(
-      wanted.map(async (hook) => {
-        const chat = chatFormat(hook.url)
-        const body = JSON.stringify(chat ? chat(chatMessage(event, data)) : { at: new Date().toISOString(), data, event })
-        const time = Math.floor(Date.now() / 1000)
-        let status = 0
-        try {
-          const response = await fetch(hook.url, {
-            body,
-            headers: { 'Content-Type': 'application/json', 'X-Web-End-Event': event, 'X-Web-End-Signature': `t=${time},v1=${await sign(hook.secret, `${time}.${body}`)}` },
-            method: 'POST',
-            signal: AbortSignal.timeout(5000),
-          })
-          status = response.status
-        } catch (error) {
-          console.error('A webhook could not be delivered', error)
-        }
-        await env.DB.prepare("UPDATE webhooks SET last_status = ?, last_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?").bind(status, hook.id).run()
-      }),
-    )
+    const body = JSON.stringify(data) ?? 'null'
+    await Promise.all(wanted.map((hook) => env.DB.prepare('INSERT INTO webhook_deliveries (webhook_id, event, data) VALUES (?, ?, ?)').bind(hook.id, event, body).run()))
   } catch (error) {
-    console.error(error)
+    console.error('A webhook could not be queued', error)
+  }
+}
+
+/** Delivers a small bounded batch. Scheduled runs also reclaim work left in progress by an interrupted Worker. */
+export async function runWebhookOutbox(env: Env, now = Date.now()) {
+  const clock = new Date(now).toISOString()
+  try {
+    await env.DB.prepare("UPDATE webhook_deliveries SET status = 'pending', locked_at = NULL, updated_at = ? WHERE status = 'sending' AND locked_at < ?")
+      .bind(clock, new Date(now - 300_000).toISOString())
+      .run()
+    const { results } = await env.DB.prepare("SELECT d.id, d.webhook_id, d.event, d.data, d.attempts, h.url, h.secret FROM webhook_deliveries d JOIN webhooks h ON h.id = d.webhook_id WHERE d.status = 'pending' AND d.next_at <= ? ORDER BY d.id LIMIT 20")
+      .bind(clock)
+      .all<Delivery>()
+    await Promise.all(results.map(async (delivery) => {
+      const claim = await env.DB.prepare("UPDATE webhook_deliveries SET status = 'sending', attempts = attempts + 1, locked_at = ?, updated_at = ? WHERE id = ? AND status = 'pending'")
+        .bind(clock, clock, delivery.id)
+        .run()
+      if (!claim.meta.changes) return
+      const attempt = delivery.attempts + 1
+      const chat = chatFormat(delivery.url)
+      const data = JSON.parse(delivery.data) as unknown
+      const body = JSON.stringify(chat ? chat(chatMessage(delivery.event, data)) : { at: clock, data, event: delivery.event })
+      const time = Math.floor(now / 1000)
+      let status = 0
+      let failure = ''
+      try {
+        const response = await fetch(delivery.url, {
+          body,
+          headers: { 'Content-Type': 'application/json', 'X-Web-End-Event': delivery.event, 'X-Web-End-Signature': `t=${time},v1=${await sign(delivery.secret, `${time}.${body}`)}` },
+          method: 'POST',
+          signal: AbortSignal.timeout(5000),
+        })
+        status = response.status
+        if (status >= 200 && status <= 299) {
+          await env.DB.batch([
+            env.DB.prepare("UPDATE webhook_deliveries SET status = 'sent', last_status = ?, error = NULL, locked_at = NULL, updated_at = ? WHERE id = ?").bind(status, nowIso(), delivery.id),
+            env.DB.prepare("UPDATE webhooks SET last_status = ?, last_at = ? WHERE id = ?").bind(status, nowIso(), delivery.webhook_id),
+          ])
+          return
+        }
+        failure = `The address answered ${status}.`
+      } catch (error) {
+        failure = error instanceof Error ? error.message.slice(0, 500) : 'The address could not be reached.'
+      }
+      const retryable = status === 0 || status === 429 || status >= 500
+      const exhausted = attempt >= 5 || !retryable
+      await env.DB.batch([
+        env.DB.prepare("UPDATE webhook_deliveries SET status = ?, next_at = ?, last_status = ?, error = ?, locked_at = NULL, updated_at = ? WHERE id = ?")
+          .bind(exhausted ? 'failed' : 'pending', exhausted ? clock : retryAt(attempt), status, failure, nowIso(), delivery.id),
+        env.DB.prepare("UPDATE webhooks SET last_status = ?, last_at = ? WHERE id = ?").bind(status, nowIso(), delivery.webhook_id),
+      ])
+    }))
+  } catch (error) {
+    console.error('Webhook outbox could not run', error)
   }
 }
 
@@ -87,7 +129,8 @@ export const onEvent = (hook: EventHook) => {
 export async function fireEvent(env: Env, siteId: number, event: (typeof eventNames)[number], data: unknown, before?: Record<string, unknown>) {
   // Every write that other systems hear about can also start the owner's automations. They never throw.
   if (afterEvent) await afterEvent(env, siteId, event, data, before)
-  const work = deliver(env, siteId, event, data)
+  await enqueue(env, siteId, event, data)
+  const work = runWebhookOutbox(env)
   if (env.defer) env.defer(work)
   else await work
 }

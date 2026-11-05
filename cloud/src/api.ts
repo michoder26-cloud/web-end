@@ -30,9 +30,13 @@ const forbidden = () => fail(403, 'forbidden', "You don't have permission to do 
 export function originAllowed(origin: string, allowed: string[] = []) {
   return allowed.some((rule) => {
     if (rule === origin) return true
-    if (!rule.startsWith('https://*.') || !origin.startsWith('https://')) return false
+    if (!rule.startsWith('https://*.')) return false
     try {
-      return new URL(origin).hostname.endsWith(rule.slice('https://*'.length))
+      const parsed = new URL(origin)
+      const suffix = rule.slice('https://*'.length)
+      // A wildcard means normal HTTPS origins on subdomains, never arbitrary alternate ports.
+      // The exact-origin form above remains available when an owner deliberately needs one.
+      return parsed.origin === origin && parsed.protocol === 'https:' && !parsed.port && !parsed.hostname.includes('*') && parsed.hostname.endsWith(suffix) && parsed.hostname.length > suffix.length
     } catch {
       return false
     }
@@ -58,8 +62,9 @@ async function findActor(request: Request, env: Env, site: SiteRow, settings: Se
   if (token.startsWith(apiKeyPrefix)) {
     // A browser would show the key to every visitor, so refuse it before it becomes a habit.
     if (request.headers.get('origin')) return fail(403, 'key_in_browser', 'Secret keys only work from server code, such as Wix backend code. Never put one in a web page.')
-    const row = await env.DB.prepare('SELECT id, scope, last_used_at FROM api_keys WHERE site_id = ? AND key_hash = ?').bind(site.id, await sha256(token)).first<{ id: number; last_used_at: null | string; scope: string }>()
+    const row = await env.DB.prepare('SELECT id, scope, last_used_at, expires_at FROM api_keys WHERE site_id = ? AND key_hash = ?').bind(site.id, await sha256(token)).first<{ expires_at: null | string; id: number; last_used_at: null | string; scope: string }>()
     if (!row) return fail(401, 'bad_token', "That key isn't valid.")
+    if (row.expires_at && Date.parse(row.expires_at) <= Date.now()) return fail(401, 'bad_token', "That key isn't valid.")
     if (!row.last_used_at || Date.now() - Date.parse(row.last_used_at) > 3_600_000) await env.DB.prepare('UPDATE api_keys SET last_used_at = ? WHERE id = ?').bind(new Date().toISOString(), row.id).run()
     return { admin: true, customer: null, readOnly: row.scope === 'read' }
   }
@@ -214,13 +219,16 @@ async function handleOrders(request: Request, env: Env, url: URL, site: SiteRow,
     }
     const text = (key: string) => (typeof body[key] === 'string' ? (body[key] as string).trim() : '')
     const values = { address: text('address'), email: text('email'), name: text('name'), note: text('note'), payment: text('payment'), phone: text('phone') }
-    const placed = await submitOrder(request, env, site, cart, values, actor.customer)
+    const idempotencyKey = request.headers.get('idempotency-key')?.trim()
+    if (idempotencyKey && !/^[A-Za-z0-9._-]{8,128}$/.test(idempotencyKey)) return fail(400, 'bad_idempotency_key', 'Use 8 to 128 letters, numbers, dots, underscores or hyphens.')
+    const placed = await submitOrder(request, env, site, cart, values, actor.customer, idempotencyKey)
     if (placed.problem === 'details') return fail(400, 'bad_details', 'Check the name, phone, email, address and payment method.')
     if (placed.problem === 'busy') return fail(429, 'too_many', 'Too many orders right now. Please try again soon.')
+    if (placed.problem === 'idempotency') return fail(409, 'idempotency_conflict', 'This Idempotency-Key was already used for a different order.')
     if (placed.problem || !placed.order) return fail(409, 'unavailable', 'Something in this order is no longer on sale or in stock.')
     const orderPath = `/order/${placed.token}`
     const payUrl = values.payment === 'card' && canPayByCard(env, settings) ? await startCardPayment(env, url, settings, placed.order, placed.lines as never, orderPath) : null
-    return json({ order: orderForApi(placed.order, placed.lines as never), order_url: `${url.origin}${orderPath}`, ...(payUrl ? { pay_url: payUrl } : {}) }, 201)
+    return json({ order: orderForApi(placed.order, placed.lines as never), ...(placed.replayed ? {} : { order_url: `${url.origin}${orderPath}` }), ...(payUrl ? { pay_url: payUrl } : {}) }, placed.replayed ? 200 : 201)
   }
 
   if (!/^\d{1,12}$/.test(id)) return notFound()

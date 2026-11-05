@@ -24,6 +24,7 @@ export type Settings = {
   address?: string
   allowedOrigins?: string[]
   background?: string
+  bodyFont?: string
   cart?: boolean
   cartMembersOnly?: boolean
   currency?: string
@@ -35,6 +36,7 @@ export type Settings = {
   githubRepo?: string
   headerButtonHref?: string
   headerButtonLabel?: string
+  headingFont?: string
   language?: string
   /** The main language first, then extra ones, such as ['th', 'en']. One or none means a single-language site. */
   languages?: string[]

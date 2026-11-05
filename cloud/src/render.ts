@@ -1,6 +1,6 @@
 import { canChange, canCreate, showRecord } from './data'
 import type { DataField, PageRecords } from './data'
-import { contrast, isHexColor, isSafeHref, readableOn, siteStyles } from './theme'
+import { contrast, fontVars, isHexColor, isSafeHref, readableOn, siteStyles } from './theme'
 import { isAvailable } from './items'
 import { alternates, languageName, languagePrefix } from './languages'
 import { parsePrice } from './money'
@@ -398,7 +398,7 @@ ${hreflang}
 ${customCss}
 ${options.head ?? ''}
 </head>
-<body class="${tabs ? 'has-tabs' : ''}" data-style="${style}" style="${vars}">
+<body class="${tabs ? 'has-tabs' : ''}" data-style="${style}" style="${vars}${fontVars(settings.headingFont, settings.bodyFont).replaceAll("'", '&#39;')}">
 <header class="site-header"><div class="wrap site-header__inner"><a class="site-name" href="/">${escapeHtml(settings.name)}</a>${nav ? `<nav aria-label="Main">${nav}</nav>` : ''}${switcher}${headerButton}</div></header>
 <main>${options.main}</main>
 <footer class="site-footer"><div class="wrap"><div class="site-footer__grid"><div><p class="site-footer__name">${escapeHtml(settings.name)}</p>${settings.tagline ? `<p>${escapeHtml(settings.tagline)}</p>` : ''}${settings.footerText ? `<p class="pre-line">${escapeHtml(settings.footerText)}</p>` : ''}</div>${links ? `<nav aria-label="Footer">${links}</nav>` : ''}${settings.email || settings.phone || settings.address ? `<address>${settings.address ? `<p class="pre-line">${escapeHtml(settings.address)}</p>` : ''}${settings.phone ? `<a href="tel:${escapeHtml(settings.phone.replace(/[^\d+]/g, ''))}">${escapeHtml(settings.phone)}</a>` : ''}${settings.email ? `<a href="mailto:${escapeHtml(settings.email)}">${escapeHtml(settings.email)}</a>` : ''}</address>` : ''}</div><p class="site-credit">Made with <a href="${repository}">web-end</a>, free and open source.</p></div></footer>

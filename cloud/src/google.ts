@@ -10,7 +10,7 @@ import { fireEvent } from './webhooks'
 const google = {
   auth: 'https://accounts.google.com/o/oauth2/v2/auth',
   certs: 'https://www.googleapis.com/oauth2/v3/certs',
-  token: 'https://oauth2.googleapis.com/token',
+  exchange: 'https://oauth2.googleapis.com/token',
 }
 const issuers = ['https://accounts.google.com', 'accounts.google.com']
 const stateSeconds = 600
@@ -20,7 +20,7 @@ const clockSkew = 60
 // Tests point these at a local stand-in. The test-only switch must be on too, so a stray setting on a live site can never send the secret elsewhere.
 const endpoints = (env: Env) => {
   const base = env.WEBHOOK_ALLOW_HTTP === '1' && env.GOOGLE_API_BASE ? env.GOOGLE_API_BASE.replace(/\/+$/, '') : ''
-  return base ? { auth: `${base}/o/oauth2/v2/auth`, certs: `${base}/oauth2/v3/certs`, token: `${base}/token` } : google
+  return base ? { auth: `${base}/o/oauth2/v2/auth`, certs: `${base}/oauth2/v3/certs`, exchange: `${base}/token` } : google
 }
 
 // Pasted secrets often carry a stray space or line break.
@@ -215,7 +215,7 @@ export async function finishGoogle(request: Request, env: Env, url: URL, siteId:
 
   let idToken = ''
   try {
-    const response = await fetch(endpoints(env).token, {
+    const response = await fetch(endpoints(env).exchange, {
       body: new URLSearchParams({ client_id: clientId(env), client_secret: clientSecret(env), code, code_verifier: started.verifier, grant_type: 'authorization_code', redirect_uri: googleRedirect(url.origin) }),
       headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
       method: 'POST',

@@ -16,6 +16,7 @@ import { blockSchema, itemSchema, maxBlocksBytes, maxPagesPerSite, pageSlugSchem
 import { officeText, officeWords } from './office-words'
 import type { OfficeWords } from './office-words'
 import { entryFields, shell } from './owner'
+import { pageRevisions, rememberPage, restorePageRevision } from './page-history'
 import { validPromptPayId } from './promptpay'
 import { orderDetails, orderHistory, orderLines, orderNumber, orderStatuses, paymentName, setOrderStatus } from './shop'
 import { setStaff, staffAreas, staffPermissions } from './staff'
@@ -25,7 +26,7 @@ import { words } from './text'
 import { isNewer, latestRelease, repoPattern, updatesBody } from './updates'
 import { version } from './version'
 import { liveSite } from './versions'
-import { siteStyles } from './theme'
+import { siteFontNames, siteStyles } from './theme'
 import type { Block, Env, FormField, Item, Order, Settings, SiteRow, Variant } from './types'
 
 const maxOfficeBytes = 3_000_000
@@ -188,6 +189,10 @@ ${entry.fields.map((field) => input(`b${index}.${field.key}`, field, block[field
     })
     .join('')
   const adders = Object.entries(catalog).map(([type, entry]) => `<button class="button button--small" name="op" type="submit" value="add:${type}">${escapeHtml(t.label(entry.label))}</button>`).join('')
+  const revisions = await pageRevisions(env, site.id, slug)
+  const history = revisions.length
+    ? `<details class="cms-history"><summary>${t.pageHistory}</summary><p>${t.pageHistoryHelp}</p>${revisions.map((revision) => `<form action="${escapeHtml(desk.base)}/page/${escapeHtml(slug)}/restore/${revision.id}" method="post"><span>${escapeHtml(revision.title)} · ${escapeHtml(revision.created_at.slice(0, 16).replace('T', ' '))} UTC${revision.published ? '' : ` ${t.hiddenPage}`}</span><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmRestorePageVersion}</label> <button class="button button--small" type="submit">${t.restorePageVersion}</button></form>`).join('')}</details>`
+    : ''
   return office(
     site,
     desk,
@@ -199,6 +204,7 @@ ${entry.fields.map((field) => input(`b${index}.${field.key}`, field, block[field
 ${blocks}
 <fieldset class="cms-block"><legend>${t.addSection}</legend><div class="cms-actions">${adders}</div></fieldset>
 <button class="button cms-save" name="op" type="submit" value="save">${t.savePage}</button></form>
+${history}
 ${slug === 'home' ? '' : `<form action="${escapeHtml(desk.base)}/page/${escapeHtml(slug)}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmDeletePage}</label><button class="button button--small" type="submit">${t.deletePage}</button></form>`}`,
     notice,
   )
@@ -221,6 +227,7 @@ async function savePageFromForm(request: Request, env: Env, url: URL, site: Site
   if (!invalid.success) return pageEditor(env, site, desk, slug, page, { error: t.notSaved(firstProblem(invalid.error)) })
   const stored = JSON.stringify(invalid.data.blocks)
   if (stored.length > maxBlocksBytes) return pageEditor(env, site, desk, slug, page, { error: t.notSaved(t.pageTooLarge) })
+  await rememberPage(env, site.id, slug)
   await env.DB.prepare(`INSERT INTO pages (site_id, slug, title, description, published, blocks) VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT (site_id, slug) DO UPDATE SET title = excluded.title, description = excluded.description, published = excluded.published, blocks = excluded.blocks, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`)
     .bind(site.id, slug, page.title, page.description, page.published ? 1 : 0, stored)
@@ -302,14 +309,39 @@ ${escapeHtml(order.address)}${order.note ? `\n\n${o.orderNote}: ${escapeHtml(ord
 async function pagesList(env: Env, site: SiteRow, desk: Desk, notice?: { error?: string }) {
   const t = officeText(site)
   const { results } = await env.DB.prepare('SELECT slug, title, published FROM pages WHERE site_id = ? ORDER BY slug').bind(site.id).all<{ published: number; slug: string; title: string }>()
-  const rows = results.map((page) => `<li><a href="${escapeHtml(desk.base)}/page/${escapeHtml(page.slug)}">${escapeHtml(page.title)}</a> ${page.published ? '' : t.hiddenPage} <small>/${page.slug === 'home' ? '' : escapeHtml(page.slug)}</small></li>`).join('')
+  const rows = results
+    .map(
+      (page) => `<li><a href="${escapeHtml(desk.base)}/page/${escapeHtml(page.slug)}">${escapeHtml(page.title)}</a> ${page.published ? '' : t.hiddenPage} <small>/${page.slug === 'home' ? '' : escapeHtml(page.slug)}</small>
+<form action="${escapeHtml(desk.base)}/pages/${escapeHtml(page.slug)}/duplicate" method="post"><label>${t.duplicatePageAddress}<input maxlength="60" name="slug" pattern="[a-z0-9]+(-[a-z0-9]+)*" required></label><button class="button button--small" type="submit">${t.duplicatePage}</button></form></li>`,
+    )
+    .join('')
   return office(
     site,
     desk,
     t.nav.pages,
-    `<ul>${rows || `<li>${t.noPages}</li>`}</ul><h2>${t.addPage}</h2><form action="${escapeHtml(desk.base)}/pages" class="contact-form" method="post"><label>${t.pageTitle}<input maxlength="120" name="title" required></label><label>${t.pageAddress}<input maxlength="60" name="slug" pattern="[a-z0-9]+(-[a-z0-9]+)*" required></label><button class="button" type="submit">${t.createPage}</button></form>`,
+    `<p>${t.duplicatePageHelp}</p><ul>${rows || `<li>${t.noPages}</li>`}</ul><h2>${t.addPage}</h2><form action="${escapeHtml(desk.base)}/pages" class="contact-form" method="post"><label>${t.pageTitle}<input maxlength="120" name="title" required></label><label>${t.pageAddress}<input maxlength="60" name="slug" pattern="[a-z0-9]+(-[a-z0-9]+)*" required></label><button class="button" type="submit">${t.createPage}</button></form>`,
     notice,
   )
+}
+
+/** Copies a page into an unpublished draft. Translation words deliberately stay behind: their page title can no longer be right. */
+async function duplicatePage(request: Request, env: Env, url: URL, site: SiteRow, desk: Desk, sourceSlug: string) {
+  const form = await request.formData()
+  const slug = pageSlugSchema.safeParse(String(form.get('slug') ?? '').trim())
+  const t = officeText(site)
+  if (!slug.success || slug.data === sourceSlug) return pagesList(env, site, desk, { error: t.badPage })
+  const [source, count] = await Promise.all([
+    env.DB.prepare('SELECT title, description, blocks FROM pages WHERE site_id = ? AND slug = ?').bind(site.id, sourceSlug).first<{ blocks: string; description: string; title: string }>(),
+    env.DB.prepare('SELECT COUNT(*) AS total FROM pages WHERE site_id = ?').bind(site.id).first<{ total: number }>(),
+  ])
+  if (!source) return notFound()
+  if ((count?.total ?? 0) >= maxPagesPerSite) return pagesList(env, site, desk, { error: t.pagesLimit(maxPagesPerSite) })
+  const title = `Copy of ${source.title}`.slice(0, 120)
+  const saved = await env.DB.prepare('INSERT INTO pages (site_id, slug, title, description, published, blocks, translations) VALUES (?, ?, ?, ?, 0, ?, ?) ON CONFLICT (site_id, slug) DO NOTHING')
+    .bind(site.id, slug.data, title, source.description, source.blocks, '{}')
+    .run()
+  if (!saved.meta.changes) return pagesList(env, site, desk, { error: t.pageAddressUsed })
+  return see(url, `${desk.base}/page/${slug.data}`)
 }
 
 async function addPage(request: Request, env: Env, url: URL, site: SiteRow, desk: Desk) {
@@ -477,6 +509,7 @@ ${extraLanguages(settings).map((code) => `<p><a href="${escapeHtml(desk.base)}/s
 ${text('timeZone', t.timeZone)}
 <label>${t.officeLanguage}<select name="officeLanguage">${[['', t.officeLanguageSame], ['en', 'English'], ['th', 'ภาษาไทย']].map(([value, name]) => `<option value="${value}"${value === (settings.officeLanguage === 'auto' ? '' : (settings.officeLanguage ?? '')) ? ' selected' : ''}>${name}</option>`).join('')}</select></label>
 <label>${t.style}<select name="style">${siteStyles.map((style) => `<option${style === settings.style ? ' selected' : ''}>${style}</option>`).join('')}</select></label>
+${(['headingFont', 'bodyFont'] as const).map((key) => `<label>${key === 'headingFont' ? 'Heading font' : 'Body font'}<select name="${key}"><option value="">From the style</option>${siteFontNames.map((font) => `<option${font === settings[key] ? ' selected' : ''}>${font}</option>`).join('')}</select></label>`).join('\n')}
 ${text('accent', t.accent, 'color').replace('value=""', 'value="#1f4d3a"')}${text('background', t.background, 'color').replace('value=""', 'value="#fbfaf6"')}${text('text', t.textColour, 'color').replace('value=""', 'value="#16201b"')}
 <label class="check"><input name="accounts" type="checkbox"${settings.accounts ? ' checked' : ''}> ${t.accounts}</label>
 <label class="check"><input name="statistics" type="checkbox"${settings.statistics === false ? '' : ' checked'}> ${t.stats.setting}</label>
@@ -531,7 +564,7 @@ async function saveSettings(request: Request, env: Env, url: URL, site: SiteRow,
   if (fee) draft.shippingFee = Number(fee)
   const freeOver = String(form.get('freeShippingOver') ?? '').trim()
   if (freeOver) draft.freeShippingOver = Number(freeOver)
-  for (const key of ['name', 'tagline', 'language', 'officeLanguage', 'timeZone', 'style', 'accent', 'background', 'text', 'headerButtonLabel', 'headerButtonHref', 'footerText', 'email', 'emailFrom', 'notifyEmail', 'phone', 'address', 'customCss', 'transferDetails', 'currency', 'promptPayId', 'promptPayName']) {
+  for (const key of ['name', 'tagline', 'language', 'officeLanguage', 'timeZone', 'style', 'headingFont', 'bodyFont', 'accent', 'background', 'text', 'headerButtonLabel', 'headerButtonHref', 'footerText', 'email', 'emailFrom', 'notifyEmail', 'phone', 'address', 'customCss', 'transferDetails', 'currency', 'promptPayId', 'promptPayName']) {
     const value = String(form.get(key) ?? '').trim()
     if (value) draft[key] = value
   }
@@ -639,6 +672,7 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
   if (area === 'stats') return post || id ? notFound() : statsPage(env, url, site, desk)
 
   if (area === 'pages' && !id) return post ? addPage(request, env, url, site, desk) : pagesList(env, site, desk)
+  if (area === 'pages' && id && action === 'duplicate' && !extra && post) return duplicatePage(request, env, url, site, desk, id)
 
   if (area === 'page' && id) {
     // The same page in an extra language, from the tabs at the top of its editor.
@@ -648,6 +682,11 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
     }
     const page = await env.DB.prepare('SELECT title, description, published, blocks, translations FROM pages WHERE site_id = ? AND slug = ?').bind(site.id, id).first<{ blocks: string; description: string; published: number; title: string; translations: string }>()
     if (!page) return notFound()
+    if (action === 'restore' && post && /^\d+$/.test(extra ?? '')) {
+      if ((await request.formData()).get('confirm') !== 'on') return pageEditor(env, site, desk, id, { ...page, blocks: JSON.parse(page.blocks) as Block[], published: Boolean(page.published) }, { error: t.restorePageNeedsConfirm })
+      if (!(await restorePageRevision(env, site.id, id, Number(extra)))) return notFound()
+      return see(url, `${owner}/page/${id}?saved=1`)
+    }
     if (action === 'delete' && post && id !== 'home') {
       const form = await request.formData()
       if (form.get('confirm') === 'on') await env.DB.prepare('DELETE FROM pages WHERE site_id = ? AND slug = ?').bind(site.id, id).run()

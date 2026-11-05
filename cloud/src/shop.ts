@@ -208,13 +208,23 @@ const takeStock = (env: Env, itemId: number, variantId: null | number, quantity:
 export type OrderValues = { address: string; email?: string; name: string; note: string; payment: string; phone: string }
 
 /** Checks and records an order. The checkout page and the API both come through here, so prices and stock follow one set of rules. */
-export async function submitOrder(request: Request, env: Env, site: SiteRow, cart: Map<string, number>, values: OrderValues, customer: Customer | null) {
+export async function submitOrder(request: Request, env: Env, site: SiteRow, cart: Map<string, number>, values: OrderValues, customer: Customer | null, idempotencyKey?: string) {
   const settings = JSON.parse(site.settings) as Settings
   if (!values.name || values.name.length > 120 || !values.address || values.address.length > 1000 || values.note.length > 1000 || !/^[+\d][\d\s()-]{4,29}$/.test(values.phone)) return { problem: 'details' as const }
   if (values.email && !isEmail(values.email)) return { problem: 'details' as const }
   // A logged-in customer who leaves it empty still gets the confirmation, at their account's address.
   const email = values.email || customer?.email || ''
   if (!paymentChoices(env, settings).includes(values.payment)) return { problem: 'details' as const }
+  // Check a retry before rate limits, current stock or current prices: those can legitimately change
+  // after the original request succeeded, but must not turn its retry into a second order.
+  const idempotencyHash = idempotencyKey ? await sha256(JSON.stringify({ customer: customer?.id ?? null, lines: [...cart].sort(), values })) : null
+  if (idempotencyKey) {
+    const prior = await env.DB.prepare('SELECT * FROM orders WHERE site_id = ? AND idempotency_key = ?').bind(site.id, idempotencyKey).first<Order & { idempotency_hash: string }>()
+    if (prior) {
+      if (prior.idempotency_hash !== idempotencyHash) return { problem: 'idempotency' as const }
+      return { lines: (await orderLines(env, [prior.id])).get(prior.id) ?? [], order: prior, replayed: true }
+    }
+  }
   if (!(await allowAttempt(request, env, 'order', 20, 3600))) return { problem: 'busy' as const }
   const since = new Date(Date.now() - 3_600_000).toISOString()
   const recent = await env.DB.prepare('SELECT COUNT(*) AS total FROM orders WHERE site_id = ? AND created_at > ?').bind(site.id, since).first<{ total: number }>()
@@ -230,13 +240,18 @@ export async function submitOrder(request: Request, env: Env, site: SiteRow, car
   // One batch, so a line that would oversell cancels the whole order.
   try {
     await env.DB.batch([
-      env.DB.prepare('INSERT INTO orders (site_id, customer_id, token_hash, name, phone, email, address, note, payment, subtotal, shipping, total, money_prefix, money_suffix, language) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(site.id, customer?.id ?? null, tokenHash, values.name, values.phone, email, values.address, values.note, values.payment, priced.subtotal, priced.shipping, priced.total, priced.prefix, priced.suffix, settings.viewLanguage ?? ''),
+      env.DB.prepare('INSERT INTO orders (site_id, customer_id, token_hash, name, phone, email, address, note, payment, subtotal, shipping, total, money_prefix, money_suffix, language, idempotency_key, idempotency_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(site.id, customer?.id ?? null, tokenHash, values.name, values.phone, email, values.address, values.note, values.payment, priced.subtotal, priced.shipping, priced.total, priced.prefix, priced.suffix, settings.viewLanguage ?? '', idempotencyKey ?? null, idempotencyHash),
       ...priced.lines.flatMap((line) => [
         env.DB.prepare(`INSERT INTO order_lines (order_id, item_id, variant_id, title, variant, unit_price, quantity) VALUES (${orderId}, ?, ?, ?, ?, ?, ?)`).bind(tokenHash, line.item.id, line.variant?.id ?? null, line.item.title, line.variant?.name ?? '', line.price.amount, line.quantity),
         takeStock(env, line.item.id, line.variant?.id ?? null, line.quantity),
       ]),
     ])
   } catch (error) {
+    if (idempotencyKey && String(error).includes('UNIQUE constraint')) {
+      const prior = await env.DB.prepare('SELECT * FROM orders WHERE site_id = ? AND idempotency_key = ?').bind(site.id, idempotencyKey).first<Order & { idempotency_hash: string }>()
+      if (prior?.idempotency_hash === idempotencyHash) return { lines: (await orderLines(env, [prior.id])).get(prior.id) ?? [], order: prior, replayed: true }
+      return { problem: 'idempotency' as const }
+    }
     if (!String(error).includes('CHECK constraint')) throw error
     return { problem: 'stock' as const }
   }
@@ -292,7 +307,7 @@ async function emailOrder(env: Env, settings: Settings, origin: string, order: O
 
 /** An order as other systems see it. Its secret link hash stays in the database. */
 export function orderForApi(order: Order, lines: OrderLine[]) {
-  const { site_id: _site, token_hash: _hash, ...shown } = order as Order & { token_hash?: string }
+  const { site_id: _site, token_hash: _hash, idempotency_hash: _idempotencyHash, idempotency_key: _idempotencyKey, ...shown } = order as Order & { idempotency_hash?: string; idempotency_key?: string; token_hash?: string }
   return { ...shown, lines: lines.map(({ order_id: _order, ...line }) => line) }
 }
 
@@ -323,7 +338,7 @@ async function placeOrder(request: Request, env: Env, url: URL, site: SiteRow, c
 }
 
 /** Who changed an order: for its history, and for the link in the customer's email. */
-export type OrderChange = { actor: 'api' | 'claude' | 'owner' | 'staff'; origin: string; staff?: Customer | null }
+export type OrderChange = { actor: 'api' | 'claude' | 'owner' | 'staff' | 'system'; notifyCustomer?: boolean; origin: string; staff?: Customer | null }
 
 // Customers hear about these. Going back to pending is someone fixing a mistake, so it stays quiet.
 const emailedStatuses = ['paid', 'shipped', 'done', 'cancelled']
@@ -354,8 +369,19 @@ export async function setOrderStatus(env: Env, siteId: number, id: number, statu
     await env.DB.prepare('INSERT INTO order_events (order_id, status, actor, customer_id, actor_name) VALUES (?, ?, ?, ?, ?)').bind(id, status, change.actor, change.staff?.id ?? null, name).run()
   }
   await fireEvent(env, siteId, 'order.updated', { id, status })
-  if (change && emailedStatuses.includes(status)) await emailStatus(env, change.origin, id)
+  if (change && change.notifyCustomer !== false && emailedStatuses.includes(status)) await emailStatus(env, change.origin, id)
   return 'ok'
+}
+
+/** Card checkout reserves stock before Stripe confirms payment. Release abandoned holds after one hour, but never touch bank, PromptPay or COD orders. */
+export async function releaseExpiredCardOrders(env: Env, now = Date.now()) {
+  const before = new Date(now - 3_600_000).toISOString()
+  const { results } = await env.DB.prepare("SELECT id, site_id FROM orders WHERE payment = 'card' AND status = 'pending' AND created_at < ? ORDER BY id LIMIT 100").bind(before).all<{ id: number; site_id: number }>()
+  let released = 0
+  for (const order of results) {
+    if ((await setOrderStatus(env, order.site_id, order.id, 'cancelled', { actor: 'system', notifyCustomer: false, origin: '' })) === 'ok') released += 1
+  }
+  return released
 }
 
 /** Tells the customer their order moved on. Only a hash of the first private link is kept, so the email brings a new link to the same order. */

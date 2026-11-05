@@ -1,5 +1,27 @@
 export const siteStyles = ['studio', 'editorial', 'warm', 'bold', 'calm'] as const
 
+const sans = "'Noto Sans Thai Variable', sans-serif"
+const serif = "'Noto Serif Thai Variable', serif"
+
+/** The fonts every site carries, each with a Thai font that suits it. */
+export const siteFonts = {
+  'Bricolage Grotesque': `'Bricolage Grotesque Variable', ${sans}`,
+  Fraunces: `'Fraunces Variable', ${serif}`,
+  Fredoka: `'Fredoka Variable', ${sans}`,
+  Inter: `'Inter Variable', ${sans}`,
+  Manrope: `'Manrope Variable', ${sans}`,
+  Nunito: `'Nunito Variable', ${sans}`,
+  'Source Serif 4': `'Source Serif 4 Variable', ${serif}`,
+  'Space Grotesk': `'Space Grotesk Variable', ${sans}`,
+} as const
+
+export const siteFontNames = Object.keys(siteFonts) as [keyof typeof siteFonts, ...(keyof typeof siteFonts)[]]
+
+export const fontVars = (heading: unknown, body: unknown) => {
+  const stack = (name: unknown) => (typeof name === 'string' && Object.hasOwn(siteFonts, name) ? siteFonts[name as keyof typeof siteFonts] : '')
+  return `${stack(heading) ? `--display:${stack(heading)};` : ''}${stack(body) ? `--body:${stack(body)};` : ''}`
+}
+
 export const isHexColor = (value: unknown): value is string =>
   typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)
 

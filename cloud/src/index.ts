@@ -19,11 +19,12 @@ import { followRedirect } from './moving'
 import { browserWords, officeText } from './office-words'
 import { claimSite, getSite, isOwner, setupPage, shell } from './owner'
 import { renderPage } from './render'
-import { cartCount, handleShop } from './shop'
+import { cartCount, handleShop, releaseExpiredCardOrders } from './shop'
 import { cleanStats, countConversion, countVisit } from './stats'
 import { stripeWebhook } from './stripe'
 import type { Block, Env, FormField, Settings, SiteRow } from './types'
 import { findLivePage, findWorkingPage, liveSite, liveSlugs } from './versions'
+import { runWebhookOutbox } from './webhooks'
 
 const maxEntriesPerHour = 200
 const maxBodyBytes = 32 * 1024
@@ -305,9 +306,13 @@ export default {
   async scheduled(controller: ScheduledController, plainEnv: Env, context: ExecutionContext): Promise<void> {
     const env: Env = { ...plainEnv, defer: (work) => context.waitUntil(work) }
     const now = testClock(env, controller.cron) ?? Date.now()
+    // A visitor who leaves Stripe checkout cannot hold the shop's last item forever.
+    await releaseExpiredCardOrders(env, now)
     await runSchedules(env, now)
     // News emails go out in batches, inside the owner's daily limit.
     await runNews(env, now)
+    // Delivery retries are separate from the visitor request, and survive a transient endpoint failure.
+    await runWebhookOutbox(env, now)
     // Once a day: forgets yesterday's visitor hashes and deletes statistics older than 400 days.
     await cleanStats(env, now).catch((error) => console.error('Statistics could not be cleaned up', error))
   },

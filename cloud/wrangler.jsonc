@@ -4,6 +4,13 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
+  // Keep enough production evidence to diagnose a failed checkout, move or integration
+  // without sampling every trace on a growing customer site.
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.1 },
+  },
   "assets": {
     "directory": "public",
     "binding": "ASSETS",

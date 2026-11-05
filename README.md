@@ -28,7 +28,7 @@ Claude asks a few short questions about your business, builds the pages and desi
 - **Access rules:** for each table, choose who can read and add: anyone, logged-in customers, customers' own records only, staff, or only you. Fields can be staff-only, and every rule is enforced on the server.
 - **Customer accounts:** sign up, log in, log out, staff roles, a page where customers see their own orders, password reset emails once email is set up, and "Continue with Google" through your own Google client. Turn it on when you need it.
 - **API:** other systems and front ends can use your data, logins and orders, with secret keys and an OpenAPI description at `/api/v1/openapi.json`
-- **Publishing:** after your first publish, changes stay private with a preview link until you publish them. Go back to any of the last 20 versions. Version history covers pages and settings, while data changes at once.
+- **Publishing:** after your first publish, changes stay private with a preview link until you publish them. Go back to any of the last 20 site versions. Each page also keeps its own last 20 versions, so you can undo one page without changing the rest of the website. Data changes at once.
 - **Limits nothing can get around:** seats and other places can't be overbooked, even by two people at the same moment, and one customer can't book the same thing twice
 - **Your data can leave with you:** download all your content and data in one file at any time
 - **Notifications:** get an email for each new order, form entry and booking through your own Resend account, get them in Discord, Slack or Telegram for free, or send signed webhooks to other services
@@ -42,7 +42,7 @@ Claude asks a few short questions about your business, builds the pages and desi
 - **Shop:** product pages, categories, sale prices, sizes and colours, stock that can't oversell, a cart, free delivery thresholds, private order links and order status. Prices are always set on the server.
 - **Payments:** bank transfer, PromptPay QR codes and pay on delivery, plus cards through your own Stripe account
 - **Phone-first shopping:** a bottom tab bar and two-column product grid on phones, with no scripts on your pages
-- **Back office (CMS):** a private page to edit pages and sections, products, photos, menus, colours, orders and customers, with or without Claude. It's in Thai or English: a Thai site gets a Thai back office, and you can choose either one in Settings.
+- **Back office (CMS):** a private page to edit pages and sections, products, photos, menus, colours, orders and customers, with or without Claude. Copy a page into a private draft, then restore an earlier version of that page if needed. It's in Thai or English: a Thai site gets a Thai back office, and you can choose either one in Settings.
 - **Staff logins:** your team logs in with their own accounts and sees only the parts of the back office you tick for each person, such as orders, products, pages or messages. Settings, connections and your private links stay yours.
 - **Photo upload:** PNG, JPEG, WebP or GIF, up to 1 MB each, stored in your own database
 - **Search basics:** page titles, descriptions, a sitemap and structured data
@@ -132,10 +132,10 @@ Wix sites can't run anywhere else, so web-end rebuilds your own content instead 
 1. Publish your Wix site on its free address, if it isn't already. You don't need to buy a domain.
 2. Install web-end, connect Claude, and say: "Move my website here." Claude lists your pages, rebuilds them, copies your photos and tells you what moved and what didn't.
 3. If you have a shop, export your products from Wix and upload the file on the **Move here** page of your back office.
-4. Read the results on the **Move here** page. An automatic check compares each new page with its old page and lists any text, button labels and photos that didn't come across, so you don't have to take Claude's word for it. It can't judge how a page looks.
+4. Read the results on the **Move here** page. An automatic check compares each new page with its old page and lists any text, button labels and photos that didn't come across, so you don't have to take Claude's word for it. It also shows old and new colours and fonts, and any headings in a different order. It can't judge how a page looks, so open both pages side by side.
 5. Check the new site on your phone, publish it, then point your domain to it. Old links keep working through the redirects Claude saves.
 
-What doesn't move: customer passwords, payment accounts, orders, reviews, and features from Wix apps. Tables can often replace bookings or members. The design will be new, because a Wix template's design and stock photos may not be yours to take. Only move sites you own.
+What doesn't move: customer passwords, payment accounts, orders, reviews, and features from Wix apps. Tables can often replace bookings or members. The new pages keep your colours, the order of your sections, and fonts close to yours, but they won't match pixel for pixel, because they're built from web-end's sections and a Wix template's design and stock photos may not be yours to take. Only move sites you own.
 
 ## Keeping your database in the EU
 
@@ -156,6 +156,7 @@ Wix can't export a site to WordPress, so web-end works as the bridge. Move your 
 - **A WordPress file** with your pages, photos and menu. In WordPress, open **Tools**, **Import**, **WordPress**, and tick **Download and import file attachments**.
 - **A WooCommerce file** with your products, prices, sale prices, stock, categories, photos and options.
 - **An old links file** for the Redirection plugin, so links to your old site keep working.
+- **A readiness report** listing the published pages, products and redirects that will move, and the issues to resolve before pointing your domain at WordPress.
 
 The page also lists what WordPress needs a plugin for, such as forms and tables. Customer passwords and orders don't move. Your design comes from your WordPress theme. Keep this site online until WordPress has copied your photos. The files are tested against WordPress's import format, but we haven't yet imported one into a live WordPress site, so check yours before you rely on it.
 

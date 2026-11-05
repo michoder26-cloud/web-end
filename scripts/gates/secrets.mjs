@@ -24,7 +24,9 @@ const tokens = [
   ['database URL with a password', /\b(postgres(ql)?|mysql|mongodb(\+srv)?):\/\/[^\s:'"/]+:[^\s@'"]+@/],
   ['Payload secret', /PAYLOAD_SECRET\s*=\s*['"]?(?!local-tests-only\b|ignore\b)[A-Za-z0-9+/_-]{8,}/],
 ]
-const hardcoded = /\b(api[_-]?key|secret|token|password|passwd)\b\s*[:=]\s*['"][^'"\s]{12,}['"]/i
+// OAuth endpoint URLs often have a path named "token". They are public addresses,
+// not credentials; actual hard-coded secrets still match this rule.
+const hardcoded = /\b(api[_-]?key|secret|token|password|passwd)\b\s*[:=]\s*['"](?!https?:\/\/)[^'"\s]{12,}['"]/i
 const skipContent = /(^|\/)(package-lock\.json|importMap\.js)$|\/migrations\/[^/]+\.json$|\.(png|jpe?g|webp|gif|ico|woff2?|ttf|pdf)$/i
 
 const findings = []

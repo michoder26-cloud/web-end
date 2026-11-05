@@ -1,6 +1,7 @@
 import { escapeHtml } from './http'
 import { parsePrice } from './money'
 import { version } from './version'
+import { liveSite } from './versions'
 import type { Block, Env, Settings, SiteRow } from './types'
 
 /**
@@ -18,16 +19,22 @@ const cdata = (value: string) => `<![CDATA[${value.replaceAll(']]>', ']]]]><![CD
 const e = escapeHtml
 
 async function load(env: Env, site: SiteRow) {
+  // A migration is an exit from the site the public can actually see. Never send an owner’s
+  // unpublished pages or unpublished products to another host by accident.
+  const live = liveSite(site)
+  const pageQuery = live.live_version
+    ? env.DB.prepare("SELECT slug, title, description, published, blocks FROM version_pages WHERE version_id = ? AND published = 1 ORDER BY slug = 'home' DESC, slug").bind(live.live_version)
+    : env.DB.prepare("SELECT slug, title, description, published, blocks FROM pages WHERE site_id = ? AND published = 1 ORDER BY slug = 'home' DESC, slug").bind(site.id)
   const [pages, items, variants, media, redirects] = await Promise.all([
-    env.DB.prepare('SELECT slug, title, description, published, blocks FROM pages WHERE site_id = ? ORDER BY slug = \'home\' DESC, slug').bind(site.id).all<PageRow>(),
-    env.DB.prepare('SELECT id, collection, title, price, compare_price, category, stock, body, image_url, image_alt, link_label, link_href, sort, published FROM items WHERE site_id = ? ORDER BY collection, sort, id').bind(site.id).all<ItemRow>(),
-    env.DB.prepare('SELECT item_variants.item_id, item_variants.name, item_variants.price, item_variants.compare_price, item_variants.stock, item_variants.sort FROM item_variants JOIN items ON items.id = item_variants.item_id WHERE items.site_id = ? ORDER BY item_variants.sort, item_variants.id').bind(site.id).all<VariantRow>(),
+    pageQuery.all<PageRow>(),
+    env.DB.prepare('SELECT id, collection, title, price, compare_price, category, stock, body, image_url, image_alt, link_label, link_href, sort, published FROM items WHERE site_id = ? AND published = 1 ORDER BY collection, sort, id').bind(site.id).all<ItemRow>(),
+    env.DB.prepare('SELECT item_variants.item_id, item_variants.name, item_variants.price, item_variants.compare_price, item_variants.stock, item_variants.sort FROM item_variants JOIN items ON items.id = item_variants.item_id WHERE items.site_id = ? AND items.published = 1 ORDER BY item_variants.sort, item_variants.id').bind(site.id).all<VariantRow>(),
     env.DB.prepare('SELECT id, name, type FROM media WHERE site_id = ?').bind(site.id).all<{ id: number; name: string; type: string }>(),
     env.DB.prepare('SELECT from_path, to_path FROM redirects WHERE site_id = ? ORDER BY from_path').bind(site.id).all<{ from_path: string; to_path: string }>(),
   ])
   const variantsOf = new Map<number, VariantRow[]>()
   for (const variant of variants.results) variantsOf.set(variant.item_id, [...(variantsOf.get(variant.item_id) ?? []), variant])
-  return { items: items.results, media: media.results, pages: pages.results, redirects: redirects.results, settings: JSON.parse(site.settings) as Settings, variantsOf }
+  return { items: items.results, media: media.results, pages: pages.results, redirects: redirects.results, settings: JSON.parse(live.settings) as Settings, variantsOf }
 }
 
 /** Addresses that work on the WordPress side: photos keep loading from here until WordPress has copied them, and shop pages map to WooCommerce's. */
@@ -172,7 +179,25 @@ export async function wordpressPlan(env: Env, site: SiteRow, origin: string) {
   const symbols: Record<string, string> = { '£': 'GBP', '¥': 'JPY', '฿': 'THB', '€': 'EUR' }
   const first = products.map((item) => parsePrice(item.price)).find(Boolean)
   const currency = data.settings.currency?.toUpperCase() || symbols[first?.prefix.trim() ?? ''] || (/บาท/.test(first?.suffix ?? '') ? 'THB' : '')
+  if (!data.pages.length) todo.push('There are no published pages to import. Publish the pages you want to move, then download these files again.')
+  if (data.pages.length && !data.pages.some((page) => page.slug === 'home')) todo.push('There is no published home page. Add or publish the page with address "home" before choosing a static homepage in WordPress.')
+  if (products.length && !currency) todo.push('The product prices do not say which currency they use. Choose the matching currency in WooCommerce before accepting orders.')
   return { currency, data, link, pages, products, tagged, todo }
+}
+
+/** A compact handover report: it says what the import files contain, never unpublished drafts or private order data. */
+export async function wordpressReport(env: Env, site: SiteRow, origin: string) {
+  const plan = await wordpressPlan(env, site, origin)
+  return {
+    format: 'web-end-wordpress-report-1',
+    generated_at: new Date().toISOString(),
+    readiness: plan.todo.length ? 'needs_review' : 'ready_for_import',
+    summary: { pages: plan.pages.length, products: plan.products.length, redirects: plan.data.redirects.length, attention: plan.todo.length },
+    currency: plan.currency || null,
+    exports: { redirects_csv: 'redirection-old-links.csv', products_csv: plan.products.length ? 'woocommerce-products.csv' : null, wordpress_xml: 'wordpress-import.xml' },
+    pages: plan.pages.map(({ page, todo }) => ({ attention: todo, slug: page.slug, title: page.title })),
+    attention: plan.todo,
+  }
 }
 
 export async function wordpressXml(env: Env, site: SiteRow, origin: string) {
@@ -216,7 +241,7 @@ ${fields.extra ?? ''}
     const id = 100 + index
     pageIds.set(page.slug, id)
     const extra = [meta('_yoast_wpseo_title', page.title), meta('_yoast_wpseo_metadesc', page.description), meta('rank_math_title', page.title), meta('rank_math_description', page.description)].join('\n')
-    return item({ content: html, excerpt: page.description, extra, id, name: page.slug, order: index, status: page.published ? 'publish' : 'draft', title: shortTitle(page.title, page.slug), type: 'page', url: `${origin}/${page.slug === 'home' ? '' : page.slug}` })
+    return item({ content: html, excerpt: page.description, extra, id, name: page.slug, order: index, status: 'publish', title: shortTitle(page.title, page.slug), type: 'page', url: `${origin}/${page.slug === 'home' ? '' : page.slug}` })
   })
   const menuItems = (data.settings.nav ?? []).map((entry, index) => {
     const id = 20_000 + index

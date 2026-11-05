@@ -84,7 +84,35 @@ export async function scanWebsite(env: Env, start: URL) {
 
 const usefulData = new Set(['BreadcrumbList', 'LocalBusiness', 'Offer', 'Organization', 'Product', 'Service', 'Store'])
 
-type PageReading = { buttons: string[]; data: unknown[]; description: string; headings: { level: number; text: string }[]; images: { alt: string; url: string }[]; links: { href: string; text: string }[]; text: string[]; title: string; truncated: boolean; url: string }
+type PageDesign = { accent?: string; background?: string; buttonText?: string; fonts: string[]; text?: string }
+type PageSection = { buttons: string[]; firstLines: string[]; headings: string[]; images: string[]; kind: string; lines: number }
+type PageReading = { buttons: string[]; data: unknown[]; description: string; design: PageDesign; headings: { level: number; text: string }[]; images: { alt: string; url: string }[]; links: { href: string; text: string }[]; sections: PageSection[]; text: string[]; title: string; truncated: boolean; url: string }
+
+const maxSections = 40
+const maxPerSection = 12
+const maxStyleChars = 120_000
+const hexFrom = (rgb: string | undefined) => (rgb ? `#${rgb.split(',').map((part) => Number(part).toString(16).padStart(2, '0')).join('')}` : undefined)
+const systemFont = /^(var\(|inherit|initial|sans-serif|serif|monospace|system-ui|-apple|blinkmacsystem|wix|madefor|helvetica|din-next|arial|times|courier|segoe)/i
+
+function readDesign(css: string, themeColor: string): PageDesign {
+  const colors = new Map<string, string>()
+  for (const match of css.matchAll(/--color_(\d+):\s*(\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3})\s*[;}]/g)) if (!colors.has(match[1])) colors.set(match[1], match[2].replace(/\s/g, ''))
+  const counts = new Map<string, number>()
+  for (const match of css.matchAll(/font-family:\s*["']?([^;"'},!]+)/g)) {
+    const name = match[1].trim().toLowerCase()
+    if (!systemFont.test(name)) counts.set(name, (counts.get(name) ?? 0) + 1)
+  }
+  const design: PageDesign = { fonts: [...counts].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([name]) => name) }
+  const accent = hexFrom(colors.get('48') ?? colors.get('18')) ?? (/^#[0-9a-f]{6}$/i.test(themeColor) ? themeColor.toLowerCase() : undefined)
+  if (accent) design.accent = accent
+  const background = hexFrom(colors.get('11'))
+  if (background) design.background = background
+  const buttonText = hexFrom(colors.get('50'))
+  if (buttonText) design.buttonText = buttonText
+  const text = hexFrom(colors.get('15'))
+  if (text) design.text = text
+  return design
+}
 
 /** Reads one page with the runtime's streaming HTML parser, keeping what a person would see and leaving out scripts. */
 export async function readWebPage(target: URL): Promise<PageReading | { error: string }> {
@@ -94,11 +122,17 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
   if (!(response.headers.get('content-type') ?? '').includes('html')) return { error: "That address isn't a web page." }
   if (Number(response.headers.get('content-length') || 0) > maxPageBytes) return { error: 'That page is too large to read here.' }
 
-  const page: PageReading = { buttons: [], data: [], description: '', headings: [], images: [], links: [], text: [], title: '', truncated: false, url: response.url || target.href }
+  const page: PageReading = { buttons: [], data: [], description: '', design: { fonts: [] }, headings: [], images: [], links: [], sections: [], text: [], title: '', truncated: false, url: response.url || target.href }
   const seenText = new Set<string>()
   const seenImages = new Set<string>()
   const seenLinks = new Set<string>()
   let chars = 0
+  const open: PageSection[] = []
+  const noteLabel = (label: string) => {
+    const section = open.at(-1)
+    if (section && !section.buttons.includes(label) && section.buttons.length < maxPerSection) section.buttons.push(label)
+  }
+  let themeColor = ''
   const addImage = (url: string | null | undefined, alt: string | null | undefined) => {
     if (!url || url.startsWith('data:')) return
     let full: string
@@ -110,6 +144,8 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
     if (seenImages.has(full) || page.images.length >= maxListed) return
     seenImages.add(full)
     page.images.push({ alt: clean(alt ?? ''), url: full })
+    const section = open.at(-1)
+    if (section && section.images.length < maxPerSection) section.images.push(full)
   }
   // Wix splits lines with <br>, which has no text of its own, so each open element is told about it.
   const reading = new Set<{ value: string }>()
@@ -142,14 +178,41 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
     seenText.add(text)
     chars += text.length
     page.text.push(text)
+    const section = open.at(-1)
+    if (section) {
+      section.lines++
+      if (section.firstLines.length < 3) section.firstLines.push(text.slice(0, 80))
+    }
   }
+  let themeStyles = ''
+  let otherStyles = ''
+  let inThemeStyles = false
   const rewriter = new HTMLRewriter()
     .on('br', { element: () => reading.forEach((open) => (open.value += '\n')) })
     .on('title', collect((text) => (page.title ||= text)))
+    .on('section, header, footer', {
+      element(element) {
+        if (page.sections.length >= maxSections) return
+        const section: PageSection = { buttons: [], firstLines: [], headings: [], images: [], kind: element.tagName.toLowerCase(), lines: 0 }
+        page.sections.push(section)
+        open.push(section)
+        element.onEndTag(() => {
+          open.pop()
+        })
+      },
+    })
+    .on('style', {
+      element(element) { inThemeStyles = element.getAttribute('id') === 'css_masterPage' },
+      text(chunk) {
+        if (inThemeStyles) { if (themeStyles.length < maxStyleChars) themeStyles += chunk.text }
+        else if (otherStyles.length < maxStyleChars) otherStyles += chunk.text
+      },
+    })
     .on('meta', {
       element(element) {
         const name = (element.getAttribute('name') ?? element.getAttribute('property') ?? '').toLowerCase()
         const content = decode(element.getAttribute('content') ?? '')
+        if (name === 'theme-color') themeColor = content.trim()
         if (name === 'description' || (name === 'og:description' && !page.description)) page.description = clean(content)
         if (name === 'og:image') addImage(content, 'Main image')
       },
@@ -167,6 +230,7 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
     .on('a[href]', collect((text, href) => {
       try {
         const full = new URL(href, target)
+        if (full.host === target.host) noteLabel(text)
         if (full.host !== target.host || seenLinks.has(full.href) || page.links.length >= maxListed) return
         seenLinks.add(full.href)
         page.links.push({ href: full.href, text })
@@ -177,6 +241,8 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
   for (const level of [1, 2, 3, 4, 5, 6]) {
     rewriter.on(`h${level}`, collect((text) => {
       if (page.headings.length < maxListed) page.headings.push({ level, text })
+      const section = open.at(-1)
+      if (section && section.headings.length < maxPerSection) section.headings.push(text)
       seenText.add(text)
     }))
   }
@@ -201,6 +267,7 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
   // Wix buttons often have no link in the page, so they don't show up among the links.
   rewriter.on('button', collect((text) => {
     if (!page.buttons.includes(text) && page.buttons.length < maxListed) page.buttons.push(text)
+    noteLabel(text)
   }))
   rewriter.on('p', collect(addText)).on('li', collect(addText)).on('blockquote', collect(addText))
   const transformed = rewriter.transform(response)
@@ -216,6 +283,8 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
       break
     }
   }
+  page.design = readDesign(themeStyles || otherStyles, themeColor)
+  page.sections = page.sections.filter((section) => section.headings.length || section.images.length || section.buttons.length || section.lines)
   return page
 }
 
@@ -250,18 +319,44 @@ const pageText = (html: string) => comparable(html.replace(/<(script|style)\b[\s
 
 const maxReported = 60
 
-type Reading = { buttons?: string[]; reader?: number; description: string; headings: { level: number; text: string }[]; images: { url: string }[]; links: { text: string }[]; text: string[]; title: string; truncated: boolean; url: string }
+type Reading = { buttons?: string[]; design?: PageDesign; reader?: number; description: string; headings: { level: number; text: string }[]; images: { url: string }[]; links: { text: string }[]; text: string[]; title: string; truncated: boolean; url: string }
 type WorkingPage = { blocks: string; description: string; published: number; slug: string; title: string }
 
 const sourcesKeptDays = 30
 
 /** Keeps what an old page contained, so the move can be checked later by any tool, without reading the page again. */
 export async function rememberReading(env: Env, siteId: number, reading: Reading, slug: null | string = null) {
-  const kept = { buttons: reading.buttons, description: reading.description, reader: reading.reader ?? readerVersion, headings: reading.headings.map((heading) => ({ level: heading.level, text: heading.text })), images: reading.images.map((image) => ({ url: image.url })), links: reading.links.map((link) => ({ text: link.text })), text: reading.text, title: reading.title, truncated: reading.truncated, url: reading.url }
+  const kept = { buttons: reading.buttons, design: reading.design, description: reading.description, reader: reading.reader ?? readerVersion, headings: reading.headings.map((heading) => ({ level: heading.level, text: heading.text })), images: reading.images.map((image) => ({ url: image.url })), links: reading.links.map((link) => ({ text: link.text })), text: reading.text, title: reading.title, truncated: reading.truncated, url: reading.url }
   await env.DB.prepare(`INSERT INTO move_sources (site_id, url, page_slug, reading) VALUES (?, ?, ?, ?)
     ON CONFLICT (site_id, url) DO UPDATE SET page_slug = COALESCE(excluded.page_slug, page_slug), reading = excluded.reading, read_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`)
     .bind(siteId, reading.url, slug, JSON.stringify(kept))
     .run()
+}
+
+function outOfOrder(headings: string[], text: string) {
+  const found = [...new Set(headings)].map((heading) => ({ at: text.indexOf(comparable(heading)), heading })).filter((item) => item.at >= 0 && comparable(item.heading).length > 1)
+  const longest = found.map(() => 1)
+  const before = found.map(() => -1)
+  let end = -1
+  found.forEach((item, index) => {
+    for (let earlier = 0; earlier < index; earlier++) if (found[earlier].at < item.at && longest[earlier] + 1 > longest[index]) { longest[index] = longest[earlier] + 1; before[index] = earlier }
+    if (end < 0 || longest[index] > longest[end]) end = index
+  })
+  const inOrder = new Set<number>()
+  for (let index = end; index >= 0; index = before[index]) inOrder.add(index)
+  return found.filter((_, index) => !inOrder.has(index)).map((item) => item.heading)
+}
+
+const channels = (hex: string) => [1, 3, 5].map((start) => parseInt(hex.slice(start, start + 2), 16))
+const sameColor = (a: string | undefined, b: string | undefined) => Boolean(a && b) && channels(a!).reduce((sum, value, index) => sum + Math.abs(value - channels(b!)[index]), 0) <= 24
+
+function compareDesign(site: SiteRow, sources: Reading[]) {
+  const old = sources.find((source) => source.design?.background || source.design?.fonts.length)?.design
+  if (!old) return null
+  const settings = JSON.parse(site.settings) as Settings
+  const now = { accent: settings.accent, background: settings.background, text: settings.text }
+  const differs = (['accent', 'background', 'text'] as const).filter((key) => old[key] && !sameColor(old[key], now[key]))
+  return { differs, now: { ...now, bodyFont: settings.bodyFont ?? `from the ${settings.style ?? 'studio'} style`, headingFont: settings.headingFont ?? `from the ${settings.style ?? 'studio'} style` }, old }
 }
 
 /** Compares a rebuilt page with a saved reading of its old page, using what the two contain and not what anyone says was moved. */
@@ -288,10 +383,12 @@ async function comparePage(env: Env, site: SiteRow, old: Reading, page: WorkingP
   const imagesStillOnOldHost = [...new Set([...shows.matchAll(/(?:src|href)="(https:\/\/static\.wixstatic\.com\/[^"]+)"/g)].map((match) => match[1]))]
   const titleKept = comparable(page.title) === comparable(old.title) || comparable(old.title).includes(comparable(page.title)) || comparable(page.title).includes(comparable(old.title))
   const descriptionKept = !old.description || comparable(page.description) === comparable(old.description)
-  const counts = { imagesCopiedNotUsed: imagesCopiedNotUsed.length, imagesNotCopied: imagesNotCopied.length, imagesOnOldHost: imagesStillOnOldHost.length, linkTextMissing: linkTextMissing.length, textMissing: textMissing.length }
+  const headingsOutOfOrder = outOfOrder(old.headings.map((heading) => heading.text), pageText(/<main\b[\s\S]*<\/main>/i.exec(html)?.[0] ?? html))
+  const counts = { headingsOutOfOrder: headingsOutOfOrder.length, imagesCopiedNotUsed: imagesCopiedNotUsed.length, imagesNotCopied: imagesNotCopied.length, imagesOnOldHost: imagesStillOnOldHost.length, linkTextMissing: linkTextMissing.length, textMissing: textMissing.length }
   return {
     counts,
     descriptionKept,
+    headingsOutOfOrder: headingsOutOfOrder.slice(0, maxReported),
     imagesCopiedNotUsed: imagesCopiedNotUsed.slice(0, maxReported),
     imagesFoundOnOldPage: sources.length,
     imagesNotCopied: imagesNotCopied.slice(0, maxReported),
@@ -323,10 +420,11 @@ export async function checkMove(env: Env, site: SiteRow, target: URL, slug: stri
 export async function moveStatus(env: Env, site: SiteRow) {
   const since = new Date(Date.now() - sourcesKeptDays * 86_400_000).toISOString()
   const { results: sources } = await env.DB.prepare('SELECT url, page_slug, reading FROM move_sources WHERE site_id = ? AND read_at > ? ORDER BY url LIMIT 60').bind(site.id, since).all<{ page_slug: null | string; reading: string; url: string }>()
-  if (!sources.length) return { notRebuilt: [] as string[], pages: [] as MoveReport[], problems: 0 }
+  if (!sources.length) return { design: null, notRebuilt: [] as string[], pages: [] as MoveReport[], problems: 0 }
   const { results: pages } = await env.DB.prepare('SELECT slug, title, description, published, blocks FROM pages WHERE site_id = ?').bind(site.id).all<WorkingPage>()
   const reports: MoveReport[] = []
   const notRebuilt: string[] = []
+  const readings: Reading[] = []
   let rereads = 0
   for (const source of sources) {
     let old = JSON.parse(source.reading) as Reading
@@ -338,19 +436,42 @@ export async function moveStatus(env: Env, site: SiteRow) {
       old = 'error' in fresh ? { ...old, reader: readerVersion } : { ...fresh, reader: readerVersion, url: source.url }
       await rememberReading(env, site.id, old, source.page_slug)
     }
+    readings.push(old)
     const wanted = comparable(old.title)
     const page = pages.find((item) => item.slug === source.page_slug) ?? pages.find((item) => comparable(item.title) === wanted) ?? pages.find((item) => wanted && wanted.includes(comparable(item.title)) && item.title.length > 3)
     if (page) reports.push(await comparePage(env, site, old, page))
     else notRebuilt.push(source.url)
   }
-  return { notRebuilt, pages: reports, problems: reports.reduce((sum, report) => sum + report.problems, 0) + notRebuilt.length }
+  return { design: compareDesign(site, readings), notRebuilt, pages: reports, problems: reports.reduce((sum, report) => sum + report.problems, 0) + notRebuilt.length }
+}
+
+/** A portable, secret-free record the owner can keep with a completed migration. */
+export async function moveReport(env: Env, site: SiteRow) {
+  const since = new Date(Date.now() - sourcesKeptDays * 86_400_000).toISOString()
+  const [status, { results: sources }, redirects] = await Promise.all([
+    moveStatus(env, site),
+    env.DB.prepare('SELECT url, page_slug, read_at FROM move_sources WHERE site_id = ? AND read_at > ? ORDER BY url LIMIT 60').bind(site.id, since).all<{ page_slug: null | string; read_at: string; url: string }>(),
+    env.DB.prepare('SELECT COUNT(*) AS total FROM redirects WHERE site_id = ?').bind(site.id).first<{ total: number }>(),
+  ])
+  const designDifferences = status.design?.differs ?? []
+  const verification = !sources.length ? 'not_started' : status.problems || designDifferences.length ? 'needs_review' : 'verified'
+  return {
+    format: 'web-end-move-report-1',
+    generated_at: new Date().toISOString(),
+    verification,
+    summary: { compared_pages: status.pages.length, design_differences: designDifferences.length, known_old_pages: sources.length, problems: status.problems, redirects: redirects?.total ?? 0, unrebuild_pages: status.notRebuilt.length },
+    sources: sources.map((source) => ({ checked_at: source.read_at, old_url: source.url, page: source.page_slug })),
+    pages: status.pages.map((page) => ({ description_kept: page.descriptionKept, differences: page.problems, headings_out_of_order: page.headingsOutOfOrder, images_not_copied: page.imagesNotCopied, images_not_used: page.imagesCopiedNotUsed, images_still_on_old_host: page.imagesStillOnOldHost, lines_on_old_page: page.linesOnOldPage, links_missing: page.linkTextMissing, new_page: page.newPage, old_url: page.oldUrl, text_missing: page.textMissing, title_kept: page.titleKept })),
+    not_rebuilt: status.notRebuilt,
+    design: status.design ? { differences: status.design.differs, new: status.design.now, old: status.design.old } : null,
+  }
 }
 
 /** A move's differences stop a publish once, so they get seen. If nothing changes after that, going ahead is the owner's call. */
 export async function moveGate(env: Env, site: SiteRow) {
   const status = await moveStatus(env, site)
   if (!status.problems) return { status, stop: false }
-  const fingerprint = await sha256(JSON.stringify([status.notRebuilt, status.pages.map((page) => [page.newPage, page.problems, page.textMissing, page.linkTextMissing])]))
+  const fingerprint = await sha256(JSON.stringify([status.notRebuilt, status.pages.map((page) => [page.newPage, page.problems, page.textMissing, page.linkTextMissing, page.headingsOutOfOrder])]))
   const row = await env.DB.prepare('SELECT move_differences_shown AS shown FROM sites WHERE id = ?').bind(site.id).first<{ shown: null | string }>()
   if (row?.shown === fingerprint) return { status, stop: false }
   await env.DB.prepare('UPDATE sites SET move_differences_shown = ? WHERE id = ?').bind(fingerprint, site.id).run()

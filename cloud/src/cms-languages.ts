@@ -5,6 +5,7 @@ import { extraLanguages, isText, itemMissing, itemTextKeys, languageName, locali
 import type { ItemTranslation, PageTranslation } from './languages'
 import { officeText } from './office-words'
 import type { OfficeWords } from './office-words'
+import { rememberPage } from './page-history'
 import type { Block, Env, Item, Settings, SiteRow, Variant } from './types'
 
 // The back office's language tabs: the same page, product or menu, in each extra language of the site.
@@ -85,6 +86,7 @@ async function savePageWords(request: Request, env: Env, url: URL, site: SiteRow
   const kept = pageWords(blocks, given)
   if ('error' in kept) return notFound()
   const words = { title: String(form.get('title') ?? '').trim().slice(0, 120), description: String(form.get('description') ?? '').trim().slice(0, 300), blocks: kept.blocks }
+  await rememberPage(env, site.id, slug)
   await env.DB.prepare("UPDATE pages SET translations = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE site_id = ? AND slug = ?").bind(JSON.stringify({ ...readJson<PageTranslation>(page.translations), [language]: words }), site.id, slug).run()
   return see(url, `${desk.base}/page/${slug}?lang=${language}&saved=1`)
 }
