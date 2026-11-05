@@ -1,4 +1,4 @@
 {
-  "version": "0.12.0",
-  "notes": "Your site can be in Thai and English at once, with English pages under /en and a language link in the header. A new Statistics page shows visitors, top pages and orders without cookies or tracking people. You can send news by email to customers who agreed to get it, with one-click unsubscribe."
+  "version": "0.13.0",
+  "notes": "Orders through the API are safe to retry without making duplicates, API keys can expire, and failed webhooks retry safely. Pages now keep their own 20-version history. Moving to WordPress includes a readiness report that shows what will move and what still needs attention."
 }
