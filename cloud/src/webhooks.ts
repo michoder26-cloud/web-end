@@ -9,7 +9,10 @@ export function safeWebUrl(env: Env, value: string) {
   try {
     const target = new URL(value)
     if (env.WEBHOOK_ALLOW_HTTP === '1' && (target.protocol === 'http:' || target.protocol === 'https:')) return target
-    if (target.protocol !== 'https:' || target.username || target.password || isIpAddress(target.hostname) || !target.hostname.includes('.') || /(^|\.)(localhost|local|internal)$/.test(target.hostname)) return null
+    // A trailing dot is a valid fully-qualified hostname. Normalize it before
+    // checking reserved names, or `localhost.` would bypass the allowlist.
+    const hostname = target.hostname.replace(/\.$/, '')
+    if (target.protocol !== 'https:' || target.username || target.password || isIpAddress(hostname) || !hostname.includes('.') || /(^|\.)(localhost|local|internal)$/.test(hostname)) return null
     return target
   } catch {
     return null

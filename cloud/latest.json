@@ -1,4 +1,4 @@
 {
-  "version": "0.13.1",
-  "notes": "Webhooks now reject local and private destinations. CMS entry deletion needs an explicit confirmation, and individual page history is kept when a starter or a full-site version replaces pages. WordPress migration has an import file for each published page language, and JavaScript-only source pages are flagged for manual review."
+  "version": "0.13.2",
+  "notes": "Webhook and external URL checks also reject reserved hostnames written with a final DNS dot, such as localhost. and service.internal. This closes a private-network request bypass while keeping normal public fully-qualified domains working."
 }

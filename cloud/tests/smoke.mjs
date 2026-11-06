@@ -1136,7 +1136,7 @@ if (hasWebhookTest) {
   await new Promise((done) => receiver.close(done))
   await call('delete_webhook', { id: (await call('list_webhooks', {})).data[0].id })
 } else {
-  const privateTargets = ['https://127.0.0.1/hook', 'https://localhost/hook', 'https://169.254.169.254/latest/meta-data/', 'https://10.0.0.5/hook', 'https://[::1]/hook', 'https://books.internal/hook']
+  const privateTargets = ['https://127.0.0.1/hook', 'https://localhost/hook', 'https://localhost./hook', 'https://169.254.169.254/latest/meta-data/', 'https://10.0.0.5/hook', 'https://[::1]/hook', 'https://books.internal/hook', 'https://books.internal./hook']
   const refusals = []
   for (const url of privateTargets) refusals.push((await call('save_webhook', { url, events: ['order.created'] })).isError ? null : url)
   check(refusals.every((item) => item === null), 'loopback, private, link-local and metadata addresses are refused as webhooks', refusals.filter(Boolean).join(', '))
