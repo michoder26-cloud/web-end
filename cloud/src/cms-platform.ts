@@ -174,27 +174,27 @@ const designCard = (design: NonNullable<Awaited<ReturnType<typeof moveStatus>>['
   return `<article class="card account__record"><h3>Colours and fonts</h3><div style="overflow-x:auto"><table><thead><tr><th scope="col"></th><th scope="col">Old site</th><th scope="col">Here</th></tr></thead><tbody>${row('Page background', 'background')}${row('Text', 'text')}${row('Buttons', 'accent')}<tr><th scope="row">Fonts</th><td>${escapeHtml(design.old.fonts.join(', ') || 'Not found')}</td><td>Headings: ${escapeHtml(design.now.headingFont)}<br>Text: ${escapeHtml(design.now.bodyFont)}</td></tr></tbody></table></div></article>`
 }
 
-const checkCard = (code: string, report: MoveReport, t: OfficeWords) => {
+const checkCard = (base: string, report: MoveReport, t: OfficeWords) => {
   const group = (title: string, lines: string[]) => (lines.length ? `<h4>${escapeHtml(title)} (${lines.length})</h4><ul>${lines.map((line) => `<li style="overflow-wrap:anywhere">${escapeHtml(line)}</li>`).join('')}</ul>` : '')
   const facts = [...(report.titleKept ? [] : [t.titleChanged]), ...(report.descriptionKept ? [] : [t.descriptionChanged]), ...(report.oldPageWasCut ? [t.oldPageCut] : [])]
-  return `<article class="card account__record"><h3>${report.problems ? t.differences(report.problems) : t.noDifferences} · /${escapeHtml(report.newPage)}</h3><p style="overflow-wrap:anywhere"><small>${t.comparedWith(escapeHtml(report.oldUrl), report.linesOnOldPage, report.imagesFoundOnOldPage)}</small></p><p><a href="${escapeHtml(report.oldUrl)}" rel="noopener noreferrer" target="_blank">Open the old page</a> · <a href="/owner/${escapeHtml(code)}/preview/${escapeHtml(report.newPage)}" target="_blank">Open the new page</a></p>${facts.map((fact) => `<p>${escapeHtml(fact)}</p>`).join('')}${group('Headings in a different order', report.headingsOutOfOrder)}${group(t.textMissing, report.textMissing)}${group(t.linkTextMissing, report.linkTextMissing)}${group(t.imagesNotCopied, report.imagesNotCopied)}${group(t.imagesNotUsed, report.imagesCopiedNotUsed)}${group(t.imagesOnOldHost, report.imagesStillOnOldHost)}</article>`
+  return `<article class="card account__record"><h3>${report.problems ? t.differences(report.problems) : t.noDifferences} · /${escapeHtml(report.newPage)}</h3><p style="overflow-wrap:anywhere"><small>${t.comparedWith(escapeHtml(report.oldUrl), report.linesOnOldPage, report.imagesFoundOnOldPage)}</small></p><p><a href="${escapeHtml(report.oldUrl)}" rel="noopener noreferrer" target="_blank">Open the old page</a> · <a href="${escapeHtml(base)}/preview/${escapeHtml(report.newPage)}" target="_blank">Open the new page</a></p>${facts.map((fact) => `<p>${escapeHtml(fact)}</p>`).join('')}${group('Headings in a different order', report.headingsOutOfOrder)}${group(t.textMissing, report.textMissing)}${group(t.linkTextMissing, report.linkTextMissing)}${group(t.imagesNotCopied, report.imagesNotCopied)}${group(t.imagesNotUsed, report.imagesCopiedNotUsed)}${group(t.imagesOnOldHost, report.imagesStillOnOldHost)}</article>`
 }
 
-async function movePage(env: Env, site: SiteRow, code: string, notice?: Notice) {
+async function movePage(env: Env, site: SiteRow, desk: Desk, notice?: Notice) {
   const t = officeText(site)
-  const base = `/owner/${escapeHtml(code)}/move`
+  const base = `${escapeHtml(desk.base)}/move`
   const [status, { results: pages }] = await Promise.all([moveStatus(env, site), env.DB.prepare('SELECT slug FROM pages WHERE site_id = ? ORDER BY slug').bind(site.id).all<{ slug: string }>()])
   const { results } = await env.DB.prepare('SELECT from_path, to_path FROM redirects WHERE site_id = ? ORDER BY from_path LIMIT 2000').bind(site.id).all<{ from_path: string; to_path: string }>()
   return office(
     site,
-    code,
+    desk,
     t.moveTitle,
     `<p>${t.moveIntro}</p>
 <h2>${t.checkHeading}</h2><p>${t.checkHelp}</p>
 <form action="${base}/check" class="contact-form" method="post"><label>${t.oldPageAddress}<input maxlength="500" name="url" placeholder="https://" required type="url"></label><label>${t.pageHere}<select name="page">${pages.map((page) => `<option>${escapeHtml(page.slug)}</option>`).join('')}</select></label><button class="button button--small" type="submit">${t.compare}</button></form>
 ${status.notRebuilt.length ? `<article class="card account__record"><h3>${t.notRebuilt(status.notRebuilt.length)}</h3><ul>${status.notRebuilt.map((address) => `<li style="overflow-wrap:anywhere">${escapeHtml(address)}</li>`).join('')}</ul></article>` : ''}
 ${status.design ? designCard(status.design) : ''}
-${[...status.pages].sort((a, b) => b.problems - a.problems).map((report) => checkCard(code, report, t)).join('')}
+${[...status.pages].sort((a, b) => b.problems - a.problems).map((report) => checkCard(desk.base, report, t)).join('')}
 ${status.pages.length || status.notRebuilt.length ? `<p><a class="button button--small button--ghost" href="${base}/report.json">${t.downloadMoveReport}</a></p>` : ''}
 ${status.pages.length || status.notRebuilt.length ? `<form action="${base}/finish" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmFinishMove}</label><button class="button button--small" type="submit">${t.finishMove}</button></form>` : ''}
 <h2>${t.wixProducts}</h2><p>${t.wixProductsHelp}</p>
@@ -205,39 +205,40 @@ ${status.pages.length || status.notRebuilt.length ? `<form action="${base}/finis
   )
 }
 
-async function handleMove(request: Request, env: Env, url: URL, site: SiteRow, code: string, kind: string | undefined, saved?: Notice) {
+async function handleMove(request: Request, env: Env, url: URL, site: SiteRow, desk: Desk, kind: string | undefined, saved?: Notice) {
+  const base = `${desk.base}/move`
   if (kind === 'report.json' && request.method === 'GET') return new Response(JSON.stringify(await moveReport(env, site), null, 2), { headers: { 'Cache-Control': 'no-store', 'Content-Disposition': 'attachment; filename="web-end-move-report.json"', 'Content-Type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff', 'X-Robots-Tag': 'noindex' } })
-  if (!kind) return request.method === 'POST' ? notFound() : movePage(env, site, code, saved)
+  if (!kind) return request.method === 'POST' ? notFound() : movePage(env, site, desk, saved)
   if (request.method !== 'POST') return notFound()
   const form = await request.formData().catch((): null => null)
-  if (!form) return see(url, `/owner/${code}/move`)
+  if (!form) return see(url, base)
   const t = officeText(site)
   if (kind === 'finish') {
     if (form.get('confirm') === 'on') await finishMove(env, site.id)
-    return see(url, `/owner/${code}/move?saved=1`)
+    return see(url, `${base}?saved=1`)
   }
   if (kind === 'check') {
     const target = safeWebUrl(env, String(form.get('url') ?? '').trim())
-    if (!target) return movePage(env, site, code, { error: t.usePublicHttps })
+    if (!target) return movePage(env, site, desk, { error: t.usePublicHttps })
     const result = await checkMove(env, site, target, String(form.get('page') ?? ''))
-    return result.error ? movePage(env, site, code, { error: result.error }) : see(url, `/owner/${code}/move?saved=1`)
+    return result.error ? movePage(env, site, desk, { error: result.error }) : see(url, `${base}?saved=1`)
   }
   if (kind === 'products') {
     const file = form.get('file')
-    if (!(file instanceof File) || !file.size) return movePage(env, site, code, { error: t.chooseFile })
-    if (file.size > 2_000_000) return movePage(env, site, code, { error: t.fileTooLarge })
+    if (!(file instanceof File) || !file.size) return movePage(env, site, desk, { error: t.chooseFile })
+    if (file.size > 2_000_000) return movePage(env, site, desk, { error: t.fileTooLarge })
     const result = await importProducts(env, site, await file.text())
-    if (result.error) return movePage(env, site, code, { error: result.error })
+    if (result.error) return movePage(env, site, desk, { error: result.error })
     const notes = [t.imported(result.imported ?? 0), result.skippedAlreadyThere ? t.alreadyThere(result.skippedAlreadyThere) : '', result.skippedNoRoom ? t.noRoom(result.skippedNoRoom) : '', result.notImportedExtraImages ? t.extraImages(result.notImportedExtraImages) : '', result.imagesStillOnOldHost ? t.photosOnOldHost : '']
-    return movePage(env, site, code, { saved: notes.filter(Boolean).join(' ') })
+    return movePage(env, site, desk, { saved: notes.filter(Boolean).join(' ') })
   }
   if (kind === 'redirects') {
     const pairs = String(form.get('redirects') ?? '').split('\n').map((line) => line.split('|').map((part) => part.trim())).filter(([from]) => from).map(([from, to]) => ({ from, to: to ?? '' }))
     const result = await saveRedirects(env, site.id, pairs)
-    if (result.error) return movePage(env, site, code, { error: result.error })
-    if (result.problems?.length) return movePage(env, site, code, { error: t.redirectProblems(result.saved ?? 0, result.problems.slice(0, 5).join(', ')) })
+    if (result.error) return movePage(env, site, desk, { error: result.error })
+    if (result.problems?.length) return movePage(env, site, desk, { error: t.redirectProblems(result.saved ?? 0, result.problems.slice(0, 5).join(', ')) })
     await env.DB.prepare(`DELETE FROM redirects WHERE site_id = ?${pairs.length ? ` AND from_path NOT IN (${pairs.map(() => '?').join(',')})` : ''}`).bind(site.id, ...pairs.map((pair) => cleanPath(pair.from) ?? '')).run()
-    return see(url, `/owner/${code}/move?saved=1`)
+    return see(url, `${base}?saved=1`)
   }
   return notFound()
 }
@@ -279,9 +280,9 @@ export const listRecords = webMethod(Permissions.Anyone, async () => {
   return response.json()
 })`
 
-async function connectPage(env: Env, url: URL, site: SiteRow, code: string, notice?: Notice, newKey?: string) {
+async function connectPage(env: Env, url: URL, site: SiteRow, desk: Desk, notice?: Notice, newKey?: string) {
   const t = officeText(site)
-  const base = `/owner/${escapeHtml(code)}/connect`
+  const base = `${escapeHtml(desk.base)}/connect`
   const settings = JSON.parse(site.settings) as Settings
   const [{ results: keys }, { results: hooks }] = await Promise.all([
     env.DB.prepare('SELECT id, name, scope, created_at, last_used_at, expires_at FROM api_keys WHERE site_id = ? ORDER BY id').bind(site.id).all<{ created_at: string; expires_at: null | string; id: number; last_used_at: null | string; name: string; scope: string }>(),
@@ -289,7 +290,7 @@ async function connectPage(env: Env, url: URL, site: SiteRow, code: string, noti
   ])
   return office(
     site,
-    code,
+    desk,
     t.nav.connect,
     `${newKey ? `<p role="status">${t.newKeyHelp}<br><code style="overflow-wrap:anywhere">${escapeHtml(newKey)}</code></p>` : ''}
 <h2>${t.yourApi}</h2><p>${t.apiHelp}</p><p><code style="overflow-wrap:anywhere">${escapeHtml(url.origin)}/api/v1</code></p><p>${t.apiDocs} <a href="/api/v1/openapi.json" target="_blank" rel="noopener">openapi.json</a></p>
@@ -307,37 +308,37 @@ ${hooks.map((hook) => `<article class="card account__record"><h3 style="overflow
   )
 }
 
-async function handleConnect(request: Request, env: Env, url: URL, site: SiteRow, code: string, kind: string | undefined, id: string | undefined, action: string | undefined, saved?: Notice) {
-  const owner = `/owner/${code}/connect`
-  if (!kind) return request.method === 'POST' ? notFound() : connectPage(env, url, site, code, saved)
+async function handleConnect(request: Request, env: Env, url: URL, site: SiteRow, desk: Desk, kind: string | undefined, id: string | undefined, action: string | undefined, saved?: Notice) {
+  const owner = `${desk.base}/connect`
+  if (!kind) return request.method === 'POST' ? notFound() : connectPage(env, url, site, desk, saved)
   if (request.method !== 'POST') return notFound()
   const form = await request.formData().catch((): null => null)
   if (!form) return see(url, owner)
   const t = officeText(site)
   if (kind === 'origins' && !id) {
     const origins = String(form.get('origins') ?? '').split('\n').map((line) => line.trim().replace(/\/$/, '')).filter(Boolean)
-    if (origins.length > 20 || origins.some((origin) => !/^(https:\/\/(?:\*\.[a-z0-9.-]+|[a-z0-9.-]+(?::\d+)?)|http:\/\/localhost(?::\d+)?)$/.test(origin))) return connectPage(env, url, site, code, { error: t.badOrigins })
+    if (origins.length > 20 || origins.some((origin) => !/^(https:\/\/(?:\*\.[a-z0-9.-]+|[a-z0-9.-]+(?::\d+)?)|http:\/\/localhost(?::\d+)?)$/.test(origin))) return connectPage(env, url, site, desk, { error: t.badOrigins })
     await env.DB.prepare("UPDATE sites SET settings = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?").bind(JSON.stringify({ ...(JSON.parse(site.settings) as Settings), allowedOrigins: origins }), site.id).run()
     return see(url, `${owner}?saved=1`)
   }
   if (kind === 'key' && !id) {
     const name = String(form.get('name') ?? '').trim().slice(0, 80)
-    if (!name) return connectPage(env, url, site, code, { error: t.needKeyName })
+    if (!name) return connectPage(env, url, site, desk, { error: t.needKeyName })
     const count = await env.DB.prepare('SELECT COUNT(*) AS total FROM api_keys WHERE site_id = ?').bind(site.id).first<{ total: number }>()
-    if ((count?.total ?? 0) >= 20) return connectPage(env, url, site, code, { error: t.tooManyKeys })
+    if ((count?.total ?? 0) >= 20) return connectPage(env, url, site, desk, { error: t.tooManyKeys })
     const key = newApiKey()
     const days = [30, 90, 365].includes(Number(form.get('expires'))) ? Number(form.get('expires')) : null
     const expires = days ? new Date(Date.now() + days * 86_400_000).toISOString() : null
     await env.DB.prepare('INSERT INTO api_keys (site_id, name, key_hash, scope, expires_at) VALUES (?, ?, ?, ?, ?)').bind(site.id, name, await sha256(key), form.get('scope') === 'read' ? 'read' : 'full', expires).run()
-    return connectPage(env, url, site, code, undefined, key)
+    return connectPage(env, url, site, desk, undefined, key)
   }
   if (kind === 'webhook' && !id) {
     const target = String(form.get('url') ?? '').trim()
     const events = form.getAll('events').map(String).filter((event) => (eventNames as readonly string[]).includes(event))
-    if (target.length > 500 || !validWebhookUrl(env, target)) return connectPage(env, url, site, code, { error: t.usePublicHttps })
-    if (!events.length) return connectPage(env, url, site, code, { error: t.chooseEvent })
+    if (target.length > 500 || !validWebhookUrl(env, target)) return connectPage(env, url, site, desk, { error: t.usePublicHttps })
+    if (!events.length) return connectPage(env, url, site, desk, { error: t.chooseEvent })
     const count = await env.DB.prepare('SELECT COUNT(*) AS total FROM webhooks WHERE site_id = ?').bind(site.id).first<{ total: number }>()
-    if ((count?.total ?? 0) >= 10) return connectPage(env, url, site, code, { error: t.tooManyWebhooks })
+    if ((count?.total ?? 0) >= 10) return connectPage(env, url, site, desk, { error: t.tooManyWebhooks })
     await env.DB.prepare('INSERT INTO webhooks (site_id, url, events, secret) VALUES (?, ?, ?, ?)').bind(site.id, target, JSON.stringify(events), newToken()).run()
     return see(url, `${owner}?saved=1`)
   }
@@ -415,17 +416,17 @@ export async function systemStatus(env: Env, site: SiteRow, origin: string) {
   }
 }
 
-async function systemPage(env: Env, url: URL, site: SiteRow, code: string, notice?: Notice) {
+async function systemPage(env: Env, url: URL, site: SiteRow, desk: Desk, notice?: Notice) {
   const status = await systemStatus(env, site, url.origin)
   const settings = JSON.parse(site.settings) as Settings
   const t = officeText(site)
-  const base = `/owner/${escapeHtml(code)}`
+  const base = escapeHtml(desk.base)
   const row = (label: string, value: unknown, href?: string) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}${href ? ` <a href="${base}${href}">${t.open}</a>` : ''}</dd></div>`
   const on = (value: boolean) => (value ? t.on : t.off)
   const waiting = status.publishing.waiting
   return office(
     site,
-    code,
+    desk,
     t.nav.system,
     `<p>${t.systemIntro}</p>
 <article class="card account__record"><h2>${t.hosting}</h2><dl>${row(t.siteAddress, status.address)}${row(t.whereItRuns, t.hostingText)}${row(t.versionLabel, `${status.version}${status.latestVersion === 'unknown' || status.latestVersion === status.version ? '' : t.isAvailable(status.latestVersion)}`, '/updates')}</dl></article>
@@ -441,32 +442,32 @@ async function systemPage(env: Env, url: URL, site: SiteRow, code: string, notic
 }
 
 /** Lets the owner see that their email setup works, and what Resend said if it doesn't. */
-async function testEmail(env: Env, url: URL, site: SiteRow, code: string) {
+async function testEmail(env: Env, url: URL, site: SiteRow, desk: Desk) {
   const settings = JSON.parse(site.settings) as Settings
   const t = officeText(site)
-  if (!settings.notifyEmail) return systemPage(env, url, site, code, { error: t.needNotifyEmail })
+  if (!settings.notifyEmail) return systemPage(env, url, site, desk, { error: t.needNotifyEmail })
   const sent = await sendEmail(env, settings, settings.notifyEmail, {
     heading: t.testEmailHeading,
     lines: [t.testEmailText(url.origin)],
     subject: t.testEmailSubject(settings.name),
   })
-  return systemPage(env, url, site, code, sent.ok ? { saved: t.testEmailSent(settings.notifyEmail) } : { error: t.notSent(t.problem(sent.problem ?? '')) })
+  return systemPage(env, url, site, desk, sent.ok ? { saved: t.testEmailSent(settings.notifyEmail) } : { error: t.notSent(t.problem(sent.problem ?? '')) })
 }
 
 const download = (body: string, name: string, type: string) =>
   new Response(body, { headers: { 'Cache-Control': 'no-store', 'Content-Disposition': `attachment; filename="${name}"`, 'Content-Type': `${type}; charset=utf-8`, 'X-Content-Type-Options': 'nosniff', 'X-Robots-Tag': 'noindex' } })
 
 /** The steps and files for moving this site to WordPress. A Wix site moves here first, so this is also the way from Wix to WordPress. */
-async function wordpressPage(env: Env, url: URL, site: SiteRow, code: string) {
+async function wordpressPage(env: Env, url: URL, site: SiteRow, desk: Desk) {
   const plan = await wordpressPlan(env, site, url.origin)
   const t = officeText(site)
-  const base = `/owner/${escapeHtml(code)}/wordpress`
+  const base = `${escapeHtml(desk.base)}/wordpress`
   const file = (href: string, label: string, note: string) => `<p><a class="button button--small" href="${base}/${href}">${label}</a> ${note}</p>`
   return office(
     site,
-    code,
+    desk,
     t.moveToWordpress,
-    `<p>${t.wordpressIntro(`/owner/${escapeHtml(code)}/move`)}</p>
+    `<p>${t.wordpressIntro(`${escapeHtml(desk.base)}/move`)}</p>
 ${extraLanguages(JSON.parse(site.settings) as Settings).length ? `<p role="note">${escapeHtml(t.wordpressMainOnly(languageName(mainLanguage(JSON.parse(site.settings) as Settings), t.lang)))}</p>` : ''}
 <article class="card account__record"><h2>${t.downloadFiles}</h2>
 ${file('site.xml', t.wordpressFile, t.wordpressFileNote(plan.pages.length))}
@@ -491,15 +492,14 @@ export function handlePlatform(request: Request, env: Env, url: URL, site: SiteR
   if (area === 'data') return handleData(request, env, url, site, desk, id, action, extra, saved)
   if (area === 'publish') return handlePublish(request, env, url, site, desk, id, action, saved)
   // The rest is for the owner alone.
-  const code = desk.code
-  if (!code) return null
-  if (area === 'connect') return handleConnect(request, env, url, site, code, id, action, extra, saved)
-  if (area === 'system' && !id && request.method !== 'POST') return systemPage(env, url, site, code)
-  if (area === 'system' && id === 'test-email' && !action && request.method === 'POST') return testEmail(env, url, site, code)
+  if (!desk.accountOwner) return null
+  if (area === 'connect') return handleConnect(request, env, url, site, desk, id, action, extra, saved)
+  if (area === 'system' && !id && request.method !== 'POST') return systemPage(env, url, site, desk)
+  if (area === 'system' && id === 'test-email' && !action && request.method === 'POST') return testEmail(env, url, site, desk)
   if (area === 'export.json' && !id && request.method === 'GET') return exportEverything(env, site)
-  if (area === 'move' && !action) return handleMove(request, env, url, site, code, id, saved)
+  if (area === 'move' && !action) return handleMove(request, env, url, site, desk, id, saved)
   if (area === 'wordpress' && !action && request.method === 'GET') {
-    if (!id) return wordpressPage(env, url, site, code)
+    if (!id) return wordpressPage(env, url, site, desk)
     if (id === 'site.xml') return wordpressXml(env, site, url.origin).then((body) => download(body, 'wordpress-import.xml', 'application/xml'))
     const language = /^site-([a-z]{2}(?:-[a-z]{2})?)\.xml$/.exec(id)?.[1]
     if (language && extraLanguages(JSON.parse(site.settings) as Settings).includes(language)) return wordpressXml(env, site, url.origin, language).then((body) => download(body, `wordpress-import-${language}.xml`, 'application/xml'))

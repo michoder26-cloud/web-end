@@ -201,6 +201,7 @@ ${claudeLinkField(`${origin}/mcp/${code}`, t)}
 <p>${s.claudeLinkHelp}</p>
 ${copyField('office-link', s.officeLink, officeUrl, t)}
 <p>${s.officeLinkHelp} <a href="/owner/${escapeHtml(code)}" rel="noopener" target="_blank">${s.openOffice}</a></p>
+<p>${s.adminAccount}</p>
 <p>${s.saveHow}</p>
 </div>
 <h2>${s.connectHeading}</h2>
@@ -234,7 +235,7 @@ async function startersPage(env: Env, url: URL, site: SiteRow, desk: Desk, error
 
 /** Only the owner reaches this, through their secret link, because a starter replaces every page and the design. */
 export async function handleStarters(request: Request, env: Env, url: URL, site: SiteRow, desk: Desk) {
-  if (desk.staff || !desk.code) return notFound()
+  if (desk.staff || !desk.accountOwner) return notFound()
   if (request.method !== 'POST') return startersPage(env, url, site, desk)
   const form = await request.formData().catch((): null => null)
   const id = form?.get('starter')

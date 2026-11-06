@@ -37,10 +37,11 @@ export type Spec = { fields?: Spec[]; key: string; kind: Kind; label: string; op
 
 export type Notice = { error?: string; saved?: string }
 
-/** Who is in the back office and where it lives: the owner's secret link, or /staff for a logged-in staff member. */
-export type Desk = { base: string; code: null | string; staff: null | StaffMember }
-export const ownerDesk = (code: string): Desk => ({ base: `/owner/${code}`, code, staff: null })
-export const staffDesk = (staff: StaffMember): Desk => ({ base: '/staff', code: null, staff })
+/** Who is in the back office and where it lives: an owner, through a private link or an account, or a staff member. */
+export type Desk = { accountOwner: boolean; base: string; code: null | string; staff: null | StaffMember }
+export const ownerDesk = (code: string): Desk => ({ accountOwner: true, base: `/owner/${code}`, code, staff: null })
+export const adminDesk = (): Desk => ({ accountOwner: true, base: '/admin', code: null, staff: null })
+export const staffDesk = (staff: StaffMember): Desk => ({ accountOwner: false, base: '/staff', code: null, staff })
 
 /** The owner can do everything. Staff only what they were given. */
 export const allows = (desk: Desk, area: StaffArea) => !desk.staff || desk.staff.permissions.includes(area)
@@ -273,7 +274,7 @@ async function overview(env: Env, url: URL, site: SiteRow, desk: Desk) {
   const started = isStarter(url.searchParams.get('started')) ? `<p role="status">${site.live_version ? t.start.startedLive(`${escapeHtml(desk.base)}/publish`) : t.start.started}</p>` : ''
   // A new site gets its first steps on top, until every one of them is done.
   const firstTime = steps && !Object.values(steps).every(Boolean) ? checklist(steps, escapeHtml(desk.base), t) : ''
-  const mcpUrl = `${url.origin}/mcp/${desk.code}`
+  const mcpUrl = desk.code ? `${url.origin}/mcp/${desk.code}` : ''
   return office(
     site,
     desk,
@@ -282,7 +283,7 @@ async function overview(env: Env, url: URL, site: SiteRow, desk: Desk) {
 ${site.live_version ? `<p>${t.seeWaiting(`${escapeHtml(desk.base)}/publish`)}</p>` : ''}
 <h2 id="claude">${t.claudeHeading}</h2>
 <p>${t.claudeHelp}</p>
-${steps && !steps.claude ? `<div class="contact-form">${claudeLinkField(mcpUrl, t)}${connectGuide(t)}</div>` : `<p><code style="overflow-wrap:anywhere">${escapeHtml(mcpUrl)}</code></p>`}`,
+${desk.code ? (steps && !steps.claude ? `<div class="contact-form">${claudeLinkField(mcpUrl, t)}${connectGuide(t)}</div>` : `<p><code style="overflow-wrap:anywhere">${escapeHtml(mcpUrl)}</code></p>`) : `<p>Claude is connected with the private link shown during setup. This account dashboard never reveals it.</p>`}`,
   )
 }
 
@@ -483,6 +484,8 @@ async function customersPage(env: Env, url: URL, site: SiteRow, desk: Desk, noti
   const actions = (customer: (typeof results)[number]) =>
     desk.staff
       ? ''
+      : customer.id === site.owner_customer_id
+        ? ''
       : `<form action="${base}/customers/${customer.id}/reset" method="post"><button class="button button--small" type="submit">${t.makeResetLink}</button></form><form action="${base}/customers/${customer.id}/role" method="post"><button class="button button--small" name="role" type="submit" value="${customer.role === 'staff' ? 'member' : 'staff'}">${customer.role === 'staff' ? t.removeStaff : t.makeStaff}</button></form>${
           customer.role === 'staff'
             ? `<form action="${base}/customers/${customer.id}/access" class="contact-form" method="post"><fieldset class="cms-block"><legend>${t.staffAccess}</legend>${staffAreas.map((area) => `<label class="check"><input name="area" type="checkbox" value="${area}"${customer.permissions.split(',').includes(area) ? ' checked' : ''}> ${t.staffArea[area]}</label>`).join('')}<button class="button button--small" type="submit">${t.saveAccess}</button></fieldset></form>`
@@ -639,6 +642,9 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
   const owner = desk.base
   // Checked here, before any page or change, so hiding a menu entry is never the only thing in the way.
   if (desk.staff && !staffMay(desk.staff, post, area, id, action, extra)) return office(site, desk, t.staffRefusedTitle, `<p>${t.staffRefused}</p>`, undefined, 403)
+  // Capability URLs are unguessable. A signed-in owner instead needs the same
+  // browser origin for every write, so another site cannot submit their forms.
+  if (desk.accountOwner && !desk.code && post && !fromThisSite(request, url)) return office(site, desk, t.staffRefusedTitle, `<p>${t.staffOtherSite}</p>`, undefined, 403)
 
   if (!area) return post ? notFound() : overview(env, url, site, desk)
 
@@ -730,9 +736,10 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
   if (area === 'customers') {
     if (!id) return post ? notFound() : customersPage(env, url, site, desk, saved)
     // Changing accounts is for the owner alone.
-    if (!post || !/^\d+$/.test(id) || !desk.code) return notFound()
+    if (!post || !/^\d+$/.test(id) || !desk.accountOwner) return notFound()
     const customer = await env.DB.prepare('SELECT id, role FROM customers WHERE id = ? AND site_id = ?').bind(Number(id), site.id).first<{ id: number; role: string }>()
     if (!customer) return notFound()
+    if (customer.id === site.owner_customer_id) return notFound()
     if (action === 'reset') {
       return customersPage(env, url, site, desk, undefined, await createResetLink(env, customer.id))
     }
@@ -754,18 +761,17 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
   }
 
   // Everything below is for the owner alone.
-  const code = desk.code
-  if (!code) return notFound()
+  if (!desk.accountOwner) return notFound()
 
   if (area === 'updates' && !id) {
     const settings = JSON.parse(site.settings) as Settings
     if (post) {
       const repo = String((await request.formData().catch((): null => null))?.get('repo') ?? '').trim()
-      if (!repoPattern.test(repo)) return office(site, desk, t.nav.updates, updatesBody(code, settings.githubRepo, await latestRelease(), t), { error: t.badRepo })
+      if (!repoPattern.test(repo)) return office(site, desk, t.nav.updates, updatesBody(desk.base, settings.githubRepo, await latestRelease(), t), { error: t.badRepo })
       await env.DB.prepare("UPDATE sites SET settings = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?").bind(JSON.stringify({ ...settings, githubRepo: repo }), site.id).run()
       return see(url, `${owner}/updates?saved=1`)
     }
-    return office(site, desk, t.nav.updates, updatesBody(code, settings.githubRepo, await latestRelease(), t), saved)
+    return office(site, desk, t.nav.updates, updatesBody(desk.base, settings.githubRepo, await latestRelease(), t), saved)
   }
 
   if (area === 'settings' && !id) {

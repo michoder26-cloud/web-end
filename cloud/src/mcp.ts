@@ -93,7 +93,7 @@ const button = { buttonLabel: optional(60), buttonHref: href.optional() }
 const titled = z.array(z.object({ title: text(120), text: optional(600) }))
 const fieldName = z.string().regex(/^[a-z][a-z0-9_]{0,39}$/).refine((name) => name !== 'website', 'That name is reserved.')
 
-export const pageSlugSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/).max(60).refine((slug) => !['account', 'api', 'cart', 'data', 'checkout', 'form', 'frame', 'order', 'product', 'stripe', 'login', 'logout', 'media', 'owner', 'reset', 'setup', 'signup', 'mcp', 'fonts', 'robots', 'sitemap'].includes(slug), 'That name is reserved.')
+export const pageSlugSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/).max(60).refine((slug) => !['account', 'admin', 'api', 'cart', 'data', 'checkout', 'form', 'frame', 'order', 'product', 'stripe', 'login', 'logout', 'media', 'owner', 'reset', 'setup', 'signup', 'mcp', 'fonts', 'robots', 'sitemap'].includes(slug), 'That name is reserved.')
 
 export const itemSchema = z.object({
   collection: z.string().regex(/^[a-z0-9-]{1,40}$/).describe('Short English name for the group, such as products'),

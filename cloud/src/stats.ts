@@ -35,7 +35,7 @@ export type ConversionKind = (typeof conversionKinds)[number]
 const botAgent = /bot|crawl|spider|slurp|archiver|facebookexternalhit|facebookcatalog|embedly|preview|monitor|uptime|pingdom|lighthouse|pagespeed|headless|phantom|selenium|puppeteer|playwright|curl|wget|python|java\/|okhttp|go-http|httpclient|libwww|axios|scrapy|feedfetcher|validator|whatsapp/i
 
 // First parts of an address that are never a page view: the back office, Claude, the API, files and private links.
-const notPages = new Set(['__scheduled', 'account', 'api', 'cart', 'checkout', 'data', 'form', 'frame', 'login', 'logout', 'mcp', 'media', 'order', 'owner', 'preview', 'reset', 'setup', 'signup', 'staff', 'stripe'])
+const notPages = new Set(['__scheduled', 'account', 'admin', 'api', 'cart', 'checkout', 'data', 'form', 'frame', 'login', 'logout', 'mcp', 'media', 'order', 'owner', 'preview', 'reset', 'setup', 'signup', 'staff', 'stripe'])
 
 /** The path to count, or null. Pages, product pages and the same behind a language prefix such as /en/about. */
 export function countablePath(path: string) {

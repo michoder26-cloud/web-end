@@ -144,7 +144,7 @@ export type OrderLine = {
   variant_id: null | number
 }
 
-export type SiteRow = { id: number; live_settings?: null | string; live_version?: null | number; settings: string; slug: string }
+export type SiteRow = { id: number; live_settings?: null | string; live_version?: null | number; owner_customer_id?: null | number; settings: string; slug: string }
 export type PageRow = {
   blocks: string
   description: string

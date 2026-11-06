@@ -3028,6 +3028,20 @@ await call('update_site', { language: 'en', officeLanguage: 'auto' })
   if (newsServer) await new Promise((done) => newsServer.close(done))
 }
 
+// The owner can replace the one-time capability URL with a normal account login.
+const adminGuest = await (await fetch(`${base}/admin`)).text()
+const adminClaim = await fetch(`${base}/admin/claim`, { body: new URLSearchParams({ code, email: 'owner@admin.test', name: 'Site owner', password: 'owner-password-123' }), method: 'POST', redirect: 'manual' })
+const adminCookie = (adminClaim.headers.get('set-cookie') ?? '').split(';')[0]
+const adminHome = await (await fetch(`${base}/admin`, { headers: { Cookie: adminCookie } })).text()
+const adminSystem = await fetch(`${base}/admin/system`, { headers: { Cookie: adminCookie } })
+const crossSiteAdminWrite = await fetch(`${base}/admin/settings`, { body: new URLSearchParams({}), headers: { Cookie: adminCookie, Origin: 'https://not-your-site.test' }, method: 'POST', redirect: 'manual' })
+const adminLogout = await fetch(`${base}/admin/logout`, { headers: { Cookie: adminCookie }, method: 'POST', redirect: 'manual' })
+const adminLogin = await fetch(`${base}/admin/login`, { body: new URLSearchParams({ email: 'owner@admin.test', password: 'owner-password-123' }), method: 'POST', redirect: 'manual' })
+const adminRecovery = await fetch(`${base}/admin/recover`, { body: new URLSearchParams({ code, password: 'new-owner-password-123' }), method: 'POST', redirect: 'manual' })
+const oldAdminLogin = await fetch(`${base}/admin/login`, { body: new URLSearchParams({ email: 'owner@admin.test', password: 'owner-password-123' }), method: 'POST', redirect: 'manual' })
+const newAdminLogin = await fetch(`${base}/admin/login`, { body: new URLSearchParams({ email: 'owner@admin.test', password: 'new-owner-password-123' }), method: 'POST', redirect: 'manual' })
+check(adminGuest.includes('Set up owner account') && adminClaim.status === 303 && adminClaim.headers.get('location') === `${base}/admin` && adminCookie.startsWith('session=') && adminHome.includes('href="/admin/settings"') && adminSystem.status === 200 && crossSiteAdminWrite.status === 403 && adminLogout.status === 303 && adminLogin.status === 303 && adminLogin.headers.get('location') === `${base}/admin` && adminRecovery.status === 303 && oldAdminLogin.status === 200 && newAdminLogin.status === 303, 'the owner can claim, sign in to, recover and safely manage the back office at /admin')
+
 if (loadCount) {
   const runs = [['view page', () => fetch(base)], ['list tools', () => client.listTools()], ['get_site', () => call('get_site')], ['check_site', () => call('check_site')], ['save_page', () => call('save_page', page)]]
   for (const [label, run] of runs) {

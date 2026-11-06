@@ -171,7 +171,7 @@ export function siteMissing(settings: Settings, language: string) {
 }
 
 // Addresses that are the same in every language: files, the owner's and staff's back office, and outside services.
-const shared = /^\/(media|fonts|owner|staff|api|mcp|frame|stripe|login\/google)(\/|$|[?#])|^\/(site\.css|sitemap\.xml|robots\.txt|favicon\.ico)([?#]|$)/
+const shared = /^\/(admin|media|fonts|owner|staff|api|mcp|frame|stripe|login\/google)(\/|$|[?#])|^\/(site\.css|sitemap\.xml|robots\.txt|favicon\.ico)([?#]|$)/
 
 /** The address of a path in a language, such as /about becoming /en/about. */
 export function inLanguage(path: string, prefix: string) {

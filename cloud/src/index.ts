@@ -1,10 +1,11 @@
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 
 import { handleAccount } from './account'
+import { handleAdmin } from './admin'
 import { handleApi } from './api'
 import { getCustomer } from './auth'
 import { runAutomations, runSchedules } from './automations'
-import { allows, handleOffice, ownerDesk, staffEntry } from './cms'
+import { adminDesk, allows, handleOffice, ownerDesk, staffEntry } from './cms'
 import type { Desk } from './cms'
 import { loadPageRecords, receiveRecord } from './data'
 import { tellOwnerAboutEntry } from './email'
@@ -226,7 +227,7 @@ async function answer(request: Request, env: Env): Promise<Response> {
     const site = liveSite(working)
     if (url.pathname === '/setup') return see(url, '/')
     if (url.pathname === '/robots.txt') {
-      return new Response(`User-agent: *\nDisallow: /owner/\nDisallow: /staff\nDisallow: /mcp/\nDisallow: /api/\nDisallow: /data/\nDisallow: /frame/\nDisallow: /account\nDisallow: /cart\nDisallow: /checkout\nDisallow: /order/\nDisallow: /login\nDisallow: /signup\nDisallow: /reset/\nDisallow: /newsletter/\nSitemap: ${url.origin}/sitemap.xml\n`, { headers: { 'Content-Type': 'text/plain' } })
+      return new Response(`User-agent: *\nDisallow: /admin\nDisallow: /owner/\nDisallow: /staff\nDisallow: /mcp/\nDisallow: /api/\nDisallow: /data/\nDisallow: /frame/\nDisallow: /account\nDisallow: /cart\nDisallow: /checkout\nDisallow: /order/\nDisallow: /login\nDisallow: /signup\nDisallow: /reset/\nDisallow: /newsletter/\nSitemap: ${url.origin}/sitemap.xml\n`, { headers: { 'Content-Type': 'text/plain' } })
     }
     if (url.pathname === '/sitemap.xml') return await sitemap(env, url, site)
 
@@ -244,6 +245,12 @@ async function answer(request: Request, env: Env): Promise<Response> {
       const desk = ownerDesk(parts[1])
       if (parts[2] === 'preview' && parts.length <= 5 && request.method === 'GET') return await showPreview(env, url, working, desk, parts.slice(3))
       return await handleOffice(request, env, url, working, desk, parts.slice(2))
+    }
+
+    if (parts[0] === 'admin') {
+      const customer = await getCustomer(request, env, working.id)
+      if (parts[1] === 'preview' && customer?.id === working.owner_customer_id && parts.length <= 5 && request.method === 'GET') return await showPreview(env, url, working, adminDesk(), parts.slice(2))
+      return await handleAdmin(request, env, url, working, parts.slice(1))
     }
 
     // Staff log in on the website and see only the parts of the back office the owner gave them.

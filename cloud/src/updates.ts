@@ -52,8 +52,8 @@ export async function latestRelease() {
 
 export const repoPattern = /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/
 
-export function updatesBody(code: string, repo: string | undefined, latest: Awaited<ReturnType<typeof latestRelease>>, t: OfficeWords = officeWords()) {
-  const action = `/owner/${escapeHtml(code)}/updates`
+export function updatesBody(base: string, repo: string | undefined, latest: Awaited<ReturnType<typeof latestRelease>>, t: OfficeWords = officeWords()) {
+  const action = `${escapeHtml(base)}/updates`
   const status = !latest
     ? `<p role="alert">${t.couldNotCheck(version)}</p>`
     : isNewer(latest.version, version)

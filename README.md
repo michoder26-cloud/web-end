@@ -16,8 +16,9 @@ You need three free accounts: [Cloudflare](https://dash.cloudflare.com/sign-up),
 
 2. **Claim your site straight away.** Open your new website and click **Get my Claude link**. The first person to click becomes the owner.
 3. **Save your two links.** The next page shows your Claude link and your back office link only once. They work like passwords: anyone who has them can change your site. It has copy buttons.
-4. **Connect Claude.** The same page shows each step: in Claude, open **Settings**, then **Connectors**, click **Add custom connector**, and paste your Claude link. Then send the first message it gives you. [More help](docs/connect-claude.md).
-5. **Or start from a starter.** Want a working site right now, without Claude? Pick a café, shop, classes and bookings, services or portfolio starter, in English or Thai. Every word and price in it is a clearly marked sample you change later.
+4. **Create your owner login.** Open `/admin`, paste the private back office link once, then choose your name, email and password. From then on, sign in at `/admin` to manage the site without handling the private link.
+5. **Connect Claude.** The same page shows each step: in Claude, open **Settings**, then **Connectors**, click **Add custom connector**, and paste your Claude link. Then send the first message it gives you. [More help](docs/connect-claude.md).
+6. **Or start from a starter.** Want a working site right now, without Claude? Pick a café, shop, classes and bookings, services or portfolio starter, in English or Thai. Every word and price in it is a clearly marked sample you change later.
 
 Claude asks a few short questions about your business, builds the pages and design, and gives you the link. Your back office shows what's left to do, such as checking the site on your phone and publishing, and ticks each step by itself. Come back any time to change something.
 
@@ -77,7 +78,7 @@ Nobody hosts your site but you. There's no central server, and web-end never see
 
 Passing our tests means common mistakes weren't found. It isn't a security audit or legal advice. Customer passwords use PBKDF2 with 100,000 rounds, the most Cloudflare Workers allow, which is below the 600,000 that security guides recommend. You're responsible for the customer data your site holds. Don't collect health data, ID numbers or card details through forms, and have legal pages checked for your country.
 
-Your Claude link and back office link work like passwords. If you lose them, you can reset the site's owner from your Cloudflare account, so keep them safe. Don't share them with your team. Give each person their own staff login instead, as shown below.
+Your Claude link and back office link work like passwords. Keep them safe for connecting Claude and for the one-time `/admin` account setup. After that, use your email and password at `/admin` for the back office. Don't share any owner link with your team; give each person their own staff login instead, as shown below.
 
 ## Giving your team their own login
 
