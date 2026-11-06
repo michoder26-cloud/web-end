@@ -34,6 +34,8 @@ const scenarios = [
   ['f1 no match (customer=-1)', { customer: '-1' }],
   ['f2 rare (status=paid & customer=7)', { status: 'paid', customer: '7' }],
   ['f2 no match (status=paid & customer=-1)', { status: 'paid', customer: '-1' }],
+  ['f2 both indexed (customer=598 & code=C7)', { customer: '598', code: 'C7' }],
+  ['f1 unique (code=C49999)', { code: 'C49999' }],
 ]
 
 const persist = process.env.BENCH_PERSIST
@@ -53,7 +55,7 @@ function direct(sql, values) {
   return { median: +median(times).toFixed(3), max: +Math.max(...times).toFixed(3) }
 }
 
-const report = { base, local: true, note: 'wrangler dev --local (miniflare/workerd + local SQLite), not --remote', seeds: [], lists: [], invoices: [] }
+const report = { base, local: true, note: 'wrangler dev --local (miniflare/workerd + local SQLite), not --remote', seeds: [], lists: [], inserts: [], reindex: [], invoices: [] }
 
 for (const [table, n] of [['bench_10k', 10_000], ['bench_50k', 50_000]]) {
   const seeded = await call(`/seed?table=${table}&n=${n}`)
@@ -83,6 +85,13 @@ for (const [table, n] of [['bench_10k', 10_000], ['bench_50k', 50_000]]) {
       console.log(JSON.stringify(row))
     }
   }
+  const inserted = await call(`/insert?table=${table}`)
+  delete inserted.http_ms
+  report.inserts.push({ table, ...inserted, plan: (inserted.plan ?? []).map((step) => step.detail).join(' | ') })
+  console.log(JSON.stringify({ insert: table, ...report.inserts.at(-1) }))
+  const rebuilt = await call(`/reindex?table=${table}`)
+  report.reindex.push({ table, drop: rebuilt.drop, build: rebuilt.build })
+  console.log(JSON.stringify({ reindex: table, drop: rebuilt.drop, build: rebuilt.build }))
 }
 
 for (const webhook of [false, true]) {

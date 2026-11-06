@@ -6,7 +6,7 @@ import { automationProblems, automationSchema, automationWarnings, dryRun, dryRu
 import { isSchedule, shownTime, validTimeZone, zoneOf } from './clock'
 import { writeItem } from './cms'
 import { systemStatus } from './cms-platform'
-import { createRecord, deleteRecord, getRecord, getTable, listRecords, listTables, ownerActor, saveTable, showRecord, tableBase, tableSchema, updateRecord } from './data'
+import { createRecord, deleteRecord, deleteTable, getRecord, getTable, listRecords, listTables, ownerActor, saveTable, showRecord, tableBase, tableSchema, updateRecord } from './data'
 import { canSendEmail, emailProblems } from './email'
 import { applyStarter, siteStarterLanguage } from './first-steps'
 import { googleProblems } from './google'
@@ -924,7 +924,7 @@ export function createMcpServer(env: Env, origin: string, code: string) {
     'save_table',
     {
       title: 'Create or change a database table',
-      description: 'Creates a table for your own kind of data, such as bookings or classes, or changes its fields and access. This is live at once and is not part of publishing. Existing records keep their values. Read the data_model and access_rules guides first. Show it with records and record-form blocks.',
+      description: 'Creates a table for your own kind of data, such as bookings or classes, or changes its fields and access. This is live at once and is not part of publishing. Existing records keep their values. Read the data_model and access_rules guides first. Show it with records and record-form blocks. Unique and reference fields, and fields marked indexed, are fast to filter on big tables; this happens by itself.',
       inputSchema: tableBase.shape,
     },
     safely(async (input) => {
@@ -946,7 +946,7 @@ export function createMcpServer(env: Env, origin: string, code: string) {
     },
     safely(async () => {
       const site = await getSite()
-      return reply((await listTables(env, site.id)).map((table) => ({ name: table.name, label: table.label, readAccess: table.read_access, writeAccess: table.write_access, records: table.record_count, fields: table.fields })))
+      return reply((await listTables(env, site.id)).map((table) => ({ name: table.name, label: table.label, readAccess: table.read_access, writeAccess: table.write_access, records: table.record_count, fastFilters: table.indexed?.split(',').filter(Boolean) ?? [], fields: table.fields })))
     }),
   )
 
@@ -960,8 +960,8 @@ export function createMcpServer(env: Env, origin: string, code: string) {
     },
     safely(async ({ name }) => {
       const site = await getSite()
-      const result = await db.prepare('DELETE FROM data_tables WHERE site_id = ? AND name = ?').bind(site.id, name).run()
-      return result.meta.changes ? reply({ deleted: name }) : refuse(`There is no table called "${name}".`)
+      const table = await getTable(env, site.id, name)
+      return table && (await deleteTable(env, site.id, table)) ? reply({ deleted: name }) : refuse(`There is no table called "${name}".`)
     }),
   )
 

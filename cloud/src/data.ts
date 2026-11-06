@@ -12,6 +12,8 @@ export const accessLevels = ['public', 'members', 'own', 'staff', 'owner'] as co
 export const fieldTypes = ['text', 'textarea', 'number', 'boolean', 'date', 'time', 'email', 'phone', 'url', 'select', 'image', 'reference'] as const
 export const maxTablesPerSite = 50
 export const maxRecordsPerTable = 50_000
+// Each index costs one more row written for every record added, changed or deleted in its table, so there are few.
+export const maxIndexesPerTable = 4
 
 const maxRecordBytes = 20_000
 const reservedFields = ['id', 'created_at', 'updated_at', 'customer_id', 'mine', 'website', 'next', 'op', 'confirm', 'spots_left']
@@ -23,6 +25,7 @@ export type DataField = {
   default?: boolean | number | string
   ignoreField?: string
   ignoreValues?: string[]
+  indexed?: boolean
   label: string
   name: string
   options?: string[]
@@ -34,7 +37,8 @@ export type DataField = {
   type: (typeof fieldTypes)[number]
   unique?: '' | 'customer' | 'table'
 }
-export type DataTable = { fields: DataField[]; id: number; label: string; name: string; read_access: Access; record_count: number; write_access: Access }
+// indexed: the fields whose index was last built, comma separated. NULL for tables saved before indexes existed.
+export type DataTable = { fields: DataField[]; id: number; indexed: null | string; label: string; name: string; read_access: Access; record_count: number; write_access: Access }
 export type DataRow = { created_at: string; customer_id: null | number; data: string; id: number; updated_at: string }
 // quiet: an automation's own write, which tells the owner only when its rule says so.
 export type Actor = { admin: boolean; customer: Customer | null; quiet?: boolean; readOnly?: boolean }
@@ -60,6 +64,7 @@ export const tableBase = z.object({
           unique: z.enum(['', 'table', 'customer']).optional().describe('table: no two records can have the same value. customer: one customer cannot use the same value twice, such as booking the same class twice.'),
           ignoreField: z.string().regex(namePattern).optional().describe('With capacityField or unique: records are not counted when this field has one of ignoreValues, such as a status of cancelled'),
           ignoreValues: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
+          indexed: z.boolean().optional().describe(`Makes filtering on this field fast on big tables, for fields with many different values such as a customer number or an email. Unique and reference fields are fast already. Each fast field costs one extra write per record, and a table can have up to ${maxIndexesPerTable}.`),
           default: z.union([z.string().max(500), z.number(), z.boolean()]).optional().describe('The value of a new record when none is given'),
         }),
       )
@@ -83,7 +88,9 @@ export const tableSchema = tableBase.superRefine((table, context) => {
       if (field.staffOnly && field.readOnly) problem(`The field "${field.name}" can't be both staff only and read only.`)
       if (field.ignoreField && !table.fields.some((other) => other.name === field.ignoreField)) problem(`The field "${field.name}" ignores records by "${field.ignoreField}", which this table doesn't have.`)
       if (field.ignoreField && !field.ignoreValues?.length) problem(`The field "${field.name}" needs the values to ignore.`)
+      if (field.indexed && field.type === 'boolean') problem(`The field "${field.name}" has only two values, so making it fast to filter wouldn't help.`)
     })
+    if (table.fields.filter((field) => field.unique || field.indexed).length > maxIndexesPerTable) context.addIssue({ code: 'custom', message: `A table can have up to ${maxIndexesPerTable} fields that are unique or fast to filter.`, path: ['fields'] })
 })
 
 const isStaff = (actor: Actor) => actor.admin || actor.customer?.role === 'staff'
@@ -115,14 +122,60 @@ export function canChange(table: Pick<DataTable, 'write_access'>, actor: Actor, 
 
 const tableFrom = (row: Omit<DataTable, 'fields'> & { fields: string }): DataTable => ({ ...row, fields: JSON.parse(row.fields) as DataField[] })
 
+/** A table's id written into SQL, so the database can use the indexes made for that table alone. */
+const tableKey = (table: Pick<DataTable, 'id'>) => {
+  if (!Number.isSafeInteger(table.id) || table.id < 1) throw new Error('Bad table id')
+  return table.id
+}
+
+/**
+ * The fields the database keeps an index on, so a filter on a rare value reads only the matching records.
+ * Unique fields come first because their check runs on every write, then the fields asked for, then references,
+ * which pages and lines of an invoice are looked up by. Each index covers one table only (a partial index),
+ * so it costs nothing when records of other tables are written.
+ */
+export function indexedFields(fields: DataField[]) {
+  const ranked = [...fields.filter((field) => field.unique), ...fields.filter((field) => field.indexed && !field.unique), ...fields.filter((field) => field.type === 'reference' && !field.unique && !field.indexed)]
+  return ranked.slice(0, maxIndexesPerTable).map((field) => field.name).sort()
+}
+
+const indexName = (table: Pick<DataTable, 'id'>, field: string) => `data_field_${tableKey(table)}_${field}`
+
+/** Makes the database's indexes match the table's fields. Field names were checked against namePattern, so they are safe in SQL. */
+async function syncIndexes(env: Env, table: Pick<DataTable, 'fields' | 'id'>) {
+  const want = indexedFields(table.fields)
+  const { results } = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'data_records' AND name GLOB ?").bind(`data_field_${tableKey(table)}_*`).all<{ name: string }>()
+  const have = new Set(results.map((row) => row.name))
+  const names = new Set(want.map((field) => indexName(table, field)))
+  const steps = [
+    ...[...have].filter((name) => !names.has(name)).map((name) => env.DB.prepare(`DROP INDEX IF EXISTS ${name}`)),
+    ...want.filter((field) => !have.has(indexName(table, field))).map((field) => env.DB.prepare(`CREATE INDEX IF NOT EXISTS ${indexName(table, field)} ON data_records (json_extract(data, '$.${field}')) WHERE table_id = ${tableKey(table)}`)),
+    env.DB.prepare('UPDATE data_tables SET indexed = ? WHERE id = ?').bind(want.join(','), table.id),
+  ]
+  await env.DB.batch(steps)
+  return want.join(',')
+}
+
+/** Tables saved before indexes existed get theirs on their next write, so nobody has to do anything after an update. */
+async function ensureIndexes(env: Env, table: DataTable) {
+  if (table.indexed !== indexedFields(table.fields).join(',')) table.indexed = await syncIndexes(env, table)
+}
+
+/** Deletes a table, its records and its indexes. */
+export async function deleteTable(env: Env, siteId: number, table: Pick<DataTable, 'id'>) {
+  const { results } = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'data_records' AND name GLOB ?").bind(`data_field_${tableKey(table)}_*`).all<{ name: string }>()
+  const [deleted] = await env.DB.batch([env.DB.prepare('DELETE FROM data_tables WHERE id = ? AND site_id = ?').bind(table.id, siteId), ...results.map((row) => env.DB.prepare(`DROP INDEX IF EXISTS ${row.name}`))])
+  return Boolean(deleted.meta.changes)
+}
+
 export async function getTable(env: Env, siteId: number, name: string) {
   if (!namePattern.test(name)) return null
-  const row = await env.DB.prepare('SELECT id, name, label, fields, read_access, write_access, record_count FROM data_tables WHERE site_id = ? AND name = ?').bind(siteId, name).first<Omit<DataTable, 'fields'> & { fields: string }>()
+  const row = await env.DB.prepare('SELECT id, name, label, fields, indexed, read_access, write_access, record_count FROM data_tables WHERE site_id = ? AND name = ?').bind(siteId, name).first<Omit<DataTable, 'fields'> & { fields: string }>()
   return row ? tableFrom(row) : null
 }
 
 export async function listTables(env: Env, siteId: number) {
-  const { results } = await env.DB.prepare('SELECT id, name, label, fields, read_access, write_access, record_count FROM data_tables WHERE site_id = ? ORDER BY name').bind(siteId).all<Omit<DataTable, 'fields'> & { fields: string }>()
+  const { results } = await env.DB.prepare('SELECT id, name, label, fields, indexed, read_access, write_access, record_count FROM data_tables WHERE site_id = ? ORDER BY name').bind(siteId).all<Omit<DataTable, 'fields'> & { fields: string }>()
   return results.map(tableFrom)
 }
 
@@ -139,10 +192,12 @@ export async function saveTable(env: Env, siteId: number, table: z.infer<typeof 
     if (field.table !== table.name && !target) return `The field "${field.name}" points to a table that doesn't exist yet: ${field.table}. Create that table first.`
     if (field.capacityField && (field.table === table.name ? table.fields : target!.fields).find((other) => other.name === field.capacityField)?.type !== 'number') return `The field "${field.name}" takes its capacity from "${field.capacityField}", which must be a number field of the table ${field.table}.`
   }
-  await env.DB.prepare(`INSERT INTO data_tables (site_id, name, label, fields, read_access, write_access) VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT (site_id, name) DO UPDATE SET label = excluded.label, fields = excluded.fields, read_access = excluded.read_access, write_access = excluded.write_access, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`)
+  const saved = await env.DB.prepare(`INSERT INTO data_tables (site_id, name, label, fields, read_access, write_access) VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT (site_id, name) DO UPDATE SET label = excluded.label, fields = excluded.fields, read_access = excluded.read_access, write_access = excluded.write_access, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') RETURNING id`)
     .bind(siteId, table.name, table.label, JSON.stringify(table.fields), table.readAccess, table.writeAccess)
-    .run()
+    .first<{ id: number }>()
+  // Only missing indexes are built. Building one reads every record of the table once.
+  if (saved) await syncIndexes(env, { fields: table.fields as DataField[], id: saved.id })
   return null
 }
 
@@ -213,8 +268,8 @@ type ListOptions = { after?: number; filters?: Record<string, string>; limit?: n
 export async function listRecords(env: Env, table: DataTable, actor: Actor, options: ListOptions = {}) {
   const scope = readScope(table, actor)
   if (!scope) return { error: 'forbidden' as const }
-  const where = ['table_id = ?']
-  const values: unknown[] = [table.id]
+  const where = [`table_id = ${tableKey(table)}`]
+  const values: unknown[] = []
   if (scope === 'mine') {
     where.push('customer_id = ?')
     values.push(actor.customer!.id)
@@ -258,8 +313,8 @@ export function writeGuards(table: DataTable, data: Record<string, unknown>, cus
     const live = counted(field, 'r')
     const others = self ? ' AND r.id != ?' : ''
     const otherValues = self ? [self.id] : []
-    const same = `r.table_id = ? AND json_extract(r.data, '$.${field.name}') = ?${live.sql}${others}`
-    const sameValues = [table.id, value, ...live.values, ...otherValues]
+    const same = `r.table_id = ${tableKey(table)} AND json_extract(r.data, '$.${field.name}') = ?${live.sql}${others}`
+    const sameValues = [value, ...live.values, ...otherValues]
     if (field.unique === 'table') guards.push({ code: 'duplicate', field, sql: `NOT EXISTS (SELECT 1 FROM data_records r WHERE ${same})`, values: sameValues })
     // Someone who already has a place should hear that, not that the session is full.
     if (field.unique === 'customer' && customerId !== null) guards.push({ code: 'duplicate', field, sql: `NOT EXISTS (SELECT 1 FROM data_records r WHERE r.customer_id = ? AND ${same})`, values: [customerId, ...sameValues] })
@@ -278,6 +333,7 @@ async function refused(env: Env, guards: Guard[]): Promise<Saved> {
 
 export async function createRecord(env: Env, siteId: number, table: DataTable, input: Record<string, unknown>, actor: Actor): Promise<Saved> {
   if (table.record_count >= maxRecordsPerTable) return { error: `This table is full. It can hold up to ${maxRecordsPerTable} records.` }
+  await ensureIndexes(env, table)
   const read = await readInput(env, siteId, table, input, actor)
   if (!read.data) return { error: read.error, field: read.field }
   const guards = writeGuards(table, read.data, actor.customer?.id ?? null)
@@ -295,6 +351,7 @@ export async function createRecord(env: Env, siteId: number, table: DataTable, i
 export async function updateRecord(env: Env, siteId: number, table: DataTable, row: DataRow, input: Record<string, unknown>, actor: Actor): Promise<Saved> {
   const read = await readInput(env, siteId, table, input, actor, JSON.parse(row.data))
   if (!read.data) return { error: read.error, field: read.field }
+  await ensureIndexes(env, table)
   const guards = writeGuards(table, read.data, row.customer_id, row)
   const updated = await env.DB.prepare(`UPDATE data_records SET data = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND table_id = ?${guards.map((guard) => ` AND ${guard.sql}`).join('')} RETURNING id, customer_id, data, created_at, updated_at`)
     .bind(JSON.stringify(read.data), row.id, table.id, ...guards.flatMap((guard) => guard.values))
@@ -342,7 +399,7 @@ export async function spotsLeft(env: Env, siteId: number, parent: DataTable, row
     for (const field of child.fields) {
       if (field.type !== 'reference' || field.table !== parent.name || !field.capacityField) continue
       const live = counted(field, 'data_records')
-      const { results } = await env.DB.prepare(`SELECT json_extract(data, '$.${field.name}') AS target, COUNT(*) AS used FROM data_records WHERE table_id = ?${live.sql} GROUP BY target`).bind(child.id, ...live.values).all<{ target: number; used: number }>()
+      const { results } = await env.DB.prepare(`SELECT json_extract(data, '$.${field.name}') AS target, COUNT(*) AS used FROM data_records WHERE table_id = ${tableKey(child)}${live.sql} GROUP BY target`).bind(...live.values).all<{ target: number; used: number }>()
       const used = new Map(results.map((row) => [row.target, row.used]))
       for (const row of rows) {
         const capacity = (JSON.parse(row.data) as Record<string, unknown>)[field.capacityField]

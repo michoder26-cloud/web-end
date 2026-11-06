@@ -54,6 +54,7 @@ Wix can't export a site to WordPress. web-end is the bridge: move the Wix site h
 - Use select for a closed list, such as a status. Changing a label later is safe, but records keep the old value, so choose values with care.
 - Give a status field readOnly true and a default, so customers can see it but can't approve their own booking. Use staffOnly for what customers must not see, such as private notes.
 - Put a person's contact details behind staffOnly if the table can be read publicly.
+- Filters on unique and reference fields are fast even on big tables. Give indexed true to up to 4 other fields people often filter by that have many different values, such as a customer number or an email. Each one costs an extra write per record, so don't mark everything.
 - Money in custom tables is a number in normal units. Real selling belongs in the shop, which handles stock and totals.
 - Changing fields is safe. Existing records keep their values, and removed fields just stop showing. Deleting a table deletes its records, so ask first.`,
   access_rules: `# Who can see and change what

@@ -3,7 +3,7 @@
 //   npx wrangler dev --local scripts/bench-worker.ts --port 8803 --persist-to <dir>
 // and drive it with scripts/bench-records.mjs. Never deploy it.
 import '../src/automations' // registers the automation hook, so createRecord does the same reads as on the site
-import { createRecord, getTable, listRecords, ownerActor, saveTable, type DataTable } from '../src/data'
+import { createRecord, deleteTable, getTable, listRecords, ownerActor, saveTable, type DataTable } from '../src/data'
 import type { Env } from '../src/types'
 
 type Cost = { duration: number; rows_read: number; rows_written: number; sql: string; values: unknown[] }
@@ -60,29 +60,34 @@ async function benchSite(env: Env) {
 
 const statuses = ['draft', 'sent', 'paid', 'overdue', 'void']
 
-/** n rows: status = i % 5 (20% each), customer = (i * 7919) % 997 (about 0.1% each, independent of status), amount, note. */
+// E1: customer is marked indexed and code is unique, so both get an index. status (20% each) is left without one.
+const benchTable = (name: string, customerIndexed = true) => ({
+  name,
+  label: name,
+  readAccess: 'public' as const,
+  writeAccess: 'owner' as const,
+  fields: [
+    { name: 'status', label: 'Status', type: 'select' as const, options: statuses },
+    { name: 'customer', label: 'Customer', type: 'number' as const, indexed: customerIndexed },
+    { name: 'amount', label: 'Amount', type: 'number' as const },
+    { name: 'note', label: 'Note', type: 'text' as const },
+    { name: 'code', label: 'Code', type: 'text' as const, unique: 'table' as const },
+  ],
+})
+
+/** n rows: status = i % 5 (20% each), customer = (i * 7919) % 997 (about 0.1% each, independent of status), amount, note, code = C<i>. */
 async function seed(env: Env, siteId: number, name: string, n: number) {
-  const error = await saveTable(env, siteId, {
-    name,
-    label: name,
-    readAccess: 'public',
-    writeAccess: 'owner',
-    fields: [
-      { name: 'status', label: 'Status', type: 'select', options: statuses },
-      { name: 'customer', label: 'Customer', type: 'number' },
-      { name: 'amount', label: 'Amount', type: 'number' },
-      { name: 'note', label: 'Note', type: 'text' },
-    ],
-  })
+  const error = await saveTable(env, siteId, benchTable(name))
   if (error) throw new Error(error)
   const table = (await getTable(env, siteId, name))!
   await env.DB.prepare('DELETE FROM data_records WHERE table_id = ?').bind(table.id).run()
   // Chunks keep each statement well inside local limits.
   for (let start = 0; start < n; start += 5000) {
     const end = Math.min(start + 5000, n)
-    await env.DB.prepare(`WITH RECURSIVE k(i) AS (SELECT ? UNION ALL SELECT i + 1 FROM k WHERE i + 1 < ?)
+    await env.DB.prepare(`WITH RECURSIVE k(i) AS (SELECT CAST(? AS INTEGER) UNION ALL SELECT i + 1 FROM k WHERE i + 1 < ?)
       INSERT INTO data_records (table_id, data) SELECT ?, json_object('status', CASE i % 5 WHEN 0 THEN 'draft' WHEN 1 THEN 'sent' WHEN 2 THEN 'paid' WHEN 3 THEN 'overdue' ELSE 'void' END,
-        'customer', (i * 7919) % 997, 'amount', (i * 37) % 100000, 'note', 'Row number ' || i || ' with some text like a real record') FROM k`)
+        'customer', (i * 7919) % 997, 'amount', (i * 37) % 100000, 'note', 'Row number ' || i || ' with some text like a real record', 'code', 'C' || i) FROM k`)
+      // D1 binds JS numbers as REAL, so i is cast or the codes would read C7.0.
       .bind(start, end, table.id)
       .run()
   }
@@ -100,6 +105,39 @@ async function list(env: Env, siteId: number, name: string, filters: Record<stri
   if ('error' in result) return { error: result.error }
   const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${costs[0].sql}`).bind(...costs[0].values).all().catch((error: unknown) => ({ results: [{ detail: String(error) }] }))
   return { costs, matched: result.rows.length, next: result.next, wall_ms: wall, plan: plan?.results }
+}
+
+const total = (costs: Cost[]) => ({ statements: costs.length, rows_read: costs.reduce((sum, item) => sum + item.rows_read, 0), rows_written: costs.reduce((sum, item) => sum + item.rows_written, 0), sql_ms: costs.reduce((sum, item) => sum + item.duration, 0) })
+
+/** What saveTable costs when it drops the customer index, then when it builds it again on a full table. */
+async function reindex(env: Env, siteId: number, name: string) {
+  const drop: Cost[] = []
+  const build: Cost[] = []
+  await saveTable({ ...env, DB: metered(env.DB, drop) }, siteId, benchTable(name, false))
+  await saveTable({ ...env, DB: metered(env.DB, build) }, siteId, benchTable(name, true))
+  return { drop: total(drop), build: total(build) }
+}
+
+/** One record added to a full table, whose unique code is checked by the database in the same step. */
+async function insert(env: Env, siteId: number, name: string) {
+  const table = (await getTable(env, siteId, name)) as DataTable
+  const costs: Cost[] = []
+  const saved = await createRecord({ ...env, DB: metered(env.DB, costs) }, siteId, { ...table, record_count: 0 }, { status: 'draft', customer: 1, amount: 1, note: 'x', code: `NEW-${Date.now()}` }, ownerActor)
+  const duplicate = await createRecord({ ...env, DB: metered(env.DB, []) }, siteId, { ...table, record_count: 0 }, { status: 'draft', customer: 1, amount: 1, note: 'x', code: 'C7' }, ownerActor)
+  for (const row of [saved.row, duplicate.row]) if (row) await env.DB.batch([env.DB.prepare('DELETE FROM data_records WHERE id = ?').bind(row.id), env.DB.prepare('UPDATE data_tables SET record_count = record_count - 1 WHERE id = ?').bind(table.id)])
+  const guard = costs.find((cost) => cost.sql.startsWith('INSERT INTO data_records'))
+  const plan = guard ? await env.DB.prepare(`EXPLAIN QUERY PLAN ${guard.sql}`).bind(...guard.values).all().catch((error: unknown) => ({ results: [{ detail: String(error) }] })) : null
+  return { ...total(costs), saved: Boolean(saved.row), duplicate_refused: duplicate.code === 'duplicate', plan: plan?.results }
+}
+
+/** Deletes a table and says which of its indexes are left in the database (none should be). */
+async function drop(env: Env, siteId: number, name: string) {
+  const table = await getTable(env, siteId, name)
+  if (!table) return { error: 'no table' }
+  const names = async () => (await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name GLOB ?").bind(`data_field_${table.id}_*`).all<{ name: string }>()).results.map((row) => row.name)
+  const before = await names()
+  const deleted = await deleteTable(env, siteId, table)
+  return { deleted, indexes_before: before, indexes_after: await names() }
 }
 
 async function invoice(env: Env, siteId: number, withWebhook: boolean) {
@@ -150,6 +188,9 @@ export default {
       const siteId = await benchSite(env)
       if (url.pathname === '/seed') return json(await seed(env, siteId, url.searchParams.get('table')!, Number(url.searchParams.get('n'))))
       if (url.pathname === '/list') return json(await list(env, siteId, url.searchParams.get('table')!, JSON.parse(url.searchParams.get('filters') ?? '{}'), url.searchParams.get('newest') === '1'))
+      if (url.pathname === '/reindex') return json(await reindex(env, siteId, url.searchParams.get('table')!))
+      if (url.pathname === '/drop') return json(await drop(env, siteId, url.searchParams.get('table')!))
+      if (url.pathname === '/insert') return json(await insert(env, siteId, url.searchParams.get('table')!))
       if (url.pathname === '/invoice') return json(await invoice(env, siteId, url.searchParams.get('webhook') === '1'))
       return json({ error: 'unknown' }, 404)
     } catch (error) {
