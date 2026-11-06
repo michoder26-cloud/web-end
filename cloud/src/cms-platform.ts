@@ -7,7 +7,7 @@ import type { Actor, DataField, DataTable } from './data'
 import { emailProblems, emailStatus, sendEmail } from './email'
 import { googleProblems, googleStatus } from './google'
 import { escapeHtml, notFound, see } from './http'
-import { extraLanguages, languageName, mainLanguage } from './languages'
+import { languageName, mainLanguage } from './languages'
 import { checkMove, cleanPath, finishMove, importProducts, moveReport, moveStatus, safeWebUrl, saveRedirects } from './moving'
 import type { MoveReport } from './moving'
 import { officeText } from './office-words'
@@ -18,7 +18,7 @@ import { latestRelease } from './updates'
 import { listVersions, publishVersion, restoreVersion, unpublishedChanges } from './versions'
 import { version } from './version'
 import { eventNames, validWebhookUrl } from './webhooks'
-import { redirectionCsv, woocommerceCsv, wordpressPlan, wordpressReport, wordpressXml } from './wordpress'
+import { redirectionCsv, woocommerceCsv, wordpressLanguages, wordpressPlan, wordpressReport, wordpressXml } from './wordpress'
 import type { Env, Settings, SiteRow } from './types'
 
 const fieldSpec = () =>
@@ -176,7 +176,7 @@ const designCard = (design: NonNullable<Awaited<ReturnType<typeof moveStatus>>['
 
 const checkCard = (code: string, report: MoveReport, t: OfficeWords) => {
   const group = (title: string, lines: string[]) => (lines.length ? `<h4>${escapeHtml(title)} (${lines.length})</h4><ul>${lines.map((line) => `<li style="overflow-wrap:anywhere">${escapeHtml(line)}</li>`).join('')}</ul>` : '')
-  const facts = [...(report.titleKept ? [] : [t.titleChanged]), ...(report.descriptionKept ? [] : [t.descriptionChanged]), ...(report.oldPageWasCut ? [t.oldPageCut] : [])]
+  const facts = [...(report.titleKept ? [] : [t.titleChanged]), ...(report.descriptionKept ? [] : [t.descriptionChanged]), ...(report.oldPageWasCut ? [t.oldPageCut] : []), ...(report.needsManualReview ? [t.oldPageThin] : [])]
   return `<article class="card account__record"><h3>${report.problems ? t.differences(report.problems) : t.noDifferences} · /${escapeHtml(report.newPage)}</h3><p style="overflow-wrap:anywhere"><small>${t.comparedWith(escapeHtml(report.oldUrl), report.linesOnOldPage, report.imagesFoundOnOldPage)}</small></p><p><a href="${escapeHtml(report.oldUrl)}" rel="noopener noreferrer" target="_blank">Open the old page</a> · <a href="/owner/${escapeHtml(code)}/preview/${escapeHtml(report.newPage)}" target="_blank">Open the new page</a></p>${facts.map((fact) => `<p>${escapeHtml(fact)}</p>`).join('')}${group('Headings in a different order', report.headingsOutOfOrder)}${group(t.textMissing, report.textMissing)}${group(t.linkTextMissing, report.linkTextMissing)}${group(t.imagesNotCopied, report.imagesNotCopied)}${group(t.imagesNotUsed, report.imagesCopiedNotUsed)}${group(t.imagesOnOldHost, report.imagesStillOnOldHost)}</article>`
 }
 
@@ -461,15 +461,17 @@ async function wordpressPage(env: Env, url: URL, site: SiteRow, code: string) {
   const plan = await wordpressPlan(env, site, url.origin)
   const t = officeText(site)
   const base = `/owner/${escapeHtml(code)}/wordpress`
+  const extras = wordpressLanguages(site)
   const file = (href: string, label: string, note: string) => `<p><a class="button button--small" href="${base}/${href}">${label}</a> ${note}</p>`
   return office(
     site,
     code,
     t.moveToWordpress,
     `<p>${t.wordpressIntro(`/owner/${escapeHtml(code)}/move`)}</p>
-${extraLanguages(JSON.parse(site.settings) as Settings).length ? `<p role="note">${escapeHtml(t.wordpressMainOnly(languageName(mainLanguage(JSON.parse(site.settings) as Settings), t.lang)))}</p>` : ''}
+${extras.length ? `<p role="note">${escapeHtml(t.wordpressMainOnly(languageName(mainLanguage(JSON.parse(site.settings) as Settings), t.lang)))}</p>` : ''}
 <article class="card account__record"><h2>${t.downloadFiles}</h2>
 ${file('site.xml', t.wordpressFile, t.wordpressFileNote(plan.pages.length))}
+${extras.map((code) => file(`site-${code}.xml`, `${t.wordpressFile} · ${escapeHtml(languageName(code, t.lang))}`, t.wordpressLanguageFileNote(plan.pages.length))).join('\n')}
 ${plan.products.length ? file('products.csv', t.woocommerceFile, t.woocommerceFileNote(plan.products.length)) : ''}
 ${plan.data.redirects.length ? file('redirects.csv', t.redirectsFile, t.redirectsFileNote(plan.data.redirects.length)) : ''}
 ${file('report.json', t.wordpressReport, t.wordpressReportHelp)}</article>
@@ -499,10 +501,10 @@ export function handlePlatform(request: Request, env: Env, url: URL, site: SiteR
   if (area === 'move' && !action) return handleMove(request, env, url, site, code, id, saved)
   if (area === 'wordpress' && !action && request.method === 'GET') {
     if (!id) return wordpressPage(env, url, site, code)
-    const wpLang = id === 'site.xml' ? undefined : id.startsWith('site-') ? id.slice(5, -4) : null
-    if (wpLang === null) return new Response('Not found', { status: 404 })
-    if (wpLang) return wordpressXml(env, site, url.origin, wpLang).then((body) => download(body, `wordpress-import-${wpLang}.xml`, 'application/xml'))
-    return wordpressXml(env, site, url.origin).then((body) => download(body, 'wordpress-import.xml', 'application/xml'))
+    if (id === 'site.xml') return wordpressXml(env, site, url.origin).then((body) => (body ? download(body, 'wordpress-import.xml', 'application/xml') : notFound()))
+    // One file per extra language, such as site-en.xml. A language the site doesn't have is not found.
+    const wpLanguage = /^site-([a-z]{2}(?:-[a-z]{2})?)\.xml$/.exec(id)?.[1]
+    if (wpLanguage) return wordpressXml(env, site, url.origin, wpLanguage).then((body) => (body ? download(body, `wordpress-import-${wpLanguage}.xml`, 'application/xml') : notFound()))
     if (id === 'products.csv') return woocommerceCsv(env, site, url.origin).then((body) => download(body, 'woocommerce-products.csv', 'text/csv'))
     if (id === 'redirects.csv') return redirectionCsv(env, site, url.origin).then((body) => download(body, 'redirection-old-links.csv', 'text/csv'))
     if (id === 'report.json') return wordpressReport(env, site, url.origin).then((body) => download(JSON.stringify(body, null, 2), 'wordpress-move-report.json', 'application/json'))

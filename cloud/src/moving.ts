@@ -285,13 +285,9 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
   }
   page.design = readDesign(themeStyles || otherStyles, themeColor)
   page.sections = page.sections.filter((section) => section.headings.length || section.images.length || section.buttons.length || section.lines)
-  const usable = page.headings.length + page.buttons.length + page.images.length + page.links.length
-  if (page.text.join(' ').length < 60 && usable === 0) {
-    // A page this empty is almost always rendered by JavaScript in the browser
-    // (e.g. a Wix site that ships its content as a single app shell), so the
-    // read here is not a reliable verdict about the old page.
+  if (thinReading(page)) {
     page.tooFewWords = true
-    page.reviewReason = 'This page looks like it is rendered by JavaScript in the browser, so its text could not be read here. Please compare this page with the original side by side.'
+    page.reviewReason = thinReadingReason
   }
   return page
 }
@@ -322,6 +318,18 @@ export async function copyImage(env: Env, siteId: number, target: URL): Promise<
 
 // Compares words only, so "Way<br>San Francisco" and "Way, San Francisco" count as the same line.
 const comparable = (value: string) => clean(value).normalize('NFC').toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ').trim()
+
+// A page whose own words add up to almost nothing was most likely drawn by JavaScript in the visitor's browser,
+// such as a Wix app shell, so reading its HTML here can't say whether the move kept it. Lines that only repeat the
+// page title are left out, and letters are counted rather than words, so Thai text without spaces is judged fairly.
+// It is worked out from the saved reading itself, so readings saved before this check are judged the same way.
+const thinLetters = 80
+const thinReadingReason = 'Almost no text could be read from the old page, most likely because it is drawn by JavaScript in the browser. Nothing here can confirm the move kept it, so open the old and new pages side by side and compare them yourself.'
+function thinReading(reading: { headings: { text: string }[]; text: string[]; title: string }) {
+  const title = comparable(reading.title)
+  const own = [...new Set([...reading.headings.map((heading) => heading.text), ...reading.text].map(comparable))].filter((line) => line && line !== title)
+  return own.join('').replace(/[^\p{L}\p{N}]/gu, '').length < thinLetters
+}
 
 const pageText = (html: string) => comparable(html.replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' '))
 
@@ -392,6 +400,7 @@ async function comparePage(env: Env, site: SiteRow, old: Reading, page: WorkingP
   const titleKept = comparable(page.title) === comparable(old.title) || comparable(old.title).includes(comparable(page.title)) || comparable(page.title).includes(comparable(old.title))
   const descriptionKept = !old.description || comparable(page.description) === comparable(old.description)
   const headingsOutOfOrder = outOfOrder(old.headings.map((heading) => heading.text), pageText(/<main\b[\s\S]*<\/main>/i.exec(html)?.[0] ?? html))
+  const needsManualReview = thinReading(old)
   const counts = { headingsOutOfOrder: headingsOutOfOrder.length, imagesCopiedNotUsed: imagesCopiedNotUsed.length, imagesNotCopied: imagesNotCopied.length, imagesOnOldHost: imagesStillOnOldHost.length, linkTextMissing: linkTextMissing.length, textMissing: textMissing.length }
   return {
     counts,
@@ -410,7 +419,7 @@ async function comparePage(env: Env, site: SiteRow, old: Reading, page: WorkingP
     problems: Object.values(counts).reduce((sum, count) => sum + count, 0) + (titleKept ? 0 : 1) + (descriptionKept ? 0 : 1),
     textMissing: textMissing.slice(0, maxReported),
     titleKept,
-    reviewReason: needsManualReview ? old.reviewReason : undefined,
+    reviewReason: needsManualReview ? thinReadingReason : undefined,
   }
 }
 
@@ -464,12 +473,14 @@ export async function moveReport(env: Env, site: SiteRow) {
     env.DB.prepare('SELECT COUNT(*) AS total FROM redirects WHERE site_id = ?').bind(site.id).first<{ total: number }>(),
   ])
   const designDifferences = status.design?.differs ?? []
-  const verification = !sources.length ? 'not_started' : status.problems || designDifferences.length ? 'needs_review' : 'verified'
+  const manualReview = status.pages.filter((page) => page.needsManualReview).length
+  // A page that could not be read can never count as verified, even with no differences found.
+  const verification = !sources.length ? 'not_started' : status.problems || designDifferences.length || manualReview ? 'needs_review' : 'verified'
   return {
     format: 'web-end-move-report-1',
     generated_at: new Date().toISOString(),
     verification,
-    summary: { compared_pages: status.pages.length, design_differences: designDifferences.length, known_old_pages: sources.length, problems: status.problems, redirects: redirects?.total ?? 0, unrebuild_pages: status.notRebuilt.length },
+    summary: { compared_pages: status.pages.length, design_differences: designDifferences.length, manual_review: manualReview, known_old_pages: sources.length, problems: status.problems, redirects: redirects?.total ?? 0, unrebuild_pages: status.notRebuilt.length },
     sources: sources.map((source) => ({ checked_at: source.read_at, old_url: source.url, page: source.page_slug })),
     pages: status.pages.map((page) => ({ description_kept: page.descriptionKept, differences: page.problems, headings_out_of_order: page.headingsOutOfOrder, images_not_copied: page.imagesNotCopied, images_not_used: page.imagesCopiedNotUsed, images_still_on_old_host: page.imagesStillOnOldHost, lines_on_old_page: page.linesOnOldPage, links_missing: page.linkTextMissing, new_page: page.newPage, old_url: page.oldUrl, text_missing: page.textMissing, title_kept: page.titleKept, manual_review: page.needsManualReview, review_reason: page.reviewReason })),
     not_rebuilt: status.notRebuilt,

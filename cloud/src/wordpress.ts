@@ -1,4 +1,5 @@
 import { escapeHtml } from './http'
+import { extraLanguages, localizePage, localizeSettings, mainLanguage } from './languages'
 import { parsePrice } from './money'
 import { version } from './version'
 import { liveSite } from './versions'
@@ -10,7 +11,7 @@ import type { Block, Env, Settings, SiteRow } from './types'
  * A Wix site moves here first, so this is also the way from Wix to WordPress.
  */
 
-type PageRow = { blocks: string; description: string; published: number; slug: string; title: string }
+type PageRow = { blocks: string; description: string; published: number; slug: string; title: string; translations?: string }
 type ItemRow = { body: string; category: string; collection: string; compare_price: string; id: number; image_alt: string; image_url: string; link_href: string; link_label: string; price: string; published: number; sort: number; stock: null | number; title: string }
 type VariantRow = { compare_price: string; item_id: number; name: string; price: string; sort: number; stock: null | number }
 
@@ -18,13 +19,13 @@ const extensions: Record<string, string> = { 'image/gif': 'gif', 'image/jpeg': '
 const cdata = (value: string) => `<![CDATA[${value.replaceAll(']]>', ']]]]><![CDATA[>')}]]>`
 const e = escapeHtml
 
-async function load(env: Env, site: SiteRow) {
+async function load(env: Env, site: SiteRow, language: null | string = null) {
   // A migration is an exit from the site the public can actually see. Never send an owner’s
   // unpublished pages or unpublished products to another host by accident.
   const live = liveSite(site)
   const pageQuery = live.live_version
-    ? env.DB.prepare("SELECT slug, title, description, published, blocks FROM version_pages WHERE version_id = ? AND published = 1 ORDER BY slug = 'home' DESC, slug").bind(live.live_version)
-    : env.DB.prepare("SELECT slug, title, description, published, blocks FROM pages WHERE site_id = ? AND published = 1 ORDER BY slug = 'home' DESC, slug").bind(site.id)
+    ? env.DB.prepare("SELECT slug, title, description, published, blocks, translations FROM version_pages WHERE version_id = ? AND published = 1 ORDER BY slug = 'home' DESC, slug").bind(live.live_version)
+    : env.DB.prepare("SELECT slug, title, description, published, blocks, translations FROM pages WHERE site_id = ? AND published = 1 ORDER BY slug = 'home' DESC, slug").bind(site.id)
   const [pages, items, variants, media, redirects] = await Promise.all([
     pageQuery.all<PageRow>(),
     env.DB.prepare('SELECT id, collection, title, price, compare_price, category, stock, body, image_url, image_alt, link_label, link_href, sort, published FROM items WHERE site_id = ? AND published = 1 ORDER BY collection, sort, id').bind(site.id).all<ItemRow>(),
@@ -34,7 +35,16 @@ async function load(env: Env, site: SiteRow) {
   ])
   const variantsOf = new Map<number, VariantRow[]>()
   for (const variant of variants.results) variantsOf.set(variant.item_id, [...(variantsOf.get(variant.item_id) ?? []), variant])
-  return { items: items.results, media: media.results, pages: pages.results, redirects: redirects.results, settings: JSON.parse(live.settings) as Settings, variantsOf }
+  const settings = JSON.parse(live.settings) as Settings
+  // An extra language's file has that language's page words, menu, name and tagline, and the main language's wherever a translation is missing.
+  // Photos, links and the order of sections always come from the main language, as on the site itself.
+  const shown = language
+    ? pages.results.map((page) => {
+        const local = localizePage({ ...page, blocks: JSON.parse(page.blocks) as Block[] }, language)
+        return { ...page, blocks: JSON.stringify(local.blocks), description: local.description, title: local.title }
+      })
+    : pages.results
+  return { items: items.results, media: media.results, pages: shown, redirects: redirects.results, settings: language ? localizeSettings(settings, language) : settings, variantsOf }
 }
 
 /** Addresses that work on the WordPress side: photos keep loading from here until WordPress has copied them, and shop pages map to WooCommerce's. */
@@ -161,8 +171,11 @@ function pageHtml(page: PageRow, items: ItemRow[], link: ReturnType<typeof addre
 /** A WordPress title is the page's heading, so the site name some titles end with is left for the SEO title instead. */
 const shortTitle = (title: string, slug: string) => title.split(/\s+[|–—]\s+/)[0].trim() || (slug === 'home' ? 'Home' : slug)
 
-export async function wordpressPlan(env: Env, site: SiteRow, origin: string) {
-  const data = await load(env, site)
+/** The site's extra languages, each of which gets its own WordPress import file. The main language's is the usual file. */
+export const wordpressLanguages = (site: SiteRow) => extraLanguages(JSON.parse(liveSite(site).settings) as Settings)
+
+export async function wordpressPlan(env: Env, site: SiteRow, origin: string, language: null | string = null) {
+  const data = await load(env, site, language)
   const products = data.items.filter((item) => parsePrice(item.price) || data.variantsOf.get(item.id)?.some((variant) => parsePrice(variant.price)))
   const link = addresses(origin, data.media, products)
   // WooCommerce has one list of products, so separate collections become tags that each shop section can show.
@@ -181,6 +194,7 @@ export async function wordpressPlan(env: Env, site: SiteRow, origin: string) {
   const currency = data.settings.currency?.toUpperCase() || symbols[first?.prefix.trim() ?? ''] || (/บาท/.test(first?.suffix ?? '') ? 'THB' : '')
   if (!data.pages.length) todo.push('There are no published pages to import. Publish the pages you want to move, then download these files again.')
   if (data.pages.length && !data.pages.some((page) => page.slug === 'home')) todo.push('There is no published home page. Add or publish the page with address "home" before choosing a static homepage in WordPress.')
+  if (language && products.length) todo.push(`Products stay in the main language: the WooCommerce file and the product names in this ${language} file are not translated.`)
   if (products.length && !currency) todo.push('The product prices do not say which currency they use. Choose the matching currency in WooCommerce before accepting orders.')
   return { currency, data, link, pages, products, tagged, todo }
 }
@@ -194,16 +208,17 @@ export async function wordpressReport(env: Env, site: SiteRow, origin: string) {
     readiness: plan.todo.length ? 'needs_review' : 'ready_for_import',
     summary: { pages: plan.pages.length, products: plan.products.length, redirects: plan.data.redirects.length, attention: plan.todo.length },
     currency: plan.currency || null,
-    exports: { redirects_csv: 'redirection-old-links.csv', products_csv: plan.products.length ? 'woocommerce-products.csv' : null, wordpress_xml: 'wordpress-import.xml' },
+    exports: { redirects_csv: 'redirection-old-links.csv', products_csv: plan.products.length ? 'woocommerce-products.csv' : null, wordpress_xml: 'wordpress-import.xml', wordpress_xml_languages: Object.fromEntries(wordpressLanguages(site).map((code) => [code, `wordpress-import-${code}.xml`])) },
     pages: plan.pages.map(({ page, todo }) => ({ attention: todo, slug: page.slug, title: page.title })),
     attention: plan.todo,
   }
 }
 
-export async function wordpressXml(env: Env, site: SiteRow, origin: string, language?: string) {
-  const { data, link, pages } = await wordpressPlan(env, site, origin)
-  const mainLanguage = (data.settings.languages ?? ['en'])[0]
-  const lang = language && (data.settings.languages ?? ['en']).includes(language) ? language : mainLanguage
+/** A WordPress import file for the main language, or for one extra language. Any other language is refused with null. */
+export async function wordpressXml(env: Env, site: SiteRow, origin: string, language: null | string = null) {
+  if (language && !wordpressLanguages(site).includes(language)) return null
+  const { data, link, pages } = await wordpressPlan(env, site, origin, language)
+  const lang = language ?? mainLanguage(data.settings)
   const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
   const pubDate = new Date().toUTCString()
   const meta = (key: string, value: string | number) => `<wp:postmeta><wp:meta_key>${cdata(key)}</wp:meta_key><wp:meta_value>${cdata(String(value))}</wp:meta_value></wp:postmeta>`
@@ -240,11 +255,10 @@ ${fields.extra ?? ''}
   })
   const pageIds = new Map<string, number>()
   const pageItems = pages.map(({ html, page }, index) => {
-    const shownTitle = lang ? (page.translations as any)?.[lang] ?? page.title : page.title
     const id = 100 + index
     pageIds.set(page.slug, id)
     const extra = [meta('_yoast_wpseo_title', page.title), meta('_yoast_wpseo_metadesc', page.description), meta('rank_math_title', page.title), meta('rank_math_description', page.description)].join('\n')
-    return item({ content: html, excerpt: page.description, extra, id, name: page.slug, order: index, status: 'publish', title: shortTitle(shownTitle, page.slug), type: 'page', url: `${origin}/${page.slug === 'home' ? '' : page.slug}` })
+    return item({ content: html, excerpt: page.description, extra, id, name: page.slug, order: index, status: 'publish', title: shortTitle(page.title, page.slug), type: 'page', url: `${origin}/${language ? `${language}/` : ''}${page.slug === 'home' ? '' : page.slug}` })
   })
   const menuItems = (data.settings.nav ?? []).map((entry, index) => {
     const id = 20_000 + index
