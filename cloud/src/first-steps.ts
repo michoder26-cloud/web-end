@@ -5,6 +5,7 @@ import type { Desk } from './cms'
 import { createRecord, getTable, ownerActor, saveTable, tableSchema } from './data'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { officeText } from './office-words'
+import { rememberPage } from './page-history'
 import type { OfficeWords } from './office-words'
 import { defaultSiteNames, shell } from './owner'
 import { starterIds, starterLanguages, starterSites } from './starters'
@@ -46,7 +47,7 @@ export async function applyStarter(env: Env, site: SiteRow, id: StarterId, langu
   delete next.background
   delete next.text
   const pageSavers = replacePages
-    ? (await env.DB.prepare('SELECT id, slug, title, description, published, blocks, translations FROM pages WHERE site_id = ?').bind(site.id).all<{ id: number; slug: string }>()).results.map((page) => rememberPage(env, site.id, page.slug))
+    ? (await env.DB.prepare('SELECT slug FROM pages WHERE site_id = ?').bind(site.id).all<{ slug: string }>()).results.map((page) => rememberPage(env, site.id, page.slug))
     : []
   await Promise.all(pageSavers)
   await env.DB.batch([
