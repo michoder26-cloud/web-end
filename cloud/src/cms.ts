@@ -651,6 +651,8 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
     const form = await request.formData().catch((): null => null)
     const status = form?.get('status')
     if (status === 'delete') {
+      const form = await request.formData().catch(() => null)
+      if (form?.get('confirm') !== 'on') return see(url, owner)
       await env.DB.prepare('DELETE FROM entries WHERE id = ? AND site_id = ?').bind(Number(id), site.id).run()
     } else if (typeof status === 'string' && statuses.includes(status)) {
       await env.DB.prepare('UPDATE entries SET status = ? WHERE id = ? AND site_id = ?').bind(status, Number(id), site.id).run()

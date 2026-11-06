@@ -45,6 +45,10 @@ export async function applyStarter(env: Env, site: SiteRow, id: StarterId, langu
   // The starter brings its own look, so colours chosen for another design would only clash.
   delete next.background
   delete next.text
+  const pageSavers = replacePages
+    ? (await env.DB.prepare('SELECT id, slug, title, description, published, blocks, translations FROM pages WHERE site_id = ?').bind(site.id).all<{ id: number; slug: string }>()).results.map((page) => rememberPage(env, site.id, page.slug))
+    : []
+  await Promise.all(pageSavers)
   await env.DB.batch([
     ...(replacePages ? [env.DB.prepare('DELETE FROM pages WHERE site_id = ?').bind(site.id)] : []),
     ...content.pages.map((page) =>

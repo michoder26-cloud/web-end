@@ -65,6 +65,8 @@ export async function restoreVersion(env: Env, site: SiteRow, id: number) {
   const version = await env.DB.prepare('SELECT settings FROM versions WHERE id = ? AND site_id = ?').bind(id, site.id).first<{ settings: string }>()
   if (!version) return false
   const settings = { ...(JSON.parse(version.settings) as Settings), ...systemSettings(JSON.parse(site.settings) as Settings) }
+  const draftSavers = await env.DB.prepare('SELECT id, slug, title, description, published, blocks, translations FROM pages WHERE site_id = ?').bind(site.id).all<{ id: number; slug: string }>()
+  await Promise.all(draftSavers.results.map((page) => rememberPage(env, site.id, page.slug)))
   await env.DB.batch([
     env.DB.prepare('DELETE FROM pages WHERE site_id = ?').bind(site.id),
     env.DB.prepare('INSERT INTO pages (site_id, slug, title, description, published, blocks, translations) SELECT ?, slug, title, description, published, blocks, translations FROM version_pages WHERE version_id = ?').bind(site.id, id),
