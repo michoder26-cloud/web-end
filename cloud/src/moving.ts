@@ -449,12 +449,14 @@ export async function moveReport(env: Env, site: SiteRow) {
     env.DB.prepare('SELECT COUNT(*) AS total FROM redirects WHERE site_id = ?').bind(site.id).first<{ total: number }>(),
   ])
   const designDifferences = status.design?.differs ?? []
+  // A page that could not be read can never count as verified; it is already part of status.problems, and is also surfaced on its own so the owner sees how many pages a person must still compare.
+  const manualReview = status.pages.filter((page) => page.needsManualReview).length
   const verification = !sources.length ? 'not_started' : status.problems || designDifferences.length ? 'needs_review' : 'verified'
   return {
     format: 'web-end-move-report-1',
     generated_at: new Date().toISOString(),
     verification,
-    summary: { compared_pages: status.pages.length, design_differences: designDifferences.length, known_old_pages: sources.length, problems: status.problems, redirects: redirects?.total ?? 0, unrebuild_pages: status.notRebuilt.length },
+    summary: { compared_pages: status.pages.length, design_differences: designDifferences.length, known_old_pages: sources.length, manual_review: manualReview, problems: status.problems, redirects: redirects?.total ?? 0, unrebuild_pages: status.notRebuilt.length },
     sources: sources.map((source) => ({ checked_at: source.read_at, old_url: source.url, page: source.page_slug })),
     pages: status.pages.map((page) => ({ description_kept: page.descriptionKept, differences: page.problems, headings_out_of_order: page.headingsOutOfOrder, images_not_copied: page.imagesNotCopied, images_not_used: page.imagesCopiedNotUsed, images_still_on_old_host: page.imagesStillOnOldHost, lines_on_old_page: page.linesOnOldPage, links_missing: page.linkTextMissing, manual_review: page.needsManualReview, new_page: page.newPage, old_url: page.oldUrl, review_reason: page.reviewReason, text_missing: page.textMissing, title_kept: page.titleKept })),
     not_rebuilt: status.notRebuilt,
