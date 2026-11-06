@@ -200,8 +200,10 @@ export async function wordpressReport(env: Env, site: SiteRow, origin: string) {
   }
 }
 
-export async function wordpressXml(env: Env, site: SiteRow, origin: string) {
+export async function wordpressXml(env: Env, site: SiteRow, origin: string, language?: string) {
   const { data, link, pages } = await wordpressPlan(env, site, origin)
+  const mainLanguage = (data.settings.languages ?? ['en'])[0]
+  const lang = language && (data.settings.languages ?? ['en']).includes(language) ? language : mainLanguage
   const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
   const pubDate = new Date().toUTCString()
   const meta = (key: string, value: string | number) => `<wp:postmeta><wp:meta_key>${cdata(key)}</wp:meta_key><wp:meta_value>${cdata(String(value))}</wp:meta_value></wp:postmeta>`
@@ -238,10 +240,11 @@ ${fields.extra ?? ''}
   })
   const pageIds = new Map<string, number>()
   const pageItems = pages.map(({ html, page }, index) => {
+    const shownTitle = lang ? (page.translations as any)?.[lang] ?? page.title : page.title
     const id = 100 + index
     pageIds.set(page.slug, id)
     const extra = [meta('_yoast_wpseo_title', page.title), meta('_yoast_wpseo_metadesc', page.description), meta('rank_math_title', page.title), meta('rank_math_description', page.description)].join('\n')
-    return item({ content: html, excerpt: page.description, extra, id, name: page.slug, order: index, status: 'publish', title: shortTitle(page.title, page.slug), type: 'page', url: `${origin}/${page.slug === 'home' ? '' : page.slug}` })
+    return item({ content: html, excerpt: page.description, extra, id, name: page.slug, order: index, status: 'publish', title: shortTitle(shownTitle, page.slug), type: 'page', url: `${origin}/${page.slug === 'home' ? '' : page.slug}` })
   })
   const menuItems = (data.settings.nav ?? []).map((entry, index) => {
     const id = 20_000 + index
@@ -260,7 +263,7 @@ ${fields.extra ?? ''}
 <link>${e(origin)}</link>
 <description>${cdata(data.settings.tagline ?? '')}</description>
 <pubDate>${pubDate}</pubDate>
-<language>${e(data.settings.language ?? 'en')}</language>
+<language>${e(lang)}</language>
 <wp:wxr_version>1.2</wp:wxr_version>
 <wp:base_site_url>${e(origin)}</wp:base_site_url>
 <wp:base_blog_url>${e(origin)}</wp:base_blog_url>

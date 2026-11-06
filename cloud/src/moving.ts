@@ -86,7 +86,7 @@ const usefulData = new Set(['BreadcrumbList', 'LocalBusiness', 'Offer', 'Organiz
 
 type PageDesign = { accent?: string; background?: string; buttonText?: string; fonts: string[]; text?: string }
 type PageSection = { buttons: string[]; firstLines: string[]; headings: string[]; images: string[]; kind: string; lines: number }
-type PageReading = { buttons: string[]; data: unknown[]; description: string; design: PageDesign; headings: { level: number; text: string }[]; images: { alt: string; url: string }[]; links: { href: string; text: string }[]; sections: PageSection[]; text: string[]; title: string; truncated: boolean; url: string }
+type PageReading = { buttons: string[]; data: unknown[]; description: string; design: PageDesign; headings: { level: number; text: string }[]; images: { alt: string; url: string }[]; links: { href: string; text: string }[]; sections: PageSection[]; text: string[]; title: string; truncated: boolean; url: string; tooFewWords?: boolean; reviewReason?: string }
 
 const maxSections = 40
 const maxPerSection = 12
@@ -285,6 +285,14 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
   }
   page.design = readDesign(themeStyles || otherStyles, themeColor)
   page.sections = page.sections.filter((section) => section.headings.length || section.images.length || section.buttons.length || section.lines)
+  const usable = page.headings.length + page.buttons.length + page.images.length + page.links.length
+  if (page.text.join(' ').length < 60 && usable === 0) {
+    // A page this empty is almost always rendered by JavaScript in the browser
+    // (e.g. a Wix site that ships its content as a single app shell), so the
+    // read here is not a reliable verdict about the old page.
+    page.tooFewWords = true
+    page.reviewReason = 'This page looks like it is rendered by JavaScript in the browser, so its text could not be read here. Please compare this page with the original side by side.'
+  }
   return page
 }
 
@@ -319,7 +327,7 @@ const pageText = (html: string) => comparable(html.replace(/<(script|style)\b[\s
 
 const maxReported = 60
 
-type Reading = { buttons?: string[]; design?: PageDesign; reader?: number; description: string; headings: { level: number; text: string }[]; images: { url: string }[]; links: { text: string }[]; text: string[]; title: string; truncated: boolean; url: string }
+type Reading = { buttons?: string[]; design?: PageDesign; reader?: number; description: string; headings: { level: number; text: string }[]; images: { url: string }[]; links: { text: string }[]; text: string[]; title: string; truncated: boolean; url: string; tooFewWords?: boolean; reviewReason?: string }
 type WorkingPage = { blocks: string; description: string; published: number; slug: string; title: string }
 
 const sourcesKeptDays = 30
@@ -388,6 +396,7 @@ async function comparePage(env: Env, site: SiteRow, old: Reading, page: WorkingP
   return {
     counts,
     descriptionKept,
+    needsManualReview,
     headingsOutOfOrder: headingsOutOfOrder.slice(0, maxReported),
     imagesCopiedNotUsed: imagesCopiedNotUsed.slice(0, maxReported),
     imagesFoundOnOldPage: sources.length,
@@ -401,6 +410,7 @@ async function comparePage(env: Env, site: SiteRow, old: Reading, page: WorkingP
     problems: Object.values(counts).reduce((sum, count) => sum + count, 0) + (titleKept ? 0 : 1) + (descriptionKept ? 0 : 1),
     textMissing: textMissing.slice(0, maxReported),
     titleKept,
+    reviewReason: needsManualReview ? old.reviewReason : undefined,
   }
 }
 
@@ -461,7 +471,7 @@ export async function moveReport(env: Env, site: SiteRow) {
     verification,
     summary: { compared_pages: status.pages.length, design_differences: designDifferences.length, known_old_pages: sources.length, problems: status.problems, redirects: redirects?.total ?? 0, unrebuild_pages: status.notRebuilt.length },
     sources: sources.map((source) => ({ checked_at: source.read_at, old_url: source.url, page: source.page_slug })),
-    pages: status.pages.map((page) => ({ description_kept: page.descriptionKept, differences: page.problems, headings_out_of_order: page.headingsOutOfOrder, images_not_copied: page.imagesNotCopied, images_not_used: page.imagesCopiedNotUsed, images_still_on_old_host: page.imagesStillOnOldHost, lines_on_old_page: page.linesOnOldPage, links_missing: page.linkTextMissing, new_page: page.newPage, old_url: page.oldUrl, text_missing: page.textMissing, title_kept: page.titleKept })),
+    pages: status.pages.map((page) => ({ description_kept: page.descriptionKept, differences: page.problems, headings_out_of_order: page.headingsOutOfOrder, images_not_copied: page.imagesNotCopied, images_not_used: page.imagesCopiedNotUsed, images_still_on_old_host: page.imagesStillOnOldHost, lines_on_old_page: page.linesOnOldPage, links_missing: page.linkTextMissing, new_page: page.newPage, old_url: page.oldUrl, text_missing: page.textMissing, title_kept: page.titleKept, manual_review: page.needsManualReview, review_reason: page.reviewReason })),
     not_rebuilt: status.notRebuilt,
     design: status.design ? { differences: status.design.differs, new: status.design.now, old: status.design.old } : null,
   }

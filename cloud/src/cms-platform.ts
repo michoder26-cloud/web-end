@@ -499,7 +499,10 @@ export function handlePlatform(request: Request, env: Env, url: URL, site: SiteR
   if (area === 'move' && !action) return handleMove(request, env, url, site, code, id, saved)
   if (area === 'wordpress' && !action && request.method === 'GET') {
     if (!id) return wordpressPage(env, url, site, code)
-    if (id === 'site.xml') return wordpressXml(env, site, url.origin).then((body) => download(body, 'wordpress-import.xml', 'application/xml'))
+    const wpLang = id === 'site.xml' ? undefined : id.startsWith('site-') ? id.slice(5, -4) : null
+    if (wpLang === null) return new Response('Not found', { status: 404 })
+    if (wpLang) return wordpressXml(env, site, url.origin, wpLang).then((body) => download(body, `wordpress-import-${wpLang}.xml`, 'application/xml'))
+    return wordpressXml(env, site, url.origin).then((body) => download(body, 'wordpress-import.xml', 'application/xml'))
     if (id === 'products.csv') return woocommerceCsv(env, site, url.origin).then((body) => download(body, 'woocommerce-products.csv', 'text/csv'))
     if (id === 'redirects.csv') return redirectionCsv(env, site, url.origin).then((body) => download(body, 'redirection-old-links.csv', 'text/csv'))
     if (id === 'report.json') return wordpressReport(env, site, url.origin).then((body) => download(JSON.stringify(body, null, 2), 'wordpress-move-report.json', 'application/json'))
