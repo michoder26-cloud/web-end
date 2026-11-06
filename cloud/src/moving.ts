@@ -4,6 +4,7 @@ import { loadItems, saveImage } from './items'
 import { renderPage } from './render'
 import type { Block, Env, Settings, SiteRow } from './types'
 import { findWorkingPage } from './versions'
+import { safeWebUrl } from './webhooks'
 
 const maxPageBytes = 3_000_000
 const maxTextChars = 60_000
@@ -16,20 +17,6 @@ const maxProducts = 500
 export const maxRedirects = 2000
 
 const currencySigns: Record<string, string> = { aud: 'A$', cad: 'C$', chf: 'CHF ', eur: '€', gbp: '£', jpy: '¥', thb: '฿', usd: '$' }
-
-const isIpAddress = (host: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(':') || host.startsWith('[')
-
-/** Only public https addresses, so nobody can point this at a private service. The local tests are the one exception. */
-export function safeWebUrl(env: Env, value: string) {
-  try {
-    const target = new URL(value)
-    if (env.WEBHOOK_ALLOW_HTTP === '1' && (target.protocol === 'http:' || target.protocol === 'https:')) return target
-    if (target.protocol !== 'https:' || target.username || target.password || isIpAddress(target.hostname) || !target.hostname.includes('.') || /(^|\.)(localhost|local|internal)$/.test(target.hostname)) return null
-    return target
-  } catch {
-    return null
-  }
-}
 
 const fetchPublic = (target: URL, accept: string) =>
   fetch(target, { headers: { Accept: accept, 'User-Agent': 'web-end-site-mover/1.0 (moving an owner\'s own site)' }, signal: AbortSignal.timeout(10_000) })

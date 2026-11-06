@@ -17,7 +17,7 @@ import { maxDailyLimit } from './news'
 import { registerNewsTools } from './news-tools'
 import { parsePrice } from './money'
 import { validPromptPayId } from './promptpay'
-import { checkMove, cleanPath, copyImage, importProducts, moveGate, moveReport, moveStatus, readWebPage, rememberReading, saveRedirects, safeWebUrl, scanWebsite } from './moving'
+import { checkMove, cleanPath, copyImage, importProducts, moveGate, moveReport, moveStatus, readWebPage, rememberReading, saveRedirects, scanWebsite } from './moving'
 import { officeWords } from './office-words'
 import { getSite as findSite } from './owner'
 import { pageRevisions, rememberPage, restorePageRevision } from './page-history'
@@ -27,7 +27,7 @@ import { maxReportDays, readStats } from './stats'
 import { starterIds, starterLanguages, starterSites } from './starters'
 import { listVersions, liveSite, publishVersion, restoreVersion, systemSettingKeys, unpublishedChanges } from './versions'
 import { version } from './version'
-import { eventNames, hiddenUrl, isChatUrl, validWebhookUrl } from './webhooks'
+import { eventNames, hiddenUrl, isChatUrl, safeWebUrl, validWebhookUrl } from './webhooks'
 import { wordpressReport } from './wordpress'
 import { contrast, isHexColor, isSafeHref, siteFontNames, siteStyles } from './theme'
 import type { Block, Env, FormField, Item, Order, Settings, SiteRow, Variant } from './types'
@@ -1087,7 +1087,7 @@ export function createMcpServer(env: Env, origin: string, code: string) {
       inputSchema: { url: z.string().url().max(500), events: z.array(z.enum(eventNames)).min(1) },
     },
     safely(async ({ events, url }) => {
-      if (!validWebhookUrl(env, url)) return refuse('Use an https address.')
+      if (!validWebhookUrl(env, url)) return refuse('Use a public https address.')
       if (isChatUrl(url)) return refuse('A chat address holds a secret, so the owner should add it themselves on the Connect page of the back office. Do not ask them to paste it in this conversation.')
       const site = await getSite()
       const count = await db.prepare('SELECT COUNT(*) AS total FROM webhooks WHERE site_id = ?').bind(site.id).first<{ total: number }>()

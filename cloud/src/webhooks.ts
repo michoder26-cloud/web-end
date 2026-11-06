@@ -2,14 +2,22 @@ import type { Env } from './types'
 
 export const eventNames = ['record.created', 'record.updated', 'record.deleted', 'order.created', 'order.updated', 'customer.created'] as const
 
-export const validWebhookUrl = (env: Env, value: string) => {
+const isIpAddress = (host: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(':') || host.startsWith('[')
+
+/** Only public https addresses, so nobody can point this at a private service. The local tests are the one exception. */
+export function safeWebUrl(env: Env, value: string) {
   try {
     const target = new URL(value)
-    return target.protocol === 'https:' || (env.WEBHOOK_ALLOW_HTTP === '1' && target.protocol === 'http:')
+    if (env.WEBHOOK_ALLOW_HTTP === '1' && (target.protocol === 'http:' || target.protocol === 'https:')) return target
+    if (target.protocol !== 'https:' || target.username || target.password || isIpAddress(target.hostname) || !target.hostname.includes('.') || /(^|\.)(localhost|local|internal)$/.test(target.hostname)) return null
+    return target
   } catch {
-    return false
+    return null
   }
 }
+
+/** The same rule everywhere: a webhook address must be one `safeWebUrl` accepts, so it can never point at a private service. */
+export const validWebhookUrl = (env: Env, value: string) => Boolean(safeWebUrl(env, value))
 
 const chatHosts: Record<string, (text: string) => Record<string, string>> = {
   'api.telegram.org': (text) => ({ text }),
@@ -85,26 +93,33 @@ export async function runWebhookOutbox(env: Env, now = Date.now()) {
       const time = Math.floor(now / 1000)
       let status = 0
       let failure = ''
-      try {
-        const response = await fetch(delivery.url, {
-          body,
-          headers: { 'Content-Type': 'application/json', 'X-Web-End-Event': delivery.event, 'X-Web-End-Signature': `t=${time},v1=${await sign(delivery.secret, `${time}.${body}`)}` },
-          method: 'POST',
-          signal: AbortSignal.timeout(5000),
-        })
-        status = response.status
-        if (status >= 200 && status <= 299) {
-          await env.DB.batch([
-            env.DB.prepare("UPDATE webhook_deliveries SET status = 'sent', last_status = ?, error = NULL, locked_at = NULL, updated_at = ? WHERE id = ?").bind(status, nowIso(), delivery.id),
-            env.DB.prepare("UPDATE webhooks SET last_status = ?, last_at = ? WHERE id = ?").bind(status, nowIso(), delivery.webhook_id),
-          ])
-          return
+      // The stored address is checked again, so a row saved before this rule existed cannot reach a private service.
+      const target = safeWebUrl(env, delivery.url)
+      if (!target) failure = 'Use a public https address.'
+      else {
+        try {
+          const response = await fetch(target, {
+            body,
+            headers: { 'Content-Type': 'application/json', 'X-Web-End-Event': delivery.event, 'X-Web-End-Signature': `t=${time},v1=${await sign(delivery.secret, `${time}.${body}`)}` },
+            method: 'POST',
+            // A redirect could lead to a private address, so it counts as a failure.
+            redirect: 'manual',
+            signal: AbortSignal.timeout(5000),
+          })
+          status = response.status
+          if (status >= 200 && status <= 299) {
+            await env.DB.batch([
+              env.DB.prepare("UPDATE webhook_deliveries SET status = 'sent', last_status = ?, error = NULL, locked_at = NULL, updated_at = ? WHERE id = ?").bind(status, nowIso(), delivery.id),
+              env.DB.prepare("UPDATE webhooks SET last_status = ?, last_at = ? WHERE id = ?").bind(status, nowIso(), delivery.webhook_id),
+            ])
+            return
+          }
+          failure = status >= 300 && status <= 399 ? `The address answered ${status} and sent the message elsewhere, so it was not delivered.` : `The address answered ${status}.`
+        } catch (error) {
+          failure = error instanceof Error ? error.message.slice(0, 500) : 'The address could not be reached.'
         }
-        failure = `The address answered ${status}.`
-      } catch (error) {
-        failure = error instanceof Error ? error.message.slice(0, 500) : 'The address could not be reached.'
       }
-      const retryable = status === 0 || status === 429 || status >= 500
+      const retryable = Boolean(target) && (status === 0 || status === 429 || status >= 500)
       const exhausted = attempt >= 5 || !retryable
       await env.DB.batch([
         env.DB.prepare("UPDATE webhook_deliveries SET status = ?, next_at = ?, last_status = ?, error = ?, locked_at = NULL, updated_at = ? WHERE id = ?")
