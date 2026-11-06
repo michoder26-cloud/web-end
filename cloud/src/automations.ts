@@ -7,13 +7,12 @@ import { isSchedule, localTime, nextRun, nextRuns, period, shownTime, targetDate
 import type { Added, Schedule, Weekday } from './clock'
 import { canSendEmail, isEmail, later, sendEmail } from './email'
 import { formatMoney } from './money'
-import { safeWebUrl } from './moving'
 import { officeLanguage, officeWords } from './office-words'
 import type { OfficeWords } from './office-words'
 import { orderLines, orderNumber, orderStatuses } from './shop'
 import type { Block, Customer, Env, FormField, Order, Settings, SiteRow } from './types'
 import { liveSite } from './versions'
-import { fireEvent, isChatUrl, onEvent, sign, validWebhookUrl } from './webhooks'
+import { fireEvent, isChatUrl, onEvent, safeWebUrl, sign, validWebhookUrl } from './webhooks'
 
 // Automations are the owner's "when this happens, do that" rules. A rule is checked JSON, never code:
 // one trigger, conditions that must all hold, and a short list of steps from a fixed menu.

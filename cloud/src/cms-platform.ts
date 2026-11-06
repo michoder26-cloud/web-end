@@ -8,7 +8,7 @@ import { emailProblems, emailStatus, sendEmail } from './email'
 import { googleProblems, googleStatus } from './google'
 import { escapeHtml, notFound, see } from './http'
 import { extraLanguages, languageName, mainLanguage } from './languages'
-import { checkMove, cleanPath, finishMove, importProducts, moveReport, moveStatus, safeWebUrl, saveRedirects } from './moving'
+import { checkMove, cleanPath, finishMove, importProducts, moveReport, moveStatus, saveRedirects } from './moving'
 import type { MoveReport } from './moving'
 import { officeText } from './office-words'
 import type { OfficeWords } from './office-words'
@@ -17,7 +17,7 @@ import { exportStats } from './stats'
 import { latestRelease } from './updates'
 import { listVersions, publishVersion, restoreVersion, unpublishedChanges } from './versions'
 import { version } from './version'
-import { eventNames, validWebhookUrl } from './webhooks'
+import { eventNames, safeWebUrl, validWebhookUrl } from './webhooks'
 import { redirectionCsv, woocommerceCsv, wordpressPlan, wordpressReport, wordpressXml } from './wordpress'
 import type { Env, Settings, SiteRow } from './types'
 
@@ -334,7 +334,7 @@ async function handleConnect(request: Request, env: Env, url: URL, site: SiteRow
   if (kind === 'webhook' && !id) {
     const target = String(form.get('url') ?? '').trim()
     const events = form.getAll('events').map(String).filter((event) => (eventNames as readonly string[]).includes(event))
-    if (target.length > 500 || !validWebhookUrl(env, target)) return connectPage(env, url, site, code, { error: t.useHttps })
+    if (target.length > 500 || !validWebhookUrl(env, target)) return connectPage(env, url, site, code, { error: t.usePublicHttps })
     if (!events.length) return connectPage(env, url, site, code, { error: t.chooseEvent })
     const count = await env.DB.prepare('SELECT COUNT(*) AS total FROM webhooks WHERE site_id = ?').bind(site.id).first<{ total: number }>()
     if ((count?.total ?? 0) >= 10) return connectPage(env, url, site, code, { error: t.tooManyWebhooks })

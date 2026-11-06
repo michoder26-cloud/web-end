@@ -337,7 +337,6 @@ const en = {
   badOrigins: 'Enter addresses like https://www.example.com, one per line.',
   needKeyName: 'Give the key a name.',
   tooManyKeys: 'A site can have up to 20 keys. Remove one first.',
-  useHttps: 'Use an https address.',
   chooseEvent: 'Choose at least one event.',
   tooManyWebhooks: 'A site can have up to 10 webhooks.',
 
@@ -1176,7 +1175,6 @@ const th: OfficeWords = {
   badOrigins: 'ใส่ที่อยู่ในรูปแบบ https://www.example.com บรรทัดละหนึ่งที่อยู่',
   needKeyName: 'ตั้งชื่อคีย์ก่อน',
   tooManyKeys: 'เว็บหนึ่งมีคีย์ได้สูงสุด 20 คีย์ ลบคีย์เก่าออกก่อน',
-  useHttps: 'ใช้ที่อยู่ที่ขึ้นต้นด้วย https',
   chooseEvent: 'เลือกอย่างน้อยหนึ่งเหตุการณ์',
   tooManyWebhooks: 'เว็บหนึ่งมี webhook ได้สูงสุด 10 รายการ',
 
