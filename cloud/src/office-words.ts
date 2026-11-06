@@ -40,6 +40,7 @@ const en = {
   messagesHeading: 'Messages and bookings',
   entryState: (status: string) => status,
   entryAction: (status: string) => status,
+  confirmDeleteEntry: 'Yes, delete this message or booking',
   noEntries: 'Nothing yet. Orders, messages and bookings from your forms will appear here.',
   seeWaiting: (href: string) => `<a href="${href}">See what is waiting to be published</a>. Changes stay private until you publish them.`,
   claudeHeading: 'Change your site with Claude',
@@ -548,7 +549,7 @@ const en = {
   leftToTranslate: (count: number) => (count ? `${count} left to translate` : 'Translated'),
   translateSite: (name: string) => `Menu, tagline and footer in ${name}`,
   translateOptions: 'Option names',
-  wordpressMainOnly: (main: string) => `The WordPress file holds the ${main} version of your site only. Your translations stay here, and Download everything on the System page includes them.`,
+  wordpressMainOnly: (main: string) => `There is one WordPress page file for ${main} and each extra language. Import the main file first, then pair the matching pages in your WordPress language plugin. Products, orders and redirects use the main language.`,
 
   // Setup, before the back office exists
   setupTitle: 'Set up your website',
@@ -890,6 +891,7 @@ const th: OfficeWords = {
   messagesHeading: 'ข้อความและการจอง',
   entryState: (status: string) => thEntryState[status] ?? status,
   entryAction: (status: string) => thEntryAction[status] ?? status,
+  confirmDeleteEntry: 'ใช่ ลบข้อความหรือการจองนี้',
   noEntries: 'ยังไม่มีรายการ คำสั่งซื้อ ข้อความ และการจองที่ส่งมาจากแบบฟอร์มจะแสดงที่นี่',
   seeWaiting: (href: string) => `<a href="${href}">ดูสิ่งที่รอเผยแพร่</a> การแก้ไขจะยังไม่แสดงต่อผู้เข้าชมจนกว่าคุณจะกดเผยแพร่`,
   claudeHeading: 'แก้ไขเว็บด้วย Claude',
@@ -1384,7 +1386,7 @@ const th: OfficeWords = {
   leftToTranslate: (count: number) => (count ? `เหลือที่ต้องแปลอีก ${count} จุด` : 'แปลครบแล้ว'),
   translateSite: (name: string) => `เมนู คำโปรย และส่วนท้ายเว็บเป็นภาษา${name}`,
   translateOptions: 'ชื่อตัวเลือก',
-  wordpressMainOnly: (main: string) => `ไฟล์ WordPress มีเฉพาะฉบับภาษา${main}ของเว็บ คำแปลจะยังอยู่ที่นี่ และไฟล์ดาวน์โหลดข้อมูลทั้งหมดในหน้าระบบมีคำแปลครบ`,
+  wordpressMainOnly: (main: string) => `มีไฟล์หน้า WordPress สำหรับภาษา${main}และภาษาเพิ่มเติมทุกภาษา ให้นำเข้าภาษาหลักก่อน แล้วจับคู่หน้าที่ตรงกันในปลั๊กอินภาษาของ WordPress สินค้า คำสั่งซื้อ และลิงก์เปลี่ยนทางใช้ภาษาหลัก`,
 
   setupTitle: 'ตั้งค่าเว็บไซต์',
   installed: 'ติดตั้งเว็บไซต์เรียบร้อยแล้ว',

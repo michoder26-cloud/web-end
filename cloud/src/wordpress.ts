@@ -1,4 +1,5 @@
 import { escapeHtml } from './http'
+import { extraLanguages, localizePage, localizeSettings, mainLanguage } from './languages'
 import { parsePrice } from './money'
 import { version } from './version'
 import { liveSite } from './versions'
@@ -10,7 +11,7 @@ import type { Block, Env, Settings, SiteRow } from './types'
  * A Wix site moves here first, so this is also the way from Wix to WordPress.
  */
 
-type PageRow = { blocks: string; description: string; published: number; slug: string; title: string }
+type PageRow = { blocks: string; description: string; published: number; slug: string; title: string; translations: string }
 type ItemRow = { body: string; category: string; collection: string; compare_price: string; id: number; image_alt: string; image_url: string; link_href: string; link_label: string; price: string; published: number; sort: number; stock: null | number; title: string }
 type VariantRow = { compare_price: string; item_id: number; name: string; price: string; sort: number; stock: null | number }
 
@@ -23,8 +24,8 @@ async function load(env: Env, site: SiteRow) {
   // unpublished pages or unpublished products to another host by accident.
   const live = liveSite(site)
   const pageQuery = live.live_version
-    ? env.DB.prepare("SELECT slug, title, description, published, blocks FROM version_pages WHERE version_id = ? AND published = 1 ORDER BY slug = 'home' DESC, slug").bind(live.live_version)
-    : env.DB.prepare("SELECT slug, title, description, published, blocks FROM pages WHERE site_id = ? AND published = 1 ORDER BY slug = 'home' DESC, slug").bind(site.id)
+    ? env.DB.prepare("SELECT slug, title, description, published, blocks, translations FROM version_pages WHERE version_id = ? AND published = 1 ORDER BY slug = 'home' DESC, slug").bind(live.live_version)
+    : env.DB.prepare("SELECT slug, title, description, published, blocks, translations FROM pages WHERE site_id = ? AND published = 1 ORDER BY slug = 'home' DESC, slug").bind(site.id)
   const [pages, items, variants, media, redirects] = await Promise.all([
     pageQuery.all<PageRow>(),
     env.DB.prepare('SELECT id, collection, title, price, compare_price, category, stock, body, image_url, image_alt, link_label, link_href, sort, published FROM items WHERE site_id = ? AND published = 1 ORDER BY collection, sort, id').bind(site.id).all<ItemRow>(),
@@ -194,14 +195,28 @@ export async function wordpressReport(env: Env, site: SiteRow, origin: string) {
     readiness: plan.todo.length ? 'needs_review' : 'ready_for_import',
     summary: { pages: plan.pages.length, products: plan.products.length, redirects: plan.data.redirects.length, attention: plan.todo.length },
     currency: plan.currency || null,
-    exports: { redirects_csv: 'redirection-old-links.csv', products_csv: plan.products.length ? 'woocommerce-products.csv' : null, wordpress_xml: 'wordpress-import.xml' },
+    exports: {
+      redirects_csv: 'redirection-old-links.csv',
+      products_csv: plan.products.length ? 'woocommerce-products.csv' : null,
+      wordpress_language_xml: extraLanguages(plan.data.settings).map((language) => `wordpress-import-${language}.xml`),
+      wordpress_xml: 'wordpress-import.xml',
+    },
     pages: plan.pages.map(({ page, todo }) => ({ attention: todo, slug: page.slug, title: page.title })),
     attention: plan.todo,
   }
 }
 
-export async function wordpressXml(env: Env, site: SiteRow, origin: string) {
-  const { data, link, pages } = await wordpressPlan(env, site, origin)
+export async function wordpressXml(env: Env, site: SiteRow, origin: string, language?: string) {
+  const { data, link, pages, tagged } = await wordpressPlan(env, site, origin)
+  const translatedLanguage = language && extraLanguages(data.settings).includes(language) ? language : null
+  const settings = localizeSettings(data.settings, translatedLanguage)
+  const exportPages = translatedLanguage
+    ? data.pages.map((page) => {
+        const localized = localizePage({ ...page, blocks: JSON.parse(page.blocks) as Block[] }, translatedLanguage)
+        const shown: PageRow = { ...page, blocks: JSON.stringify(localized.blocks), description: localized.description, title: localized.title }
+        return { ...pageHtml(shown, data.items, link, tagged), page: shown }
+      })
+    : pages
   const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
   const pubDate = new Date().toUTCString()
   const meta = (key: string, value: string | number) => `<wp:postmeta><wp:meta_key>${cdata(key)}</wp:meta_key><wp:meta_value>${cdata(String(value))}</wp:meta_value></wp:postmeta>`
@@ -230,20 +245,20 @@ ${fields.extra ?? ''}
 </item>`
 
   // Only photos used on pages go in, so WordPress doesn't copy the whole library.
-  const used = new Set([...pages.map(({ html }) => html).join(' ').matchAll(/\/media\/(\d+)\./g)].map((match) => Number(match[1])))
+  const used = new Set([...exportPages.map(({ html }) => html).join(' ').matchAll(/\/media\/(\d+)\./g)].map((match) => Number(match[1])))
   const photos = data.media.filter((row) => used.has(row.id)).map((row) => {
     const url = link.photo(`/media/${row.id}`)
     // WooCommerce's product importer looks for this before downloading, so a product photo that is also on a page isn't copied twice.
     return item({ extra: `<wp:attachment_url>${cdata(url)}</wp:attachment_url>\n${meta('_wc_attachment_source', url)}`, id: 10_000 + row.id, name: `photo-${row.id}`, status: 'inherit', title: row.name || `Photo ${row.id}`, type: 'attachment', url })
   })
   const pageIds = new Map<string, number>()
-  const pageItems = pages.map(({ html, page }, index) => {
+  const pageItems = exportPages.map(({ html, page }, index) => {
     const id = 100 + index
     pageIds.set(page.slug, id)
     const extra = [meta('_yoast_wpseo_title', page.title), meta('_yoast_wpseo_metadesc', page.description), meta('rank_math_title', page.title), meta('rank_math_description', page.description)].join('\n')
     return item({ content: html, excerpt: page.description, extra, id, name: page.slug, order: index, status: 'publish', title: shortTitle(page.title, page.slug), type: 'page', url: `${origin}/${page.slug === 'home' ? '' : page.slug}` })
   })
-  const menuItems = (data.settings.nav ?? []).map((entry, index) => {
+  const menuItems = (settings.nav ?? []).map((entry, index) => {
     const id = 20_000 + index
     const slug = /^\/([a-z0-9-]+)\/?$/.exec(entry.href)?.[1] ?? (entry.href === '/' ? 'home' : '')
     const target = pageIds.get(slug)
@@ -256,15 +271,15 @@ ${fields.extra ?? ''}
 <!-- A WordPress import file made by web-end ${version}. In WordPress: Tools, Import, WordPress, then tick "Download and import file attachments". -->
 <rss version="2.0" xmlns:excerpt="http://wordpress.org/export/1.2/excerpt/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:wfw="http://wellformedweb.org/CommentAPI/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:wp="http://wordpress.org/export/1.2/">
 <channel>
-<title>${cdata(data.settings.name ?? '')}</title>
+<title>${cdata(settings.name ?? '')}</title>
 <link>${e(origin)}</link>
-<description>${cdata(data.settings.tagline ?? '')}</description>
+<description>${cdata(settings.tagline ?? '')}</description>
 <pubDate>${pubDate}</pubDate>
-<language>${e(data.settings.language ?? 'en')}</language>
+<language>${e(translatedLanguage ?? mainLanguage(data.settings))}</language>
 <wp:wxr_version>1.2</wp:wxr_version>
 <wp:base_site_url>${e(origin)}</wp:base_site_url>
 <wp:base_blog_url>${e(origin)}</wp:base_blog_url>
-<wp:author><wp:author_id>1</wp:author_id><wp:author_login>${cdata('web-end')}</wp:author_login><wp:author_email>${cdata('')}</wp:author_email><wp:author_display_name>${cdata(data.settings.name ?? 'web-end')}</wp:author_display_name><wp:author_first_name>${cdata('')}</wp:author_first_name><wp:author_last_name>${cdata('')}</wp:author_last_name></wp:author>
+<wp:author><wp:author_id>1</wp:author_id><wp:author_login>${cdata('web-end')}</wp:author_login><wp:author_email>${cdata('')}</wp:author_email><wp:author_display_name>${cdata(settings.name ?? 'web-end')}</wp:author_display_name><wp:author_first_name>${cdata('')}</wp:author_first_name><wp:author_last_name>${cdata('')}</wp:author_last_name></wp:author>
 ${menuItems.length ? `<wp:term><wp:term_id>1</wp:term_id><wp:term_taxonomy>${cdata('nav_menu')}</wp:term_taxonomy><wp:term_slug>${cdata('main-menu')}</wp:term_slug><wp:term_name>${cdata('Main menu')}</wp:term_name></wp:term>` : ''}
 <generator>web-end ${version}</generator>
 ${[...photos, ...pageItems, ...menuItems].join('\n')}

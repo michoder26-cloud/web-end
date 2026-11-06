@@ -1,4 +1,4 @@
 {
-  "version": "0.13.0",
-  "notes": "Orders through the API are safe to retry without making duplicates, API keys can expire, and failed webhooks retry safely. Pages now keep their own 20-version history. Moving to WordPress includes a readiness report that shows what will move and what still needs attention."
+  "version": "0.13.1",
+  "notes": "Webhooks now reject local and private destinations. CMS entry deletion needs an explicit confirmation, and individual page history is kept when a starter or a full-site version replaces pages. WordPress migration has an import file for each published page language, and JavaScript-only source pages are flagged for manual review."
 }

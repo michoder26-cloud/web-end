@@ -7,6 +7,7 @@ import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { officeText } from './office-words'
 import type { OfficeWords } from './office-words'
 import { defaultSiteNames, shell } from './owner'
+import { rememberPage } from './page-history'
 import { starterIds, starterLanguages, starterSites } from './starters'
 import type { StarterId, StarterLanguage } from './starters'
 import type { Env, Settings, SiteRow } from './types'
@@ -45,6 +46,12 @@ export async function applyStarter(env: Env, site: SiteRow, id: StarterId, langu
   // The starter brings its own look, so colours chosen for another design would only clash.
   delete next.background
   delete next.text
+  // Replacing the pages is intentional, but the owner can still recover every page
+  // individually from its private history after choosing a starter.
+  if (replacePages) {
+    const { results } = await env.DB.prepare('SELECT slug FROM pages WHERE site_id = ?').bind(site.id).all<{ slug: string }>()
+    await Promise.all(results.map((page) => rememberPage(env, site.id, page.slug)))
+  }
   await env.DB.batch([
     ...(replacePages ? [env.DB.prepare('DELETE FROM pages WHERE site_id = ?').bind(site.id)] : []),
     ...content.pages.map((page) =>

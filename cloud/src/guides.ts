@@ -276,7 +276,7 @@ Checking
 - check_site lists every page, product and menu text that isn't translated yet. Until it is, visitors of that language see the main language's words there, so nothing breaks. The owner's preview at the preview link plus /en, such as /owner/.../preview/en/about, marks those places.
 - Page and menu translations wait for publish_site like other changes, and versions keep them. Product translations work at once, like products.
 - Form answers and orders from visitors of an extra language come in their words, such as an English option name. Tell the owner.
-- The move to WordPress file holds the main language only. Download everything on the System page includes all translations.
+- The WordPress page has one import file for the main language and one for each extra language. Import the main file first, then import each language file and pair its matching pages in a multilingual WordPress plugin such as WPML or TranslatePress. The importer cannot safely guess those page pairings. Download everything on the System page includes all translations.
 - To go back to one language, set update_site languages to []. Translations are kept in case the owner turns it on again.`,
   limits: `# Honest limits
 - It runs on the owner's Cloudflare account. The free plan allows 100,000 requests and 5 million database rows read a day, 100,000 rows written a day, and 10 ms of processor time per request. At the limit it pauses until 00:00 UTC. Workers Paid starts at $5 a month.

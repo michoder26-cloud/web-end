@@ -1,4 +1,5 @@
 import type { Env, PageRow, Settings, SiteRow } from './types'
+import { rememberPage } from './page-history'
 
 const keptVersions = 20
 const now = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"
@@ -65,6 +66,10 @@ export async function restoreVersion(env: Env, site: SiteRow, id: number) {
   const version = await env.DB.prepare('SELECT settings FROM versions WHERE id = ? AND site_id = ?').bind(id, site.id).first<{ settings: string }>()
   if (!version) return false
   const settings = { ...(JSON.parse(version.settings) as Settings), ...systemSettings(JSON.parse(site.settings) as Settings) }
+  // A site-wide restore also changes each working page. Keep those individual
+  // copies so the owner can undo just one page afterwards if needed.
+  const { results: drafts } = await env.DB.prepare('SELECT slug FROM pages WHERE site_id = ?').bind(site.id).all<{ slug: string }>()
+  await Promise.all(drafts.map((page) => rememberPage(env, site.id, page.slug)))
   await env.DB.batch([
     env.DB.prepare('DELETE FROM pages WHERE site_id = ?').bind(site.id),
     env.DB.prepare('INSERT INTO pages (site_id, slug, title, description, published, blocks, translations) SELECT ?, slug, title, description, published, blocks, translations FROM version_pages WHERE version_id = ?').bind(site.id, id),

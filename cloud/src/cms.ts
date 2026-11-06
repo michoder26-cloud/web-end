@@ -252,10 +252,11 @@ async function messageList(env: Env, site: SiteRow, desk: Desk) {
             .filter((field) => data[field.name] !== undefined)
             .map((field) => `<div><dt>${escapeHtml(field.label)}</dt><dd class="pre-line">${escapeHtml(data[field.name] === true ? t.yes : data[field.name] === false ? t.no : data[field.name])}</dd></div>`)
             .join('')
-          const buttons = [...statuses.filter((status) => status !== entry.status), 'delete']
+          const buttons = statuses.filter((status) => status !== entry.status)
             .map((status) => `<button class="button button--small" name="status" type="submit" value="${status}">${escapeHtml(t.entryAction(status))}</button> `)
             .join('')
-          return `<article class="card account__record"><h3>${escapeHtml(entry.form)} · ${escapeHtml(t.entryState(entry.status))}</h3><p class="post-date">${escapeHtml(entry.created_at.slice(0, 16).replace('T', ' '))} UTC${entry.customer ? ` · ${escapeHtml(entry.customer)}` : ''}</p><dl>${list}</dl><form action="${escapeHtml(desk.base)}/entry/${entry.id}" method="post">${buttons}</form></article>`
+          const remove = `<label class="check"><input name="confirm" type="checkbox"> ${escapeHtml(t.confirmDeleteEntry)}</label><button class="button button--small" name="status" type="submit" value="delete">${escapeHtml(t.entryAction('delete'))}</button>`
+          return `<article class="card account__record"><h3>${escapeHtml(entry.form)} · ${escapeHtml(t.entryState(entry.status))}</h3><p class="post-date">${escapeHtml(entry.created_at.slice(0, 16).replace('T', ' '))} UTC${entry.customer ? ` · ${escapeHtml(entry.customer)}` : ''}</p><dl>${list}</dl><form action="${escapeHtml(desk.base)}/entry/${entry.id}" method="post">${buttons}${remove}</form></article>`
         })
         .join('')
     : `<p>${t.noEntries}</p>`
@@ -651,6 +652,7 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
     const form = await request.formData().catch((): null => null)
     const status = form?.get('status')
     if (status === 'delete') {
+      if (form?.get('confirm') !== 'on') return see(url, owner)
       await env.DB.prepare('DELETE FROM entries WHERE id = ? AND site_id = ?').bind(Number(id), site.id).run()
     } else if (typeof status === 'string' && statuses.includes(status)) {
       await env.DB.prepare('UPDATE entries SET status = ? WHERE id = ? AND site_id = ?').bind(status, Number(id), site.id).run()

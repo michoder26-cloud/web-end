@@ -10,7 +10,7 @@ const maxPageBytes = 3_000_000
 const maxTextChars = 60_000
 const maxListed = 200
 // Raise this when the reader finds more or reads differently, so readings an older version saved are read again.
-const readerVersion = 2
+const readerVersion = 3
 // Cloudflare's free plan allows 50 outside requests per visit, so one check re-reads only some pages and the rest on the next.
 const maxRereads = 20
 const maxProducts = 500
@@ -73,7 +73,7 @@ const usefulData = new Set(['BreadcrumbList', 'LocalBusiness', 'Offer', 'Organiz
 
 type PageDesign = { accent?: string; background?: string; buttonText?: string; fonts: string[]; text?: string }
 type PageSection = { buttons: string[]; firstLines: string[]; headings: string[]; images: string[]; kind: string; lines: number }
-type PageReading = { buttons: string[]; data: unknown[]; description: string; design: PageDesign; headings: { level: number; text: string }[]; images: { alt: string; url: string }[]; links: { href: string; text: string }[]; sections: PageSection[]; text: string[]; title: string; truncated: boolean; url: string }
+type PageReading = { buttons: string[]; data: unknown[]; description: string; design: PageDesign; headings: { level: number; text: string }[]; images: { alt: string; url: string }[]; links: { href: string; text: string }[]; reviewReason?: string; sections: PageSection[]; text: string[]; title: string; tooFewWords?: boolean; truncated: boolean; url: string }
 
 const maxSections = 40
 const maxPerSection = 12
@@ -272,6 +272,11 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
   }
   page.design = readDesign(themeStyles || otherStyles, themeColor)
   page.sections = page.sections.filter((section) => section.headings.length || section.images.length || section.buttons.length || section.lines)
+  const usable = page.headings.length + page.buttons.length + page.images.length + page.links.length
+  if (page.text.join(' ').length < 60 && usable === 0) {
+    page.tooFewWords = true
+    page.reviewReason = 'This page looks like it is rendered by JavaScript in the browser, so its text could not be read here. Please compare this page with the original side by side.'
+  }
   return page
 }
 
@@ -306,14 +311,14 @@ const pageText = (html: string) => comparable(html.replace(/<(script|style)\b[\s
 
 const maxReported = 60
 
-type Reading = { buttons?: string[]; design?: PageDesign; reader?: number; description: string; headings: { level: number; text: string }[]; images: { url: string }[]; links: { text: string }[]; text: string[]; title: string; truncated: boolean; url: string }
+type Reading = { buttons?: string[]; design?: PageDesign; reader?: number; description: string; headings: { level: number; text: string }[]; images: { url: string }[]; links: { text: string }[]; reviewReason?: string; text: string[]; title: string; tooFewWords?: boolean; truncated: boolean; url: string }
 type WorkingPage = { blocks: string; description: string; published: number; slug: string; title: string }
 
 const sourcesKeptDays = 30
 
 /** Keeps what an old page contained, so the move can be checked later by any tool, without reading the page again. */
 export async function rememberReading(env: Env, siteId: number, reading: Reading, slug: null | string = null) {
-  const kept = { buttons: reading.buttons, design: reading.design, description: reading.description, reader: reading.reader ?? readerVersion, headings: reading.headings.map((heading) => ({ level: heading.level, text: heading.text })), images: reading.images.map((image) => ({ url: image.url })), links: reading.links.map((link) => ({ text: link.text })), text: reading.text, title: reading.title, truncated: reading.truncated, url: reading.url }
+  const kept = { buttons: reading.buttons, design: reading.design, description: reading.description, reader: reading.reader ?? readerVersion, headings: reading.headings.map((heading) => ({ level: heading.level, text: heading.text })), images: reading.images.map((image) => ({ url: image.url })), links: reading.links.map((link) => ({ text: link.text })), reviewReason: reading.reviewReason, text: reading.text, title: reading.title, tooFewWords: reading.tooFewWords, truncated: reading.truncated, url: reading.url }
   await env.DB.prepare(`INSERT INTO move_sources (site_id, url, page_slug, reading) VALUES (?, ?, ?, ?)
     ON CONFLICT (site_id, url) DO UPDATE SET page_slug = COALESCE(excluded.page_slug, page_slug), reading = excluded.reading, read_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`)
     .bind(siteId, reading.url, slug, JSON.stringify(kept))
@@ -371,6 +376,7 @@ async function comparePage(env: Env, site: SiteRow, old: Reading, page: WorkingP
   const titleKept = comparable(page.title) === comparable(old.title) || comparable(old.title).includes(comparable(page.title)) || comparable(page.title).includes(comparable(old.title))
   const descriptionKept = !old.description || comparable(page.description) === comparable(old.description)
   const headingsOutOfOrder = outOfOrder(old.headings.map((heading) => heading.text), pageText(/<main\b[\s\S]*<\/main>/i.exec(html)?.[0] ?? html))
+  const needsManualReview = Boolean(old.tooFewWords)
   const counts = { headingsOutOfOrder: headingsOutOfOrder.length, imagesCopiedNotUsed: imagesCopiedNotUsed.length, imagesNotCopied: imagesNotCopied.length, imagesOnOldHost: imagesStillOnOldHost.length, linkTextMissing: linkTextMissing.length, textMissing: textMissing.length }
   return {
     counts,
@@ -383,9 +389,11 @@ async function comparePage(env: Env, site: SiteRow, old: Reading, page: WorkingP
     linesOnOldPage: lines.length,
     linkTextMissing: linkTextMissing.slice(0, maxReported),
     newPage: page.slug,
+    needsManualReview,
     oldPageWasCut: old.truncated,
     oldUrl: old.url,
-    problems: Object.values(counts).reduce((sum, count) => sum + count, 0) + (titleKept ? 0 : 1) + (descriptionKept ? 0 : 1),
+    problems: Object.values(counts).reduce((sum, count) => sum + count, 0) + (titleKept ? 0 : 1) + (descriptionKept ? 0 : 1) + (needsManualReview ? 1 : 0),
+    reviewReason: needsManualReview ? old.reviewReason : undefined,
     textMissing: textMissing.slice(0, maxReported),
     titleKept,
   }
@@ -448,7 +456,7 @@ export async function moveReport(env: Env, site: SiteRow) {
     verification,
     summary: { compared_pages: status.pages.length, design_differences: designDifferences.length, known_old_pages: sources.length, problems: status.problems, redirects: redirects?.total ?? 0, unrebuild_pages: status.notRebuilt.length },
     sources: sources.map((source) => ({ checked_at: source.read_at, old_url: source.url, page: source.page_slug })),
-    pages: status.pages.map((page) => ({ description_kept: page.descriptionKept, differences: page.problems, headings_out_of_order: page.headingsOutOfOrder, images_not_copied: page.imagesNotCopied, images_not_used: page.imagesCopiedNotUsed, images_still_on_old_host: page.imagesStillOnOldHost, lines_on_old_page: page.linesOnOldPage, links_missing: page.linkTextMissing, new_page: page.newPage, old_url: page.oldUrl, text_missing: page.textMissing, title_kept: page.titleKept })),
+    pages: status.pages.map((page) => ({ description_kept: page.descriptionKept, differences: page.problems, headings_out_of_order: page.headingsOutOfOrder, images_not_copied: page.imagesNotCopied, images_not_used: page.imagesCopiedNotUsed, images_still_on_old_host: page.imagesStillOnOldHost, lines_on_old_page: page.linesOnOldPage, links_missing: page.linkTextMissing, manual_review: page.needsManualReview, new_page: page.newPage, old_url: page.oldUrl, review_reason: page.reviewReason, text_missing: page.textMissing, title_kept: page.titleKept })),
     not_rebuilt: status.notRebuilt,
     design: status.design ? { differences: status.design.differs, new: status.design.now, old: status.design.old } : null,
   }

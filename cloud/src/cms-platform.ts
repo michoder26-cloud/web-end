@@ -470,6 +470,7 @@ async function wordpressPage(env: Env, url: URL, site: SiteRow, code: string) {
 ${extraLanguages(JSON.parse(site.settings) as Settings).length ? `<p role="note">${escapeHtml(t.wordpressMainOnly(languageName(mainLanguage(JSON.parse(site.settings) as Settings), t.lang)))}</p>` : ''}
 <article class="card account__record"><h2>${t.downloadFiles}</h2>
 ${file('site.xml', t.wordpressFile, t.wordpressFileNote(plan.pages.length))}
+${extraLanguages(JSON.parse(site.settings) as Settings).map((language) => file(`site-${language}.xml`, `${t.wordpressFile} (${languageName(language, t.lang)})`, t.wordpressFileNote(plan.pages.length))).join('')}
 ${plan.products.length ? file('products.csv', t.woocommerceFile, t.woocommerceFileNote(plan.products.length)) : ''}
 ${plan.data.redirects.length ? file('redirects.csv', t.redirectsFile, t.redirectsFileNote(plan.data.redirects.length)) : ''}
 ${file('report.json', t.wordpressReport, t.wordpressReportHelp)}</article>
@@ -500,6 +501,8 @@ export function handlePlatform(request: Request, env: Env, url: URL, site: SiteR
   if (area === 'wordpress' && !action && request.method === 'GET') {
     if (!id) return wordpressPage(env, url, site, code)
     if (id === 'site.xml') return wordpressXml(env, site, url.origin).then((body) => download(body, 'wordpress-import.xml', 'application/xml'))
+    const language = /^site-([a-z]{2}(?:-[a-z]{2})?)\.xml$/.exec(id)?.[1]
+    if (language && extraLanguages(JSON.parse(site.settings) as Settings).includes(language)) return wordpressXml(env, site, url.origin, language).then((body) => download(body, `wordpress-import-${language}.xml`, 'application/xml'))
     if (id === 'products.csv') return woocommerceCsv(env, site, url.origin).then((body) => download(body, 'woocommerce-products.csv', 'text/csv'))
     if (id === 'redirects.csv') return redirectionCsv(env, site, url.origin).then((body) => download(body, 'redirection-old-links.csv', 'text/csv'))
     if (id === 'report.json') return wordpressReport(env, site, url.origin).then((body) => download(JSON.stringify(body, null, 2), 'wordpress-move-report.json', 'application/json'))
