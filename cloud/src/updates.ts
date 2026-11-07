@@ -7,8 +7,16 @@ const latestUrl = 'https://raw.githubusercontent.com/michoder26-cloud/web-end/ma
 const workflowFile = 'update-web-end.yml'
 
 // Only tagged releases reach installed sites, so unfinished work on main never does.
+// It runs by itself once a day (02:23 UTC, 09:23 in Thailand) and does nothing when the site is already up to date.
+// The owner can still run it at once from GitHub.
+export const autoUpdateLines = `on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 2 * * *'`
 const workflow = `name: Update web-end
-on: workflow_dispatch
+${autoUpdateLines}
+# Two runs at once could both try to push the same update.
+concurrency: update-web-end
 permissions:
   contents: write
 jobs:
@@ -68,10 +76,14 @@ export function updatesBody(base: string, repo: string | undefined, latest: Awai
 <h2>${t.howToUpdate}</h2>
 <ol class="cms-steps">
 <li>${t.updateStep1(escapeHtml(addUrl))}</li>
+<li>${t.updateAuto}</li>
 <li>${t.updateStep2(escapeHtml(runUrl))}</li>
 <li>${t.updateStep3}</li>
 <li>${t.updateStep4}</li>
 </ol>
 <p>${t.updateKeeps}</p>
+<h2>${t.updateOldTitle}</h2>
+<p>${t.updateOldHelp(escapeHtml(`https://github.com/${repo}/edit/main/.github/workflows/${workflowFile}`))}</p>
+<pre class="pre-line"><code>${escapeHtml(autoUpdateLines)}</code></pre>
 <h2>${t.repository}</h2>${repoForm}`
 }

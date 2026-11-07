@@ -135,7 +135,11 @@ Each page view writes one row to your database, and a visitor's first page of th
 Open the **Updates** page in your back office. It tells you when a new version is out and walks you through installing it:
 
 1. The first time, follow the link to add the updater to your GitHub repository.
-2. Open the updater and press **Run workflow**. Cloudflare rebuilds your site in a few minutes.
+2. From then on, your site updates by itself once a day (at 02:23 UTC) when there's a new version. To update at once, open the updater and press **Run workflow**. Cloudflare rebuilds your site in a few minutes.
+
+If you added the updater before it updated by itself, the Updates page shows the three lines to put in place of `on: workflow_dispatch`, once.
+
+GitHub pauses scheduled updates in a public repository after 60 days with no changes. If that happens, GitHub emails you, and the Updates page's **Run workflow** link still works; pressing **Enable workflow** on GitHub turns the daily check back on.
 
 Your pages, products, orders, customers and private links stay as they are. If a developer changed your site's code, those changes get replaced, but they stay in your GitHub history.
 
