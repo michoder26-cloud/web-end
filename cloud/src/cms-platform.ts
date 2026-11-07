@@ -176,7 +176,7 @@ const designCard = (design: NonNullable<Awaited<ReturnType<typeof moveStatus>>['
 
 const checkCard = (base: string, report: MoveReport, t: OfficeWords) => {
   const group = (title: string, lines: string[]) => (lines.length ? `<h4>${escapeHtml(title)} (${lines.length})</h4><ul>${lines.map((line) => `<li style="overflow-wrap:anywhere">${escapeHtml(line)}</li>`).join('')}</ul>` : '')
-  const facts = [...(report.titleKept ? [] : [t.titleChanged]), ...(report.descriptionKept ? [] : [t.descriptionChanged]), ...(report.oldPageWasCut ? [t.oldPageCut] : [])]
+  const facts = [...(report.titleKept ? [] : [t.titleChanged]), ...(report.descriptionKept ? [] : [t.descriptionChanged]), ...(report.oldPageWasCut ? [t.oldPageCut] : []), ...(report.needsManualReview ? [t.oldPageThin] : [])]
   return `<article class="card account__record"><h3>${report.problems ? t.differences(report.problems) : t.noDifferences} · /${escapeHtml(report.newPage)}</h3><p style="overflow-wrap:anywhere"><small>${t.comparedWith(escapeHtml(report.oldUrl), report.linesOnOldPage, report.imagesFoundOnOldPage)}</small></p><p><a href="${escapeHtml(report.oldUrl)}" rel="noopener noreferrer" target="_blank">Open the old page</a> · <a href="${escapeHtml(base)}/preview/${escapeHtml(report.newPage)}" target="_blank">Open the new page</a></p>${facts.map((fact) => `<p>${escapeHtml(fact)}</p>`).join('')}${group('Headings in a different order', report.headingsOutOfOrder)}${group(t.textMissing, report.textMissing)}${group(t.linkTextMissing, report.linkTextMissing)}${group(t.imagesNotCopied, report.imagesNotCopied)}${group(t.imagesNotUsed, report.imagesCopiedNotUsed)}${group(t.imagesOnOldHost, report.imagesStillOnOldHost)}</article>`
 }
 
