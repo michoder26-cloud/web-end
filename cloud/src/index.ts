@@ -8,6 +8,7 @@ import { runAutomations, runSchedules } from './automations'
 import { adminDesk, allows, handleOffice, ownerDesk, staffEntry } from './cms'
 import type { Desk } from './cms'
 import { loadPageRecords, receiveRecord } from './data'
+import { loadTableBlocks } from './table-block'
 import { tellOwnerAboutEntry } from './email'
 import { validateEntry } from './forms'
 import { guidedStart, noteClaude, notePhone } from './first-steps'
@@ -61,7 +62,8 @@ async function showPage(request: Request, env: Env, url: URL, site: SiteRow, slu
   const page = localizePage({ ...found, blocks: JSON.parse(found.blocks) as Block[] }, language)
   const blocks = page.blocks
   const [items, customer] = await Promise.all([loadItems(env, site.id, blocks, language), customerFor(request, env, site)])
-  const records = await loadPageRecords(env, site.id, blocks, { admin: false, customer: customer ?? null })
+  const actor = { admin: false, customer: customer ?? null }
+  const records = await loadTableBlocks(env, site.id, blocks, actor, url.searchParams, await loadPageRecords(env, site.id, blocks, actor))
   return html(
     renderPage(
       site,
@@ -93,7 +95,7 @@ async function showPreview(env: Env, url: URL, working: SiteRow, desk: Desk, par
   const blocks = page.blocks
   const [items, records, { results }] = await Promise.all([
     loadItems(env, site.id, blocks, language),
-    loadPageRecords(env, site.id, blocks, { admin: false, customer: null }),
+    loadPageRecords(env, site.id, blocks, { admin: false, customer: null }).then((loaded) => loadTableBlocks(env, site.id, blocks, { admin: false, customer: null }, url.searchParams, loaded)),
     env.DB.prepare('SELECT slug FROM pages WHERE site_id = ?').bind(site.id).all<{ slug: string }>(),
   ])
   const base = `${desk.base}/preview${language ? `/${language}` : ''}`

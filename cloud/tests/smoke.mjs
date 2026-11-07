@@ -1028,6 +1028,76 @@ await call('save_page', { slug: 'broken', title: 'Broken', description: 'A page 
 check((await call('check_site', {})).data.problems.some((problem) => problem.includes('missing_table')), 'the review finds a page that uses a missing table')
 await call('delete_page', { slug: 'broken' })
 
+// The table block: columns, search, filter, sort, pages, private fields, scripts and escaping
+const catalogTable = { name: 'catalog', label: 'Catalog', readAccess: 'public', writeAccess: 'owner', fields: [{ name: 'name', label: 'Name', type: 'text', required: true }, { name: 'kind', label: 'Kind', type: 'select', options: ['fruit', 'veg'] }, { name: 'qty', label: 'Qty', type: 'number' }, { name: 'fresh', label: 'Fresh', type: 'boolean' }, { name: 'secret', label: 'Secret note', type: 'text', staffOnly: true }] }
+check(!(await call('save_table', catalogTable)).isError, 'table block: creates a table to show')
+const catalogIds = []
+for (let i = 1; i <= 25; i++) catalogIds.push((await call('save_record', { table: 'catalog', values: { name: `Item ${String(i).padStart(2, '0')}`, kind: i % 2 ? 'fruit' : 'veg', qty: (i * 7) % 25, fresh: i % 3 === 0, secret: `SECRET-${i}` } })).data.saved.id)
+await call('save_record', { table: 'catalog', values: { name: '<b>Zed</b> & "q"', kind: 'fruit', qty: 100, secret: 'SECRET-Z' } })
+const catalogBlocks = [{ type: 'hero', heading: 'Catalog' }, { type: 'table', table: 'catalog', heading: 'All items', columns: ['name', 'kind', 'qty'], pageSize: 10, filters: ['kind'], detailPage: 'stock-item' }]
+const savedCatalog = await call('save_page', { slug: 'stock-list', title: 'Catalog', description: 'A table of every item in the catalog, with search, filters, sorting and pages for visitors.', published: true, blocks: catalogBlocks })
+check(!savedCatalog.isError, 'table block: save_page accepts a table block', savedCatalog.data?.error ?? JSON.stringify(savedCatalog.data).slice(0, 200))
+check((await call('save_page', { slug: 'badtable', title: 'Bad', description: 'A page used to check that a table block with a wrong page size is refused by the schema.', published: false, blocks: [{ type: 'table', table: 'catalog', pageSize: 500 }] })).isError, 'table block: save_page refuses a page size over 100')
+await call('save_page', { slug: 'stock-item', title: 'Item', description: 'The details of one item from the catalog, opened from a row of the catalog table.', published: true, blocks: [{ type: 'hero', heading: 'Item' }, { type: 'table', table: 'catalog', detail: true, heading: 'Details' }] })
+const tableSection = (html) => html.match(/<section class="block block--table[\s\S]*?<\/section>/)?.[0] ?? ''
+const tablePage = async (query = '', cookie) => tableSection(await (await fetch(`${base}/stock-list${query}`, { headers: cookie ? { Cookie: cookie } : {} })).text())
+const bodyOf = (html) => html.match(/<tbody>[\s\S]*<\/tbody>/)?.[0] ?? ''
+const rowsOf = (html) => (bodyOf(html).match(/<tr>/g) ?? []).length
+const t0 = await tablePage()
+check(rowsOf(t0) === 10 && t0.includes('26 results') && t0.includes('Page 1 of 3') && t0.includes('Item 01') && !t0.includes('Item 11'), 'table block: shows the first page of rows and the total', `${rowsOf(t0)} rows`)
+check(['Name', 'Kind', 'Qty'].every((label) => t0.includes(`<th scope="col">`) && t0.includes(`>${label}`)) && !t0.includes('Fresh') && !t0.includes('Secret note'), 'table block: only the chosen columns are shown')
+check(!t0.includes('SECRET-') && !t0.includes('secret') && !(await tablePage('?t1q=SECRET')).includes('SECRET-'), 'table block: private fields never show')
+check((await tablePage('?t1q=SECRET')).includes('Nothing matches') && rowsOf(await tablePage('?t1q=SECRET')) === 0, "table block: searching can't find text in a private field")
+check(!/<script/i.test(t0) && !/ on[a-z]+=/i.test(t0) && !t0.includes('javascript:'), 'table block: no script and no event handlers')
+const tSortDesc = await tablePage('?t1s=qty&t1d=desc')
+check(tSortDesc.includes('aria-sort="descending"') && bodyOf(tSortDesc).indexOf('Zed') > -1 && bodyOf(tSortDesc).indexOf('Zed') < bodyOf(tSortDesc).indexOf('Item'), 'table block: sorts by a number, largest first')
+check(!tSortDesc.includes('<b>Zed') && tSortDesc.includes('&lt;b&gt;Zed&lt;/b&gt; &amp; &quot;q&quot;'), 'table block: escapes text from records')
+const tSortAsc = await tablePage('?t1s=qty&t1d=asc')
+check(bodyOf(tSortAsc).indexOf('Item 25') > -1 && bodyOf(tSortAsc).indexOf('Item 25') < bodyOf(tSortAsc).indexOf('Item 18') && tSortAsc.includes('aria-sort="ascending"'), 'table block: sorts by a number, smallest first', bodyOf(tSortAsc).slice(0, 200))
+const tSecretSort = await tablePage('?t1s=secret&t1d=desc')
+check(rowsOf(tSecretSort) === 10 && bodyOf(tSecretSort).indexOf('Item 01') > -1 && !tSecretSort.includes('aria-sort'), "table block: a sort on a private field is ignored")
+const tVeg = await tablePage('?t1f_kind=veg')
+check(tVeg.includes('12 results') && !bodyOf(tVeg).includes('>fruit<') && rowsOf(tVeg) === 10, 'table block: filters by a drop-down', tVeg.match(/\d+ results/)?.[0])
+check((await tablePage('?t1f_kind=nope')).includes('26 results') && (await tablePage('?t1f_secret=SECRET-1')).includes('26 results'), 'table block: unknown filter values and private-field filters are ignored')
+const tFound = await tablePage('?t1q=item+07')
+check(tFound.includes('1 results') && rowsOf(tFound) === 1 && tFound.includes('Item 07'), 'table block: searches the shown columns, ignoring case')
+const tPage3 = await tablePage('?t1p=3')
+check(rowsOf(tPage3) === 6 && tPage3.includes('Page 3 of 3') && tPage3.includes('Item 25') && !tPage3.includes('Item 01') && !tPage3.includes('rel="next"') && tPage3.includes('rel="prev"'), 'table block: pages through the rows')
+check((await tablePage('?t1p=99')).includes('Page 3 of 3') && (await tablePage('?t1p=-4')).includes('Page 1 of 3') && (await tablePage('?t1p=abc')).includes('Page 1 of 3'), 'table block: a bad page number falls back safely')
+check((await tablePage('?t1q=item&t1f_kind=veg&t1s=name&t1d=desc')).includes('t1q=item') && (await tablePage('?t1q=item&t1f_kind=veg&t1s=name&t1d=desc&t1p=1')).includes('t1f_kind=veg'), 'table block: sort and page links keep the search and filters')
+check(t0.includes('<form action="#table-catalog" class="table__tools contact-form" method="get">') && t0.includes('name="t1q"') && t0.includes('name="t1f_kind"') && t0.includes('name="t1s"') && t0.includes('data-label="Qty"'), 'table block: search, filters and sort are a plain GET form, and cells carry labels for phones')
+const firstItemId = catalogIds[0]
+check(t0.includes(`href="/stock-item?row=${firstItemId}"`), 'table block: rows link to the detail page')
+const itemHtml = await (await fetch(`${base}/stock-item?row=${firstItemId}`)).text()
+check(tableSection(itemHtml).includes('Item 01') && tableSection(itemHtml).includes('fruit') && !itemHtml.includes('SECRET-') && !tableSection(itemHtml).includes('<script'), 'table block: the detail page shows the one record without private fields')
+check((await (await fetch(`${base}/stock-item?row=999999`)).text()).includes('We could not find that item.') && (await (await fetch(`${base}/stock-item?row=abc`)).text()).includes('We could not find that item.') && !(await (await fetch(`${base}/stock-item`)).text()).includes('Item 01'), 'table block: a missing or bad row shows a plain message')
+// who may see what
+await call('save_page', { slug: 'mine', title: 'Mine', description: 'A table of my own bookings, used to check that the table block follows the access rules.', published: true, blocks: [{ type: 'hero', heading: 'Mine' }, { type: 'table', table: 'bookings', heading: 'My bookings', columns: ['contact', 'status'] }, { type: 'table', table: 'messages', heading: 'Owner only' }] })
+const mineAnon = await (await fetch(`${base}/mine`)).text()
+check(mineAnon.includes('/login?next=%2Fmine') && !mineAnon.includes('new@example.test') && !mineAnon.includes('Owner only'), 'table block: asks visitors to log in when the table requires it, and hides owner-only tables')
+const mineAlice = await (await fetch(`${base}/mine`, { headers: { Cookie: aliceCookie } })).text()
+const mineBob = await (await fetch(`${base}/mine`, { headers: { Cookie: bobCookie } })).text()
+check(mineAlice.includes('new@example.test') && !mineAlice.includes('Owner only') && !mineBob.includes('new@example.test'), "table block: a customer sees only their own rows, never someone else's")
+await call('set_customer_role', { id: bobCustomer.id, role: 'staff' })
+const staffCatalog = await (await fetch(`${base}/stock-list`, { headers: { Cookie: bobCookie } })).text()
+await call('save_page', { slug: 'stock-all', title: 'Catalog all', description: 'A table with every column of the catalog, used to check what staff are allowed to see.', published: true, blocks: [{ type: 'hero', heading: 'All' }, { type: 'table', table: 'catalog', heading: 'Everything', columns: ['name', 'secret'] }] })
+const staffAll = await (await fetch(`${base}/stock-all`, { headers: { Cookie: bobCookie } })).text()
+const publicAll = await (await fetch(`${base}/stock-all`)).text()
+await call('set_customer_role', { id: bobCustomer.id, role: 'member' })
+check(staffAll.includes('SECRET-1') && staffAll.includes('Secret note') && !publicAll.includes('SECRET-') && !publicAll.includes('Secret note') && !staffCatalog.includes('SECRET-'), 'table block: staff see a private column only if the owner chose it, visitors never do')
+const tableReview = (await call('check_site', {})).data.problems
+check(!tableReview.some((problem) => problem.includes('stock-list') && !problem.includes('reached')), 'table block: a good table block passes the review', JSON.stringify(tableReview.filter((problem) => problem.includes('catalog'))))
+await call('save_page', { slug: 'brokentable', title: 'Broken table', description: 'A page used to check that the review finds wrong fields and a missing detail page on a table block.', published: false, blocks: [{ type: 'hero', heading: 'Broken' }, { type: 'table', table: 'catalog', columns: ['name', 'nothing'], filters: ['qty'], detailPage: 'nowhere' }] })
+const brokenReview = (await call('check_site', {})).data.problems.join('\n')
+check(brokenReview.includes('"nothing"') && brokenReview.includes('only select and boolean') && brokenReview.includes('"nowhere"'), 'table block: the review finds a missing field, a bad filter and a missing detail page')
+await call('delete_page', { slug: 'brokentable' })
+check((await call('get_guide', { topic: 'screens' })).data?.toString().includes('table block') || JSON.stringify((await call('get_guide', { topic: 'screens' })).data).includes('table block'), 'table block: the guide explains it')
+const thaiBefore = (await call('get_site')).data.settings.language
+await call('update_site', { language: 'th' })
+const thaiTable = await tablePage('?t1q=zzz')
+await call('update_site', { language: thaiBefore ?? 'en' })
+check(thaiTable.includes('ค้นหา') && thaiTable.includes('ไม่พบรายการที่ตรงกัน') && thaiTable.includes('เรียงตาม'), 'table block: speaks Thai on a Thai site')
+
 // Back office for tables
 const dataPage = await (await fetch(`${owner}/data`)).text()
 check(dataPage.includes('Classes') && dataPage.includes('Bookings'), 'the back office lists the tables')

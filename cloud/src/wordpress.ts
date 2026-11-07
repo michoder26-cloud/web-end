@@ -146,9 +146,10 @@ function pageHtml(page: PageRow, items: ItemRow[], link: ReturnType<typeof addre
         todo.push(`The form ${named(block)} needs a form plugin, such as Contact Form 7 or WPForms. Its fields: ${(block.fields ?? []).map((field: any) => field.label).join(', ')}.`)
         return h2(block.heading, `form-${block.name}`)
       case 'records':
+      case 'table':
       case 'record-form':
         todo.push(`${named(block)} uses the table "${block.table}". WordPress has no tables like this, so it needs a plugin, or keep this site as the backend and call its API.`)
-        return h2(block.heading, block.type === 'records' ? block.id || `record-${block.table}` : '')
+        return h2(block.heading, block.type !== 'record-form' ? block.id || `record-${block.table}` : '')
       case 'html':
         todo.push(`${block.title ? `"${String(block.title)}"` : 'A custom code section'} was left out, because code made for a sandboxed frame can break a WordPress theme. Copy it into a Custom HTML block if you still need it.`)
         return ''
