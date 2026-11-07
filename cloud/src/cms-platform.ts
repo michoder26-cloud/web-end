@@ -1,5 +1,6 @@
 import { newApiKey } from './api'
 import { newToken, sha256 } from './auth'
+import { approvalWords } from './approvals-office'
 import { allows, firstProblem, input, office, readField, spec } from './cms'
 import type { Desk, Notice } from './cms'
 import { accessLevels, canChange, canCreate, createRecord, deleteRecord, fieldTypes, getRecord, getTable, listRecords, listTables, ownerActor, readScope, recordsCsv, saveTable, tableSchema, updateRecord } from './data'
@@ -160,7 +161,7 @@ async function handleData(request: Request, env: Env, url: URL, site: SiteRow, d
   if (!canChange(table, actor, row)) return refuse()
   const form = await request.formData()
   if (action === 'delete') {
-    if (form.get('confirm') === 'on') await deleteRecord(env, site.id, table, row)
+    if (form.get('confirm') === 'on' && !(await deleteRecord(env, site.id, table, row, actor))) return tablePage(env, site, desk, table, { error: approvalWords(site).locked }, 409)
     return see(url, path)
   }
   if (action) return notFound()

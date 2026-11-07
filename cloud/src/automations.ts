@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 import { withinLimit } from './auth'
-import { createRecord, getRecord, getTable, listTables, ownerActor, readInput, showRecord, writeGuards } from './data'
+import { approvalLock, createRecord, getRecord, getTable, listTables, ownerActor, readInput, showRecord, writeGuards } from './data'
 import type { DataRow, DataTable } from './data'
 import { isSchedule, localTime, nextRun, nextRuns, period, shownTime, targetDate, timeOf, weekdays, zonedTime, zoneOf } from './clock'
 import type { Added, Schedule, Weekday } from './clock'
@@ -414,10 +414,15 @@ async function patch(context: Context, table: DataTable, id: number, changes: Re
   if (removes.length) expression = `json_remove(${expression}, ${removes.map((name) => `'$.${name}'`).join(', ')})`
   const guards = writeGuards(table, predicted, row.customer_id, row)
   // Field names were checked against the table's own names, which allow only letters, digits and _.
-  const updated = await env.DB.prepare(`UPDATE data_records SET data = ${expression}, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND table_id = ?${guards.map((guard) => ` AND ${guard.sql}`).join('')} RETURNING id, customer_id, data, created_at, updated_at`)
+  const updated = await env.DB.prepare(`UPDATE data_records SET data = ${expression}, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND table_id = ? AND ${approvalLock(ownerActor)}${guards.map((guard) => ` AND ${guard.sql}`).join('')} RETURNING id, customer_id, data, created_at, updated_at`)
     .bind(...sets.map((name) => JSON.stringify(read.data[name])), ...adds.map(([, , add]) => add), row.id, table.id, ...guards.flatMap((guard) => guard.values))
     .first<DataRow>()
-  if (!updated) throw new Problem('limitHit', table.label, String(id))
+  if (!updated) {
+    // A record waiting for approval can't change, even by the owner's own rules. Say so instead of blaming a limit.
+    const waiting = await env.DB.prepare(`SELECT 1 FROM data_records WHERE id = ? AND NOT ${approvalLock(ownerActor)}`).bind(row.id).first()
+    if (waiting) throw new Problem('raw', `${table.label} #${id} is waiting for approval, so it can't change now.`)
+    throw new Problem('limitHit', table.label, String(id))
+  }
   await fireEvent(env, siteId, 'record.updated', { table: table.name, record: showRecord(table, updated, ownerActor) }, before)
   return { data: JSON.parse(updated.data) as Facts, shown }
 }

@@ -76,7 +76,7 @@ check((await rpc('/mcp/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd')).status === 404, 'M
 check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd`)).status === 404, 'the back office with a wrong link is refused')
 
 const { tools } = await client.listTools()
-check(tools.length === 54 && tools.some((tool) => tool.name === 'get_move_report') && tools.some((tool) => tool.name === 'get_wordpress_report') && tools.some((tool) => tool.name === 'duplicate_page') && tools.some((tool) => tool.name === 'restore_page_revision'), 'lists the tools', tools.map((tool) => tool.name).join(','))
+check(tools.length === 60 && tools.some((tool) => tool.name === 'get_move_report') && tools.some((tool) => tool.name === 'get_wordpress_report') && tools.some((tool) => tool.name === 'duplicate_page') && tools.some((tool) => tool.name === 'restore_page_revision'), 'lists the tools', tools.map((tool) => tool.name).join(','))
 check(stepDone(await (await fetch(`${base}/owner/${code}`)).text(), 'claude') === '1', 'connecting Claude ticks its step')
 check(client.getInstructions()?.includes('apply_starter') && tools.find((tool) => tool.name === 'apply_starter')?.description.includes('replacePages'), 'Claude knows about starters and when it may replace pages')
 check(client.getInstructions()?.includes('web team'), 'gives Claude its working method')
@@ -3037,6 +3037,102 @@ await call('update_site', { language: 'en', officeLanguage: 'auto' })
   check((await call('delete_page', { slug: 'news-forms' })).isError === false, 'cleans up')
   await call('update_site', { newsletter: false, cart: false })
   if (newsServer) await new Promise((done) => newsServer.close(done))
+}
+
+// Approvals: expense claims need the manager, and above 5,000 also a second staff member
+{
+  await call('update_site', { accounts: true })
+  const join = async (name, n) => (await apiJson('/auth/signup', { body: asJson({ email: `${name}@claims.test`, name, password: 'a-good-password' }), headers: { 'CF-Connecting-IP': `198.51.100.${200 + n}` }, method: 'POST' })).body.token
+  const [empToken, mgrToken, finToken, otherToken] = [await join('emp', 1), await join('mgr', 2), await join('fin', 3), await join('other', 4)]
+  const people = (await call('list_customers', {})).data
+  const idOf = (email) => people.find((row) => row.email === email)?.id
+  await call('set_customer_role', { id: idOf('mgr@claims.test'), role: 'staff', areas: [] })
+  await call('set_customer_role', { id: idOf('fin@claims.test'), role: 'staff', areas: [] })
+  const claimsTable = { name: 'claims', label: 'Expense claims', readAccess: 'own', writeAccess: 'own', fields: [{ name: 'title', label: 'What for', type: 'text', required: true }, { name: 'amount', label: 'Amount', type: 'number', required: true }, { name: 'manager', label: 'Manager email', type: 'email' }, { name: 'status', label: 'Status', type: 'select', readOnly: true, options: ['draft', 'pending', 'approved', 'rejected', 'returned'], default: 'draft' }] }
+  check(!(await call('save_table', claimsTable)).isError, 'approvals: the claims table is created')
+  const flow = { table: 'claims', amountField: 'amount', statusField: 'status', steps: [{ label: 'Manager', approver: { by: 'field', field: 'manager' } }, { label: 'Finance', approver: { by: 'staff' }, above: 5000 }] }
+  check((await call('save_approval_flow', { ...flow, statusField: 'title' })).isError && (await call('save_approval_flow', { ...flow, steps: [{ label: 'Boss', approver: { by: 'field', field: 'title' } }] })).isError && (await call('save_approval_flow', { ...flow, amountField: undefined })).isError, 'approvals: a status customers could set, an approver field without an email, or an amount rule without amountField is refused')
+  const savedFlow = await call('save_approval_flow', flow)
+  check(!savedFlow.isError && savedFlow.data.steps === 2 && (await call('list_approval_flows')).data[0]?.table === 'claims', 'approvals: Claude sets up a two-step flow with an amount limit', savedFlow.text)
+  check((await call('get_guide', { topic: 'approvals' })).text.includes('above 5000') && client.getInstructions()?.includes('approvals'), 'approvals: Claude has an approvals guide')
+
+  const claim = async (title, amount, token = empToken) => (await apiJson('/data/claims', { body: asJson({ title, amount, manager: 'mgr@claims.test', status: 'approved' }), method: 'POST', token })).body.record
+  const state = async (id, token = empToken) => apiJson(`/approvals/claims/${id}`, { token })
+  const act = (id, action, token, body = {}) => apiJson(`/approvals/claims/${id}/${action}`, { body: asJson(body), method: 'POST', token })
+  const small = await claim('Taxi', 3000)
+  const big = await claim('Laptop', 30000)
+  const smallState = await state(small.id)
+  const bigState = await state(big.id)
+  check(small.status === 'draft' && smallState.status === 200 && smallState.body.approval.status === 'pending' && smallState.body.approval.steps === 1 && smallState.body.approval.waitingFor.email === 'mgr@claims.test', 'approvals: a claim of 3,000 is sent on save and needs one step, by the manager in its field', JSON.stringify(smallState.body))
+  check(bigState.body.approval.status === 'pending' && bigState.body.approval.steps === 2 && bigState.body.approval.plan[1].label === 'Finance', 'approvals: a claim of 30,000 needs two steps')
+  check((await apiJson(`/data/claims/${big.id}`, { token: empToken })).body.record.status === 'pending', 'approvals: the status field shows pending, and the customer could not set it to approved themselves')
+
+  // Who may decide
+  check((await act(small.id, 'approve', otherToken, { step: 1 })).status === 404 && (await act(small.id, 'approve', empToken, { step: 1 })).status === 403 && (await act(small.id, 'approve', finToken, { step: 1 })).status === 403, 'approvals: a stranger finds nothing, and the sender or another staff member gets 403')
+  check((await act(small.id, 'approve', mgrToken, {})).status === 400, 'approvals: deciding without the step seen is refused')
+
+  // Locked while it waits
+  const lockedEdit = await apiJson(`/data/claims/${big.id}`, { body: asJson({ amount: 10 }), method: 'PATCH', token: empToken })
+  const lockedDelete = await apiJson(`/data/claims/${big.id}`, { method: 'DELETE', token: empToken })
+  const ownerEdit = await call('save_record', { table: 'claims', id: big.id, values: { amount: 10 } })
+  check(lockedEdit.status === 409 && lockedEdit.body.error.code === 'locked' && lockedDelete.status === 409 && ownerEdit.isError && (await apiJson(`/data/claims/${big.id}`, { token: empToken })).body.record.amount === 30000, 'approvals: nobody can change or delete a claim while it waits, not even the owner')
+
+  // One step, then done
+  const smallDone = await act(small.id, 'approve', mgrToken, { step: 1, comment: 'OK' })
+  check(smallDone.status === 200 && smallDone.body.approval.status === 'approved' && (await apiJson(`/data/claims/${small.id}`, { token: empToken })).body.record.status === 'approved', 'approvals: the manager approves the small claim and it is approved', JSON.stringify(smallDone.body))
+  check((await apiJson(`/data/claims/${small.id}`, { body: asJson({ amount: 1 }), method: 'PATCH', token: empToken })).status === 409, 'approvals: the sender cannot change an approved claim')
+
+  // Two approvals at the same moment, and a repeated call, decide step 1 once and never skip step 2
+  const both = await Promise.all([act(big.id, 'approve', mgrToken, { step: 1 }), act(big.id, 'approve', mgrToken, { step: 1 })])
+  const afterBoth = await state(big.id, mgrToken)
+  check(both.map((one) => one.status).sort().join() === '200,409' && afterBoth.body.approval.status === 'pending' && afterBoth.body.approval.step === 2, 'approvals: two approvals at once make one decision, and the claim waits at step 2', both.map((one) => one.status).join())
+  check((await act(big.id, 'approve', mgrToken, { step: 1 })).status === 409 && (await act(big.id, 'approve', mgrToken, { step: 2 })).status === 403, 'approvals: approving step 1 again changes nothing, and the manager cannot approve step 2 too')
+  const mgrPage = await (await fetch(`${base}/staff/approvals`, { headers: { Cookie: `session=${mgrToken}` } })).text()
+  const finPage = await (await fetch(`${base}/staff/approvals`, { headers: { Cookie: `session=${finToken}` } })).text()
+  check(finPage.includes(`id="approval-${big.id}"`) && finPage.includes('value="approve"') && !mgrPage.split('Waiting for someone else')[0].includes(`id="approval-${big.id}"`) && !/<script/i.test(finPage), 'approvals: the staff back office shows finance the claim to decide, with plain forms and no scripts')
+  const staleForm = await fetch(`${base}/staff/approvals/claims/${big.id}`, { body: new URLSearchParams({ op: 'approve', step: '1', round: '1' }), headers: { Cookie: `session=${finToken}`, Origin: base }, method: 'POST', redirect: 'manual' })
+  check(staleForm.status === 409 && (await state(big.id, finToken)).body.approval.step === 2, 'approvals: an old form for step 1 cannot decide step 2')
+
+  // Return for changes, fix, send again; then reject, fix, send again
+  check((await act(big.id, 'return', finToken, { step: 2 })).status === 400, 'approvals: returning needs a comment')
+  const returnForm = await fetch(`${base}/staff/approvals/claims/${big.id}`, { body: new URLSearchParams({ op: 'return', step: '2', round: '1', comment: 'Attach the receipt number' }), headers: { Cookie: `session=${finToken}`, Origin: base }, method: 'POST', redirect: 'manual' })
+  check(returnForm.status === 303 && (await state(big.id)).body.approval.status === 'returned' && (await apiJson(`/data/claims/${big.id}`, { token: empToken })).body.record.status === 'returned', 'approvals: finance returns it from the back office')
+  const fixed = await apiJson(`/data/claims/${big.id}`, { body: asJson({ title: 'Laptop, receipt 123' }), method: 'PATCH', token: empToken })
+  const resent = await state(big.id)
+  check(fixed.status === 200 && resent.body.approval.status === 'pending' && resent.body.approval.round === 2 && resent.body.approval.step === 1, 'approvals: the sender can fix a returned claim, and saving sends it again from step 1')
+  const rejected = await act(big.id, 'reject', mgrToken, { step: 1, round: 2, comment: 'Over budget' })
+  check(rejected.status === 200 && rejected.body.approval.status === 'rejected' && (await apiJson(`/data/claims/${big.id}`, { body: asJson({ amount: 4000 }), method: 'PATCH', token: empToken })).status === 200, 'approvals: a rejected claim can be changed again by its sender')
+  const third = await state(big.id)
+  check(third.body.approval.status === 'pending' && third.body.approval.steps === 1 && third.body.approval.round === 3, 'approvals: lowered to 4,000 and sent again, it needs only the manager')
+
+  // History
+  const log = third.body.approval.history
+  check(log.map((one) => one.action).join() === 'submitted,approved,returned,submitted,rejected,submitted' && log[2].comment === 'Attach the receipt number' && log[2].by === 'fin' && log[1].by === 'mgr' && log.every((one, index) => !index || one.at >= log[index - 1].at), 'approvals: the history lists who did what, when and why, in order', JSON.stringify(log.map((one) => [one.action, one.by])))
+  check((await api(`/approvals/claims/${big.id}`, { method: 'DELETE', token: empToken })).status === 405 && (await api(`/approvals/claims/${big.id}`, { body: asJson({ history: [] }), method: 'PATCH', token: mgrToken })).status === 405 && !(await client.listTools()).tools.some((tool) => /history|decision/.test(tool.name)), 'approvals: no address or tool can change the history')
+
+  // The owner and Claude
+  const sample = await call('save_record', { table: 'claims', values: { title: 'Sample', amount: 100, manager: 'mgr@claims.test' } })
+  check((await call('get_approval', { table: 'claims', id: sample.data.saved.id })).data.status === 'draft', 'approvals: a record the owner adds stays a draft')
+  const ownerSubmit = await call('decide_approval', { table: 'claims', id: sample.data.saved.id, decision: 'submit' })
+  const ownerApprove = await call('decide_approval', { table: 'claims', id: big.id, decision: 'approve', step: 1 })
+  check(ownerSubmit.data.status === 'pending' && ownerApprove.data.status === 'approved' && (await call('decide_approval', { table: 'claims', id: big.id, decision: 'approve' })).isError, 'approvals: the owner can send and decide any step through Claude, always naming the step')
+  check((await call('list_approvals', { status: 'pending' })).data.requests.some((one) => one.id === sample.data.saved.id) && (await apiJson('/approvals', { token: mgrToken })).body.waiting.some((one) => one.id === sample.data.saved.id), 'approvals: Claude and the manager see what is waiting')
+  const ownerPage = await (await fetch(`${owner}/approvals`)).text()
+  check(ownerPage.includes('Approval flows') && ownerPage.includes('Manager (the person in a field) → Finance (any staff member, above 5,000)') && ownerPage.includes(`href="/owner/${code}/approvals"`), 'approvals: the owner sees the flows and the menu link')
+  await call('update_site', { officeLanguage: 'th' })
+  check((await (await fetch(`${owner}/approvals`)).text()).includes('ขั้นตอนอนุมัติ'), 'approvals: the back office page is in Thai too')
+  await call('update_site', { officeLanguage: 'en' })
+
+  // Rows written by one decision
+  const measured = await act(sample.data.saved.id, 'approve', mgrToken, { step: 1 })
+  const submitWrites = (await act(small.id, 'submit', empToken)).status
+  check(measured.status === 200 && Number.isInteger(measured.body.rows_written) && measured.body.rows_written > 0 && submitWrites === 409, 'approvals: a decision reports the rows it wrote, and an approved claim cannot be sent again', JSON.stringify(measured.body.rows_written))
+  console.log(`      rows written: final approval with status field ${measured.body.rows_written}, step 1 of 2 ${both.find((one) => one.status === 200)?.body.rows_written}, send ${ownerSubmit.data.rowsWritten ?? 'n/a'}`)
+
+  // Deleting keeps working, and the history stays out of the way
+  check(!(await call('delete_table', { name: 'claims' })).isError && (await call('list_approval_flows')).data.length === 0, 'approvals: a table with approval history can still be deleted, and its flow goes with it')
+  await call('set_customer_role', { id: idOf('mgr@claims.test'), role: 'member' })
+  await call('set_customer_role', { id: idOf('fin@claims.test'), role: 'member' })
 }
 
 // The owner can replace the one-time capability URL with a normal account login.

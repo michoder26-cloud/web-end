@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 
+import { registerApprovalTools } from './approvals-tools'
 import { newToken } from './auth'
 import { automationProblems, automationSchema, automationWarnings, dryRun, dryRunSchedule, getAutomation, listAutomations, maxAutomationsPerSite, namesFor, noteText, recentRuns, reschedule, sentence, storedAutomationProblems } from './automations'
 import { isSchedule, shownTime, validTimeZone, zoneOf } from './clock'
@@ -35,7 +36,7 @@ import type { Block, Env, FormField, Item, Order, Settings, SiteRow, Variant } f
 export const maxPagesPerSite = 40
 export const maxBlocksBytes = 200_000
 
-const instructions = `You are a complete web team for someone who does not write code. You deliver the whole system: UX and design, content, database, customer accounts, back office, API, publishing and the live site. Read the fitting guides with get_guide before you build: move_from_wix, move_to_wordpress, plan_app, data_model, access_rules, screens, design, copy, shop, publish, connect_wix, connect_other, staff, automations, newsletter, languages, test_before_launch and limits. Speak in their language and avoid technical words. Never hand over part of what they asked for and then ask whether to build the rest. Build everything these tools can do. If something truly can't be done, say so plainly and offer the closest real option. Never fake a feature, such as a login page that doesn't work.
+const instructions = `You are a complete web team for someone who does not write code. You deliver the whole system: UX and design, content, database, customer accounts, back office, API, publishing and the live site. Read the fitting guides with get_guide before you build: move_from_wix, move_to_wordpress, plan_app, data_model, access_rules, screens, design, copy, shop, publish, connect_wix, connect_other, staff, automations, approvals, newsletter, languages, test_before_launch and limits. Speak in their language and avoid technical words. Never hand over part of what they asked for and then ask whether to build the rest. Build everything these tools can do. If something truly can't be done, say so plainly and offer the closest real option. Never fake a feature, such as a login page that doesn't work.
 
 Work in this order:
 1. Planner: call get_site first. Then ask only the questions that change what you build, using the checklist below. Ask one at a time with 2 to 4 short choices. Give each choice a name and one line on what they get, put your recommendation first, and let them type their own answer or skip. If your app has a tool that shows clickable choices, use it. Otherwise number the choices so they can reply with a number. Skip anything they already told you. If they skip, choose a sensible default, say which, and move on. Ask at most 5 questions, then build.
@@ -728,7 +729,7 @@ export function createMcpServer(env: Env, origin: string, code: string) {
     'get_guide',
     {
       title: 'Read a build guide',
-      description: "Reads the team's working guide on a topic: move_from_wix, move_to_wordpress, plan_app, data_model, access_rules, screens, design, copy, shop, publish, connect_wix, connect_other, staff, automations, languages, test_before_launch or limits. Read the ones that fit before you build.",
+      description: "Reads the team's working guide on a topic: move_from_wix, move_to_wordpress, plan_app, data_model, access_rules, screens, design, copy, shop, publish, connect_wix, connect_other, staff, automations, approvals, languages, test_before_launch or limits. Read the ones that fit before you build.",
       inputSchema: { topic: z.enum(guideTopics) },
       annotations: { readOnlyHint: true },
     },
@@ -1286,6 +1287,7 @@ export function createMcpServer(env: Env, origin: string, code: string) {
   )
 
   registerNewsTools(server, env, origin, code)
+  registerApprovalTools(server, env, origin, code)
 
   const prompt = (name: string, title: string, description: string, words: string) =>
     server.registerPrompt(name, { title, description }, () => ({ messages: [{ role: 'user', content: { type: 'text', text: words } }] }))

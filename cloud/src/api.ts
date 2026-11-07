@@ -1,4 +1,5 @@
 import { emailResetLink } from './account'
+import { handleApprovalsApi } from './approvals-office'
 import { allowAttempt, customerFromToken, endToken, newToken, openSession, registerCustomer, sha256, verifyLogin } from './auth'
 import { canChange, canCreate, createRecord, deleteRecord, getRecord, getTable, listRecords, listTables, readScope, showRecord, spotsLeft, updateRecord } from './data'
 import type { Actor, DataField, DataTable } from './data'
@@ -183,7 +184,7 @@ async function handleData(request: Request, env: Env, url: URL, site: SiteRow, a
   if (request.method === 'GET') return scope ? json({ record: showRecord(table, row, actor) }) : notFound()
   if (!canChange(table, actor, row)) return forbidden()
   if (request.method === 'DELETE') {
-    await deleteRecord(env, site.id, table, row)
+    if (!(await deleteRecord(env, site.id, table, row, actor))) return fail(409, 'locked', 'This record is waiting for approval or already approved, so it cannot be deleted.')
     return json({ deleted: row.id })
   }
   if (request.method !== 'PATCH') return fail(405, 'bad_method', 'Use GET, PATCH or DELETE.')
@@ -264,6 +265,9 @@ function openApi(url: URL, settings: Settings, tables: DataTable[], actor: Actor
   const paths: Record<string, object> = {
     '/auth/signup': { post: { summary: 'Create a customer account and get a token' } },
     '/auth/login': { post: { summary: 'Log a customer in and get a token' } },
+    '/approvals': { get: { summary: 'What waits for your approval, and your own requests' } },
+    '/approvals/{table}/{id}': { get: { summary: "A record's approval status and its history, which can't be changed" } },
+    '/approvals/{table}/{id}/{action}': { post: { summary: 'action is submit, approve, reject or return. Send {"comment": "..."}; to decide, also send step, the step number shown by GET, so a repeated call never decides the next step.' } },
     '/auth/logout': { post: { summary: 'End the session of this token' } },
     '/auth/me': { get: { summary: 'The logged-in customer' } },
     '/auth/reset': { post: { summary: 'Email a link to choose a new password, if an account uses this email. The answer is the same either way. Only works once the site sends emails.' } },
@@ -304,6 +308,7 @@ async function route(request: Request, env: Env, url: URL, site: SiteRow, settin
     return json({ accounts: Boolean(settings.accounts), api: 'web-end', cart: Boolean(settings.cart), docs: `${url.origin}/api/v1/openapi.json`, name: settings.name, tables: tables.map((table) => ({ count: actor.admin ? table.record_count : undefined, label: table.label, name: table.name })), version })
   }
   if (area === 'auth' && id && !extra) return handleAuth(request, env, site, settings, actor, id)
+  if (area === 'approvals') return handleApprovalsApi(request, env, site, actor, parts.slice(3))
   if (area === 'data' && id) return handleData(request, env, url, site, actor, id, extra, parts[5])
   if (area === 'orders' && !extra) return handleOrders(request, env, url, site, settings, actor, id)
   if (area === 'products' && !extra) {
