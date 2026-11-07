@@ -6,6 +6,7 @@ import { notFound, see } from './http'
 import { isSafeHref } from './theme'
 import type { Block, Customer, Env, SiteRow } from './types'
 import { countConversion } from './stats'
+import { staffPermissions } from './staff'
 import { fireEvent } from './webhooks'
 
 export const accessLevels = ['public', 'members', 'own', 'staff', 'owner'] as const
@@ -375,9 +376,12 @@ export async function updateRecord(env: Env, siteId: number, table: DataTable, r
 
 /** Deletes a record, unless approvals lock it for this person. Says whether it went. */
 export async function deleteRecord(env: Env, siteId: number, table: DataTable, row: DataRow, actor: Actor = ownerActor) {
-  const gone = await env.DB.prepare(`DELETE FROM data_records WHERE id = ? AND table_id = ? AND ${actor.admin ? '1' : approvalLock(actor)} RETURNING id`).bind(row.id, table.id).first()
-  if (!gone) return false
-  await env.DB.prepare('UPDATE data_tables SET record_count = MAX(record_count - 1, 0) WHERE id = ?').bind(table.id).run()
+  // One batch runs as one transaction, so the count drops if and only if the record went. changes() is the delete's.
+  const [deleted] = await env.DB.batch([
+    env.DB.prepare(`DELETE FROM data_records WHERE id = ? AND table_id = ? AND ${actor.admin ? '1' : approvalLock(actor)} RETURNING id`).bind(row.id, table.id),
+    env.DB.prepare('UPDATE data_tables SET record_count = MAX(record_count - changes(), 0) WHERE id = ?').bind(table.id),
+  ])
+  if (!deleted.results.length) return false
   await fireEvent(env, siteId, 'record.deleted', { table: table.name, id: row.id })
   return true
 }
@@ -482,17 +486,27 @@ export async function receiveRecord(request: Request, env: Env, url: URL, site: 
   if (!form || !table) return see(url, path)
   if (id) {
     const row = await getRecord(env, table, id)
+    // On the public site, staff change other people's records only if the owner gave them the data area of the back office.
+    const mayChange = async (found: DataRow) => {
+      if (!canChange(table, actor, found)) return false
+      if (actor.admin || actor.customer?.role !== 'staff' || found.customer_id === actor.customer.id) return true
+      return (await staffPermissions(env, actor.customer.id)).includes('data')
+    }
     if (remove) {
       // Keep the actor: deleteRecord also refuses deletions while a request is pending or approved.
-      if (row && canChange(table, actor, row)) await deleteRecord(env, site.id, table, row, actor)
+      if (row && (await mayChange(row))) await deleteRecord(env, site.id, table, row, actor)
       return see(url, path)
     }
     // Editing one of your own records. Someone else's, or a missing one, looks the same so an id can't be probed.
-    if (!row || !canChange(table, actor, row)) return notFound()
+    if (!row || !(await mayChange(row))) return notFound()
+    // A checkbox that isn't ticked sends nothing, so only the boxes the form says it showed are changed.
+    // Every other field keeps its value, such as a "paid" box the block doesn't show.
+    const boxes = new Set(form.getAll('_box').map(String))
     const input: Record<string, unknown> = {}
     for (const field of table.fields) {
-      if (field.type === 'boolean') input[field.name] = form.get(field.name) === 'on'
-      else if (form.has(field.name)) input[field.name] = String(form.get(field.name))
+      if (field.type === 'boolean') {
+        if (boxes.has(field.name)) input[field.name] = form.get(field.name) === 'on'
+      } else if (form.has(field.name)) input[field.name] = String(form.get(field.name))
     }
     // readInput drops staff-only, read-only and set-once fields for a customer, so those keep their value whatever is sent.
     const saved = await updateRecord(env, site.id, table, row, input, actor)

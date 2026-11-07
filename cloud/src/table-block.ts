@@ -8,7 +8,8 @@ export const tableScanLimit = 1000
 const defaultPageSize = 20
 const maxColumns = 12
 
-export type TableLoaded = PageRecords & { capped?: boolean }
+// knownTotal: set when only the rows up to the page asked for were read, so the page count comes from the table's stored count.
+export type TableLoaded = PageRecords & { capped?: boolean; knownTotal?: number }
 
 const isStaff = (actor: Actor) => actor.admin || actor.customer?.role === 'staff'
 
@@ -44,14 +45,25 @@ export async function loadTableBlocks(env: Env, siteId: number, blocks: Block[],
       const row = /^\d{1,12}$/.test(id) ? await getRecord(env, table, Number(id)) : null
       if (row && (scope === 'all' || row.customer_id === actor.customer?.id)) page.rows = [row]
     } else if (scope) {
+      // With no search, filter or sort, the default order is the stored order, so only the rows up to the page asked for
+      // are needed. Reading the whole table on every view would use up the free plan's daily reads on a busy page.
+      const key = `t${index}`
+      let narrowed = false
+      query.forEach((_value, name) => {
+        if (name === `${key}q` || name === `${key}s` || name === `${key}d` || name.startsWith(`${key}f_`)) narrowed = true
+      })
+      const plain = scope === 'all' && !block.sort && !narrowed
+      const asked = Number(query.get(`${key}p`))
+      const needed = plain ? Math.min(tableScanLimit, (Number.isInteger(asked) && asked >= 1 ? asked : 1) * pageSizeOf(block)) : tableScanLimit
+      if (plain) page.knownTotal = table.record_count
       let after = 0
       for (;;) {
-        const list = await listRecords(env, table, actor, { after: after || undefined, limit: 100 })
+        const list = await listRecords(env, table, actor, { after: after || undefined, limit: Math.min(100, needed - page.rows.length) })
         if (!list.rows) break
         page.rows.push(...list.rows)
         if (list.next === null || list.next === undefined) break
-        if (page.rows.length >= tableScanLimit) {
-          page.capped = true
+        if (page.rows.length >= needed) {
+          page.capped = !plain
           break
         }
         after = list.next
@@ -101,7 +113,7 @@ export const pageSizeOf = (block: Block) => Math.min(Math.max(Math.floor(Number(
 type Cell = { raw: unknown; text: string }
 
 /** Applies search, filters, sort and paging to the rows. `text` turns a value into what the visitor reads, so searching and sorting follow what is on screen. */
-export function viewRows(rows: { data: Record<string, unknown>; id: number }[], columns: DataField[], filters: DataField[], state: TableState, size: number, text: (field: DataField, value: unknown) => string, language?: string) {
+export function viewRows(rows: { data: Record<string, unknown>; id: number }[], columns: DataField[], filters: DataField[], state: TableState, size: number, text: (field: DataField, value: unknown) => string, language?: string, knownTotal?: number) {
   const cell = (row: { data: Record<string, unknown> }, field: DataField): Cell => ({ raw: row.data[field.name], text: row.data[field.name] === undefined || row.data[field.name] === null ? '' : text(field, row.data[field.name]) })
   const needle = state.q.toLocaleLowerCase()
   let found = rows
@@ -126,7 +138,8 @@ export function viewRows(rows: { data: Record<string, unknown>; id: number }[], 
       })
       .map((item) => item.row)
   }
-  const total = found.length
+  const narrowed = Boolean(needle) || Object.keys(state.filters).length > 0 || Boolean(sortField)
+  const total = knownTotal !== undefined && !narrowed ? Math.max(knownTotal, found.length) : found.length
   const pages = Math.max(1, Math.ceil(total / size))
   const page = Math.min(state.page, pages)
   return { page, pages, rows: found.slice((page - 1) * size, page * size), total }

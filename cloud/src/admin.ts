@@ -47,6 +47,17 @@ const ownerCode = (value: unknown) => {
   }
 }
 
+/**
+ * Another website's form posting here in the owner's browser. Browsers always send Origin with such a post, so a post
+ * that names another site, or that the browser marks as cross-site, is refused. Tools that send neither still work.
+ */
+const fromAnotherSite = (request: Request, url: URL) => {
+  const origin = request.headers.get('origin')
+  if (origin && origin !== 'null') return origin !== url.origin
+  const fetchSite = request.headers.get('sec-fetch-site')
+  return Boolean(fetchSite) && fetchSite !== 'same-origin' && fetchSite !== 'none'
+}
+
 const isAccountOwner = async (request: Request, env: Env, site: SiteRow) => {
   if (!site.owner_customer_id) return false
   const customer = await getCustomer(request, env, site.id)
@@ -56,6 +67,8 @@ const isAccountOwner = async (request: Request, env: Env, site: SiteRow) => {
 /** Owner access is account-based. The original capability URL only proves ownership during the one-time enrollment. */
 export async function handleAdmin(request: Request, env: Env, url: URL, site: SiteRow, parts: string[]) {
   const [action] = parts
+  // Sign in, set up, recover and sign out change who is logged in, so another site must not be able to post them.
+  if (request.method === 'POST' && ['claim', 'login', 'logout', 'recover'].includes(action) && fromAnotherSite(request, url)) return page(site, 'Owner sign in', '<p role="alert">This form was sent from another website, so nothing was changed. Open this page directly and try again.</p>', 403)
   if (!site.owner_customer_id) {
     if (action !== 'claim') return request.method === 'GET' ? claimPage(site) : notFound()
     if (request.method !== 'POST') return claimPage(site)
@@ -90,6 +103,12 @@ export async function handleAdmin(request: Request, env: Env, url: URL, site: Si
     const code = ownerCode(form?.get('code'))
     const password = String(form?.get('password') ?? '')
     if (!code || !(await isOwner(env, code)) || password.length < 8 || password.length > 200) return recoverPage(site, 'The private owner link or password is not valid.')
+    // If the owner's account is gone, the private link sets up a new one rather than signing in to nobody.
+    const exists = await env.DB.prepare('SELECT 1 FROM customers WHERE id = ? AND site_id = ?').bind(site.owner_customer_id, site.id).first()
+    if (!exists) {
+      await env.DB.prepare('UPDATE sites SET owner_customer_id = NULL WHERE id = ? AND owner_customer_id = ?').bind(site.id, site.owner_customer_id).run()
+      return claimPage({ ...site, owner_customer_id: null }, 'Your owner account was removed. Set it up again with your private owner link.')
+    }
     const secret = await hashPassword(password)
     await env.DB.batch([
       env.DB.prepare('UPDATE customers SET password_hash = ?, salt = ?, iterations = ? WHERE id = ? AND site_id = ?').bind(secret.password_hash, secret.salt, secret.iterations, site.owner_customer_id, site.id),

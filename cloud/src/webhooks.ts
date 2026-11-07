@@ -135,6 +135,22 @@ export async function runWebhookOutbox(env: Env, now = Date.now()) {
   }
 }
 
+/**
+ * Deliveries hold the event's data, which can include a customer's name, phone and address, so they are kept only
+ * as long as they help: a week once delivered, a month once given up on, so the owner can still see what failed.
+ */
+export async function cleanWebhookOutbox(env: Env, now = Date.now()) {
+  const day = 86_400_000
+  try {
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM webhook_deliveries WHERE status = 'sent' AND updated_at < ?").bind(new Date(now - 7 * day).toISOString()),
+      env.DB.prepare("DELETE FROM webhook_deliveries WHERE status = 'failed' AND updated_at < ?").bind(new Date(now - 30 * day).toISOString()),
+    ])
+  } catch (error) {
+    console.error('Old webhook deliveries could not be cleaned up', error)
+  }
+}
+
 type EventHook = (env: Env, siteId: number, event: string, data: unknown, before?: Record<string, unknown>) => Promise<void>
 const afterEvent: EventHook[] = []
 

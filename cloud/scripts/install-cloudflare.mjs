@@ -89,19 +89,31 @@ function configuredFor(name, databaseName, databaseId) {
   }
 }
 
-function databaseIdFrom(output, databaseName) {
-  const jsonStart = output.indexOf('[')
-  if (jsonStart >= 0) {
+const uuidPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i
+
+/**
+ * The id of the database this run created, and only that one. An account can hold other sites' databases, and
+ * running migrations on the wrong one would damage that site, so this never guesses: no match means it stops.
+ */
+function databaseIdFrom(created, listed, databaseName) {
+  // `wrangler d1 create` prints the new binding, such as "database_id": "…", for exactly this database.
+  const fromCreate = /"database_id"\s*[:=]\s*"([0-9a-f-]{36})"/i.exec(created)?.[1]
+  let fromList = null
+  // `d1 list --json` prints a JSON array, possibly after log lines, so try each line that starts one.
+  for (const [index] of [...listed.matchAll(/^\s*\[/gm)].map((match) => [match.index])) {
     try {
-      const databases = JSON.parse(output.slice(jsonStart))
-      const database = databases.find((item) => item.name === databaseName)
-      if (typeof database?.uuid === 'string') return database.uuid
-      if (typeof database?.id === 'string') return database.id
+      const databases = JSON.parse(listed.slice(index))
+      const database = Array.isArray(databases) ? databases.find((item) => item?.name === databaseName) : null
+      const id = database?.uuid ?? database?.id
+      if (typeof id === 'string' && uuidPattern.test(id)) fromList = id
+      break
     } catch {
-      // Older Wrangler versions can include text before the JSON. The UUID fallback below still works.
+      // Not the JSON array yet; try the next line that starts with "[".
     }
   }
-  return output.match(/\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b/i)?.[0] ?? null
+  if (fromCreate && fromList && fromCreate !== fromList) return null
+  const id = fromList ?? fromCreate
+  return id && uuidPattern.test(id) ? id : null
 }
 
 const options = parseArgs(process.argv.slice(2))
@@ -138,10 +150,10 @@ run(['wrangler', 'whoami'])
 const create = ['wrangler', 'd1', 'create', databaseName]
 if (options.location) create.push('--location', options.location)
 if (options.jurisdiction) create.push('--jurisdiction', options.jurisdiction)
-run(create)
+const created = run(create, { capture: true })
 
 const listed = run(['wrangler', 'd1', 'list', '--json'], { capture: true })
-const databaseId = databaseIdFrom(listed, databaseName)
+const databaseId = databaseIdFrom(created, listed, databaseName)
 if (!databaseId) stop(`The D1 database was created, but its ID could not be read safely. Find ${databaseName} in Cloudflare, add its ID to wrangler.jsonc, then run npm run deploy.`)
 
 await writeFile(configPath, configuredFor(options.name, databaseName, databaseId)(config))

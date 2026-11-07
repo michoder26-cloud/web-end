@@ -26,7 +26,7 @@ import { cleanStats, countConversion, countVisit } from './stats'
 import { stripeWebhook } from './stripe'
 import type { Block, Env, FormField, Settings, SiteRow } from './types'
 import { findLivePage, findWorkingPage, liveSite, liveSlugs } from './versions'
-import { runWebhookOutbox } from './webhooks'
+import { cleanWebhookOutbox, runWebhookOutbox } from './webhooks'
 
 const maxEntriesPerHour = 200
 const maxBodyBytes = 32 * 1024
@@ -322,6 +322,7 @@ export default {
     await runNews(env, now)
     // Delivery retries are separate from the visitor request, and survive a transient endpoint failure.
     await runWebhookOutbox(env, now)
+    await cleanWebhookOutbox(env, now)
     // Once a day: forgets yesterday's visitor hashes and deletes statistics older than 400 days.
     await cleanStats(env, now).catch((error) => console.error('Statistics could not be cleaned up', error))
   },

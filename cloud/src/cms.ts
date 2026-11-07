@@ -819,7 +819,8 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
     }
     if (action === 'delete') {
       const form = await request.formData()
-      if (form.get('confirm') === 'on') await env.DB.prepare('DELETE FROM customers WHERE id = ?').bind(customer.id).run()
+      // The owner's own sign-in account can't be deleted here, or /admin would have nobody to let in.
+      if (form.get('confirm') === 'on') await env.DB.prepare('DELETE FROM customers WHERE id = ? AND id IS NOT (SELECT owner_customer_id FROM sites WHERE id = ?)').bind(customer.id, site.id).run()
       return see(url, `${owner}/customers`)
     }
     return notFound()

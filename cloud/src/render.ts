@@ -324,7 +324,7 @@ const renderers: Record<string, (block: Block, context: Context) => string> = {
     const state = readState(block, blockIndex, query ?? new URLSearchParams(), columns, filters)
     const plain = (field: DataField, value: unknown) =>
       field.type === 'boolean' ? (value ? t.tableYes : t.tableNo) : field.type === 'reference' ? (loaded.labels.get(`${field.name}:${value}`) ?? `#${value}`) : String(value)
-    const view = viewRows(shown, columns, filters, state, pageSizeOf(block), plain, language)
+    const view = viewRows(shown, columns, filters, state, pageSizeOf(block), plain, language, (loaded as { knownTotal?: number }).knownTotal)
     // Links and the form keep this block's choices, and the choices of other table blocks on the page.
     const others: [string, string][] = []
     query?.forEach((value, name) => {
@@ -438,8 +438,13 @@ const renderers: Record<string, (block: Block, context: Context) => string> = {
               : recordInput(field, loaded, t.full, shown[field.name]),
           )
           .join('')
+        // An unticked box sends nothing, so the form names the boxes it shows. The others keep their value when saved.
+        const boxes = loaded.table.fields
+          .filter((field) => field.type === 'boolean' && !field.staffOnly && !field.readOnly && !field.setOnce && (!chosen || chosen.includes(field.name)))
+          .map((field) => `<input name="_box" type="hidden" value="${escapeHtml(field.name)}">`)
+          .join('')
         const remove = block.allowDelete ? `<form action="/data/${escapeHtml(loaded.table.name)}/${row.id}/delete" method="post"><input name="next" type="hidden" value="${escapeHtml(path)}"><button class="link-button" type="submit">${t.remove}</button></form>` : ''
-        return `<div class="record-edit"><form action="/data/${escapeHtml(loaded.table.name)}/${row.id}" class="contact-form" method="post"><input name="next" type="hidden" value="${escapeHtml(path)}">${parts}<button class="button" type="submit">${escapeHtml(block.buttonLabel || t.recordSave)}</button></form>${remove}</div>`
+        return `<div class="record-edit"><form action="/data/${escapeHtml(loaded.table.name)}/${row.id}" class="contact-form" method="post"><input name="next" type="hidden" value="${escapeHtml(path)}">${boxes}${parts}<button class="button" type="submit">${escapeHtml(block.buttonLabel || t.recordSave)}</button></form>${remove}</div>`
       })
       .join('')
     return section('form', block.tone, `<div class="wrap info">${copy}<div>${status}${forms || `<p>${t.recordsEmpty}</p>`}</div></div>`, anchor)
