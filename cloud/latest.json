@@ -1,4 +1,4 @@
 {
-  "version": "0.16.0",
-  "notes": "A self-hosted installer now creates a fresh Worker and D1 database in the owner's own Cloudflare account, binds them safely, applies migrations and deploys without handling Cloudflare credentials. Run npm run install:cloudflare from cloud after cloning or forking."
+  "version": "0.17.0",
+  "notes": "Every system can now keep a versioned App Plan in its own D1 database: users, modules, tables, pages, approvals, automations and acceptance checks. Claude compares it with the real system before saying the build is ready."
 }

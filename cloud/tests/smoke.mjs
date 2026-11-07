@@ -76,7 +76,7 @@ check((await rpc('/mcp/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd')).status === 404, 'M
 check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd`)).status === 404, 'the back office with a wrong link is refused')
 
 const { tools } = await client.listTools()
-check(tools.length === 60 && tools.some((tool) => tool.name === 'get_move_report') && tools.some((tool) => tool.name === 'get_wordpress_report') && tools.some((tool) => tool.name === 'duplicate_page') && tools.some((tool) => tool.name === 'restore_page_revision'), 'lists the tools', tools.map((tool) => tool.name).join(','))
+check(tools.length === 63 && tools.some((tool) => tool.name === 'get_move_report') && tools.some((tool) => tool.name === 'get_wordpress_report') && tools.some((tool) => tool.name === 'duplicate_page') && tools.some((tool) => tool.name === 'restore_page_revision') && tools.some((tool) => tool.name === 'save_app_plan') && tools.some((tool) => tool.name === 'check_app_plan'), 'lists the tools', tools.map((tool) => tool.name).join(','))
 check(stepDone(await (await fetch(`${base}/owner/${code}`)).text(), 'claude') === '1', 'connecting Claude ticks its step')
 check(client.getInstructions()?.includes('apply_starter') && tools.find((tool) => tool.name === 'apply_starter')?.description.includes('replacePages'), 'Claude knows about starters and when it may replace pages')
 check(client.getInstructions()?.includes('web team'), 'gives Claude its working method')
@@ -96,6 +96,22 @@ const page = {
 }
 check(!(await call('save_page', page)).isError, 'saves a page')
 check(stepDone(await (await fetch(`${base}/owner/${code}`)).text(), 'build') === '1', 'a home page ticks the step to build the site')
+const appPlan = {
+  title: 'Class bookings',
+  summary: 'Customers find a class and send a booking request. Staff can see the requests.',
+  phase: 'building',
+  roles: [{ name: 'Customer', purpose: 'Finds a class and sends a booking request.' }, { name: 'Staff', purpose: 'Sees booking requests and follows them up.' }],
+  modules: [{ id: 'bookings', name: 'Bookings', purpose: 'Classes and the booking requests people send.' }],
+  tables: [{ name: 'classes', purpose: 'The classes people may book.' }],
+  pages: [{ slug: 'home', purpose: 'Explains the service and sends people to booking.' }],
+  approvalFlows: [],
+  automations: [],
+  acceptanceCriteria: ['A visitor can see the classes and send a booking request.'],
+  nextStep: 'Create the classes table.',
+}
+const planSaved = await call('save_app_plan', { plan: appPlan })
+const planBeforeTable = await call('check_app_plan')
+check(!planSaved.isError && planSaved.data.version === 1 && planBeforeTable.data.ready === false && planBeforeTable.data.missing.some((item) => item.kind === 'table' && item.name === 'classes') && (await call('get_app_plan')).data.plan.title === 'Class bookings', 'an app plan records the agreed system and says what is missing')
 const book = await call('save_page', {
   slug: 'book',
   title: 'Book a table',
@@ -845,6 +861,10 @@ const asJson = (body) => JSON.stringify(body)
 await call('update_site', { accounts: true, cart: true, payCod: true })
 const classesTable = { name: 'classes', label: 'Classes', readAccess: 'public', writeAccess: 'owner', fields: [{ name: 'title', label: 'Title', type: 'text', required: true }, { name: 'seats', label: 'Seats', type: 'number' }, { name: 'room_code', label: 'Room code', type: 'text', staffOnly: true }] }
 check(!(await call('save_table', classesTable)).isError, 'creates a table')
+const planReady = await call('check_app_plan')
+const planReview = await call('save_app_plan', { plan: { ...appPlan, phase: 'review', nextStep: 'Ask the owner to test the booking request.' } })
+const planFirstVersion = await call('get_app_plan', { version: 1 })
+check(planReady.data.ready === true && planReview.data.version === 2 && planFirstVersion.data.plan.phase === 'building' && (await call('get_app_plan')).data.plan.phase === 'review', 'an app plan checks the real system and keeps earlier design versions')
 check((await call('save_table', { ...classesTable, name: 'bad', fields: [{ name: 'id', label: 'Id', type: 'text' }] })).isError, 'refuses reserved field names')
 check((await call('save_table', { ...classesTable, name: 'bad', fields: [{ name: 'a', label: 'A', type: 'text' }, { name: 'a', label: 'B', type: 'text' }] })).isError, 'refuses a field name used twice')
 check((await call('save_table', { ...classesTable, name: 'bad', fields: [{ name: 'a', label: 'A', type: 'select' }] })).isError, 'refuses a select with no options')

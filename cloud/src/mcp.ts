@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 
 import { registerApprovalTools } from './approvals-tools'
+import { appPlanHealth, appPlanSchema, getAppPlan, saveAppPlan } from './app-plan'
 import { newToken } from './auth'
 import { automationProblems, automationSchema, automationWarnings, dryRun, dryRunSchedule, getAutomation, listAutomations, maxAutomationsPerSite, namesFor, noteText, recentRuns, reschedule, sentence, storedAutomationProblems } from './automations'
 import { isSchedule, shownTime, validTimeZone, zoneOf } from './clock'
@@ -54,8 +55,8 @@ Starters: when the owner wants something working quickly, wants to see an exampl
 2. Architect: decide what the site needs. Custom kinds of data, such as bookings, classes or members, go in tables with save_table, shown by records and record-form blocks. Products, menus, listings and similar things go in the database with save_item, shown by a collection block. Login goes on with update_site accounts true. A shop uses update_site cart true, with payTransfer and transferDetails, payPromptPay and the owner's own promptPayId for prices in baht, and/or payCod, and a collection block with an id, filters true and no button link. Give products categories, real sale prices with comparePrice, stock, and variants for sizes or colours. Every product has its own page at /product/id. Use the shopping features the owner needs, and leave out the rest. Bookings and simple requests use a form block, with membersOnly true if only logged-in customers may send them.
 3. Copywriter: write clear, specific words for those customers. Use only facts they gave you. Never invent reviews, clients, numbers, prices or awards.
 4. Designer: choose a style and colours that suit the business. Styles: studio (sharp, creative work), editorial (elegant serif, restaurants, fashion), warm (friendly, cafes, local shops), bold (loud, gyms, events), calm (trustworthy, clinics, law). Pick a distinctive accent colour, not a default blue. Vary the rhythm: alternate tone plain, tint and dark, and mix block types. Design for phones first. Leave out anything you have no real content for.
-5. Builder: use update_site for the name, design and navigation, save_item for data, then save_page for each page. The home page has the slug "home". Links that jump within a page use #name: an info or collection block's id, or #form-name for a form.
-6. Reviewer: run check_site, fix every problem, then give the site link and the back office link from get_site. Tell them they can change pages, products, data, photos, settings, orders and customers there without Claude.
+5. Builder: after the owner agrees the shape, save_app_plan before the first material build. It is the durable map of what you are building, not a replacement for save_table or save_page. Use update_site for the name, design and navigation, save_item for data, then save_page for each page. The home page has the slug "home". Links that jump within a page use #name: an info or collection block's id, or #form-name for a form.
+6. Reviewer: run check_app_plan and check_site, fix every problem, then give the site link and the back office link from get_site. Tell them they can change pages, products, data, photos, settings, orders and customers there without Claude.
 7. Release: when the owner is happy, run publish_site. After the first publish, changes to pages and settings stay private until the next publish_site, and the preview link in get_site shows them. Tables and records are live at once. restore_version goes back to an older version.
 
 If the owner wants to leave Wix or another host, read the move_from_wix guide and rebuild their own content here. If the owner already has a front end, such as Wix, and wants to keep it, keep it. Read the connect_wix guide and use web-end as the backend through its API. Don't rebuild their pages unless they ask.
@@ -740,6 +741,50 @@ export function createMcpServer(env: Env, origin: string, code: string) {
       annotations: { readOnlyHint: true },
     },
     safely(async ({ topic }) => reply(guides[topic])),
+  )
+
+  server.registerTool(
+    'get_app_plan',
+    {
+      title: 'Read the app plan',
+      description: 'Reads the current durable map of this system: people, modules, expected data, screens, workflows and acceptance criteria. Give version only to read one earlier plan snapshot. This reads the plan only; it never changes the live system.',
+      inputSchema: { version: z.number().int().positive().optional().describe('An earlier plan version, if the owner needs to compare a past design') },
+      annotations: { readOnlyHint: true },
+    },
+    safely(async ({ version }) => {
+      const site = await getSite()
+      const found = await getAppPlan(env, site.id, version)
+      return found ? reply(found) : reply({ plan: null, next: 'Ask the owner the few questions that change the system, then save_app_plan before creating its first table or page.' })
+    }),
+  )
+
+  server.registerTool(
+    'save_app_plan',
+    {
+      title: 'Save the system plan',
+      description: 'Saves the agreed map of the whole system: who uses it, its modules, expected tables, pages, approval flows, automations and observable acceptance criteria. Do this after the owner agrees the shape and before the material build. It changes only this plan; use save_table, save_page, save_approval_flow and save_automation to build the actual system.',
+      inputSchema: { plan: appPlanSchema },
+    },
+    safely(async ({ plan }) => {
+      const site = await getSite()
+      const saved = await saveAppPlan(env, site.id, plan)
+      if (!saved) throw new Error('The app plan could not be saved.')
+      return reply({ saved: true, version: saved.version, updated_at: saved.updated_at, next: 'Build the smallest missing part with the regular tools, then use check_app_plan to see what remains.' })
+    }),
+  )
+
+  server.registerTool(
+    'check_app_plan',
+    {
+      title: 'Check the system against its plan',
+      description: 'Compares the owner-approved app plan with the real tables, pages, approval flows and automations in D1. It lists what is still missing; it never creates, deletes or changes anything.',
+      annotations: { readOnlyHint: true },
+    },
+    safely(async () => {
+      const site = await getSite()
+      const found = await getAppPlan(env, site.id)
+      return found ? reply(await appPlanHealth(env, site.id, found)) : reply({ ready: false, plan: null, missing: [], next: 'There is no app plan yet. Ask the owner the questions that change the system, then use save_app_plan.' })
+    }),
   )
 
   server.registerTool(

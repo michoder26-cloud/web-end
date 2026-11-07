@@ -44,8 +44,9 @@ Wix can't export a site to WordPress. web-end is the bridge: move the Wix site h
 1. Name the people: visitors, customers who log in, staff, and the owner. List what each one must do.
 2. Turn each noun into a table and each action into a screen. "Customers book a class and staff mark who came" needs classes and bookings tables, a page listing classes, a booking form, and a staff page.
 3. Use what exists first. Selling things with a cart is the shop (save_item, collection block), not a custom table. A one-off message is a form block. Use save_table when records need their own fields, rules, or a list on a page.
-4. Build in this order: tables and access, sample records, pages, navigation, check_site, preview, publish.
-5. If it needs something these tools can't do, say so before you build. Options are a webhook to another service, a custom code block, or a developer changing the GitHub repository.`,
+4. After the owner agrees the shape, save it with save_app_plan. This is the durable map: roles, modules, expected tables and pages, approval flows, automations, acceptance criteria and the next step. It does not build anything itself, so then use the normal tools.
+5. Build in this order: tables and access, sample records, pages, navigation, check_app_plan, check_site, preview, publish. Save the app plan again when the owner changes the system's shape.
+6. If it needs something these tools can't do, say so before you build. Options are a webhook to another service, a custom code block, or a developer changing the GitHub repository.`,
   data_model: `# Designing tables
 - One table per kind of thing. Don't put a list inside a field. A class with many bookings means a bookings table with a reference field pointing to classes.
 - Names: short English in snake_case, such as start_date. Labels are in the site's language.
