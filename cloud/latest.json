@@ -1,4 +1,4 @@
 {
-  "version": "0.14.0",
-  "notes": "Owners can now create an email-and-password account and manage their CMS at /admin instead of relying on a capability URL every day. The original private link securely enrolls or recovers the owner account, while every /admin write checks the browser origin."
+  "version": "0.16.0",
+  "notes": "A self-hosted installer now creates a fresh Worker and D1 database in the owner's own Cloudflare account, binds them safely, applies migrations and deploys without handling Cloudflare credentials. Run npm run install:cloudflare from cloud after cloning or forking."
 }

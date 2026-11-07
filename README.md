@@ -20,6 +20,18 @@ You need three free accounts: [Cloudflare](https://dash.cloudflare.com/sign-up),
 5. **Connect Claude.** The same page shows each step: in Claude, open **Settings**, then **Connectors**, click **Add custom connector**, and paste your Claude link. Then send the first message it gives you. [More help](docs/connect-claude.md).
 6. **Or start from a starter.** Want a working site right now, without Claude? Pick a café, shop, classes and bookings, services or portfolio starter, in English or Thai. Every word and price in it is a clearly marked sample you change later.
 
+### Install directly from your own copy
+
+The button above is the simplest route. If you fork or clone the project yourself, or want to choose where your D1 database is created, use the installer from the `cloud` folder instead. It creates a new Worker and D1 database in the Cloudflare account you are signed in to, applies the migrations and deploys. It never asks for, stores or sends your Cloudflare password or API token.
+
+```bash
+cd cloud
+npm ci
+npm run install:cloudflare -- baan-coffee --location apac
+```
+
+For an EU-only database, choose `--jurisdiction eu` instead of a location hint. The installer stops rather than overwrite a configured site; later releases use `npm run deploy`.
+
 Claude asks a few short questions about your business, builds the pages and design, and gives you the link. Your back office shows what's left to do, such as checking the site on your phone and publishing, and ticks each step by itself. Come back any time to change something.
 
 ## What you get

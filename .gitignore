@@ -22,3 +22,4 @@ playwright-report/
 
 # Local test output
 /cloud/.dev-*.log
+/cloud/.smoke-state/
