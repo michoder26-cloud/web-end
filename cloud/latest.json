@@ -1,4 +1,4 @@
 {
-  "version": "0.17.0",
-  "notes": "Every system can now keep a versioned App Plan in its own D1 database: users, modules, tables, pages, approvals, automations and acceptance checks. Claude compares it with the real system before saying the build is ready."
+  "version": "0.18.0",
+  "notes": "A redesigned owner Dashboard now puts Preview, site editing, content, data, customers, orders, workflows, publishing, integrations and system controls in one responsive back office."
 }

@@ -313,6 +313,8 @@ for (const area of ['', '/pages', '/page/home', '/items', '/media', '/customers'
   const response = await fetch(`${owner}${area}`)
   check(response.status === 200 && response.headers.get('x-robots-tag') === 'noindex', `the back office opens: ${area || 'overview'}`)
 }
+const ownerDashboard = await (await fetch(owner)).text()
+check(ownerDashboard.includes('cms-mode-tabs') && ownerDashboard.includes('Preview') && ownerDashboard.includes('Dashboard') && ownerDashboard.includes('Edit site') && ownerDashboard.includes('cms-command-card') && ownerDashboard.includes('/automations'), 'the owner dashboard groups preview, editing and operational controls')
 for (const [method, area] of [['GET', '/settings'], ['POST', '/settings'], ['POST', '/pages'], ['POST', '/items'], ['POST', '/customers/1/reset']]) {
   check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd${area}`, { method, redirect: 'manual' })).status === 404, `a wrong link cannot reach: ${method} ${area}`)
 }

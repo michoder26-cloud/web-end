@@ -94,13 +94,58 @@ export const office = (site: SiteRow, at: Desk | string, title: string, body: st
   const links: [string, string][] = [['', t.nav.overview], ['/stats', t.nav.stats], ['/orders', t.nav.orders], ['/pages', t.nav.pages], ['/items', t.nav.products], ['/data', t.nav.data], ['/approvals', approvalWords(site).title], ['/automations', t.automations.title], ['/media', t.nav.images], ['/customers', t.nav.customers], ['/news', t.news.title], ['/publish', t.nav.publish], ['/connect', t.nav.connect], ['/move', t.nav.move], ['/wordpress', t.nav.wordpress], ['/settings', t.nav.settings], ['/system', t.nav.system], ['/updates', t.nav.updates]]
   // Any staff member may be an approver, so Approvals is always in their menu. The page shows only what they may see.
   const shown = desk.staff ? links.filter(([path]) => !path || path === '/approvals' || (staffMenu[path] && allows(desk, staffMenu[path]))) : links
-  const who = desk.staff ? `<p class="cms-who">${t.staffLoggedIn(escapeHtml(desk.staff.name))}</p><form action="/logout" method="post"><button class="button button--small button--ghost" type="submit">${t.logOut}</button></form>` : ''
+  const copy = t.lang === 'th'
+    ? { build: 'สร้างและจัดการ', run: 'ดูแลระบบ', connect: 'เชื่อมต่อและย้าย', preview: 'ดูเว็บ', dashboard: 'หลังบ้าน', edit: 'แก้ไขเว็บ', live: 'เปิดหน้าเว็บ', workspace: 'พื้นที่ของเจ้าของ' }
+    : { build: 'Build and manage', run: 'Run the business', connect: 'Connect and move', preview: 'Preview', dashboard: 'Dashboard', edit: 'Edit site', live: 'Open site', workspace: 'Owner workspace' }
+  const item = new Map(shown)
+  const isAvailable = (path: string) => item.has(path)
+  const activePath = links.find(([, label]) => label === title)?.[0] ?? ''
+  const navLink = (path: string, label?: string) => {
+    const text = label ?? item.get(path)
+    if (!text || !isAvailable(path)) return ''
+    return `<a${path === activePath ? ' aria-current="page"' : ''} href="${base}${path}">${escapeHtml(text)}</a>`
+  }
+  const group = (label: string, paths: string[]) => {
+    const items = paths.map((path) => navLink(path)).join('')
+    return items ? `<section class="cms-nav-group"><h2>${escapeHtml(label)}</h2>${items}</section>` : ''
+  }
+  const previewHref = desk.staff && !allows(desk, 'pages') ? '/' : `${base}/preview`
+  const editHref = isAvailable('/pages') ? `${base}/pages` : base
+  const canPublish = isAvailable('/publish')
+  const identity = desk.staff ? escapeHtml(desk.staff.name) : escapeHtml(settings.name)
+  const who = desk.staff
+    ? `<div class="cms-user"><span>${t.staffLoggedIn(identity)}</span><form action="/logout" method="post"><button class="button button--small button--ghost" type="submit">${t.logOut}</button></form></div>`
+    : `<div class="cms-user"><span>${copy.workspace}</span><strong>${identity}</strong></div>`
   return html(
     shell(
       `${settings.name}: ${title}`,
-      `<nav aria-label="${t.navLabel}" class="cms-nav">${shown.map(([path, label]) => `<a href="${base}${path}">${label}</a>`).join('')}<a href="/" target="_blank" rel="noopener">${t.openWebsite}</a></nav>${who}
-<h1>${escapeHtml(title)}</h1>
-${notice?.error ? `<p role="alert">${escapeHtml(t.problem(notice.error))}</p>` : ''}${notice?.saved ? `<p role="status">${escapeHtml(notice.saved)}</p>` : ''}${body}`,
+      `<div class="cms-workspace">
+<header class="cms-topbar">
+  <a class="cms-mark" href="${base}" aria-label="${escapeHtml(copy.dashboard)}">WE</a>
+  <nav class="cms-mode-tabs" aria-label="${escapeHtml(t.navLabel)}">
+    <a href="${escapeHtml(previewHref)}">${escapeHtml(copy.preview)}</a>
+    <a${activePath !== '/pages' ? ' aria-current="page"' : ''} href="${base}">${escapeHtml(copy.dashboard)}</a>
+    <a${activePath === '/pages' ? ' aria-current="page"' : ''} href="${escapeHtml(editHref)}">${escapeHtml(copy.edit)}</a>
+  </nav>
+  <p class="cms-site-name">${escapeHtml(settings.name)}</p>
+  <div class="cms-top-actions"><a class="cms-open-site" href="/" target="_blank" rel="noopener">${escapeHtml(copy.live)} ↗</a>${canPublish ? `<a class="cms-publish" href="${base}/publish">${escapeHtml(t.nav.publish)}</a>` : ''}</div>
+</header>
+<div class="cms-console">
+  <aside class="cms-sidebar">
+    <p class="cms-sidebar-label">${escapeHtml(copy.dashboard)}</p>
+    <nav aria-label="${escapeHtml(t.navLabel)}" class="cms-nav">
+      ${group(copy.build, ['', '/pages', '/items', '/data', '/media', '/news'])}
+      ${group(copy.run, ['/stats', '/orders', '/customers', '/approvals', '/automations', '/publish'])}
+      ${group(copy.connect, ['/connect', '/wordpress', '/move', '/settings', '/system', '/updates'])}
+    </nav>
+    ${who}
+  </aside>
+  <section class="cms-content">
+    <div class="cms-page-heading"><p>${escapeHtml(copy.workspace)}</p><h1>${escapeHtml(title)}</h1></div>
+    ${notice?.error ? `<p class="cms-notice cms-notice--error" role="alert">${escapeHtml(t.problem(notice.error))}</p>` : ''}${notice?.saved ? `<p class="cms-notice" role="status">${escapeHtml(notice.saved)}</p>` : ''}${body}
+  </section>
+</div>
+</div>`,
       true,
       t.lang,
     ),
@@ -269,6 +314,7 @@ async function messageList(env: Env, site: SiteRow, desk: Desk) {
 
 async function overview(env: Env, url: URL, site: SiteRow, desk: Desk) {
   const t = officeText(site)
+  const settings = JSON.parse(site.settings) as Settings
   if (desk.staff) {
     const intro = desk.staff.permissions.length ? `<p>${t.staffIntro}</p>` : `<p role="status">${t.staffNoAreas}</p>`
     return office(site, desk, t.nav.overview, `${intro}${allows(desk, 'messages') ? `<h2>${t.messagesHeading}</h2>${await messageList(env, site, desk)}` : ''}`)
@@ -279,11 +325,23 @@ async function overview(env: Env, url: URL, site: SiteRow, desk: Desk) {
   // A new site gets its first steps on top, until every one of them is done.
   const firstTime = steps && !Object.values(steps).every(Boolean) ? checklist(steps, escapeHtml(desk.base), t) : ''
   const mcpUrl = desk.code ? `${url.origin}/mcp/${desk.code}` : ''
+  const isThai = t.lang === 'th'
+  const dashboard = isThai
+    ? { content: 'จัดการหน้าเว็บและเนื้อหา', people: 'ลูกค้าและคำสั่งซื้อ', operate: 'เวิร์กโฟลว์และการอนุมัติ', connect: 'เชื่อมต่อ Claude และบริการอื่น', publish: site.live_version ? 'เวอร์ชันออนไลน์กำลังใช้งาน' : 'ยังไม่มีเวอร์ชันออนไลน์', draft: 'แก้ไขหน้าเว็บ', data: 'ข้อมูล', customers: 'ลูกค้า', automation: 'ระบบอัตโนมัติ', integrations: 'การเชื่อมต่อ', release: 'เผยแพร่' }
+    : { content: 'Manage pages and content', people: 'Customers and orders', operate: 'Workflows and approvals', connect: 'Connect Claude and other services', publish: site.live_version ? 'A live version is active' : 'No live version yet', draft: 'Edit site', data: 'Data', customers: 'Customers', automation: 'Automations', integrations: 'Integrations', release: 'Publish' }
+  const commandCenter = `<section class="cms-command-center" aria-label="${escapeHtml(t.nav.overview)}"><div class="cms-command-intro"><p>${escapeHtml(dashboard.publish)}</p><h2>${escapeHtml(settings.name)}</h2></div><div class="cms-command-grid">
+<a class="cms-command-card" href="${escapeHtml(desk.base)}/pages"><small>${escapeHtml(dashboard.content)}</small><strong>${escapeHtml(dashboard.draft)} →</strong></a>
+<a class="cms-command-card" href="${escapeHtml(desk.base)}/data"><small>${escapeHtml(dashboard.content)}</small><strong>${escapeHtml(dashboard.data)} →</strong></a>
+<a class="cms-command-card" href="${escapeHtml(desk.base)}/customers"><small>${escapeHtml(dashboard.people)}</small><strong>${escapeHtml(dashboard.customers)} →</strong></a>
+<a class="cms-command-card" href="${escapeHtml(desk.base)}/automations"><small>${escapeHtml(dashboard.operate)}</small><strong>${escapeHtml(dashboard.automation)} →</strong></a>
+<a class="cms-command-card" href="${escapeHtml(desk.base)}/connect"><small>${escapeHtml(dashboard.connect)}</small><strong>${escapeHtml(dashboard.integrations)} →</strong></a>
+<a class="cms-command-card cms-command-card--accent" href="${escapeHtml(desk.base)}/publish"><small>${escapeHtml(dashboard.publish)}</small><strong>${escapeHtml(dashboard.release)} →</strong></a>
+</div></section>`
   return office(
     site,
     desk,
     t.nav.overview,
-    `${started}${newer}${firstTime}<h2>${t.messagesHeading}</h2>${await messageList(env, site, desk)}
+    `${started}${newer}${firstTime}${commandCenter}<h2>${t.messagesHeading}</h2>${await messageList(env, site, desk)}
 ${site.live_version ? `<p>${t.seeWaiting(`${escapeHtml(desk.base)}/publish`)}</p>` : ''}
 <h2 id="claude">${t.claudeHeading}</h2>
 <p>${t.claudeHelp}</p>

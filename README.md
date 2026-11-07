@@ -56,7 +56,7 @@ Claude asks a few short questions about your business, builds the pages and desi
 - **Shop:** product pages, categories, sale prices, sizes and colours, stock that can't oversell, a cart, free delivery thresholds, private order links and order status. Prices are always set on the server.
 - **Payments:** bank transfer, PromptPay QR codes and pay on delivery, plus cards through your own Stripe account
 - **Phone-first shopping:** a bottom tab bar and two-column product grid on phones, with no scripts on your pages
-- **Back office (CMS):** a private page to edit pages and sections, products, photos, menus, colours, orders and customers, with or without Claude. Copy a page into a private draft, then restore an earlier version of that page if needed. It's in Thai or English: a Thai site gets a Thai back office, and you can choose either one in Settings.
+- **Owner Dashboard and CMS:** one private workspace with Preview, Dashboard and Edit modes. Manage pages and sections, products, photos, data, customers, orders, approvals, automations, publishing, integrations and system settings with or without Claude. Copy a page into a private draft, then restore an earlier version of that page if needed. It's in Thai or English: a Thai site gets a Thai back office, and you can choose either one in Settings.
 - **Staff logins:** your team logs in with their own accounts and sees only the parts of the back office you tick for each person, such as orders, products, pages or messages. Settings, connections and your private links stay yours.
 - **Photo upload:** PNG, JPEG, WebP or GIF, up to 1 MB each, stored in your own database
 - **Search basics:** page titles, descriptions, a sitemap and structured data
