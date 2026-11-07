@@ -5,6 +5,8 @@ export type Env = {
   automationDepth?: number
   DB: D1Database
   defer?: (work: Promise<unknown>) => void
+  // SPIKE: serves frozen Wix pages at /frozen/<page>/<width>. See frozen-spike.ts.
+  FROZEN_SPIKE?: string
   GOOGLE_API_BASE?: string
   GOOGLE_CLIENT_ID?: string
   GOOGLE_CLIENT_SECRET?: string
