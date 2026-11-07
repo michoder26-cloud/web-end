@@ -136,17 +136,17 @@ export async function runWebhookOutbox(env: Env, now = Date.now()) {
 }
 
 type EventHook = (env: Env, siteId: number, event: string, data: unknown, before?: Record<string, unknown>) => Promise<void>
-let afterEvent: EventHook | null = null
+const afterEvent: EventHook[] = []
 
-/** automations.ts registers itself here. Importing it directly would make the modules load in a circle. */
+/** automations.ts and approvals.ts register themselves here. Importing them directly would make the modules load in a circle. */
 export const onEvent = (hook: EventHook) => {
-  afterEvent = hook
+  afterEvent.push(hook)
 }
 
 /** Tells the owner's other systems what happened, once and after the visitor has their answer. `before` is a changed record's old values. */
 export async function fireEvent(env: Env, siteId: number, event: (typeof eventNames)[number], data: unknown, before?: Record<string, unknown>) {
   // Every write that other systems hear about can also start the owner's automations. They never throw.
-  if (afterEvent) await afterEvent(env, siteId, event, data, before)
+  for (const hook of afterEvent) await hook(env, siteId, event, data, before)
   await enqueue(env, siteId, event, data)
   const work = runWebhookOutbox(env)
   if (env.defer) env.defer(work)

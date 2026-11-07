@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { approvalWords, handleApprovalsOffice } from './approvals-office'
 import { createResetLink, getCustomer } from './auth'
 import { reschedule } from './automations'
 import { handleAutomationsOffice } from './automations-office'
@@ -88,8 +89,9 @@ export const office = (site: SiteRow, at: Desk | string, title: string, body: st
   const settings = JSON.parse(site.settings) as Settings
   const t = officeText(site)
   const base = `${escapeHtml(desk.base)}`
-  const links: [string, string][] = [['', t.nav.overview], ['/stats', t.nav.stats], ['/orders', t.nav.orders], ['/pages', t.nav.pages], ['/items', t.nav.products], ['/data', t.nav.data], ['/automations', t.automations.title], ['/media', t.nav.images], ['/customers', t.nav.customers], ['/news', t.news.title], ['/publish', t.nav.publish], ['/connect', t.nav.connect], ['/move', t.nav.move], ['/wordpress', t.nav.wordpress], ['/settings', t.nav.settings], ['/system', t.nav.system], ['/updates', t.nav.updates]]
-  const shown = desk.staff ? links.filter(([path]) => !path || (staffMenu[path] && allows(desk, staffMenu[path]))) : links
+  const links: [string, string][] = [['', t.nav.overview], ['/stats', t.nav.stats], ['/orders', t.nav.orders], ['/pages', t.nav.pages], ['/items', t.nav.products], ['/data', t.nav.data], ['/approvals', approvalWords(site).title], ['/automations', t.automations.title], ['/media', t.nav.images], ['/customers', t.nav.customers], ['/news', t.news.title], ['/publish', t.nav.publish], ['/connect', t.nav.connect], ['/move', t.nav.move], ['/wordpress', t.nav.wordpress], ['/settings', t.nav.settings], ['/system', t.nav.system], ['/updates', t.nav.updates]]
+  // Any staff member may be an approver, so Approvals is always in their menu. The page shows only what they may see.
+  const shown = desk.staff ? links.filter(([path]) => !path || path === '/approvals' || (staffMenu[path] && allows(desk, staffMenu[path]))) : links
   const who = desk.staff ? `<p class="cms-who">${t.staffLoggedIn(escapeHtml(desk.staff.name))}</p><form action="/logout" method="post"><button class="button button--small button--ghost" type="submit">${t.logOut}</button></form>` : ''
   return html(
     shell(
@@ -624,6 +626,8 @@ export function staffMay(staff: StaffMember, post: boolean, area?: string, id?: 
   if (area === 'entry') return has('messages')
   if (area === 'customers') return has('customers') && !post
   if (area === 'stats') return has('stats') && !post
+  // Approvers are named by the flow, not by an area. The page and every decision check the person themselves.
+  if (area === 'approvals') return true
   // Drafts and their preview only. Testing, sending, the people and their addresses stay with the owner.
   if (area === 'news') return has('news') && (post ? id === 'campaign' && !extra && (!action || /^\d{1,12}$/.test(action)) : !id || (id === 'campaign' && /^\d{1,12}$/.test(action ?? '') && (!extra || extra === 'preview')))
   // Records only. Creating or deleting a table stays with the owner, and so does changing its fields, which the data area checks itself.
@@ -653,6 +657,7 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
   // Automations stay the owner's alone: staffMay refuses the area, and this checks again.
   if (area === 'news') return handleNewsOffice(request, env, url, site, desk, id, action, extra, saved)
   if (area === 'automations' && !extra && !desk.staff) return handleAutomationsOffice(request, env, url, site, desk, id, action, saved)
+  if (area === 'approvals') return handleApprovalsOffice(request, env, url, site, desk, id, action, extra, saved)
 
   if (area === 'entry' && post && /^\d+$/.test(id ?? '') && !action) {
     const form = await request.formData().catch((): null => null)

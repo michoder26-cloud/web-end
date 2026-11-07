@@ -293,7 +293,18 @@ export async function listRecords(env: Env, table: DataTable, actor: Actor, opti
 
 export const getRecord = (env: Env, table: DataTable, id: number) => env.DB.prepare('SELECT id, customer_id, data, created_at, updated_at FROM data_records WHERE id = ? AND table_id = ?').bind(id, table.id).first<DataRow>()
 
-type Saved = { code?: 'duplicate' | 'full'; error?: string; field?: string; row?: DataRow }
+type Saved = { code?: 'duplicate' | 'full' | 'locked'; error?: string; field?: string; row?: DataRow }
+
+/**
+ * A record waiting for approval can't change, so nobody edits it under an approver. Once approved, only the owner,
+ * or the owner's automations, can change or delete it. Checked by the database in the same step as the write. See approvals.ts.
+ */
+export const approvalLock = (actor: Pick<Actor, 'admin'>) => `NOT EXISTS (SELECT 1 FROM approval_requests a WHERE a.record_id = data_records.id AND a.status IN (${actor.admin ? "'pending'" : "'pending', 'approved'"}))`
+
+const lockedNow = async (env: Env, id: number, actor: Actor): Promise<Saved | null> => {
+  const locked = await env.DB.prepare(`SELECT 1 AS locked FROM data_records WHERE id = ? AND NOT ${approvalLock(actor)}`).bind(id).first()
+  return locked ? { code: 'locked', error: actor.admin ? 'This record is waiting for approval, so it cannot change now. Return it, or wait for the decision.' : 'This record is waiting for approval or already approved, so it cannot change.' } : null
+}
 
 const isIgnored = (field: DataField, data: Record<string, unknown>) => Boolean(field.ignoreField && field.ignoreValues?.includes(String(data[field.ignoreField] ?? '')))
 
@@ -353,17 +364,21 @@ export async function updateRecord(env: Env, siteId: number, table: DataTable, r
   if (!read.data) return { error: read.error, field: read.field }
   await ensureIndexes(env, table)
   const guards = writeGuards(table, read.data, row.customer_id, row)
-  const updated = await env.DB.prepare(`UPDATE data_records SET data = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND table_id = ?${guards.map((guard) => ` AND ${guard.sql}`).join('')} RETURNING id, customer_id, data, created_at, updated_at`)
+  const updated = await env.DB.prepare(`UPDATE data_records SET data = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND table_id = ? AND ${approvalLock(actor)}${guards.map((guard) => ` AND ${guard.sql}`).join('')} RETURNING id, customer_id, data, created_at, updated_at`)
     .bind(JSON.stringify(read.data), row.id, table.id, ...guards.flatMap((guard) => guard.values))
     .first<DataRow>()
-  if (!updated) return refused(env, guards)
+  if (!updated) return (await lockedNow(env, row.id, actor)) ?? refused(env, guards)
   await fireEvent(env, siteId, 'record.updated', { table: table.name, record: showRecord(table, updated, ownerActor) }, JSON.parse(row.data))
   return { row: updated }
 }
 
-export async function deleteRecord(env: Env, siteId: number, table: DataTable, row: DataRow) {
-  await env.DB.batch([env.DB.prepare('DELETE FROM data_records WHERE id = ? AND table_id = ?').bind(row.id, table.id), env.DB.prepare('UPDATE data_tables SET record_count = MAX(record_count - 1, 0) WHERE id = ?').bind(table.id)])
+/** Deletes a record, unless approvals lock it for this person. Says whether it went. */
+export async function deleteRecord(env: Env, siteId: number, table: DataTable, row: DataRow, actor: Actor = ownerActor) {
+  const gone = await env.DB.prepare(`DELETE FROM data_records WHERE id = ? AND table_id = ? AND ${actor.admin ? '1' : approvalLock(actor)} RETURNING id`).bind(row.id, table.id).first()
+  if (!gone) return false
+  await env.DB.prepare('UPDATE data_tables SET record_count = MAX(record_count - 1, 0) WHERE id = ?').bind(table.id).run()
   await fireEvent(env, siteId, 'record.deleted', { table: table.name, id: row.id })
+  return true
 }
 
 /** Spreadsheets run a cell that starts with these characters as a formula, so they get a leading quote. */
@@ -460,7 +475,7 @@ export async function receiveRecord(request: Request, env: Env, url: URL, site: 
   if (!form || !table) return see(url, path)
   if (id) {
     const row = await getRecord(env, table, id)
-    if (row && canChange(table, actor, row)) await deleteRecord(env, site.id, table, row)
+    if (row && canChange(table, actor, row)) await deleteRecord(env, site.id, table, row, actor)
     return see(url, path)
   }
   // Bots fill in the hidden field. Tell them it worked and keep nothing.

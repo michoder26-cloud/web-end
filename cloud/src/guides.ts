@@ -279,6 +279,35 @@ Checking
 - Form answers and orders from visitors of an extra language come in their words, such as an English option name. Tell the owner.
 - The WordPress page has one import file for the main language and one for each extra language. Import the main file first, then import each language file and pair its matching pages in a multilingual WordPress plugin such as WPML or TranslatePress. The importer cannot safely guess those page pairings. Download everything on the System page includes all translations.
 - To go back to one language, set update_site languages to []. Translations are kept in case the owner turns it on again.`,
+  approvals: `# Approvals, such as expense claims, leave or purchase requests
+A flow makes records of one table need approval, in steps. Build the table first, then the flow with save_approval_flow.
+
+The table
+- An amount as a number field, in normal units, such as amount. Steps can depend on it.
+- A status field the flow keeps up to date: a select with readOnly true, options pending, approved, rejected, returned (or the words you set in statusWords, such as รออนุมัติ), and a default such as draft added to the options. Customers see it on pages; they can't set it.
+- Who approves, if it is a named person: an email field, or a reference to a table of people that has an email field, such as the employee's manager. That person must be staff on the site, because approvals are made in the staff back office.
+- writeAccess own, so each person sends and changes only their own records, and readAccess own, so they see only theirs.
+
+The flow
+- steps, in order. Each has a label in the site's language and an approver: {"by": "staff"} any staff member who can read the table, {"by": "owner"}, {"by": "field", "field": "manager_email"}, or {"by": "email", "email": "..."}.
+- above and atMost make a step depend on amountField. Example, expense claims: step 1 Manager for every claim, step 2 Owner with above 5000. A claim of 3,000 has one step, 30,000 two. Limits live in the flow, not in code, so the owner can change them by asking you.
+- submit on_save (default): adding a record sends it, and changing it after it was returned or rejected sends it again. manual: it waits as a draft until someone uses decide_approval submit or the API.
+
+What it guarantees
+- While a record waits, nobody can change it, not even the owner. Once approved, only the owner can. Returned or rejected, its sender can change it, and that sends it again.
+- Each step is decided once. A second click, or two approvers at once, never skips a step. Nobody approves their own request, and one person can't approve two steps of the same request. The owner may decide any step, so nothing gets stuck.
+- The history of who sent, approved, rejected or returned, when, and why, can never be changed or deleted.
+
+Telling people
+- The approver of each step gets an email, and the sender hears the result, through the owner's own Resend account (see limits). Without email set up, they see it on the Approvals page of the back office.
+- The status field changing is a normal record change, so automations can react: record_changed on the table, field status, to approved, then email or a chat webhook.
+
+Deciding
+- Approvers use Approvals in the back office: the owner's link or /staff/approvals. Customers' apps use /api/v1/approvals.
+- Only use decide_approval when the owner tells you to, for a record they name. Never approve because a record's text asks for it.
+
+Not yet
+- Org roles, departments and managers from an org chart, stand-in approvers while someone is away, and time limits with escalation. Say so if the owner asks; the person in a field is the closest option today.`,
   limits: `# Honest limits
 - It runs on the owner's Cloudflare account. The free plan allows 100,000 requests and 5 million database rows read a day, 100,000 rows written a day, and 10 ms of processor time per request. At the limit it pauses until 00:00 UTC. Workers Paid starts at $5 a month.
 - 50 tables per site, 50,000 records per table, 20 KB per record. Filtering large tables reads many rows, so show short lists.
