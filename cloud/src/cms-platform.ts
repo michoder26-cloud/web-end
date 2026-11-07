@@ -2,7 +2,7 @@ import { newApiKey } from './api'
 import { newToken, sha256 } from './auth'
 import { allows, firstProblem, input, office, readField, spec } from './cms'
 import type { Desk, Notice } from './cms'
-import { accessLevels, canChange, canCreate, createRecord, deleteRecord, fieldTypes, getRecord, getTable, listRecords, listTables, ownerActor, readScope, recordsCsv, saveTable, tableSchema, updateRecord } from './data'
+import { accessLevels, canChange, canCreate, createRecord, deleteRecord, deleteTable, fieldTypes, getRecord, getTable, listRecords, listTables, ownerActor, readScope, recordsCsv, saveTable, tableSchema, updateRecord } from './data'
 import type { Actor, DataField, DataTable } from './data'
 import { emailProblems, emailStatus, sendEmail } from './email'
 import { googleProblems, googleStatus } from './google'
@@ -38,6 +38,7 @@ const fieldSpec = () =>
       spec('unique', 'No repeats', 'select', { options: ['', 'table', 'customer'] }),
       spec('ignoreField', 'Do not count records when this field'),
       spec('ignoreValues', 'has one of these values, one per line', 'lines'),
+      spec('indexed', 'Fast to filter on a big table, such as a customer number', 'bool'),
     ],
   })
 
@@ -137,7 +138,7 @@ async function handleData(request: Request, env: Env, url: URL, site: SiteRow, d
   if (id === 'export.csv' && !action && !post) return new Response(await recordsCsv(env, table), { headers: { 'Cache-Control': 'no-store', 'Content-Disposition': `attachment; filename="${table.name}.csv"`, 'Content-Type': 'text/csv; charset=utf-8', 'X-Content-Type-Options': 'nosniff' } })
   if (id === 'delete' && post && !action) {
     if (desk.staff) return refuse()
-    if ((await request.formData()).get('confirm') === 'on') await env.DB.prepare('DELETE FROM data_tables WHERE id = ? AND site_id = ?').bind(table.id, site.id).run()
+    if ((await request.formData()).get('confirm') === 'on') await deleteTable(env, site.id, table)
     return see(url, owner)
   }
   if (!id) {

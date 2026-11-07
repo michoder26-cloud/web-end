@@ -858,6 +858,20 @@ const pilatesId = (await call('save_record', { table: 'classes', values: { title
 check((await call('save_record', { table: 'classes', values: { seats: 1 } })).isError, 'a required field is enforced')
 check((await call('save_record', { table: 'classes', id: pilatesId, values: { seats: 6 } })).data.saved.title === 'Pilates' && (await call('list_records', { table: 'classes', filters: { seats: '6' } })).data.records.length === 1, 'changing one field keeps the rest, and filters work')
 
+// Fast filters: unique, reference and indexed fields get an index of their own, so rare values don't scan the table
+const fastOf = async (name) => JSON.stringify((await call('list_tables')).data.find((table) => table.name === name)?.fastFilters)
+check((await fastOf('bookings')) === '["class_id"]' && (await fastOf('classes')) === '[]', 'reference fields are fast to filter by themselves, other fields only when asked')
+const fastTable = { name: 'fast_orders', label: 'Orders', readAccess: 'owner', writeAccess: 'owner', fields: [{ name: 'ref', label: 'Ref', type: 'text', unique: 'table' }, { name: 'buyer', label: 'Buyer', type: 'email', indexed: true }, { name: 'paid', label: 'Paid', type: 'boolean' }] }
+check(!(await call('save_table', fastTable)).isError && (await fastOf('fast_orders')) === '["buyer","ref"]', 'unique and indexed fields get an index when the table is saved')
+check((await call('save_table', { ...fastTable, fields: [...fastTable.fields.slice(0, 2), { ...fastTable.fields[2], indexed: true }] })).isError, 'a yes/no field is not made fast to filter')
+check((await call('save_table', { ...fastTable, name: 'too_fast', fields: ['a', 'b', 'c', 'd', 'e'].map((name) => ({ name, label: name, type: 'text', indexed: true })) })).isError, 'a table has at most 4 fast fields')
+for (const [ref, buyer, paid] of [['A-1', 'a@x.test', true], ['A-2', 'b@x.test', false], ['A-3', 'a@x.test', false]]) await call('save_record', { table: 'fast_orders', values: { ref, buyer, paid } })
+const fastFound = async (filters) => (await call('list_records', { table: 'fast_orders', filters })).data.records.map((record) => record.ref).sort().join()
+check((await fastFound({ buyer: 'a@x.test' })) === 'A-1,A-3' && (await fastFound({ buyer: 'a@x.test', paid: 'false' })) === 'A-3' && (await fastFound({ ref: 'A-2' })) === 'A-2' && (await fastFound({ buyer: 'nobody@x.test' })) === '', 'filters on fast fields, alone and with another, find exactly the right records')
+check((await call('save_record', { table: 'fast_orders', values: { ref: 'A-1' } })).isError, 'a unique field with an index still refuses a repeat')
+check(!(await call('save_table', { ...fastTable, fields: [{ ...fastTable.fields[0], unique: '' }, { ...fastTable.fields[1], indexed: false }, fastTable.fields[2]] })).isError && (await fastOf('fast_orders')) === '[]' && (await fastFound({ buyer: 'a@x.test' })) === 'A-1,A-3', 'removing the indexes keeps the records, and filters still work')
+check(!(await call('delete_table', { name: 'fast_orders' })).isError && (await fastOf('fast_orders')) === undefined, 'a table that had indexes can be deleted')
+
 // The API
 const root = await apiJson('')
 check(root.status === 200 && root.body.tables.some((table) => table.name === 'classes') && !root.body.tables.some((table) => table.name === 'bookings'), 'the API lists only the tables this caller may use')
