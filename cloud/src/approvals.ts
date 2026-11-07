@@ -73,7 +73,12 @@ export type DecisionRow = { action: string; actor_id: null | number; actor_name:
 /** What an approval change answers. `status` is the HTTP status an API would use. */
 export type Outcome = { code?: string; error?: string; request?: RequestRow; rowsWritten?: number; status: number }
 
-const newVersion = () => Math.floor(Math.random() * 2 ** 48) + 1
+// The version protects a compare-and-swap update. It does not authenticate a request,
+// but it must still be unpredictable so concurrent decisions cannot deliberately collide.
+const newVersion = () => {
+  const random = crypto.getRandomValues(new Uint32Array(2))
+  return ((random[0] & 0xffff) * 2 ** 32) + random[1] + 1
+}
 const fail = (status: number, code: string, error: string): Outcome => ({ code, error, status })
 
 // Flows
