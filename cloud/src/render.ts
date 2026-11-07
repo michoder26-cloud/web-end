@@ -57,12 +57,16 @@ const recordValue = (field: DataField, value: unknown, loaded: PageRecords, lang
   return escapeHtml(value)
 }
 
-const recordInput = (field: DataField, loaded: PageRecords, fullLabel: string) => {
+const recordInput = (field: DataField, loaded: PageRecords, fullLabel: string, current?: unknown) => {
   const name = escapeHtml(field.name)
   const label = escapeHtml(field.label)
   const required = field.required ? ' required' : ''
-  const start = field.default === undefined ? '' : escapeHtml(field.default)
-  if (field.type === 'boolean') return `<label class="check"><input${field.default === true ? ' checked' : ''} name="${name}" type="checkbox"> ${label}</label>`
+  // When editing, the record's own value fills the input; when adding, the field's default does.
+  const has = current !== undefined
+  const value = has ? current : field.default
+  const start = value === undefined ? '' : escapeHtml(value)
+  const checked = field.type === 'boolean' && (has ? current === true : field.default === true)
+  if (field.type === 'boolean') return `<label class="check"><input${checked ? ' checked' : ''} name="${name}" type="checkbox"> ${label}</label>`
   if (field.type === 'textarea') return `<label>${label}<textarea maxlength="10000" name="${name}"${required} rows="4">${start}</textarea></label>`
   const choices = field.type === 'select' ? (field.options ?? []).map((option) => ({ label: option, value: option })) : field.type === 'reference' ? (loaded.options.get(field.name)?.map((option) => ({ full: option.full, label: option.label, value: String(option.id) })) ?? null) : null
   if (choices) return `<label>${label}<select name="${name}"${required}><option value="">—</option>${choices.map((choice: { full?: boolean; label: string; value: string }) => `<option${choice.full ? ' disabled' : ''}${choice.value === start ? ' selected' : ''} value="${escapeHtml(choice.value)}">${escapeHtml(choice.label)}${choice.full ? ` (${fullLabel})` : ''}</option>`).join('')}</select></label>`
@@ -305,6 +309,43 @@ const renderers: Record<string, (block: Block, context: Context) => string> = {
     const why = query?.get('why')
     const status = sent === anchor ? `<p role="status">${escapeHtml(block.sentMessage || t.recordSent)}</p>` : error === anchor ? `<p role="alert">${why === 'full' ? t.recordFull : why === 'duplicate' ? t.recordDuplicate : escapeHtml(block.errorMessage || t.recordFailed)}</p>` : ''
     return section('form', block.tone, `<div class="wrap info">${copy}<div>${status}<form action="/data/${escapeHtml(loaded.table.name)}" class="contact-form" method="post"><input name="next" type="hidden" value="${escapeHtml(path)}">${inputs}<label aria-hidden="true" class="trap">Leave this empty<input autocomplete="off" name="website" tabindex="-1"></label><button class="button" type="submit">${escapeHtml(block.buttonLabel || t.recordSend)}</button></form></div></div>`, anchor)
+  },
+  // Lets a logged-in customer change or cancel their own records, such as a booking. No scripts, so each record is its own plain form.
+  record(block, { blockIndex, customer, error, language, pageSlug, query, records, sent }) {
+    const t = words(language)
+    const loaded = records?.get(blockIndex)
+    if (!loaded) return ''
+    const path = `/${pageSlug === 'home' ? '' : pageSlug}`
+    const anchor = `record-${loaded.table.name}`
+    const copy = `<div>${block.heading ? `<h2>${escapeHtml(block.heading)}</h2>` : ''}${paragraphs(block.intro)}</div>`
+    if (!customer) {
+      // Only prompt a login the table could actually let a customer use.
+      if (['owner', 'staff'].includes(loaded.table.write_access)) return ''
+      return section('form', block.tone, `<div class="wrap info">${copy}<div><p>${t.loginToEdit}</p><a class="button" href="/login?next=${encodeURIComponent(path)}">${t.logIn}</a></div></div>`, anchor)
+    }
+    const actor = { admin: false, customer }
+    const why = query?.get('why')
+    const status = sent === anchor ? `<p role="status">${escapeHtml(block.sentMessage || t.recordUpdated)}</p>` : error === anchor ? `<p role="alert">${why === 'full' ? t.recordFull : why === 'duplicate' ? t.recordDuplicate : escapeHtml(block.errorMessage || t.recordFailed)}</p>` : ''
+    const chosen = block.fields as string[] | undefined
+    const forms = loaded.rows
+      .map((row) => {
+        const shown = showRecord(loaded.table, row, actor) as Record<string, unknown>
+        // Staff-only fields never reach this HTML; read-only and set-once ones show but can't be edited.
+        const parts = loaded.table.fields
+          .filter((field) => !field.staffOnly && (!chosen || chosen.includes(field.name)))
+          .map((field) =>
+            field.readOnly || field.setOnce
+              ? shown[field.name] === undefined
+                ? ''
+                : `<p class="record-fixed"><span class="record-fixed__label">${escapeHtml(field.label)}</span> <span class="pre-line">${recordValue(field, shown[field.name], loaded, language)}</span></p>`
+              : recordInput(field, loaded, t.full, shown[field.name]),
+          )
+          .join('')
+        const remove = block.allowDelete ? `<form action="/data/${escapeHtml(loaded.table.name)}/${row.id}/delete" method="post"><input name="next" type="hidden" value="${escapeHtml(path)}"><button class="link-button" type="submit">${t.remove}</button></form>` : ''
+        return `<div class="record-edit"><form action="/data/${escapeHtml(loaded.table.name)}/${row.id}" class="contact-form" method="post"><input name="next" type="hidden" value="${escapeHtml(path)}">${parts}<button class="button" type="submit">${escapeHtml(block.buttonLabel || t.recordSave)}</button></form>${remove}</div>`
+      })
+      .join('')
+    return section('form', block.tone, `<div class="wrap info">${copy}<div>${status}${forms || `<p>${t.recordsEmpty}</p>`}</div></div>`, anchor)
   },
   // Custom code loads from its own address, because a srcdoc frame would inherit this page's ban on scripts.
   html: (block, { blockIndex, pageSlug }) =>

@@ -65,7 +65,7 @@ Customers with the staff role can read and change everything except owner tables
 Common recipes:
 - Listings anyone can read, only you edit: read public, write owner.
 - Contact or request form whose answers stay private: read owner, write public.
-- Bookings: read own, write members, with status readOnly and the customer's choices setOnce. Customers can still delete their own record, so the owner should say whether that is how they cancel.
+- Bookings: read own, write members, with status readOnly and the customer's choices setOnce. Customers can change or cancel their own record with a record block, so the owner should say how customers reschedule or cancel.
 - Member directory: read members, write staff.
 - Public reviews by members: read public, write members, with email staffOnly. Only publish real reviews from real people.
 
@@ -73,6 +73,7 @@ Members, own and login prompts need update_site accounts true. Customers who log
   screens: `# Pages and screens
 - records block: lists a table as cards, respecting access. Choose fields with fields, cap it with limit, and set allowDelete true so people can remove their own records.
 - record-form block: adds a record, with inputs built from the table. Use fields to choose which to show. It asks people to log in when the table requires it.
+- record block: lets a logged-in customer change or cancel their own records, such as rescheduling or cancelling a booking. Each of their records becomes an editable form; set allowDelete true to add a cancel button. Read-only, set-once and staff-only fields can't be changed this way. Put it on a page only logged-in customers reach, such as beside "My bookings".
 - Keep one main job per page. Put the form beside or above the list it feeds.
 - Make every page reachable: from the navigation, which holds up to 8 items, or from a button or a links block on a page visitors can reach. Give the page a clear title and a 50 to 165 character description.
 - A page's id on a block lets links jump to it, such as #bookings.

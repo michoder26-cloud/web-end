@@ -144,6 +144,7 @@ export const blockSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('collection'), id: z.string().regex(/^[a-z0-9-]{1,40}$/).optional().describe('Lets links jump here, such as #products'), collection: z.string().regex(/^[a-z0-9-]{1,40}$/), heading, intro, ...button, orderField: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/).optional().describe('Form field to fill in with the chosen item when buttonHref points to a form'), filters: z.boolean().optional().describe('Shows category filter buttons'), limit: z.number().int().min(1).max(100).optional(), tone }).describe('Shows the published items of a collection as cards, such as products. Add items with save_item.'),
   z.object({ type: z.literal('records'), id: z.string().regex(/^[a-z0-9-]{1,40}$/).optional().describe('Lets links jump here'), table: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/), heading, intro, fields: z.array(z.string()).max(40).optional().describe('Which fields to show. Leave out for all that this person may see.'), limit: z.number().int().min(1).max(100).optional(), newestFirst: z.boolean().optional(), allowDelete: z.boolean().optional().describe('People can delete records they are allowed to change'), tone }).describe("Lists a table's records as cards, following the table's access rules. Asks people to log in when the table requires it."),
   z.object({ type: z.literal('record-form'), table: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/), heading, intro: optional(600), fields: z.array(z.string()).max(40).optional().describe('Which fields to ask for. Leave out for all except staff-only ones.'), buttonLabel: optional(60), sentMessage: optional(200), errorMessage: optional(200), tone }).describe("Adds a record to a table, with inputs built from the table's fields."),
+  z.object({ type: z.literal('record'), table: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/), heading, intro: optional(600), fields: z.array(z.string()).max(40).optional().describe('Which fields to show. Leave out for all except staff-only ones.'), buttonLabel: optional(60), sentMessage: optional(200), errorMessage: optional(200), allowDelete: z.boolean().optional().describe('Adds a button to cancel (delete) the record'), limit: z.number().int().min(1).max(100).optional(), tone }).describe("Lets a logged-in customer change or cancel their own records of a table, such as rescheduling or cancelling a booking. Each record becomes an editable form. Read-only and staff-only fields can't be changed. The table's writeAccess must let customers add, such as members or own."),
   z.object({ type: z.literal('html'), code: text(50_000), height: z.number().int().min(50).max(3000).optional(), title: optional(120), tone }).describe('Custom HTML, CSS and JavaScript for anything the other blocks cannot do. It runs in a sandboxed frame.'),
 ])
 
@@ -270,12 +271,13 @@ export async function findProblems(env: Env, site: SiteRow) {
     if (page.slug === 'home' && blocks[0]?.type !== 'hero') problems.push(`${where} should start with a hero.`)
     if (/lorem ipsum|placeholder|TODO/i.test(page.blocks)) problems.push(`${where} still contains placeholder text.`)
     blocks.forEach((block, index) => {
-      if (block.type === 'records' || block.type === 'record-form') {
+      if (block.type === 'records' || block.type === 'record-form' || block.type === 'record') {
           const table = tables.get(block.table)
           if (!table) problems.push(`${where} shows the table "${block.table}", which doesn't exist.`)
           for (const name of (block.fields as string[] | undefined) ?? []) if (table && !table.fields.some((field) => field.name === name)) problems.push(`${where} uses the field "${name}", which the table "${block.table}" doesn't have.`)
           if (table && block.type === 'records' && table.read_access === 'owner') problems.push(`${where} lists the table "${block.table}", but only the owner can read it, so visitors will see nothing.`)
           if (table && block.type === 'record-form' && table.write_access === 'owner') problems.push(`${where} has a form for the table "${block.table}", but only the owner can add to it, so visitors will see nothing.`)
+          if (table && block.type === 'record' && ['owner', 'staff'].includes(table.write_access)) problems.push(`${where} lets customers edit the table "${block.table}", but only ${table.write_access} can change it, so customers will see nothing.`)
         } else if (block.type !== 'form' && (block.buttonLabel || block.buttonHref)) {
         checkLink(where, block.buttonHref)
         if (Boolean(block.buttonLabel) !== Boolean(block.buttonHref)) problems.push(`${where} has a button missing its label or link.`)
@@ -434,7 +436,7 @@ export function createMcpServer(env: Env, origin: string, code: string) {
     'save_page',
     {
       title: 'Create or replace a page',
-      description: 'Creates a page, or replaces the page with the same slug. The home page has the slug "home". Blocks: hero (top of page, one per page), text, split (words beside a photo), features, steps, stats, pricing, testimonials, team, gallery, info (rows such as opening hours), faq, links (a sub-menu, footer links, resources or downloads), cta, form, collection (cards from the database, such as products), records and record-form (the records of a table, and a form to add one), and html (custom code in a sandbox). Separate paragraphs with a blank line.',
+      description: 'Creates a page, or replaces the page with the same slug. The home page has the slug "home". Blocks: hero (top of page, one per page), text, split (words beside a photo), features, steps, stats, pricing, testimonials, team, gallery, info (rows such as opening hours), faq, links (a sub-menu, footer links, resources or downloads), cta, form, collection (cards from the database, such as products), records, record-form and record (the records of a table, a form to add one, and a form for customers to change or cancel their own), and html (custom code in a sandbox). Separate paragraphs with a blank line.',
       inputSchema: {
         slug: pageSlugSchema,
         title: text(120),
