@@ -280,9 +280,9 @@ async function answer(request: Request, env: Env): Promise<Response> {
 
 /** What visitors can open, in whichever language the site row was made for. */
 async function visit(request: Request, env: Env, url: URL, site: SiteRow, parts: string[]) {
-  if (parts[0] === 'data' && request.method === 'POST' && (parts.length === 2 || (parts.length === 4 && parts[3] === 'delete' && /^\d{1,12}$/.test(parts[2])))) {
+  if (parts[0] === 'data' && request.method === 'POST' && (parts.length === 2 || ((parts.length === 3 || (parts.length === 4 && parts[3] === 'delete')) && /^\d{1,12}$/.test(parts[2])))) {
     const customer = await customerFor(request, env, site)
-    return await receiveRecord(request, env, url, site, { admin: false, customer: customer ?? null }, parts[1], parts[2] ? Number(parts[2]) : undefined)
+    return await receiveRecord(request, env, url, site, { admin: false, customer: customer ?? null }, parts[1], parts[2] ? Number(parts[2]) : undefined, parts[3] === 'delete')
   }
 
   // Confirm and unsubscribe links. Four parts long, so statistics never count them as page views.

@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 import { allowAttempt } from './auth'
 import { tellOwnerAboutRecord } from './email'
-import { see } from './http'
+import { notFound, see } from './http'
 import { isSafeHref } from './theme'
 import type { Block, Customer, Env, SiteRow } from './types'
 import { countConversion } from './stats'
@@ -208,16 +208,17 @@ export function showRecord(table: DataTable, row: DataRow, actor: Actor) {
   return { ...shown, created_at: row.created_at, updated_at: row.updated_at }
 }
 
-type ListOptions = { after?: number; filters?: Record<string, string>; limit?: number; newestFirst?: boolean }
+type ListOptions = { after?: number; filters?: Record<string, string>; limit?: number; newestFirst?: boolean; owner?: number }
 
 export async function listRecords(env: Env, table: DataTable, actor: Actor, options: ListOptions = {}) {
   const scope = readScope(table, actor)
   if (!scope) return { error: 'forbidden' as const }
   const where = ['table_id = ?']
   const values: unknown[] = [table.id]
-  if (scope === 'mine') {
+  // The record block narrows a readable table to just the viewer's own rows, the only ones they may change.
+  if (scope === 'mine' || options.owner !== undefined) {
     where.push('customer_id = ?')
-    values.push(actor.customer!.id)
+    values.push(options.owner ?? actor.customer!.id)
   }
   for (const [name, value] of Object.entries(options.filters ?? {})) {
     const field = table.fields.find((item) => item.name === name)
@@ -366,7 +367,7 @@ export type PageRecords = {
 export async function loadPageRecords(env: Env, siteId: number, blocks: Block[], actor: Actor) {
   const loaded = new Map<number, PageRecords>()
   for (const [index, block] of blocks.entries()) {
-    if (block.type !== 'records' && block.type !== 'record-form') continue
+    if (block.type !== 'records' && block.type !== 'record-form' && block.type !== 'record') continue
     const table = await getTable(env, siteId, block.table)
     if (!table) continue
     const scope = readScope(table, actor)
@@ -377,12 +378,18 @@ export async function loadPageRecords(env: Env, siteId: number, blocks: Block[],
       page.rows = list.rows ?? []
       page.left = await spotsLeft(env, siteId, table, page.rows)
     }
+    // The record block shows the viewer their own records as editable forms, so it loads only rows they may change.
+    if (block.type === 'record' && scope && actor.customer) {
+      const list = await listRecords(env, table, actor, { limit: Number(block.limit) || 24, newestFirst: block.newestFirst !== false, owner: actor.customer.id })
+      page.rows = list.rows ?? []
+      page.left = await spotsLeft(env, siteId, table, page.rows)
+    }
     for (const field of references) {
       const target = await getTable(env, siteId, field.table!)
       if (!target || readScope(target, actor) !== 'all') continue
       const list = await listRecords(env, target, actor, { limit: 100 })
       for (const row of list.rows ?? []) page.labels.set(`${field.name}:${row.id}`, labelOf(target, row))
-      if (block.type === 'record-form') {
+      if (block.type === 'record-form' || block.type === 'record') {
         const left = await spotsLeft(env, siteId, target, list.rows ?? [])
         page.options.set(field.name, (list.rows ?? []).map((row) => ({ full: left.get(row.id) === 0, id: row.id, label: labelOf(target, row) })))
       }
@@ -395,7 +402,7 @@ export async function loadPageRecords(env: Env, siteId: number, blocks: Block[],
 const safePath = (value: unknown) => (typeof value === 'string' && /^\/[a-z0-9-]*$/.test(value) ? value : '/')
 
 /** Receives the record-form block, and the delete button of the records block. These pages run no scripts, so both are plain forms. */
-export async function receiveRecord(request: Request, env: Env, url: URL, site: SiteRow, actor: Actor, name: string, id?: number) {
+export async function receiveRecord(request: Request, env: Env, url: URL, site: SiteRow, actor: Actor, name: string, id?: number, remove?: boolean) {
   const form = await request.formData().catch((): null => null)
   const path = safePath(form?.get('next'))
   const back = (state: 'error' | 'sent', why?: string) => see(url, `${path}?${state}=record-${name}${why ? `&why=${why}` : ''}#record-${name}`)
@@ -403,8 +410,20 @@ export async function receiveRecord(request: Request, env: Env, url: URL, site: 
   if (!form || !table) return see(url, path)
   if (id) {
     const row = await getRecord(env, table, id)
-    if (row && canChange(table, actor, row)) await deleteRecord(env, site.id, table, row)
-    return see(url, path)
+    if (remove) {
+      if (row && canChange(table, actor, row)) await deleteRecord(env, site.id, table, row)
+      return see(url, path)
+    }
+    // Editing one of your own records. Someone else's, or a missing one, looks the same so an id can't be probed.
+    if (!row || !canChange(table, actor, row)) return notFound()
+    const input: Record<string, unknown> = {}
+    for (const field of table.fields) {
+      if (field.type === 'boolean') input[field.name] = form.get(field.name) === 'on'
+      else if (form.has(field.name)) input[field.name] = String(form.get(field.name))
+    }
+    // readInput drops staff-only, read-only and set-once fields for a customer, so those keep their value whatever is sent.
+    const saved = await updateRecord(env, site.id, table, row, input, actor)
+    return saved.row ? back('sent') : back('error', saved.code)
   }
   // Bots fill in the hidden field. Tell them it worked and keep nothing.
   if (form.get('website')) return back('sent')
