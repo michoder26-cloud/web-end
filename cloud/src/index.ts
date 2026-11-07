@@ -17,6 +17,7 @@ import { alternates, extraLanguages, keepLanguage, languageName, localizePage, l
 import { createMcpServer } from './mcp'
 import { addSubscriber, handleNewsLink, runNews } from './news'
 import { followRedirect } from './moving'
+import { showFrozen } from './frozen-spike'
 import { browserWords, officeText } from './office-words'
 import { claimSite, getSite, isOwner, setupPage, shell } from './owner'
 import { renderPage } from './render'
@@ -212,6 +213,8 @@ async function answer(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url)
   const parts = url.pathname.split('/').filter(Boolean)
   try {
+    const frozen = request.method === 'GET' ? await showFrozen(request, env, parts) : null
+    if (frozen) return frozen
     const working = await getSite(env)
 
     if (!working) {

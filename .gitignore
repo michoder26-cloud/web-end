@@ -22,3 +22,8 @@ playwright-report/
 
 # Local test output
 /cloud/.dev-*.log
+
+# Wix pixel spike: captured template content stays on this computer
+/spikes/wix-pixel/out/
+/cloud/public/_frozen/
+/cloud/.spike-db/
