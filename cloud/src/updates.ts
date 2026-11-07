@@ -20,7 +20,8 @@ jobs:
         run: |
           set -e
           latest=$(curl -fsSL ${latestUrl} | node -pe 'JSON.parse(require("fs").readFileSync(0)).version')
-          git clone --depth 1 --branch "v$latest" https://github.com/michoder26-cloud/web-end.git /tmp/web-end
+          # A release tagged without its last ".0", such as v0.18 for 0.18.0, still updates.
+          git clone --depth 1 --branch "v$latest" https://github.com/michoder26-cloud/web-end.git /tmp/web-end || git clone --depth 1 --branch "v\${latest%.0}" https://github.com/michoder26-cloud/web-end.git /tmp/web-end
           node /tmp/web-end/cloud/scripts/update.mjs /tmp/web-end/cloud "$GITHUB_WORKSPACE"
           git add -A
           if git diff --cached --quiet; then exit 0; fi

@@ -319,6 +319,12 @@ Then, in a second terminal, test a fresh install. It needs an empty local databa
 BASE_URL=http://localhost:8799 npm test
 ```
 
+Before you announce a new version, publish its release with the tag `v` plus the exact version in `latest.json`, such as `v0.18.0`, then check that everything matches:
+
+```bash
+npm run release:check
+```
+
 To test logging in with Google against a stand-in for Google on port 8824, start the site with `--var WEBHOOK_ALLOW_HTTP:1 --var GOOGLE_CLIENT_ID:test-client --var GOOGLE_CLIENT_SECRET:test-secret --var GOOGLE_API_BASE:http://localhost:8824`, and run the tests with `GOOGLE_TEST=1`. Like the Resend address, the Google address can only be changed while `WEBHOOK_ALLOW_HTTP` is on.
 
 To test email against a stand-in for Resend on port 8823, start the site with `--var WEBHOOK_ALLOW_HTTP:1 --var RESEND_API_KEY:re_test_fake --var RESEND_API_BASE:http://localhost:8823`, and run the tests with `EMAIL_TEST=1`. The Resend address can only be changed while `WEBHOOK_ALLOW_HTTP` is on, which is for local tests only.

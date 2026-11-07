@@ -846,7 +846,7 @@ check((await fetch(`${owner}/updates`, { body: new URLSearchParams({ repo: 'some
 const updatesPage = await (await fetch(`${owner}/updates`)).text()
 const addLink = decode(updatesPage.match(/href="(https:\/\/github\.com\/someone\/my-shop\/new\/main[^"]*)"/)?.[1] ?? '')
 const prefilled = new URL(addLink || 'https://x.test')
-check(prefilled.searchParams.get('filename') === '.github/workflows/update-web-end.yml' && prefilled.searchParams.get('value')?.includes('workflow_dispatch') && prefilled.searchParams.get('value')?.includes('--branch "v$latest"'), 'the page gives a ready-made updater that uses only releases')
+check(prefilled.searchParams.get('filename') === '.github/workflows/update-web-end.yml' && prefilled.searchParams.get('value')?.includes('workflow_dispatch') && prefilled.searchParams.get('value')?.includes('--branch "v$latest"') && prefilled.searchParams.get('value')?.includes('--branch "v${latest%.0}"'), 'the page gives a ready-made updater that uses only releases, and also finds a tag without its last .0')
 check(updatesPage.includes('https://github.com/someone/my-shop/actions/workflows/update-web-end.yml'), 'the page links to where the owner runs the update')
 const repoSettings = formValues(await (await fetch(`${owner}/settings`)).text())
 await fetch(`${owner}/settings`, { body: repoSettings, method: 'POST', redirect: 'manual' })

@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node tests/smoke.mjs",
     "test:update": "node tests/update.mjs",
+    "release:check": "node scripts/check-release.mjs",
     "test:notify": "node --experimental-strip-types tests/notify.mjs",
     "fonts": "node scripts/copy-fonts.mjs"
   },
