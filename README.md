@@ -14,11 +14,11 @@ You need three free accounts: [Cloudflare](https://dash.cloudflare.com/sign-up),
 
    When GitHub asks, choose **Only select repositories**, so your other projects stay out of it. If you land on a different page afterwards, click the button again.
 
-2. **Claim your site straight away.** Open your new website and click **Get my Claude link**. The first person to click becomes the owner.
-3. **Save your two links.** The next page shows your Claude link and your back office link only once. They work like passwords: anyone who has them can change your site. It has copy buttons.
-4. **Create your owner login.** Open `/admin`, paste the private back office link once, then choose your name, email and password. From then on, sign in at `/admin` to manage the site without handling the private link.
-5. **Connect Claude.** The same page shows each step: in Claude, open **Settings**, then **Connectors**, click **Add custom connector**, and paste your Claude link. Then send the first message it gives you. [More help](docs/connect-claude.md).
-6. **Or start from a starter.** Want a working site right now, without Claude? Pick a café, shop, classes and bookings, services or portfolio starter, in English or Thai. Every word and price in it is a clearly marked sample you change later.
+2. **Start building.** Open your new website and click **Start building free**. The first person to click becomes the owner, then chooses whether to begin with Claude or a working example.
+3. **Open your workspace.** Its Dashboard is where you preview, edit and manage the finished app. Keep the recovery link offered there somewhere safe until you create an owner login; it works like a password and is shown only once.
+4. **Create your owner login.** Open `/admin`, paste the recovery link once, then choose your name, email and password. From then on, sign in at `/admin` to manage the site without handling a private link.
+5. **Connect Claude when you need it.** In the workspace, choose **Build with Claude**. It gives the short one-time steps for Claude’s **Settings → Connectors → Add custom connector** flow. [More help](docs/connect-claude.md).
+6. **Or start from an example.** Want a working site right now, without Claude? Pick a café, shop, classes and bookings, services or portfolio example, in English or Thai. Every word and price in it is a clearly marked sample you change later.
 
 ### Install directly from your own copy
 

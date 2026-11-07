@@ -185,33 +185,23 @@ const copyScript = `for (const button of document.querySelectorAll('[data-copy]'
 export function guidedStart(origin: string, code: string, t: OfficeWords) {
   const nonce = newToken()
   const s = t.start
+  const copy = t.lang === 'th'
+    ? { eyebrow: 'พื้นที่ทำงานพร้อมแล้ว', pageTitle: 'พื้นที่ทำงานของคุณ', title: 'อยากสร้างอะไร?', intro: 'เลือกตัวอย่างเพื่อเริ่มทันที หรือบอก Claude ด้วยภาษาปกติว่าต้องการระบบแบบไหน', workspace: 'เปิด Dashboard ของฉัน', build: 'สร้างกับ Claude', buildHelp: 'เชื่อม Claude ครั้งเดียว แล้วคุยให้มันสร้างเว็บและระบบหลังบ้านของคุณ', samples: 'เริ่มจากตัวอย่าง', sampleHelp: 'เลือกได้เลย แล้วค่อยปรับทุกอย่างใน Dashboard', security: 'เก็บลิงก์กู้คืนไว้', securityHelp: 'ลิงก์นี้เห็นครั้งเดียว ใช้กลับเข้าพื้นที่ทำงานได้หากยังไม่ได้สร้างบัญชีเจ้าของ', connector: 'เชื่อม Claude', ownerLink: 'ลิงก์กู้คืน Dashboard' }
+    : { eyebrow: 'Your workspace is ready', pageTitle: 'Your workspace', title: 'What do you want to build?', intro: 'Start from a working example, or tell Claude in ordinary words what system you need.', workspace: 'Open my Dashboard', build: 'Build with Claude', buildHelp: 'Connect Claude once, then ask it to build your site and back office.', samples: 'Start from an example', sampleHelp: 'Choose one now, then change every part from the Dashboard.', security: 'Keep a recovery link', securityHelp: 'This is shown once. Use it to get back into your workspace before you create an owner account.', connector: 'Connect Claude', ownerLink: 'Dashboard recovery link' }
   const officeUrl = `${origin}/owner/${code}`
   const starters = starterIds
     .map((id) => {
       const content = starterSites[id][t.lang]
-      return `<form action="/owner/${escapeHtml(code)}/starters" class="card starter" method="post" target="_blank"><input name="starter" type="hidden" value="${id}"><input name="language" type="hidden" value="${t.lang}"><h3>${escapeHtml(content.label)}</h3><p>${escapeHtml(content.description)}</p><button class="button button--small" type="submit">${s.useStarter}</button></form>`
+      return `<form action="/owner/${escapeHtml(code)}/starters" class="card starter" method="post"><input name="starter" type="hidden" value="${id}"><input name="language" type="hidden" value="${t.lang}"><h3>${escapeHtml(content.label)}</h3><p>${escapeHtml(content.description)}</p><button class="button button--small" type="submit">${s.useStarter}</button></form>`
     })
     .join('')
-  const body = `<h1>${t.youOwnIt}</h1>
-<p class="lead">${s.intro}</p>
-<h2>${s.saveHeading}</h2>
-<p role="alert">${t.saveLinks}</p>
-<div class="contact-form">
-${claudeLinkField(`${origin}/mcp/${code}`, t)}
-<p>${s.claudeLinkHelp}</p>
-${copyField('office-link', s.officeLink, officeUrl, t)}
-<p>${s.officeLinkHelp} <a href="/owner/${escapeHtml(code)}" rel="noopener" target="_blank">${s.openOffice}</a></p>
-<p>${s.adminAccount}</p>
-<p>${s.saveHow}</p>
-</div>
-<h2>${s.connectHeading}</h2>
-<div class="contact-form">${connectGuide(t)}</div>
-<h2>${s.starterHeading}</h2>
-<p>${s.starterIntro}</p>
-<div class="grid starters">${starters}</div>
-<p><small>${s.starterNewTab}</small></p>`
+  const body = `<section class="launch launch--claimed"><p class="launch__eyebrow">${copy.eyebrow}</p><h1>${copy.title}</h1>
+<p class="lead">${copy.intro}</p><div class="launch__actions"><a class="button launch__primary" href="/owner/${escapeHtml(code)}">${copy.workspace}</a><a class="button button--ghost" href="#build-with-claude">${copy.build}</a></div>
+<section class="launch__choice" id="build-with-claude"><div><h2>${copy.build}</h2><p>${copy.buildHelp}</p></div><details><summary>${copy.connector}</summary><div class="contact-form launch__details">${claudeLinkField(`${origin}/mcp/${code}`, t)}<p>${s.claudeLinkHelp}</p>${connectGuide(t)}</div></details></section>
+<section class="launch__templates"><h2>${copy.samples}</h2><p>${copy.sampleHelp}</p><div class="grid starters">${starters}</div></section>
+<details class="launch__recovery"><summary>${copy.security}</summary><div class="contact-form launch__details"><p role="alert">${copy.securityHelp}</p>${copyField('office-link', copy.ownerLink, officeUrl, t)}<p>${s.adminAccount}</p><p>${s.saveHow}</p></div></details></section>`
   const headers = { ...privateHeaders, 'Content-Security-Policy': privateHeaders['Content-Security-Policy'].replace("script-src 'none'", `script-src 'nonce-${nonce}'`) }
-  return html(shell(t.claimedTitle, body, false, t.lang, `<script nonce="${nonce}">${copyScript}</script>`), 200, headers)
+  return html(shell(copy.pageTitle, body, false, t.lang, `<script nonce="${nonce}">${copyScript}</script>`), 200, headers)
 }
 
 // The starters page of the back office

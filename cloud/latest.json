@@ -1,4 +1,4 @@
 {
-  "version": "0.18.0",
-  "notes": "A redesigned owner Dashboard now puts Preview, site editing, content, data, customers, orders, workflows, publishing, integrations and system controls in one responsive back office."
+  "version": "0.19.0",
+  "notes": "The first-run experience is now a simple build choice: start with an example or connect Claude, then enter one owner workspace. Technical links stay behind their related actions, and the public site no longer exposes setup instructions."
 }

@@ -815,6 +815,177 @@ details p:first-of-type {
   border-top: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
 }
 
+/* The first visit should feel like choosing what to make, not configuring a server. */
+.launch {
+  --launch-ink: #f5f7fb;
+  --launch-muted: #bac5d4;
+  --launch-line: #354458;
+  --launch-surface: #162231;
+  --launch-accent: #72e1bc;
+  max-width: 940px;
+  padding: clamp(28px, 6vw, 68px);
+  border-radius: 22px;
+  background: #101925;
+  color: var(--launch-ink);
+  box-shadow: 0 28px 72px rgb(16 25 37 / 22%);
+}
+
+.launch h1,
+.launch h2,
+.launch h3 {
+  color: var(--launch-ink);
+}
+
+.launch h1 {
+  max-width: 720px;
+  margin: 8px 0 16px;
+  font-size: clamp(42px, 8vw, 80px);
+  line-height: 0.98;
+  letter-spacing: -0.055em;
+}
+
+.launch h2 {
+  margin: 0 0 8px;
+  font-size: clamp(24px, 3vw, 32px);
+}
+
+.launch .lead {
+  max-width: 640px;
+  color: var(--launch-muted);
+  font-size: clamp(18px, 2.4vw, 23px);
+}
+
+.launch__eyebrow {
+  margin: 0;
+  color: var(--launch-accent);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.launch__primary {
+  border-color: var(--launch-accent);
+  background: var(--launch-accent);
+  color: #10231f;
+}
+
+.launch__primary:hover {
+  border-color: #9af0d3;
+  background: #9af0d3;
+}
+
+.launch--first {
+  min-height: min(560px, 74vh);
+  display: grid;
+  align-content: center;
+  justify-items: start;
+}
+
+.launch--first .launch__primary {
+  margin-top: 20px;
+  padding: 16px 22px;
+  font-size: 17px;
+}
+
+.launch__note {
+  margin: 30px 0 0;
+  color: var(--launch-muted);
+  font-size: 14px;
+}
+
+.launch__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 30px 0 46px;
+}
+
+.launch__actions .button--ghost {
+  border-color: var(--launch-line);
+  color: var(--launch-ink);
+}
+
+.launch__choice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.75fr);
+  gap: 24px;
+  align-items: start;
+  padding: 26px;
+  border: 1px solid var(--launch-line);
+  border-radius: 14px;
+  background: linear-gradient(110deg, #1d3640, var(--launch-surface));
+}
+
+.launch__choice p,
+.launch__templates > p {
+  color: var(--launch-muted);
+}
+
+.launch details {
+  border: 1px solid var(--launch-line);
+  border-radius: 10px;
+  background: rgb(7 13 22 / 28%);
+}
+
+.launch summary {
+  padding: 13px 14px;
+  cursor: pointer;
+  color: var(--launch-ink);
+  font-weight: 750;
+}
+
+.launch__details {
+  padding: 0 14px 16px;
+}
+
+.launch__details .copy-field,
+.launch__details textarea,
+.launch__details input {
+  color: var(--launch-ink);
+}
+
+.launch__templates {
+  margin-top: 46px;
+}
+
+.launch .starter {
+  border-color: var(--launch-line);
+  background: var(--launch-surface);
+  color: var(--launch-ink);
+  box-shadow: none;
+}
+
+.launch .starter p {
+  color: var(--launch-muted);
+}
+
+.launch .starter .button {
+  border-color: var(--launch-line);
+  background: #23364b;
+  color: var(--launch-ink);
+}
+
+.launch .starter .button:hover {
+  border-color: var(--launch-accent);
+}
+
+.launch__recovery {
+  margin-top: 28px;
+}
+
+@media (max-width: 640px) {
+  .launch {
+    margin-right: -20px;
+    margin-left: -20px;
+    padding: 28px 20px;
+    border-radius: 0;
+  }
+
+  .launch__choice {
+    grid-template-columns: 1fr;
+    padding: 20px;
+  }
+}
+
 .site-account {
   font-size: 16px;
   text-decoration: none;

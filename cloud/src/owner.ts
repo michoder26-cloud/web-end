@@ -48,16 +48,17 @@ export const shell = (title: string, body: string, wide = false, lang = 'en', en
 ${end}</body>
 </html>`
 
-export const setupPage = (t: OfficeWords = officeWords()) =>
-  shell(
+export const setupPage = (t: OfficeWords = officeWords()) => {
+  const copy = t.lang === 'th'
+    ? { eyebrow: 'WEB-END', title: 'อยากสร้างอะไร?', intro: 'บอก Claude ด้วยภาษาปกติ แล้วได้ทั้งหน้าเว็บ ระบบลูกค้า ข้อมูล และหลังบ้านในพื้นที่ของคุณเอง', action: 'เริ่มสร้างฟรี', note: 'คุณเป็นเจ้าของโค้ด ฐานข้อมูล และ Cloudflare ของตัวเอง' }
+    : { eyebrow: 'WEB-END', title: 'What do you want to build?', intro: 'Tell Claude in ordinary words. Build the website, data, customer system and back office in your own space.', action: 'Start building free', note: 'You own the code, database and Cloudflare account.' }
+  return shell(
     t.setupTitle,
-    `<h1>${t.installed}</h1>
-<p class="lead">${t.oneStepLeft}</p>
-<p role="alert">${t.shownOnce}</p>
-<form action="/setup" method="post"><button class="button" type="submit">${t.getLink}</button></form>`,
+    `<section class="launch launch--first"><p class="launch__eyebrow">${copy.eyebrow}</p><h1>${copy.title}</h1><p class="lead">${copy.intro}</p><form action="/setup" method="post"><button class="button launch__primary" type="submit">${copy.action}</button></form><p class="launch__note">${copy.note}</p></section>`,
     false,
     t.lang,
   )
+}
 
 /** Maps each form to its fields, so saved entries can be shown with their labels. */
 export function entryFields(pages: { blocks: string; slug: string }[]) {

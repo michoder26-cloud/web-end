@@ -15,9 +15,9 @@ const check = (ok, name, detail = '') => {
 
 // First run
 const welcome = await fetch(base)
-check((await welcome.text()).includes('Get my Claude link'), 'a fresh install shows the setup page')
+check((await welcome.text()).includes('Start building free'), 'a fresh install shows the setup page')
 const thaiWelcome = await (await fetch(base, { headers: { 'Accept-Language': 'th-TH,th;q=0.9,en;q=0.8' } })).text()
-check(thaiWelcome.includes('<html lang="th">') && thaiWelcome.includes('รับลิงก์ Claude ของฉัน'), 'a Thai browser gets the setup page in Thai')
+check(thaiWelcome.includes('<html lang="th">') && thaiWelcome.includes('อยากสร้างอะไร?'), 'a Thai browser gets the setup page in Thai')
 check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd`)).status === 404, 'nothing else is open before setup')
 
 const claimed = await fetch(`${base}/setup`, { method: 'POST', redirect: 'manual' })
@@ -32,14 +32,14 @@ check(stranger.status === 303 && !(await stranger.text()).includes('/mcp/'), 'no
 // The guided start, shown once right after claiming
 const claimedPolicy = claimed.headers.get('content-security-policy') ?? ''
 const claimedNonce = claimedPolicy.match(/script-src 'nonce-([0-9a-f]{64})'/)?.[1]
-check(claimedBody.includes('role="alert">Save these two links now. They are shown only once') && claimed.headers.get('x-robots-tag') === 'noindex' && claimed.headers.get('cache-control') === 'no-store', 'the guided start keeps the warning, and is never cached or indexed')
+check(claimedBody.includes('role="alert">This is shown once') && claimed.headers.get('x-robots-tag') === 'noindex' && claimed.headers.get('cache-control') === 'no-store', 'the guided start keeps the warning, and is never cached or indexed')
 check(Boolean(claimedNonce) && claimedPolicy.includes(`script-src 'nonce-${claimedNonce}';`) && claimedBody.includes(`<script nonce="${claimedNonce}">`) && (claimedBody.match(/<script/g) ?? []).length === 1, 'only the copy buttons\' own script may run, by a nonce made for this page')
 check(claimedBody.includes(`value="${base}/mcp/${code}"`) && claimedBody.includes(`value="${base}/owner/${code}"`) && claimedBody.includes('data-copy="claude-link"') && claimedBody.includes(' hidden type="button"'), 'both links are in fields to copy, with copy buttons that appear only when the script runs')
 check(claimedBody.includes('https://claude.ai/settings/connectors') && claimedBody.includes('Add custom connector') && claimedBody.includes('id="first-message"') && claimedBody.includes('ask me a few short questions about my business'), 'the guided start shows where to paste the link in Claude, and a first message to send')
-check(['cafe', 'shop', 'classes', 'services', 'portfolio'].every((id) => claimedBody.includes(`<input name="starter" type="hidden" value="${id}">`)) && claimedBody.includes(`action="/owner/${code}/starters"`) && claimedBody.includes('target="_blank"'), 'the guided start offers every starter, opening in a new tab so the links stay on screen')
+check(['cafe', 'shop', 'classes', 'services', 'portfolio'].every((id) => claimedBody.includes(`<input name="starter" type="hidden" value="${id}">`)) && claimedBody.includes(`action="/owner/${code}/starters"`) && claimedBody.includes('Open my Dashboard'), 'the guided start offers every starter and a direct path into the workspace')
 const setupAgain = await fetch(`${base}/setup`, { redirect: 'manual' })
 check(setupAgain.status === 303 && !(await (await fetch(base)).text()).includes(code), 'the guided start and its links are never shown again')
-check((await (await fetch(base)).text()).includes('pick a starter'), 'the empty site tells its owner about starters')
+check((await (await fetch(base)).text()).includes('Check back soon'), 'the empty public site does not expose owner setup steps')
 
 // The first steps checklist ticks itself from what really happened
 const stepDone = (html, step) => html.match(new RegExp(`data-done="([01])" data-step="${step}"`))?.[1]

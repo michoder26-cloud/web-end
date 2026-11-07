@@ -48,8 +48,8 @@ const buildingPage = () =>
   shell(
     'Coming soon',
     `<h1>This website is being built.</h1>
-<p>Are you the owner? Open your back office link and pick a starter for a working site in one click. Or open Claude, start a new chat with your connector on, and say what you want. For example: "Build a website for my coffee shop."</p>
-<p lang="th">เว็บนี้กำลังสร้างอยู่ ถ้าคุณเป็นเจ้าของ ให้เปิดลิงก์หลังบ้านแล้วเลือกเว็บตั้งต้น ได้เว็บที่ใช้งานได้ในคลิกเดียว หรือเปิด Claude เริ่มแชตใหม่โดยเปิด connector ไว้ แล้วบอกว่าอยากได้เว็บแบบไหน</p>`,
+<p>Check back soon.</p>
+<p lang="th">โปรดกลับมาใหม่เร็ว ๆ นี้</p>`,
   )
 
 async function showPage(request: Request, env: Env, url: URL, site: SiteRow, slug: string) {
