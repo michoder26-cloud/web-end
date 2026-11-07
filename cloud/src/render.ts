@@ -5,6 +5,7 @@ import { isAvailable } from './items'
 import { alternates, languageName, languagePrefix } from './languages'
 import { parsePrice } from './money'
 import { words } from './text'
+import { filterFields, pageSizeOf, readState, tableColumns, viewRows, visibleFields } from './table-block'
 import type { Block, Customer, FormField, Item, Settings, SiteRow } from './types'
 
 const defaults = { accent: '#1f4d3a', background: '#fbfaf6', text: '#16201b' }
@@ -288,6 +289,102 @@ const renderers: Record<string, (block: Block, context: Context) => string> = {
       })
       .join('')
     return section('records', block.tone, `<div class="wrap">${head(block.heading, block.intro)}${cards ? `<div class="records">${cards}</div>` : `<p>${t.recordsEmpty}</p>`}</div>`, anchor)
+  },
+  table(block, { blockIndex, customer, language, pageSlug, query, records }) {
+    const t = words(language)
+    const loaded = records?.get(blockIndex) as (PageRecords & { capped?: boolean }) | undefined
+    if (!loaded) return ''
+    const path = `/${pageSlug === 'home' ? '' : pageSlug}`
+    const anchor = block.id || `table-${loaded.table.name}`
+    if (!loaded.scope) {
+      if (customer || ['owner', 'staff'].includes(loaded.table.read_access)) return ''
+      return section('table', block.tone, `<div class="wrap">${head(block.heading, block.intro)}<p>${t.loginToSee}</p><a class="button" href="/login?next=${encodeURIComponent(path)}">${t.logIn}</a></div>`, anchor)
+    }
+    const actor = { admin: false, customer }
+    const shown = loaded.rows.map((row) => ({ data: showRecord(loaded.table, row, actor) as Record<string, unknown>, id: row.id }))
+    const visible = visibleFields(loaded.table, actor)
+    if (block.detail) {
+      const one = shown[0]
+      const lines = one
+        ? visible
+            .filter((field) => one.data[field.name] !== undefined && field.type !== 'image')
+            .map((field) => `<div><dt>${escapeHtml(field.label)}</dt><dd class="pre-line">${recordValue(field, one.data[field.name], loaded, language)}</dd></div>`)
+            .join('')
+        : ''
+      const pictures = one ? visible.filter((field) => field.type === 'image').map((field) => recordValue(field, one.data[field.name], loaded, language)).join('') : ''
+      return section('table', block.tone, `<div class="wrap">${head(block.heading, block.intro)}${one ? `<article class="card account__record table__detail">${pictures}<dl>${lines}</dl></article>` : `<p>${t.tableNotFound}</p>`}</div>`, anchor)
+    }
+    const key = `t${blockIndex}`
+    const columns = tableColumns(loaded.table, block, actor)
+    const filters = filterFields(block, columns, visible)
+    const state = readState(block, blockIndex, query ?? new URLSearchParams(), columns, filters)
+    const plain = (field: DataField, value: unknown) =>
+      field.type === 'boolean' ? (value ? t.tableYes : t.tableNo) : field.type === 'reference' ? (loaded.labels.get(`${field.name}:${value}`) ?? `#${value}`) : String(value)
+    const view = viewRows(shown, columns, filters, state, pageSizeOf(block), plain, language)
+    // Links and the form keep this block's choices, and the choices of other table blocks on the page.
+    const others: [string, string][] = []
+    query?.forEach((value, name) => {
+      if (/^t\d+[a-z]/.test(name) && name.match(/^t(\d+)/)?.[1] !== String(blockIndex)) others.push([name, value])
+    })
+    const href = (change: { dir?: string; page?: number; sort?: string }) => {
+      const params = new URLSearchParams(others)
+      if (state.q) params.set(`${key}q`, state.q)
+      for (const [name, value] of Object.entries(state.filters)) params.set(`${key}f_${name}`, value)
+      const sort = change.sort ?? state.sort
+      if (sort) {
+        params.set(`${key}s`, sort)
+        params.set(`${key}d`, change.dir ?? state.dir)
+      }
+      if (change.page && change.page > 1) params.set(`${key}p`, String(change.page))
+      return `?${params.toString()}#${anchor}`
+    }
+    const sortable = columns.filter((field) => field.type !== 'image')
+    const hidden = others.map(([name, value]) => `<input name="${escapeHtml(name)}" type="hidden" value="${escapeHtml(value)}">`).join('')
+    const select = (name: string, label: string, choices: { label: string; value: string }[], current: string) =>
+      `<label>${escapeHtml(label)}<select name="${escapeHtml(name)}">${choices.map((choice) => `<option${choice.value === current ? ' selected' : ''} value="${escapeHtml(choice.value)}">${escapeHtml(choice.label)}</option>`).join('')}</select></label>`
+    const filterBoxes = filters
+      .map((field) => select(`${key}f_${field.name}`, field.label, [{ label: t.tableAll, value: '' }, ...(field.type === 'boolean' ? [{ label: t.tableYes, value: 'true' }, { label: t.tableNo, value: 'false' }] : (field.options ?? []).map((option) => ({ label: option, value: option })))], state.filters[field.name] ?? ''))
+      .join('')
+    const active = Boolean(state.q || Object.keys(state.filters).length)
+    const sorting = sortable.length
+      ? select(`${key}s`, t.tableSortBy, [{ label: t.tableDefaultOrder, value: '' }, ...sortable.map((field) => ({ label: field.label, value: field.name }))], state.sort) + select(`${key}d`, t.tableSortBy, [{ label: t.tableUp, value: 'asc' }, { label: t.tableDown, value: 'desc' }], state.dir)
+      : ''
+    const search = block.search === false ? '' : `<label>${t.tableSearch}<input maxlength="100" name="${key}q" type="search" value="${escapeHtml(state.q)}"></label>`
+    const clear = active ? `<a class="table__clear" href="?${escapeHtml(new URLSearchParams(others).toString())}#${escapeHtml(anchor)}">${t.tableClear}</a>` : ''
+    const tools = `<form action="#${escapeHtml(anchor)}" class="table__tools contact-form" method="get">${hidden}${search}${filterBoxes}${sorting}<div class="table__buttons"><button class="button button--small" type="submit">${t.tableSearchGo}</button>${clear}</div></form>`
+    const detail = typeof block.detailPage === 'string' && /^[a-z0-9-]{1,60}$/.test(block.detailPage) ? block.detailPage : ''
+    const heads = columns
+      .map((field) => {
+        const on = state.sort === field.name
+        const label = escapeHtml(field.label)
+        const inner = field.type === 'image' ? label : `<a href="${escapeHtml(href({ dir: on && state.dir === 'asc' ? 'desc' : 'asc', sort: field.name }))}">${label}${on ? `<span aria-hidden="true"> ${state.dir === 'asc' ? '▲' : '▼'}</span>` : ''}</a>`
+        return `<th scope="col"${on ? ` aria-sort="${state.dir === 'asc' ? 'ascending' : 'descending'}"` : ''}>${inner}</th>`
+      })
+      .join('')
+    const body = view.rows
+      .map((row) => {
+        const cells = columns
+          .map((field, position) => {
+            const value = row.data[field.name]
+            const empty = value === undefined || value === null || value === ''
+            let content = empty ? '—' : recordValue(field, value, loaded, language)
+            // A link can't sit inside the row's own link, so the first cell shows a web address as plain text.
+            if (detail && position === 0) content = `<a class="table__open" href="/${detail}?row=${row.id}" title="${escapeHtml(t.tableOpen)}">${empty ? '—' : field.type === 'url' ? escapeHtml(value) : content}</a>`
+            return `<td data-label="${escapeHtml(field.label)}">${content}</td>`
+          })
+          .join('')
+        return `<tr>${cells}</tr>`
+      })
+      .join('')
+    const pager =
+      view.pages > 1
+        ? `<nav aria-label="${t.tablePages}" class="table__pager">${view.page > 1 ? `<a href="${escapeHtml(href({ page: view.page - 1 }))}" rel="prev">${t.tablePrev}</a>` : '<span></span>'}<span>${t.tablePage} ${view.page} ${t.tableOf} ${view.pages}</span>${view.page < view.pages ? `<a href="${escapeHtml(href({ page: view.page + 1 }))}" rel="next">${t.tableNext}</a>` : '<span></span>'}</nav>`
+        : ''
+    const list = view.total
+      ? `<div class="table__scroll"><table class="table"><caption class="table__caption">${escapeHtml(block.heading || loaded.table.label)}</caption><thead><tr>${heads}</tr></thead><tbody>${body}</tbody></table></div>${pager}`
+      : `<p role="status">${loaded.rows.length ? t.tableNoMatches : t.recordsEmpty}</p>`
+    const note = `${loaded.rows.length ? `<p class="table__count">${view.total} ${t.tableResults}</p>` : ''}${loaded.capped ? `<p class="table__count">${t.tableCapped}</p>` : ''}`
+    return section('table', block.tone, `<div class="wrap">${head(block.heading, block.intro)}${loaded.rows.length ? tools : ''}${note}${list}</div>`, anchor)
   },
   'record-form'(block, { blockIndex, customer, error, language, pageSlug, query, records, sent }) {
     const t = words(language)

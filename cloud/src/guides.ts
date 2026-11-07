@@ -70,6 +70,7 @@ Common recipes:
 
 Members, own and login prompts need update_site accounts true. Customers who log in with Google, once the owner has set it up as the limits guide explains, get the same member role and follow the same rules. Default to the tightest rule that works, and tell the owner in plain words who can see what. Never store passwords, card numbers, ID numbers or health data in tables.`,
   screens: `# Pages and screens
+- table block: shows a table's records as a table, with a search box, drop-down filters, sort and pages, all plain links and forms with no scripts. Choose columns (field names, in order), sort and dir for the first order, pageSize (20 by default, 100 at most) and filters (select or boolean fields). Rows become cards on phones. To open a row, put detail true on a table block of the same table on another page, and give detailPage on the list block. Private (staffOnly) fields never show to customers, and the table's read access decides who sees rows. It reads the first 1,000 records and says so when there are more, so use it for lists, not for huge tables.
 - records block: lists a table as cards, respecting access. Choose fields with fields, cap it with limit, and set allowDelete true so people can remove their own records.
 - record-form block: adds a record, with inputs built from the table. Use fields to choose which to show. It asks people to log in when the table requires it.
 - Keep one main job per page. Put the form beside or above the list it feeds.
