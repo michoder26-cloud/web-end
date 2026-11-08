@@ -345,7 +345,7 @@ async function overview(env: Env, url: URL, site: SiteRow, desk: Desk) {
 ${site.live_version ? `<p>${t.seeWaiting(`${escapeHtml(desk.base)}/publish`)}</p>` : ''}
 <h2 id="claude">${t.claudeHeading}</h2>
 <p>${t.claudeHelp}</p>
-${desk.code ? (steps && !steps.claude ? `<div class="contact-form">${claudeLinkField(mcpUrl, t)}${connectGuide(t)}</div>` : `<p><code style="overflow-wrap:anywhere">${escapeHtml(mcpUrl)}</code></p>`) : `<p>Claude is connected with the private link shown during setup. This account dashboard never reveals it.</p>`}`,
+${desk.code ? (steps && !steps.claude ? `<div class="contact-form">${claudeLinkField(mcpUrl, t)}${connectGuide(t)}</div>` : `${steps?.claude ? `<p role="status"><b>${t.start.claudeConnected}</b></p>` : ''}<p><code style="overflow-wrap:anywhere">${escapeHtml(mcpUrl)}</code></p>`) : `<p>Claude is connected with the private link shown during setup. This account dashboard never reveals it.</p>`}`,
   )
 }
 

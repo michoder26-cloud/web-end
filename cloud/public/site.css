@@ -944,7 +944,61 @@ details p:first-of-type {
 }
 
 .launch__templates {
-  margin-top: 46px;
+  margin-top: 34px;
+}
+
+.launch__choice {
+  display: block;
+  margin-top: 34px;
+}
+
+.launch__steps {
+  display: grid;
+  gap: 18px;
+  margin: 18px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.launch__steps li {
+  padding: 16px;
+  border: 1px solid var(--launch-line);
+  border-radius: 12px;
+  background: rgb(7 13 22 / 28%);
+}
+
+.launch__steps h3 {
+  margin: 0 0 10px;
+  font-size: 1.15rem;
+}
+
+.launch__steps input,
+.launch__steps textarea {
+  font-size: 1rem;
+}
+
+.launch__steps [data-copy] {
+  min-height: 48px;
+  padding-inline: 22px;
+  font-size: 1.05rem;
+}
+
+.launch__steps .button--ghost {
+  border-color: var(--launch-accent);
+  color: var(--launch-ink);
+}
+
+.launch__recovery {
+  margin-top: 34px;
+  color: var(--launch-muted);
+}
+
+.launch__recovery h2 {
+  font-size: 1rem;
+}
+
+.launch__recovery a {
+  color: var(--launch-ink);
 }
 
 .launch .starter {
