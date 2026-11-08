@@ -12,7 +12,7 @@ You need three free accounts: [Cloudflare](https://dash.cloudflare.com/sign-up),
 
    [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/michoder26-cloud/web-end/tree/main/cloud)
 
-   When GitHub asks, choose **Only select repositories**, so your other projects stay out of it. If you land on a different page afterwards, click the button again. When it finishes, open the address that ends in `.workers.dev` (or press **Visit**). Step-by-step guide in Thai: [docs/install-th.md](docs/install-th.md).
+   When GitHub asks, choose **Only select repositories**, so your other projects stay out of it. If you land on a different page afterwards, click the button again. When it finishes, open the address that ends in `.workers.dev` (or press **Visit**). Step-by-step install guide: [docs/install.md](docs/install.md).
 
 2. **Start building.** Open your new website and click **Start building free**. The first person to click becomes the owner, then chooses whether to begin with Claude or a working example.
 3. **Create your sign-in.** Your back office shows a **Create your sign-in** box until you do: type your name, email and password, with nothing to paste. From then on, sign in at `/admin` on any device.
