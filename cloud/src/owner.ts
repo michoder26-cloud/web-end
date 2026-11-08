@@ -54,7 +54,7 @@ export const setupPage = (t: OfficeWords = officeWords()) => {
     : { eyebrow: 'WEB-END', title: 'What do you want to build?', intro: 'Tell Claude in ordinary words. Build the website, data, customer system and back office in your own space.', action: 'Start building free', note: 'You own the code, database and Cloudflare account.' }
   return shell(
     t.setupTitle,
-    `<section class="launch launch--first"><p class="launch__eyebrow">${copy.eyebrow}</p><h1>${copy.title}</h1><p class="lead">${copy.intro}</p><form action="/setup" method="post"><button class="button launch__primary" type="submit">${copy.action}</button></form><p class="launch__note">${copy.note}</p></section>`,
+    `<section class="launch launch--first launch--warm"><p class="launch__eyebrow">${copy.eyebrow}</p><h1>${copy.title}</h1><p class="lead">${copy.intro}</p><form action="/setup" method="post"><button class="button launch__primary" type="submit">${copy.action}</button></form><p class="launch__note">${copy.note}</p></section>`,
     false,
     t.lang,
   )
