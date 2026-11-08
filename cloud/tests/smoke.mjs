@@ -1468,7 +1468,7 @@ const exportText = JSON.stringify(exported)
 check(exportResponse.headers.get('content-disposition')?.includes('attachment') && exported.format === 'web-end-export-1' && exported.pages.some((row) => row.slug === 'seats') && exported.records.sessions_on.length >= 3 && exported.customers.length > 0 && exported.orders.length > 0 && exported.items.length > 0, 'the owner can download everything in one file')
 check(!exportText.includes('password_hash') && !exportText.includes('token_hash') && !exportText.includes('key_hash') && !exportText.includes('wek_') && !exportText.includes('edit_hash'), 'the download leaves out passwords and secrets')
 check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd/export.json`)).status === 404, 'a wrong link cannot download anything')
-check((await (await fetch(`${owner}/system`)).text()).includes('Download everything'), 'the system page offers the download')
+check((await (await fetch(`${owner}/system`)).text()).includes('Readable copy for moving elsewhere'), 'the system page offers the download')
 check((await call('save_webhook', { url: 'https://discord.com/api/webhooks/123/secret', events: ['order.created'] })).isError, 'chat addresses stay out of the conversation')
 const chatAdded = await fetch(`${owner}/connect/webhook`, { body: new URLSearchParams({ events: 'order.created', url: 'https://discord.com/api/webhooks/123/secret-part' }), method: 'POST', redirect: 'manual' })
 const hooksNow = (await call('list_webhooks', {})).data
@@ -3367,6 +3367,84 @@ if (loadCount) {
     check(errors === 0, `${label}: ${loadCount} requests`, `${errors} errors`)
     console.log(`      median ${times[times.length >> 1]}ms, max ${times.at(-1)}ms`)
   }
+}
+
+{
+// What changed: Claude's changes are listed with an undo, and Claude is told to stop when it goes in circles.
+const loopPage = { slug: 'loop-test', title: 'Loop 0', description: 'x', published: true, blocks: [{ type: 'hero', heading: 'Loop 0' }] }
+await call('save_page', loopPage)
+const loopAnswers = []
+for (let round = 1; round <= 4; round++) loopAnswers.push(await client.callTool({ name: 'save_page', arguments: { ...loopPage, title: `Loop ${round}` } }))
+check(loopAnswers.slice(0, 3).every((answer) => answer.content.length === 1) && loopAnswers[3].content.some((part) => part.text.startsWith('Stop here')), 'Claude is told to stop after changing the same page 5 times in 30 minutes')
+const changesPage = await (await fetch(`${owner}/changes`)).text()
+const loopChange = changesPage.match(/action="[^"]*\/changes\/(\d+)\/undo"/)?.[1]
+check(changesPage.includes('loop-test') && changesPage.includes('Create or replace a page') && Boolean(loopChange), 'the What changed page lists Claude\'s changes, newest first, with Undo')
+const undone = await fetch(`${owner}/changes/${loopChange}/undo`, { method: 'POST', redirect: 'manual' })
+check(undone.status === 303 && (await call('get_page', { slug: 'loop-test' })).data.title === 'Loop 3', 'Undo puts the page back as it was before that change')
+check((await (await fetch(`${owner}/changes`)).text()).includes('Undo: Create or replace a page'), 'the undo is listed too, so it can be undone')
+const firstChange = [...changesPage.matchAll(/\/changes\/(\d+)\/undo"/g)].map((match) => Number(match[1])).sort((a, b) => a - b)
+const settingsBefore = (await call('get_site')).data.settings.name
+await call('update_site', { name: 'Renamed by Claude' })
+const settingsUndo = (await (await fetch(`${owner}/changes`)).text()).match(/action="[^"]*\/changes\/(\d+)\/undo"/)?.[1]
+await fetch(`${owner}/changes/${settingsUndo}/undo`, { method: 'POST', redirect: 'manual' })
+check((await call('get_site')).data.settings.name === settingsBefore && firstChange.length > 0, 'Undo puts the settings back too')
+check((await (await fetch(owner)).text()).includes('/changes">See what changed</a>'), 'the overview says how many changes Claude made today')
+await call('delete_page', { slug: 'loop-test' })
+
+// Free usage: what the site uses against the free limits, and what happens at each one.
+const usagePage = await (await fetch(`${owner}/system`)).text()
+check(usagePage.includes('id="free-usage"') && usagePage.includes('of 5 GB') && usagePage.includes('of 200 MB') && usagePage.includes('never charged') && typeof (await call('get_status')).data.freeUsage?.databaseBytes === 'number', 'the System page shows free usage against each limit, and so does get_status')
+
+// Backup and restore, done the way the System page's script does it.
+const backupGet = async (path) => (await fetch(`${owner}${path}`)).json()
+const takeBackup = async () => {
+  const head = await backupGet('/backup/part?table=site')
+  const backup = { app: 'web-end', format: head.format, site: head.site, tables: {} }
+  for (const table of head.tables) {
+    const part = { columns: [], rows: [] }
+    for (let after = 0; ; ) {
+      const page = await backupGet(`/backup/part?table=${table}&after=${after}`)
+      part.columns = page.columns
+      part.rows.push(...page.rows)
+      if (page.next === null) break
+      after = page.next
+    }
+    backup.tables[table] = part
+  }
+  return { backup, order: head.tables }
+}
+const restorePost = (body, token, headers = { Origin: base }) => fetch(`${owner}/restore/part`, { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json', ...headers, ...(token ? { 'X-Restore-Token': token } : {}) }, method: 'POST' })
+const { backup: savedBackup, order: backupOrder } = await takeBackup()
+const savedImage = savedBackup.tables.media.rows[0]
+check(backupGet && savedBackup.tables.customers.rows.length > 0 && savedBackup.tables.pages.rows.length > 0 && savedBackup.tables.customers.columns.includes('password_hash') && !('sessions' in savedBackup.tables) && (!savedImage || typeof savedImage[savedBackup.tables.media.columns.indexOf('bytes')]?.$b64 === 'string'), 'a backup holds pages, customers with their sign-in, and image bytes, but no sessions')
+check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd/backup/part?table=site`)).status === 404, 'a wrong link cannot download a backup')
+const homeBefore = (await call('get_page', { slug: 'home' })).data
+await call('save_page', { ...homeBefore, title: 'Changed after the backup' })
+const customersBefore = (await call('list_customers', {})).data.length
+check((await restorePost({ confirm: true, format: savedBackup.format, start: true }, null, { Origin: 'https://not-your-site.test' })).status === 403, 'another website cannot start a restore')
+check((await restorePost({ format: savedBackup.format, start: true })).status === 400 && (await restorePost({ confirm: true, format: 99, start: true })).status === 400, 'a restore needs the confirmation box, and refuses a backup from a newer web-end')
+check((await restorePost({ columns: ['id'], rows: [], table: 'pages' })).status === 403, 'parts of a restore need the token of a restore that was started')
+const restoreStart = await (await restorePost({ confirm: true, format: savedBackup.format, start: true })).json()
+let restoreOk = Boolean(restoreStart.token)
+for (const table of backupOrder) {
+  const part = savedBackup.tables[table]
+  for (let index = 0; index < part.rows.length; index += 100) {
+    const answer = await restorePost({ columns: part.columns, rows: part.rows.slice(index, index + 100), table }, restoreStart.token)
+    if (answer.status !== 200) {
+      restoreOk = false
+      console.log(`      restore of ${table} failed: ${await answer.text()}`)
+    }
+  }
+}
+restoreOk &&= (await restorePost({ finish: true, site: savedBackup.site }, restoreStart.token)).status === 200
+const homeAfter = (await call('get_page', { slug: 'home' })).data
+const ownerBack = await fetch(`${base}/admin/login`, { body: new URLSearchParams({ email: 'owner@admin.test', password: 'new-owner-password-123' }), method: 'POST', redirect: 'manual' })
+const { backup: again } = await takeBackup()
+const sameImage = !savedImage || JSON.stringify(again.tables.media.rows[0]) === JSON.stringify(savedImage)
+check(restoreOk && homeAfter.title === homeBefore.title && (await call('list_customers', {})).data.length === customersBefore && ownerBack.status === 303 && sameImage, 'a restore brings back pages, customers who can sign in, and the same image bytes, and the private link keeps working')
+check(Object.keys(savedBackup.tables).every((table) => again.tables[table].rows.length === savedBackup.tables[table].rows.length || table === 'change_log'), 'a backup taken after the restore has the same rows as the one restored')
+check((await restorePost({ finish: true, site: savedBackup.site }, restoreStart.token)).status === 403, 'a finished restore cannot be continued')
+
 }
 
 // Last, because it replaces the private link every check above uses: the signed-in owner makes a new Claude link.

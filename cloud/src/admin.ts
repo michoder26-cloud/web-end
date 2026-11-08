@@ -1,6 +1,7 @@
 import { allowAttempt, endCookie, endSession, getCustomer, hashPassword, registerCustomer, startSession, verifyLogin } from './auth'
 import { adminDesk, handleOffice } from './cms'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
+import { handleBackup, restoreTokenValid } from './backup'
 import { claudeLinkPage, firstSteps } from './first-steps'
 import { hashCode, isOwner, newCode, shell } from './owner'
 import { officeText } from './office-words'
@@ -77,6 +78,8 @@ export async function handleAdmin(request: Request, env: Env, url: URL, site: Si
   const a = officeText(site).admin
   // Sign in, set up, recover and sign out change who is logged in, so another site must not be able to post them.
   if (request.method === 'POST' && ['claim', 'claude-link', 'login', 'logout', 'recover'].includes(action) && fromAnotherSite(request, url)) return page(site, a.signInTitle, `<p role="alert">${a.otherSite}</p>`, 403)
+  // A restore replaces every account, the owner's sign-in too, so its later parts carry the restore's own token instead.
+  if (action === 'restore' && parts[1] === 'part' && request.method === 'POST' && Number(request.headers.get('content-length') || 0) <= 3_000_000 && (await restoreTokenValid(request, env))) return handleBackup(request, env, url, site, 'restore', 'part', true)!
   if (!site.owner_customer_id) {
     if (action !== 'claim') return request.method === 'GET' ? claimPage(site) : notFound()
     if (request.method !== 'POST') return claimPage(site)

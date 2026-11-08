@@ -1,4 +1,4 @@
 {
-  "version": "0.20.0",
-  "notes": "Easier to use: create your owner sign-in right from the back office with nothing to paste, a reminder until you do, sign-in pages in Thai, a Claude link you can make from /admin, a shorter menu with the rarer pages under More, one-click daily updates (built in for new sites), and direct Cloudflare links with exact secret names."
+  "version": "0.21.0",
+  "notes": "Backup and restore in two clicks on the System page, with images and customer sign-ins. A What changed page lists every change Claude makes, with Undo for pages and settings, and Claude now stops and explains when it keeps changing the same thing. A Free usage card shows what the site uses against each free limit, and that nothing can become a bill."
 }

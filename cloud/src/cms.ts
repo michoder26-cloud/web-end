@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 import { approvalWords, handleApprovalsOffice } from './approvals-office'
-import { createResetLink, getCustomer } from './auth'
+import { createResetLink, getCustomer, newToken } from './auth'
 import { reschedule } from './automations'
 import { handleAutomationsOffice } from './automations-office'
 import { itemInLanguage, itemLanguageLinks, languageTabs, pageInLanguage, settingsInLanguage } from './cms-languages'
@@ -11,6 +11,7 @@ import { canSendEmail } from './email'
 import { checklist, claudeLinkField, connectGuide, firstSteps, handleStarters, isStarter, ownerAccountForm } from './first-steps'
 import type { FirstSteps } from './first-steps'
 import { secretsHelp } from './secret-help'
+import { claudeChangesToday, handleChanges } from './changes'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { saveImage } from './items'
 import { extraLanguages, languageName, localizePage, mainLanguage, siteMissing } from './languages'
@@ -88,12 +89,13 @@ export const catalog: Record<string, { label: string; fields: Spec[]; start: Blo
 }
 
 /** One back office page. Owner-only pages may pass the owner's code instead of a desk. */
-export const office = (site: SiteRow, at: Desk | string, title: string, body: string, notice?: Notice, status = 200) => {
+export const office = (site: SiteRow, at: Desk | string, title: string, body: string, notice?: Notice, status = 200, script = '') => {
   const desk = typeof at === 'string' ? ownerDesk(at) : at
+  const nonce = script ? newToken() : ''
   const settings = JSON.parse(site.settings) as Settings
   const t = officeText(site)
   const base = `${escapeHtml(desk.base)}`
-  const links: [string, string][] = [['', t.nav.overview], ['/stats', t.nav.stats], ['/orders', t.nav.orders], ['/pages', t.nav.pages], ['/items', t.nav.products], ['/data', t.nav.data], ['/approvals', approvalWords(site).title], ['/automations', t.automations.title], ['/media', t.nav.images], ['/customers', t.nav.customers], ['/news', t.news.title], ['/publish', t.nav.publish], ['/connect', t.nav.connect], ['/move', t.nav.move], ['/wordpress', t.nav.wordpress], ['/settings', t.nav.settings], ['/system', t.nav.system], ['/updates', t.nav.updates]]
+  const links: [string, string][] = [['', t.nav.overview], ['/changes', t.nav.changes], ['/stats', t.nav.stats], ['/orders', t.nav.orders], ['/pages', t.nav.pages], ['/items', t.nav.products], ['/data', t.nav.data], ['/approvals', approvalWords(site).title], ['/automations', t.automations.title], ['/media', t.nav.images], ['/customers', t.nav.customers], ['/news', t.news.title], ['/publish', t.nav.publish], ['/connect', t.nav.connect], ['/move', t.nav.move], ['/wordpress', t.nav.wordpress], ['/settings', t.nav.settings], ['/system', t.nav.system], ['/updates', t.nav.updates]]
   // Any staff member may be an approver, so Approvals is always in their menu. The page shows only what they may see.
   const shown = desk.staff ? links.filter(([path]) => !path || path === '/approvals' || (staffMenu[path] && allows(desk, staffMenu[path]))) : links
   const copy = t.lang === 'th'
@@ -142,7 +144,7 @@ ${keepKey}<div class="cms-console">
   <aside class="cms-sidebar">
     <p class="cms-sidebar-label">${escapeHtml(copy.dashboard)}</p>
     <nav aria-label="${escapeHtml(t.navLabel)}" class="cms-nav">
-      ${group(copy.build, ['', '/pages', '/items', '/data', '/media', '/news'])}
+      ${group(copy.build, ['', '/pages', '/items', '/data', '/media', '/news', '/changes'])}
       ${group(copy.run, ['/stats', '/orders', '/customers', '/approvals', '/automations', '/publish', '/settings'])}
       ${more(copy.more, ['/connect', '/move', '/wordpress', '/system', '/updates'])}
     </nav>
@@ -156,9 +158,11 @@ ${keepKey}<div class="cms-console">
 </div>`,
       true,
       t.lang,
+      script ? `<script nonce="${nonce}">${script}</script>` : '',
     ),
     status,
-    desk.staff ? staffHeaders : privateHeaders,
+    // A page with its own script lets only that script run, by a nonce made for this one response.
+    script ? { ...privateHeaders, 'Content-Security-Policy': privateHeaders['Content-Security-Policy'].replace("script-src 'none'", `script-src 'nonce-${nonce}'`) } : desk.staff ? staffHeaders : privateHeaders,
   )
 }
 
@@ -334,8 +338,9 @@ async function overview(env: Env, url: URL, site: SiteRow, desk: Desk) {
     const intro = desk.staff.permissions.length ? `<p>${t.staffIntro}</p>` : `<p role="status">${t.staffNoAreas}</p>`
     return office(site, desk, t.nav.overview, `${intro}${allows(desk, 'messages') ? `<h2>${t.messagesHeading}</h2>${await messageList(env, site, desk)}` : ''}`)
   }
-  const [latest, steps] = await Promise.all([latestRelease(), firstSteps(env, site)])
+  const [latest, steps, changedToday] = await Promise.all([latestRelease(), firstSteps(env, site), claudeChangesToday(env)])
   const newer = latest && isNewer(latest.version, version) ? `<p role="status">${t.versionAvailable(escapeHtml(latest.version), `${escapeHtml(desk.base)}/updates`)}</p>` : ''
+  const changed = changedToday ? `<p role="status">${t.changes.overviewNote(changedToday, `${escapeHtml(desk.base)}/changes`)}</p>` : ''
   const started = isStarter(url.searchParams.get('started')) ? `<p role="status">${site.live_version ? t.start.startedLive(`${escapeHtml(desk.base)}/publish`) : t.start.started}</p>` : ''
   // A new site gets its first steps on top, until every one of them is done.
   const firstTime = steps && !Object.values(steps).every(Boolean) ? checklist(steps, escapeHtml(desk.base), t) : ''
@@ -358,7 +363,7 @@ async function overview(env: Env, url: URL, site: SiteRow, desk: Desk) {
     site,
     desk,
     t.nav.overview,
-    `${started}${newer}${account}${firstTime}${commandCenter}<h2>${t.messagesHeading}</h2>${await messageList(env, site, desk)}
+    `${started}${changed}${newer}${account}${firstTime}${commandCenter}<h2>${t.messagesHeading}</h2>${await messageList(env, site, desk)}
 ${site.live_version ? `<p>${t.seeWaiting(`${escapeHtml(desk.base)}/publish`)}</p>` : ''}
 <h2 id="claude">${t.claudeHeading}</h2>
 <p>${t.claudeHelp}</p>
@@ -866,5 +871,6 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
     return post ? saveSettings(request, env, url, site, desk) : settingsForm(site, desk, url.host, saved)
   }
   if (area === 'starters' && !id) return handleStarters(request, env, url, site, desk)
+  if (area === 'changes') return handleChanges(request, env, url, site, desk, id, action)
   return notFound()
 }

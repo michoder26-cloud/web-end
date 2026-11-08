@@ -21,6 +21,8 @@ import { version } from './version'
 import { eventNames, safeWebUrl, validWebhookUrl } from './webhooks'
 import { redirectionCsv, woocommerceCsv, wordpressPlan, wordpressReport, wordpressXml } from './wordpress'
 import { secretsHelp } from './secret-help'
+import { handleBackup } from './backup'
+import { backupCard, backupScript } from './backup-page'
 import type { Env, Settings, SiteRow } from './types'
 
 const fieldSpec = () =>
@@ -392,7 +394,7 @@ async function handlePublish(request: Request, env: Env, url: URL, site: SiteRow
 export async function systemStatus(env: Env, site: SiteRow, origin: string) {
   const settings = JSON.parse(site.settings) as Settings
   const count = async (sql: string) => (await env.DB.prepare(sql).bind(site.id).first<{ total: number }>())?.total ?? 0
-  const [latest, waiting, tables, customers, orders, pages, imageBytes, records, keys, hooks] = await Promise.all([
+  const [latest, waiting, tables, customers, orders, pages, imageBytes, records, keys, hooks, viewsToday, newsToday, size] = await Promise.all([
     latestRelease(),
     unpublishedChanges(env, site),
     count('SELECT COUNT(*) AS total FROM data_tables WHERE site_id = ?'),
@@ -403,6 +405,10 @@ export async function systemStatus(env: Env, site: SiteRow, origin: string) {
     count('SELECT COALESCE(SUM(record_count), 0) AS total FROM data_tables WHERE site_id = ?'),
     count('SELECT COUNT(*) AS total FROM api_keys WHERE site_id = ?'),
     count('SELECT COUNT(*) AS total FROM webhooks WHERE site_id = ?'),
+    count("SELECT COALESCE(SUM(views), 0) AS total FROM stats_daily WHERE site_id = ? AND day = strftime('%Y-%m-%d', 'now')"),
+    count("SELECT COALESCE(SUM(sent), 0) AS total FROM news_daily WHERE site_id = ? AND day = strftime('%Y-%m-%d', 'now')"),
+    // D1 reports the whole database's size with every query.
+    env.DB.prepare('SELECT 1').run().then((result) => Number((result.meta as { size_after?: number }).size_after ?? 0)).catch(() => 0),
   ])
   return {
     address: origin,
@@ -411,12 +417,30 @@ export async function systemStatus(env: Env, site: SiteRow, origin: string) {
     latestVersion: latest?.version ?? 'unknown',
     publishing: { liveVersion: site.live_version ?? null, waiting },
     database: { imageBytes, customers, orders, pages, records, tables },
+    // Against the free plans. Nothing here can turn into a bill: on Cloudflare's free plan a limit stops, it never charges.
+    freeUsage: { databaseBytes: size, databaseLimit: 5_000_000_000, imageBytes, imageLimit: 200_000_000, newsToday, newsLimit: 100, records, recordsLimit: 50 * 50_000, viewsToday, requestsLimit: 100_000 },
     login: { customerAccounts: Boolean(settings.accounts) },
     payments: { bankTransfer: Boolean(settings.payTransfer), promptPay: Boolean(settings.payPromptPay), promptPayReady: canPayByPromptPay(settings), card: Boolean(settings.payCard), cardSecretsSet: Boolean(env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET), payOnDelivery: Boolean(settings.payCod), cart: Boolean(settings.cart) },
     email: emailStatus(env, settings),
     google: googleStatus(env, settings, origin),
     connections: { apiKeys: keys, browserSites: settings.allowedOrigins ?? [], webhooks: hooks },
   }
+}
+
+const size = (bytes: number) => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : `${Math.ceil(bytes / 1e3)} KB`)
+
+/** How much of each free limit the site uses, and what happens at the limit. */
+const usageCard = (u: Awaited<ReturnType<typeof systemStatus>>['freeUsage'], t: OfficeWords) => {
+  const w = t.usage
+  const number = (value: number) => value.toLocaleString('en')
+  const row = (label: string, used: number, limit: number, shown: string, full: string) => `<div class="usage"><dt>${label}</dt><dd>${escapeHtml(shown)}<meter max="${limit}" min="0" optimum="0" high="${limit * 0.8}" value="${Math.min(used, limit)}"></meter><small>${full}</small></dd></div>`
+  return `<article class="card account__record" id="free-usage"><h2>${w.heading}</h2><p>${w.intro}</p><dl>
+${row(w.database, u.databaseBytes, u.databaseLimit, w.of(size(u.databaseBytes), '5 GB'), w.databaseFull)}
+${row(w.images, u.imageBytes, u.imageLimit, w.of(size(u.imageBytes), '200 MB'), w.imagesFull)}
+${row(w.records, u.records, u.recordsLimit, w.of(number(u.records), number(u.recordsLimit)), w.recordsFull)}
+${row(w.views, u.viewsToday, u.requestsLimit, number(u.viewsToday), w.viewsFull)}
+${row(w.news, u.newsToday, u.newsLimit, w.of(number(u.newsToday), number(u.newsLimit)), w.newsFull)}
+</dl><p><small>${w.claude}</small></p></article>`
 }
 
 async function systemPage(env: Env, url: URL, site: SiteRow, desk: Desk, notice?: Notice) {
@@ -438,9 +462,13 @@ async function systemPage(env: Env, url: URL, site: SiteRow, desk: Desk, notice?
 <article class="card account__record"><h2>${t.loginAndPayments}</h2><dl>${row(t.customerAccounts, on(status.login.customerAccounts), '/settings')}${row(t.cartLabel, on(status.payments.cart))}${row(t.bankTransfer, on(status.payments.bankTransfer))}${row(t.promptPay, status.payments.promptPay && !status.payments.promptPayReady ? t.promptPayHalf : on(status.payments.promptPay))}${row(t.payOnDelivery, on(status.payments.payOnDelivery))}${row(t.cards, on(status.payments.card))}${row(t.stripeSecrets, status.payments.cardSecretsSet ? t.isSet : t.notSet)}</dl></article>
 <article class="card account__record"><h2>${t.emailHeading}</h2><dl>${row(t.resendKey, status.email.resendKeySet ? t.isSet : t.notSet)}${row(t.sendFrom, status.email.senderAddress ?? t.notSet, '/settings')}${row(t.notifyEmail, status.email.ownerAddress ?? t.notSet, '/settings')}${row(t.emails, status.email.sending ? t.on : t.off)}</dl>${emailProblems(env, settings).map((problem) => `<p role="alert">${escapeHtml(t.problem(problem))}</p>`).join('')}${status.email.ownerNotices ? `<form action="${base}/system/test-email" method="post"><button class="button button--small" type="submit">${t.sendTestEmail}</button></form>` : ''}</article>
 <article class="card account__record"><h2>${t.googleHeading}</h2><p>${t.googleHelp}</p>${secretsHelp(url.host, ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'], t)}<dl>${row(t.googleClientId, status.google.clientIdSet ? t.isSet : t.notSet)}${row(t.googleClientSecret, status.google.clientSecretSet ? t.isSet : t.notSet)}${row(t.googleRedirect, status.google.redirectAddress)}${row(t.googleButton, on(status.google.on))}</dl>${googleProblems(env, settings).map((problem) => `<p role="alert">${escapeHtml(t.problem(problem))}</p>`).join('')}</article>
-<article class="card account__record"><h2>${t.yourData}</h2><p>${t.yourDataHelp}</p><p><a class="button button--small" href="${base}/export.json">${t.downloadEverything}</a> <a class="button button--small" href="${base}/wordpress">${t.moveToWordpress}</a></p></article>
+<article class="card account__record"><h2>${t.yourData}</h2><p>${t.yourDataHelp}</p><p><a class="button button--small" href="${base}/export.json">${t.backup.readable}</a> <a class="button button--small" href="${base}/wordpress">${t.moveToWordpress}</a></p></article>
+${usageCard(status.freeUsage, t)}
+${backupCard(desk.base, t)}
 <article class="card account__record"><h2>${t.connections}</h2><dl>${row(t.secretKeys, status.connections.apiKeys, '/connect')}${row(t.webhooks, status.connections.webhooks)}${row(t.browserSitesRow, status.connections.browserSites.join(', ') || t.none)}</dl></article>`,
     notice,
+    200,
+    backupScript,
   )
 }
 
@@ -500,6 +528,7 @@ export function handlePlatform(request: Request, env: Env, url: URL, site: SiteR
   if (area === 'system' && !id && request.method !== 'POST') return systemPage(env, url, site, desk)
   if (area === 'system' && id === 'test-email' && !action && request.method === 'POST') return testEmail(env, url, site, desk)
   if (area === 'export.json' && !id && request.method === 'GET') return exportEverything(env, site)
+  if (area === 'backup' || area === 'restore') return handleBackup(request, env, url, site, area, id, !desk.code)
   if (area === 'move' && !action) return handleMove(request, env, url, site, desk, id, saved)
   if (area === 'wordpress' && !action && request.method === 'GET') {
     if (!id) return wordpressPage(env, url, site, desk)

@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 
 import { registerApprovalTools } from './approvals-tools'
+import { watchChanges } from './changes'
 import { appPlanHealth, appPlanSchema, getAppPlan, saveAppPlan } from './app-plan'
 import { newToken } from './auth'
 import { automationProblems, automationSchema, automationWarnings, dryRun, dryRunSchedule, getAutomation, listAutomations, maxAutomationsPerSite, namesFor, noteText, recentRuns, reschedule, sentence, storedAutomationProblems } from './automations'
@@ -77,6 +78,8 @@ Limits to explain honestly:
 - Photos can be uploaded in the back office, up to 1 MB each. Otherwise use public https links they have the right to use.
 - Secret API keys are created only by the owner on the Connect page of the back office. Never ask for one in chat.
 - It cannot check bank transfers or PromptPay payments automatically, and it can't read payment slips. The owner confirms them in the back office. PromptPay shows customers a QR code with the exact amount; it needs the owner's own PromptPay ID and prices in Thai baht. Card payments need the owner's own Stripe account and its secrets added in Cloudflare. Bookings can't be overbooked or doubled when the table uses capacityField and unique, as the screens guide shows.
+- Every change you make is listed on the owner's "What changed" page in the back office, where they can undo page and settings changes. If a tool answer tells you to stop because you keep changing the same thing, stop, explain the problem to the owner in plain words, and ask how to continue.
+- Before big changes, such as a starter that replaces pages or a large import, suggest the owner downloads a backup on the System page. A backup can be restored there in one step, with every page, image, order and account.
 - Email is optional and uses the owner's own Resend account: they add the RESEND_API_KEY secret in Cloudflare themselves, and you set emailFrom and notifyEmail with update_site. Then customers can get a password reset email from the login page and an order confirmation, and the owner gets an email for each new order, form entry and record visitors add. Without it, a customer who forgets a password needs a reset link from the back office, and the owner checks the back office or a chat notification for new orders.
 - Log in with Google is optional and uses the owner's own Google OAuth client: they add the GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET secrets in Cloudflare themselves, following the README, and paste the redirect address from the System page into Google Cloud Console. Then the login and sign-up pages show Continue with Google while accounts are on. You can't set it up for them, and other social logins aren't available.
 - Don't collect health data, ID numbers or card details through forms, and never add a password field to a form. Customer passwords belong only to the built-in login.
@@ -345,6 +348,8 @@ async function translationProblems(env: Env, site: SiteRow, pages: { blocks: str
 
 export function createMcpServer(env: Env, origin: string, code: string) {
   const server = new McpServer({ name: 'web-end', version }, { instructions })
+  // Every change from here on is written down for the owner's "What changed" page, with a stop when Claude goes in circles.
+  watchChanges(server, env)
   const db = env.DB
   const siteUrl = () => `${origin}/`
   const pageUrl = (slug: string) => `${origin}/${slug === 'home' ? '' : slug}`

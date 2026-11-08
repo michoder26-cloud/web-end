@@ -1449,9 +1449,11 @@ details p:first-of-type {
 .cms-content .card,
 .cms-content .cms-block,
 .cms-content .cms-list,
-.cms-content .table tr {
+.cms-content .table tr,
+body[data-style] .cms-content .card {
   border-color: var(--cms-line);
   background: var(--cms-panel);
+  color: var(--cms-text);
 }
 
 .cms-content .card {
@@ -2595,4 +2597,37 @@ details p:first-of-type {
 
 .secret-help__name {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.backup__status:empty {
+  display: none;
+}
+
+.usage dd {
+  display: grid;
+  gap: 4px;
+}
+
+.usage meter {
+  width: 100%;
+  max-width: 320px;
+  height: 10px;
+}
+
+.changes {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.change {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border: 1px solid var(--cms-line);
+  border-radius: 10px;
 }
