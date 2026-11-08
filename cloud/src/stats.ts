@@ -128,7 +128,7 @@ export function countVisit(env: Env, request: Request, path: string, status: num
   if (status !== 200 || request.method !== 'GET') return
   const counted = countablePath(path)
   const agent = request.headers.get('user-agent') ?? ''
-  if (!counted || isBot(agent) || prefetched(request)) return
+  if (!counted || env.test || isBot(agent) || prefetched(request)) return
   const work = countView(env, request, counted, agent).catch((error) => console.error('A visit could not be counted', error))
   env.defer?.(work)
 }
@@ -136,7 +136,7 @@ export function countVisit(env: Env, request: Request, path: string, status: num
 /** Counts an order placed, a form entry or a record a visitor added. Waits only when nothing can finish it later. */
 export async function countConversion(env: Env, site: Pick<SiteRow, 'id' | 'settings'>, kind: ConversionKind) {
   const settings = JSON.parse(site.settings) as Settings
-  if (!statsOn(settings)) return
+  if (!statsOn(settings) || env.test) return
   const work = env.DB.prepare('INSERT INTO stats_events (day, site_id, event, count) VALUES (?, ?, ?, 1) ON CONFLICT DO UPDATE SET count = count + 1')
     .bind(today(settings), site.id, kind)
     .run()

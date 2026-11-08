@@ -648,7 +648,9 @@ async function runOne(env: Env, siteId: number, item: Stored, happened: Happened
   budget.left--
   if (!(await withinLimit(env, `automations:${siteId}`, maxRunsPerHour, 3600))) return logRun(env, item.id, 'skipped', [], ['busySite', String(maxRunsPerHour)])
   if (!(await withinLimit(env, `automation:${item.id}`, maxRunsPerRulePerHour, 3600))) return logRun(env, item.id, 'skipped', [], ['busyRule', String(maxRunsPerRulePerHour)])
-  const outcome = await runSteps({ dry: false, env, happened, item, siteId }, facts)
+  // In test mode the steps are only tried: nothing is changed or sent, and the log says so.
+  const outcome = await runSteps({ dry: Boolean(env.test), env, happened, item, siteId }, facts)
+  if (env.test) outcome.notes.push(['testMode'])
   const finish = async () => {
     for (const task of outcome.later) {
       try {
@@ -658,7 +660,7 @@ async function runOne(env: Env, siteId: number, item: Stored, happened: Happened
         outcome.error ??= noteOf(error)
       }
     }
-    await logRun(env, item.id, outcome.error ? 'failed' : 'done', outcome.notes, outcome.error)
+    await logRun(env, item.id, outcome.error ? 'failed' : env.test ? 'test' : 'done', outcome.notes, outcome.error)
   }
   if (outcome.later.length) await later(env, finish())
   else await finish()

@@ -12,6 +12,7 @@ import { checklist, claudeLinkField, connectGuide, firstSteps, handleStarters, i
 import type { FirstSteps } from './first-steps'
 import { secretsHelp } from './secret-help'
 import { claudeChangesToday, handleChanges } from './changes'
+import { clearTestData, endTestMode, startTestMode, testCounts } from './test-mode'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { saveImage } from './items'
 import { extraLanguages, languageName, localizePage, mainLanguage, siteMissing } from './languages'
@@ -87,6 +88,9 @@ export const catalog: Record<string, { label: string; fields: Spec[]; start: Blo
   record: { label: 'Edit own records', start: { table: 'bookings', type: 'record' }, fields: [spec('table', 'Table name'), heading, spec('intro', 'Intro', 'long'), spec('fields', 'Fields to show, one per line. Leave empty for all', 'lines'), spec('buttonLabel', 'Button text'), spec('sentMessage', 'Message after saving'), spec('errorMessage', 'Message on error'), spec('allowDelete', 'People can cancel (delete) their record', 'bool'), spec('limit', 'How many to show', 'number'), tone] },
   html: { label: 'Custom code', start: { code: '<p>New section</p>', type: 'html' }, fields: [spec('code', 'HTML, CSS and JavaScript', 'long'), spec('height', 'Height in pixels', 'number'), spec('title', 'Title'), tone] },
 }
+
+/** Marks something made in test mode. */
+export const testBadge = (t: OfficeWords) => `<span class="test-badge">${t.test.badge}</span>`
 
 /** One back office page. Owner-only pages may pass the owner's code instead of a desk. */
 export const office = (site: SiteRow, at: Desk | string, title: string, body: string, notice?: Notice, status = 200, script = '') => {
@@ -301,7 +305,7 @@ async function savePageFromForm(request: Request, env: Env, url: URL, site: Site
 async function messageList(env: Env, site: SiteRow, desk: Desk) {
   const [{ results: pages }, { results: entries }] = await Promise.all([
     env.DB.prepare('SELECT slug, blocks FROM pages WHERE site_id = ?').bind(site.id).all<{ blocks: string; slug: string }>(),
-    env.DB.prepare('SELECT entries.id, form, page, data, status, entries.created_at, customers.email AS customer FROM entries LEFT JOIN customers ON customers.id = entries.customer_id WHERE entries.site_id = ? ORDER BY entries.id DESC LIMIT 200').bind(site.id).all<{ created_at: string; customer: null | string; data: string; form: string; id: number; page: string; status: string }>(),
+    env.DB.prepare('SELECT entries.id, form, page, data, status, entries.test, entries.created_at, customers.email AS customer FROM entries LEFT JOIN customers ON customers.id = entries.customer_id WHERE entries.site_id = ? ORDER BY entries.id DESC LIMIT 200').bind(site.id).all<{ created_at: string; customer: null | string; data: string; form: string; id: number; page: string; status: string; test: number }>(),
   ])
   const t = officeText(site)
   const labels = entryFields(pages)
@@ -318,7 +322,7 @@ async function messageList(env: Env, site: SiteRow, desk: Desk) {
             .map((status) => `<button class="button button--small" name="status" type="submit" value="${status}">${escapeHtml(t.entryAction(status))}</button> `)
             .join('')
           const remove = `<label class="check"><input name="confirm" type="checkbox"> ${escapeHtml(t.confirmDeleteEntry)}</label><button class="button button--small" name="status" type="submit" value="delete">${escapeHtml(t.entryAction('delete'))}</button>`
-          return `<article class="card account__record"><h3>${escapeHtml(entry.form)} · ${escapeHtml(t.entryState(entry.status))}</h3><p class="post-date">${escapeHtml(entry.created_at.slice(0, 16).replace('T', ' '))} UTC${entry.customer ? ` · ${escapeHtml(entry.customer)}` : ''}</p><dl>${list}</dl><form action="${escapeHtml(desk.base)}/entry/${entry.id}" method="post">${buttons}${remove}</form></article>`
+          return `<article class="card account__record"><h3>${escapeHtml(entry.form)} · ${escapeHtml(t.entryState(entry.status))}${entry.test ? testBadge(t) : ''}</h3><p class="post-date">${escapeHtml(entry.created_at.slice(0, 16).replace('T', ' '))} UTC${entry.customer ? ` · ${escapeHtml(entry.customer)}` : ''}</p><dl>${list}</dl><form action="${escapeHtml(desk.base)}/entry/${entry.id}" method="post">${buttons}${remove}</form></article>`
         })
         .join('')
     : `<p>${t.noEntries}</p>`
@@ -338,8 +342,11 @@ async function overview(env: Env, url: URL, site: SiteRow, desk: Desk) {
     const intro = desk.staff.permissions.length ? `<p>${t.staffIntro}</p>` : `<p role="status">${t.staffNoAreas}</p>`
     return office(site, desk, t.nav.overview, `${intro}${allows(desk, 'messages') ? `<h2>${t.messagesHeading}</h2>${await messageList(env, site, desk)}` : ''}`)
   }
-  const [latest, steps, changedToday] = await Promise.all([latestRelease(), firstSteps(env, site), claudeChangesToday(env)])
+  const [latest, steps, changedToday, tests] = await Promise.all([latestRelease(), firstSteps(env, site), claudeChangesToday(env), testCounts(env)])
   const newer = latest && isNewer(latest.version, version) ? `<p role="status">${t.versionAvailable(escapeHtml(latest.version), `${escapeHtml(desk.base)}/updates`)}</p>` : ''
+  const w = t.test
+  const testTotal = tests.orders + tests.records + tests.entries + tests.customers
+  const testCard = `<section class="owner-account-card" id="test-mode"><h2>${w.heading}</h2><p>${w.help}</p>${tests.active ? `<p role="status"><b>${w.active}</b></p><p><a class="button button--small" href="/" rel="noopener" target="_blank">${w.open}</a></p><form action="${escapeHtml(desk.base)}/test-mode/end" method="post"><button class="button button--small button--ghost" type="submit">${w.end}</button></form>` : `<form action="${escapeHtml(desk.base)}/test-mode" method="post"><button class="button button--small" type="submit">${w.start}</button></form>`}${testTotal ? `<p>${w.data(tests.orders, tests.records, tests.entries, tests.customers)}</p><form action="${escapeHtml(desk.base)}/test-mode/clear" class="contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${w.confirm}</label><button class="button button--small" type="submit">${w.clear}</button></form>` : ''}${url.searchParams.has('testcleared') ? `<p role="status">${w.cleared}</p>` : ''}</section>`
   const changed = changedToday ? `<p role="status">${t.changes.overviewNote(changedToday, `${escapeHtml(desk.base)}/changes`)}</p>` : ''
   const started = isStarter(url.searchParams.get('started')) ? `<p role="status">${site.live_version ? t.start.startedLive(`${escapeHtml(desk.base)}/publish`) : t.start.started}</p>` : ''
   // A new site gets its first steps on top, until every one of them is done.
@@ -363,7 +370,7 @@ async function overview(env: Env, url: URL, site: SiteRow, desk: Desk) {
     site,
     desk,
     t.nav.overview,
-    `${started}${changed}${newer}${account}${firstTime}${commandCenter}<h2>${t.messagesHeading}</h2>${await messageList(env, site, desk)}
+    `${started}${changed}${newer}${account}${firstTime}${commandCenter}${testCard}<h2>${t.messagesHeading}</h2>${await messageList(env, site, desk)}
 ${site.live_version ? `<p>${t.seeWaiting(`${escapeHtml(desk.base)}/publish`)}</p>` : ''}
 <h2 id="claude">${t.claudeHeading}</h2>
 <p>${t.claudeHelp}</p>
@@ -384,7 +391,7 @@ async function ordersPage(env: Env, site: SiteRow, desk: Desk, error?: string) {
         .map((status) => `<button class="button button--small" name="status" type="submit" value="${status}">${escapeHtml(o.orderAction(status))}</button> `)
         .join('')
       const changes = (history.get(order.id) ?? []).map((event) => `<li>${escapeHtml(event.created_at.slice(0, 16).replace('T', ' '))} UTC · ${escapeHtml(o.orderState(event.status))} · ${escapeHtml(event.actor_name || o.orderActor(event.actor))}</li>`).join('')
-      return `<article class="card account__record"><h3>${orderNumber(order.id)} · ${escapeHtml(o.orderState(order.status))}</h3><p class="post-date">${escapeHtml(order.created_at.slice(0, 16).replace('T', ' '))} UTC · ${paymentName(t, order.payment)}</p>${orderDetails(order, lines.get(order.id) ?? [], t)}<p class="pre-line"><strong>${escapeHtml(order.name)}</strong>
+      return `<article class="card account__record"><h3>${orderNumber(order.id)} · ${escapeHtml(o.orderState(order.status))}${order.test ? testBadge(o) : ''}</h3><p class="post-date">${escapeHtml(order.created_at.slice(0, 16).replace('T', ' '))} UTC · ${paymentName(t, order.payment)}</p>${orderDetails(order, lines.get(order.id) ?? [], t)}<p class="pre-line"><strong>${escapeHtml(order.name)}</strong>
 ${escapeHtml(order.phone)}${order.email ? `\n${escapeHtml(order.email)}` : ''}
 ${escapeHtml(order.address)}${order.note ? `\n\n${o.orderNote}: ${escapeHtml(order.note)}` : ''}</p>${changes ? `<details class="order-history"><summary>${o.orderHistory}</summary><ul>${changes}</ul></details>` : ''}<form action="${escapeHtml(desk.base)}/orders/${order.id}" method="post">${buttons}</form></article>`
     })
@@ -562,7 +569,7 @@ async function mediaPage(env: Env, site: SiteRow, desk: Desk, notice?: { error?:
 async function customersPage(env: Env, url: URL, site: SiteRow, desk: Desk, notice?: { error?: string; saved?: string }, resetLink?: string) {
   const settings = JSON.parse(site.settings) as Settings
   const t = officeText(site)
-  const { results } = await env.DB.prepare('SELECT id, email, name, role, permissions, created_at FROM customers WHERE site_id = ? ORDER BY id DESC LIMIT 500').bind(site.id).all<{ created_at: string; email: string; id: number; name: string; permissions: string; role: string }>()
+  const { results } = await env.DB.prepare('SELECT id, email, name, role, permissions, test, created_at FROM customers WHERE site_id = ? ORDER BY id DESC LIMIT 500').bind(site.id).all<{ created_at: string; email: string; id: number; name: string; permissions: string; role: string; test: number }>()
   const base = escapeHtml(desk.base)
   // Staff only look. Making links, changing roles and deleting accounts stay with the owner.
   const actions = (customer: (typeof results)[number]) =>
@@ -576,7 +583,7 @@ async function customersPage(env: Env, url: URL, site: SiteRow, desk: Desk, noti
             : ''
         }<form action="${base}/customers/${customer.id}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmDeleteAccount}</label><button class="button button--small" type="submit">${t.deleteAccount}</button></form>`
   const rows = results
-    .map((customer) => `<article class="card account__record"><h3>${escapeHtml(customer.name)}${customer.role === 'staff' ? t.staffTag : ''}</h3><p>${escapeHtml(customer.email)}<br><small>${t.joined(escapeHtml(customer.created_at.slice(0, 10)))}</small></p>${actions(customer)}</article>`)
+    .map((customer) => `<article class="card account__record"><h3>${escapeHtml(customer.name)}${customer.role === 'staff' ? t.staffTag : ''}${customer.test ? testBadge(t) : ''}</h3><p>${escapeHtml(customer.email)}<br><small>${t.joined(escapeHtml(customer.created_at.slice(0, 10)))}</small></p>${actions(customer)}</article>`)
     .join('')
   const help = desk.staff ? '' : `${settings.accounts ? `<p>${t.staffHelp(escapeHtml(`${url.origin}/staff`))}</p>` : `<p role="alert">${t.accountsOff}</p>`}${settings.accounts && canSendEmail(env, settings) ? `<p>${t.resetEmailHelp}</p>` : ''}`
   return office(site, desk, t.nav.customers, `${help}${resetLink ? `<p role="status">${t.resetLinkHelp}<br><code style="overflow-wrap:anywhere">${escapeHtml(`${url.origin}${resetLink}`)}</code></p>` : ''}${rows || `<p>${t.noCustomers}</p>`}`, notice)
@@ -872,5 +879,15 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
   }
   if (area === 'starters' && !id) return handleStarters(request, env, url, site, desk)
   if (area === 'changes') return handleChanges(request, env, url, site, desk, id, action)
+  // Test mode belongs to the owner. Staff never start it or remove its data.
+  if (area === 'test-mode' && post && desk.accountOwner && !desk.staff && !action) {
+    if (!id) return startTestMode(env, url)
+    if (id === 'end') return endTestMode(env, url).then(() => see(url, `${desk.base}#test-mode`))
+    if (id === 'clear') {
+      const form = await request.formData().catch((): null => null)
+      if (form?.get('confirm') === 'on') await clearTestData(env)
+      return see(url, `${desk.base}?testcleared=1#test-mode`)
+    }
+  }
   return notFound()
 }

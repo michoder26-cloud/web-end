@@ -1,4 +1,4 @@
 {
-  "version": "0.21.0",
-  "notes": "Backup and restore in two clicks on the System page, with images and customer sign-ins. A What changed page lists every change Claude makes, with Undo for pages and settings, and Claude now stops and explains when it keeps changing the same thing. A Free usage card shows what the site uses against each free limit, and that nothing can become a bill."
+  "version": "0.22.0",
+  "notes": "Test mode: try your own site as a customer for 2 hours. Orders, bookings, sign-ups and messages are marked Test, take no stock, send no emails, chats or webhooks, and automations only show what they would do. Remove all test data with one button. Updates now stop, changing nothing, when someone changed the site's code by hand, unless you tick the box to update anyway."
 }

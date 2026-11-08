@@ -102,6 +102,14 @@ const apiBase = (env: Env) => (env.WEBHOOK_ALLOW_HTTP === '1' && env.RESEND_API_
 export async function sendEmail(env: Env, settings: Settings, to: string, message: Message): Promise<{ ok: boolean; problem?: string; status?: number }> {
   if (!canSendEmail(env, settings)) return { ok: false, problem: 'Email is not set up yet.' }
   if (!isEmail(to)) return { ok: false, problem: 'That is not an email address.' }
+  // In test mode nothing is sent. The owner sees what would have gone out on the "What changed" page.
+  if (env.test) {
+    await env.DB.prepare("INSERT INTO change_log (site_id, actor, action, target, summary) SELECT id, 'test', 'email', ?, ? FROM sites LIMIT 1")
+      .bind(to, oneLine(message.subject, 200))
+      .run()
+      .catch((error: unknown) => console.error(error))
+    return { ok: true }
+  }
   const { html, text } = renderMessage(settings, message)
   try {
     const response = await fetch(`${apiBase(env)}/emails`, {

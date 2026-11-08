@@ -161,7 +161,8 @@ async function updateCart(request: Request, url: URL, adding: boolean, env: Env,
 
 // With a total, PromptPay is offered only if that amount fits in a QR code.
 const paymentChoices = (env: Env, settings: Settings, total?: number) => [
-  ...(canPayByCard(env, settings) ? ['card'] : []),
+  // Cards are never charged in test mode.
+  ...(canPayByCard(env, settings) && !env.test ? ['card'] : []),
   ...(canPayByPromptPay(settings) && (total === undefined || promptPayAmountOk(total)) ? ['promptpay'] : []),
   ...(settings.payTransfer ? ['transfer'] : []),
   ...(settings.payCod ? ['cod'] : []),
@@ -240,10 +241,11 @@ export async function submitOrder(request: Request, env: Env, site: SiteRow, car
   // One batch, so a line that would oversell cancels the whole order.
   try {
     await env.DB.batch([
-      env.DB.prepare('INSERT INTO orders (site_id, customer_id, token_hash, name, phone, email, address, note, payment, subtotal, shipping, total, money_prefix, money_suffix, language, idempotency_key, idempotency_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(site.id, customer?.id ?? null, tokenHash, values.name, values.phone, email, values.address, values.note, values.payment, priced.subtotal, priced.shipping, priced.total, priced.prefix, priced.suffix, settings.viewLanguage ?? '', idempotencyKey ?? null, idempotencyHash),
+      env.DB.prepare('INSERT INTO orders (site_id, customer_id, token_hash, name, phone, email, address, note, payment, subtotal, shipping, total, money_prefix, money_suffix, language, idempotency_key, idempotency_hash, test) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(site.id, customer?.id ?? null, tokenHash, values.name, values.phone, email, values.address, values.note, values.payment, priced.subtotal, priced.shipping, priced.total, priced.prefix, priced.suffix, settings.viewLanguage ?? '', idempotencyKey ?? null, idempotencyHash, env.test ? 1 : 0),
       ...priced.lines.flatMap((line) => [
         env.DB.prepare(`INSERT INTO order_lines (order_id, item_id, variant_id, title, variant, unit_price, quantity) VALUES (${orderId}, ?, ?, ?, ?, ?, ?)`).bind(tokenHash, line.item.id, line.variant?.id ?? null, line.item.title, line.variant?.name ?? '', line.price.amount, line.quantity),
-        takeStock(env, line.item.id, line.variant?.id ?? null, line.quantity),
+        // A test order takes no stock, so cancelling it gives none back either.
+        ...(env.test ? [] : [takeStock(env, line.item.id, line.variant?.id ?? null, line.quantity)]),
       ]),
     ])
   } catch (error) {
@@ -345,11 +347,11 @@ const emailedStatuses = ['paid', 'shipped', 'done', 'cancelled']
 
 /** Changes an order's status. Cancelling puts its items back in stock, and un-cancelling takes them out again. */
 export async function setOrderStatus(env: Env, siteId: number, id: number, status: string, change?: OrderChange) {
-  const order = await env.DB.prepare('SELECT status FROM orders WHERE id = ? AND site_id = ?').bind(id, siteId).first<{ status: string }>()
+  const order = await env.DB.prepare('SELECT status, test FROM orders WHERE id = ? AND site_id = ?').bind(id, siteId).first<{ status: string; test: number }>()
   if (!order) return 'missing'
   // Choosing the status an order already has changes nothing, so nothing is logged, sent or emailed.
   if (order.status === status) return 'ok'
-  const direction = order.status !== 'cancelled' && status === 'cancelled' ? -1 : order.status === 'cancelled' && status !== 'cancelled' ? 1 : 0
+  const direction = order.test ? 0 : order.status !== 'cancelled' && status === 'cancelled' ? -1 : order.status === 'cancelled' && status !== 'cancelled' ? 1 : 0
   const lines = direction ? ((await orderLines(env, [id])).get(id) ?? []) : []
   let changed = 0
   try {
@@ -368,6 +370,8 @@ export async function setOrderStatus(env: Env, siteId: number, id: number, statu
     const name = change.staff ? `${change.staff.name} <${change.staff.email}>` : ''
     await env.DB.prepare('INSERT INTO order_events (order_id, status, actor, customer_id, actor_name) VALUES (?, ?, ?, ?, ?)').bind(id, status, change.actor, change.staff?.id ?? null, name).run()
   }
+  // A test order stays quiet when the owner moves it on: no emails, chats or webhooks.
+  if (order.test) return 'ok'
   await fireEvent(env, siteId, 'order.updated', { id, status })
   if (change && change.notifyCustomer !== false && emailedStatuses.includes(status)) await emailStatus(env, change.origin, id)
   return 'ok'

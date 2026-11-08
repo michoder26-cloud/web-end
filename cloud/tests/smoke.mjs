@@ -3369,6 +3369,49 @@ if (loadCount) {
   }
 }
 
+// Test mode: the owner tries the site as a customer, and nothing real happens.
+{
+  await call('update_site', { accounts: true, cart: true, payCod: true })
+  const lamp = (await call('save_item', { collection: 'catalog', title: 'Test-mode lamp', price: '฿250', stock: 5 })).data.id
+  const stockOf = async () => (await call('list_items', { collection: 'catalog' })).data.find((item) => item.id === lamp)?.stock
+  const realOrders = (await call('list_orders')).data.length
+  const started = await fetch(`${owner}/test-mode`, { method: 'POST', redirect: 'manual' })
+  const testCookie = (started.headers.get('set-cookie') ?? '').split(';')[0]
+  check(started.status === 303 && started.headers.get('location') === `${base}/` && testCookie.startsWith('we_test='), 'the owner starts test mode from the back office, and the site opens')
+  const testHome = await fetch(base, { headers: { Cookie: testCookie } })
+  const testHomeText = await testHome.text()
+  check(testHomeText.includes('class="test-banner"') && testHomeText.includes('Do not pay') && testHome.headers.get('cache-control') === 'private, no-store', 'every page shows the test banner, and is never cached')
+  check(!(await (await fetch(base)).text()).includes('test-banner') && !(await (await fetch(base, { headers: { Cookie: `we_test=${'0'.repeat(64)}` } })).text()).includes('test-banner'), 'other visitors and a made-up cookie see the real site')
+  const lampCart = cartCookieOf(await postForm('/cart/add', { item: String(lamp) }, testCookie))
+  const testOrder = await postForm('/checkout', { address: '1 Test Road', email: 'tester@example.test', name: 'Tester', note: '', payment: 'cod', phone: '0812345678' }, `${lampCart}; ${testCookie}`)
+  check(testOrder.status === 303 && (await stockOf()) === 5, 'a test order takes no stock')
+  if (process.env.EMAIL_TEST === '1' && (await call('get_site')).data.settings.emailFrom) {
+    const changesAfter = await (await fetch(`${owner}/changes`)).text()
+    check(changesAfter.includes('Test mode email, not sent') && changesAfter.includes('tester@example.test'), 'a test order sends no email, and the owner sees what would have gone out')
+  }
+  const ordersPage = await (await fetch(`${owner}/orders`)).text()
+  check(ordersPage.includes('class="test-badge"'), 'test orders carry a Test badge in the back office')
+  const testSignup = await postForm('/signup', { email: 'test-signup@example.test', name: 'Test Signup', password: 'test-pass-123' }, testCookie)
+  check(testSignup.status === 303, 'a visitor can sign up in test mode')
+  const overviewTest = await (await fetch(owner)).text()
+  check(overviewTest.includes('id="test-mode"') && overviewTest.includes('Test data now: 1 orders') && overviewTest.includes('1 customer accounts') && overviewTest.includes('Test mode is on'), 'the overview counts the test data and says test mode is on')
+  check((await call('get_status')).data.testData?.orders === 1, 'Claude can see how much test data exists')
+  // Moving a test order on stays quiet and gives no stock back.
+  const testOrderId = (await call('list_orders')).data.find((row) => row.name === 'Tester')?.id
+  await call('update_order', { id: testOrderId, status: 'cancelled' })
+  check((await stockOf()) === 5, 'cancelling a test order gives no stock back')
+  await fetch(`${owner}/test-mode/clear`, { body: new URLSearchParams({}), method: 'POST', redirect: 'manual' })
+  check((await call('list_orders')).data.length === realOrders + 1, 'test data stays until the owner ticks the box')
+  const cleared = await fetch(`${owner}/test-mode/clear`, { body: new URLSearchParams({ confirm: 'on' }), method: 'POST', redirect: 'manual' })
+  check(cleared.status === 303 && (await call('list_orders')).data.length === realOrders && !(await call('list_customers', {})).data.some((row) => row.email === 'test-signup@example.test'), 'removing test data deletes only the test rows')
+  const ended = await fetch(`${base}/test-mode/end`, { headers: { Cookie: testCookie }, method: 'POST', redirect: 'manual' })
+  check(ended.status === 303 && (ended.headers.get('set-cookie') ?? '').includes('Max-Age=0') && !(await (await fetch(base, { headers: { Cookie: testCookie } })).text()).includes('test-banner'), 'ending test mode turns the old cookie off')
+  const realCart = cartCookieOf(await postForm('/cart/add', { item: String(lamp) }, ''))
+  await postForm('/checkout', { address: '1 Real Road', email: 'real@example.test', name: 'Real buyer', note: '', payment: 'cod', phone: '0812345678' }, realCart)
+  check((await stockOf()) === 4, 'after test mode, orders are real again')
+  await call('delete_item', { id: lamp })
+}
+
 {
 // What changed: Claude's changes are listed with an undo, and Claude is told to stop when it goes in circles.
 const loopPage = { slug: 'loop-test', title: 'Loop 0', description: 'x', published: true, blocks: [{ type: 'hero', heading: 'Loop 0' }] }

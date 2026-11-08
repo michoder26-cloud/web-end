@@ -11,6 +11,11 @@ const workflowFile = 'update-web-end.yml'
 // The owner can still run it at once from GitHub.
 export const autoUpdateLines = `on:
   workflow_dispatch:
+    inputs:
+      force:
+        description: 'Update even if the code was changed by hand'
+        type: boolean
+        default: false
   schedule:
     - cron: '23 2 * * *'`
 // Kept the same as .github/workflows/update-web-end.yml, which new sites get from the Deploy button. The tests compare them.
@@ -31,7 +36,8 @@ jobs:
           latest=$(curl -fsSL ${latestUrl} | node -pe 'JSON.parse(require("fs").readFileSync(0)).version')
           # A release tagged without its last ".0", such as v0.18 for 0.18.0, still updates.
           git clone --depth 1 --branch "v$latest" https://github.com/michoder26-cloud/web-end.git /tmp/web-end || git clone --depth 1 --branch "v\${latest%.0}" https://github.com/michoder26-cloud/web-end.git /tmp/web-end
-          node /tmp/web-end/cloud/scripts/update.mjs /tmp/web-end/cloud "$GITHUB_WORKSPACE"
+          # Stops, changing nothing, if the code was changed by hand since the last update, unless Force was ticked.
+          node /tmp/web-end/cloud/scripts/update.mjs /tmp/web-end/cloud "$GITHUB_WORKSPACE" \${{ inputs.force && '--force' || '' }}
           git add -A
           if git diff --cached --quiet; then exit 0; fi
           git config user.name "web-end updater"

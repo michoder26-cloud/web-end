@@ -350,8 +350,8 @@ export async function createRecord(env: Env, siteId: number, table: DataTable, i
   const read = await readInput(env, siteId, table, input, actor)
   if (!read.data) return { error: read.error, field: read.field }
   const guards = writeGuards(table, read.data, actor.customer?.id ?? null)
-  const row = await env.DB.prepare(`INSERT INTO data_records (table_id, customer_id, data) SELECT ?, ?, ? WHERE ${guards.map((guard) => guard.sql).join(' AND ') || '1'} RETURNING id, customer_id, data, created_at, updated_at`)
-    .bind(table.id, actor.customer?.id ?? null, JSON.stringify(read.data), ...guards.flatMap((guard) => guard.values))
+  const row = await env.DB.prepare(`INSERT INTO data_records (table_id, customer_id, data, test) SELECT ?, ?, ?, ? WHERE ${guards.map((guard) => guard.sql).join(' AND ') || '1'} RETURNING id, customer_id, data, created_at, updated_at`)
+    .bind(table.id, actor.customer?.id ?? null, JSON.stringify(read.data), env.test ? 1 : 0, ...guards.flatMap((guard) => guard.values))
     .first<DataRow>()
   if (!row) return refused(env, guards)
   await env.DB.prepare('UPDATE data_tables SET record_count = record_count + 1 WHERE id = ?').bind(table.id).run()

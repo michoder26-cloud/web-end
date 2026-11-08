@@ -2631,3 +2631,37 @@ body[data-style] .cms-content .card {
   border: 1px solid var(--cms-line);
   border-radius: 10px;
 }
+
+.test-banner {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  background: #fff3c4;
+  color: #3d2e00;
+  font-size: 15px;
+  font-weight: 650;
+  text-align: center;
+  border-bottom: 2px solid #e0b100;
+}
+
+.test-banner form {
+  margin: 0;
+}
+
+.test-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #fff3c4;
+  color: #3d2e00;
+  font-size: 12px;
+  font-weight: 800;
+  vertical-align: middle;
+}

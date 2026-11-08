@@ -188,8 +188,8 @@ async function customerFor(request: Request, env: Env, siteId: number, claims: G
   const name = (claims.name.trim() || email.split('@')[0]).slice(0, 120)
   // No password yet: an empty hash never matches, and the customer can choose one later with a reset link.
   const salt = [...crypto.getRandomValues(new Uint8Array(16))].map((byte) => byte.toString(16).padStart(2, '0')).join('')
-  const created = await env.DB.prepare("INSERT INTO customers (site_id, email, name, password_hash, salt, iterations, google_sub) VALUES (?, ?, ?, '', ?, 100000, ?) ON CONFLICT DO NOTHING RETURNING id")
-    .bind(siteId, email, name, salt, claims.sub)
+  const created = await env.DB.prepare("INSERT INTO customers (site_id, email, name, password_hash, salt, iterations, google_sub, test) VALUES (?, ?, ?, '', ?, 100000, ?, ?) ON CONFLICT DO NOTHING RETURNING id")
+    .bind(siteId, email, name, salt, claims.sub, env.test ? 1 : 0)
     .first<{ id: number }>()
   if (!created) {
     // Two tabs finishing at once: the other one made the account.

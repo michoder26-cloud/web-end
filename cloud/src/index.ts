@@ -12,6 +12,7 @@ import { loadTableBlocks } from './table-block'
 import { tellOwnerAboutEntry } from './email'
 import { validateEntry } from './forms'
 import { guidedStart, noteClaude, notePhone } from './first-steps'
+import { endTestMode, testModeLanguage, withTestBanner } from './test-mode'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { loadItems, showImage } from './items'
 import { alternates, extraLanguages, keepLanguage, languageName, localizePage, localizeSite, mainLanguage, siteLanguages } from './languages'
@@ -149,8 +150,8 @@ async function receiveForm(request: Request, env: Env, url: URL, site: SiteRow, 
   await loadItems(env, site.id, blocks, language)
   const data = validateEntry(block.fields as FormField[], form)
   if (!data) return back('error')
-  const entry = await env.DB.prepare('INSERT INTO entries (site_id, form, page, data, customer_id) VALUES (?, ?, ?, ?, ?) RETURNING id, created_at')
-    .bind(site.id, formName, pageSlug, JSON.stringify(data), customer?.id ?? null)
+  const entry = await env.DB.prepare('INSERT INTO entries (site_id, form, page, data, customer_id, test) VALUES (?, ?, ?, ?, ?, ?) RETURNING id, created_at')
+    .bind(site.id, formName, pageSlug, JSON.stringify(data), customer?.id ?? null, env.test ? 1 : 0)
     .first<{ created_at: string; id: number }>()
   await countConversion(env, site, 'entry')
   await runAutomations(env, site.id, 'entry.created', { form: formName, page: pageSlug, id: entry?.id, created_at: entry?.created_at, customer_id: customer?.id ?? null, data })
@@ -305,7 +306,13 @@ async function visit(request: Request, env: Env, url: URL, site: SiteRow, parts:
 export default {
   async fetch(request: Request, plainEnv: Env, context: ExecutionContext): Promise<Response> {
     const env: Env = { ...plainEnv, defer: (work) => context.waitUntil(work) }
-    const response = await answerOrRedirect(request, env)
+    // Test mode applies to the public site only. The back office, Claude and the API always work for real.
+    const path = new URL(request.url).pathname
+    const testLanguage = /^\/(owner|admin|staff|mcp|api|stripe)(\/|$)/.test(path) ? null : await testModeLanguage(request, env).catch((): null => null)
+    if (path === '/test-mode/end' && request.method === 'POST') return await endTestMode(env, new URL(request.url))
+    if (testLanguage) env.test = true
+    const answered = await answerOrRedirect(request, env)
+    const response = testLanguage ? withTestBanner(answered, testLanguage) : answered
     // Counts a public page view after it is sent, with no cookies and nothing kept about the visitor. See stats.ts.
     countVisit(env, request, new URL(request.url).pathname, response.status)
     return response

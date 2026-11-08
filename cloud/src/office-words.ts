@@ -230,7 +230,7 @@ const en = {
   updateOldHelp: (link: string) => `Older updaters only run when you press the button. <a href="${link}" rel="noopener noreferrer" target="_blank">Add the daily updater</a>, then press <em>Commit changes</em>. Nothing to type, and you only do this once.`,
   updateStep3: 'Wait while Cloudflare rebuilds your site. It usually takes a few minutes, and it can wait in a queue for 10 minutes or more. Refresh this page and the version number changes.',
   updateStep4: "Start a new chat with Claude. New abilities can take a while to appear there. If one is missing, turn the connector off and on in Claude's settings.",
-  updateKeeps: "Your pages, products, orders, customers and private links stay as they are. If a developer changed your site's code, those changes get replaced, but they stay in your GitHub history.",
+  updateKeeps: "Your pages, products, orders, customers and private links stay as they are. If someone changed your site's code by hand, the update stops without changing anything, and GitHub emails you the list of files. To update anyway, open the updater, press <em>Run workflow</em>, tick <em>Update even if the code was changed by hand</em>, then press <em>Run workflow</em> again. The changed code stays in your GitHub history.",
   repository: 'Repository',
   badRepo: 'Enter it like this: your-name/my-website',
 
@@ -452,7 +452,7 @@ const en = {
     ran: (count: number, last: string) => (count ? `Ran ${count} ${count === 1 ? 'time' : 'times'}, last at ${last}` : 'Has not run yet'),
     nextRun: (time: string) => `Next run: ${time}. Runs happen within about 15 minutes of the time.`,
     lastRuns: 'Last runs',
-    outcome: (outcome: string) => ({ done: 'Done', failed: 'Failed', skipped: 'Skipped', stopped: 'Stopped' })[outcome] ?? outcome,
+    outcome: (outcome: string) => ({ done: 'Done', failed: 'Failed', skipped: 'Skipped', stopped: 'Stopped', test: 'Test only' })[outcome] ?? outcome,
     signingSecret: 'Signing secret for its webhook steps',
     confirmDelete: 'Yes, delete this automation',
     emailOff: 'Email is not set up yet, so email steps fail until it is. See Settings and System.',
@@ -531,6 +531,7 @@ const en = {
       busySite: (limit: string) => `Not run: automations already ran ${limit} times on this site this hour. This protects your site from a rule that runs too often.`,
       busyRule: (limit: string) => `Not run: this automation already ran ${limit} times this hour. This protects your site from a rule that runs too often.`,
       crashed: () => 'Something went wrong on the server, so the rest was not done.',
+      testMode: () => 'Test mode: the steps above were only tried. Nothing was changed or sent.',
     },
   },
 
@@ -686,6 +687,21 @@ const en = {
     saveSettings: 'Save settings',
     staffNoAddresses: "Only the owner sees people's addresses, and only the owner can test or send.",
   },
+  // Test mode
+  test: {
+    heading: 'Try your site as a customer',
+    help: 'Test mode lets you order, book, sign up and send forms on your own site for 2 hours, in this browser. Nothing is real: no stock is taken, no emails, chats or webhooks are sent, automations only show what they would do, card payments are off, and statistics don\'t count it. Everything you make is marked Test.',
+    start: 'Start test mode',
+    open: 'Open my site ↗',
+    active: 'Test mode is on. Open your site in this browser to try it.',
+    end: 'End test mode',
+    data: (orders: number, records: number, entries: number, customers: number) => `Test data now: ${orders} orders, ${records} records or bookings, ${entries} messages, ${customers} customer accounts. Test bookings still hold their place until you remove them.`,
+    confirm: 'Remove only the test data',
+    clear: 'Remove all test data',
+    cleared: 'All test data was removed. Nothing real was touched.',
+    badge: 'Test',
+    emailActor: 'Test mode (not sent)',
+  },
   // Free usage on the System page
   usage: {
     heading: 'Free usage',
@@ -713,7 +729,7 @@ const en = {
     noUndo: 'Change it back on its own page',
     cannotUndo: 'That change can no longer be undone.',
     undoneNotice: 'Undone. The page or settings are back as they were before that change.',
-    actor: (actor: string) => ({ claude: 'Claude', owner: 'You', staff: 'Staff' })[actor] ?? actor,
+    actor: (actor: string) => ({ claude: 'Claude', owner: 'You', staff: 'Staff', test: 'Test mode email, not sent' })[actor] ?? actor,
     overviewNote: (count: number, href: string) => `Claude made ${count} ${count === 1 ? 'change' : 'changes'} today. <a href="${href}">See what changed</a>, and undo anything you don't want.`,
   },
   // Backup and restore on the System page. {table}, {n}, {file} and {problem} are filled in by the page.
@@ -1179,7 +1195,7 @@ const th: OfficeWords = {
   updateOldHelp: (link: string) => `ตัวอัปเดตแบบเก่าทำงานเฉพาะตอนกดปุ่ม <a href="${link}" rel="noopener noreferrer" target="_blank">เพิ่มตัวอัปเดตรายวัน</a> แล้วกด <em>Commit changes</em> ไม่ต้องพิมพ์อะไร ทำแค่ครั้งเดียว`,
   updateStep3: 'รอให้ Cloudflare สร้างเว็บใหม่ ปกติใช้เวลาไม่กี่นาที แต่บางครั้งอาจต้องรอคิว 10 นาทีขึ้นไป รีเฟรชหน้านี้แล้วเลขเวอร์ชันจะเปลี่ยน',
   updateStep4: 'เริ่มแชตใหม่กับ Claude ความสามารถใหม่อาจใช้เวลาสักพักกว่าจะปรากฏ ถ้ายังไม่เห็น ให้ปิดแล้วเปิด connector ใหม่ในการตั้งค่าของ Claude',
-  updateKeeps: 'หน้าเว็บ สินค้า คำสั่งซื้อ ลูกค้า และลิงก์ส่วนตัวของคุณจะอยู่ครบเหมือนเดิม ถ้าเคยมีนักพัฒนาแก้โค้ดของเว็บ การแก้ไขนั้นจะถูกแทนที่ แต่ยังดูย้อนหลังได้ในประวัติของ GitHub',
+  updateKeeps: 'หน้าเว็บ สินค้า คำสั่งซื้อ ลูกค้า และลิงก์ส่วนตัวของคุณจะอยู่ครบเหมือนเดิม ถ้ามีคนแก้โค้ดของเว็บด้วยมือ การอัปเดตจะหยุดโดยไม่เปลี่ยนอะไร และ GitHub จะส่งอีเมลบอกรายชื่อไฟล์ ถ้าต้องการอัปเดตทับ ให้เปิดตัวอัปเดต กด <em>Run workflow</em> ติ๊ก <em>Update even if the code was changed by hand</em> แล้วกด <em>Run workflow</em> อีกครั้ง โค้ดที่แก้ไว้ยังดูย้อนหลังได้ในประวัติของ GitHub',
   repository: 'Repository',
   badRepo: 'ใส่ในรูปแบบนี้: your-name/my-website',
 
@@ -1397,7 +1413,7 @@ const th: OfficeWords = {
     ran: (count: number, last: string) => (count ? `ทำงานแล้ว ${count} ครั้ง ล่าสุดเมื่อ ${last}` : 'ยังไม่เคยทำงาน'),
     nextRun: (time: string) => `ทำงานครั้งถัดไป: ${time} โดยจะทำงานภายในประมาณ 15 นาทีจากเวลานี้`,
     lastRuns: 'การทำงานล่าสุด',
-    outcome: (outcome: string) => ({ done: 'สำเร็จ', failed: 'ไม่สำเร็จ', skipped: 'ข้าม', stopped: 'หยุด' })[outcome] ?? outcome,
+    outcome: (outcome: string) => ({ done: 'สำเร็จ', failed: 'ไม่สำเร็จ', skipped: 'ข้าม', stopped: 'หยุด', test: 'ทดลองเท่านั้น' })[outcome] ?? outcome,
     signingSecret: 'รหัสลับสำหรับลงชื่อข้อความ webhook ของกฎนี้',
     confirmDelete: 'ใช่ ลบระบบอัตโนมัตินี้',
     emailOff: 'ยังไม่ได้ตั้งค่าอีเมล ขั้นตอนที่ส่งอีเมลจะไม่สำเร็จจนกว่าจะตั้งค่า ดูที่หน้าตั้งค่าและหน้าระบบ',
@@ -1476,6 +1492,7 @@ const th: OfficeWords = {
       busySite: (limit: string) => `ไม่ได้ทำงาน: ระบบอัตโนมัติทำงานในเว็บนี้ครบ ${limit} ครั้งในชั่วโมงนี้แล้ว เพื่อป้องกันกฎที่ทำงานบ่อยเกินไป`,
       busyRule: (limit: string) => `ไม่ได้ทำงาน: กฎนี้ทำงานครบ ${limit} ครั้งในชั่วโมงนี้แล้ว เพื่อป้องกันกฎที่ทำงานบ่อยเกินไป`,
       crashed: () => 'เซิร์ฟเวอร์เกิดปัญหา จึงไม่ได้ทำส่วนที่เหลือ',
+      testMode: () => 'โหมดทดลอง: ขั้นตอนข้างบนแค่ลองดู ไม่ได้เปลี่ยนหรือส่งอะไรจริง',
     },
   },
 
@@ -1625,6 +1642,20 @@ const th: OfficeWords = {
     saveSettings: 'บันทึกการตั้งค่า',
     staffNoAddresses: 'เฉพาะเจ้าของเท่านั้นที่เห็นอีเมลของแต่ละคน และส่งทดสอบหรือส่งจริงได้',
   },
+  test: {
+    heading: 'ลองใช้เว็บแบบลูกค้า',
+    help: 'โหมดทดลองให้คุณลองสั่งซื้อ จอง สมัครสมาชิก และส่งฟอร์มบนเว็บของตัวเองได้ 2 ชั่วโมงในเบราว์เซอร์นี้ ทุกอย่างไม่ใช่ของจริง: ไม่ตัดสต็อก ไม่ส่งอีเมล แชต หรือ webhook ระบบอัตโนมัติแค่แสดงว่าจะทำอะไร ปิดการจ่ายด้วยบัตร และไม่นับในสถิติ ทุกอย่างที่ทำจะมีป้ายทดลอง',
+    start: 'เริ่มโหมดทดลอง',
+    open: 'เปิดเว็บของฉัน ↗',
+    active: 'โหมดทดลองเปิดอยู่ เปิดเว็บของคุณในเบราว์เซอร์นี้เพื่อลองใช้',
+    end: 'ออกจากโหมดทดลอง',
+    data: (orders: number, records: number, entries: number, customers: number) => `ข้อมูลทดลองตอนนี้: คำสั่งซื้อ ${orders} รายการ รายการหรือการจอง ${records} รายการ ข้อความ ${entries} รายการ บัญชีลูกค้า ${customers} บัญชี การจองทดลองยังกันที่นั่งไว้จนกว่าจะลบ`,
+    confirm: 'ลบเฉพาะข้อมูลทดลอง',
+    clear: 'ลบข้อมูลทดลองทั้งหมด',
+    cleared: 'ลบข้อมูลทดลองทั้งหมดแล้ว ข้อมูลจริงไม่ถูกแตะต้อง',
+    badge: 'ทดลอง',
+    emailActor: 'โหมดทดลอง (ไม่ได้ส่ง)',
+  },
   usage: {
     heading: 'การใช้งานแบบฟรี',
     intro: 'เว็บของคุณทำงานบนแพ็กเกจฟรี ไม่มีเครดิต และไม่มีอะไรในนี้กลายเป็นค่าใช้จ่ายได้ บนแพ็กเกจฟรีของ Cloudflare เมื่อใช้ถึงขีดจำกัด สิ่งนั้นจะหยุดชั่วคราวจนกว่าจะเริ่มนับใหม่ ไม่มีการเรียกเก็บเงิน',
@@ -1650,7 +1681,7 @@ const th: OfficeWords = {
     noUndo: 'แก้คืนได้ในหน้าของรายการนั้น',
     cannotUndo: 'การเปลี่ยนแปลงนี้ย้อนกลับไม่ได้แล้ว',
     undoneNotice: 'ย้อนกลับแล้ว หน้าเว็บหรือการตั้งค่ากลับไปเป็นเหมือนก่อนการเปลี่ยนแปลงนั้น',
-    actor: (actor: string) => ({ claude: 'Claude', owner: 'คุณ', staff: 'พนักงาน' })[actor] ?? actor,
+    actor: (actor: string) => ({ claude: 'Claude', owner: 'คุณ', staff: 'พนักงาน', test: 'อีเมลโหมดทดลอง ไม่ได้ส่ง' })[actor] ?? actor,
     overviewNote: (count: number, href: string) => `วันนี้ Claude เปลี่ยนแปลงไป ${count} อย่าง <a href="${href}">ดูว่ามีอะไรเปลี่ยนบ้าง</a> และย้อนกลับสิ่งที่ไม่ต้องการได้`,
   },
   backup: {

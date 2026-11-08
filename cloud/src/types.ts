@@ -13,6 +13,8 @@ export type Env = {
   STRIPE_API_BASE?: string
   STRIPE_SECRET_KEY?: string
   STRIPE_WEBHOOK_SECRET?: string
+  // Set for one request when the owner is trying the site in test mode. See test-mode.ts.
+  test?: boolean
   WEBHOOK_ALLOW_HTTP?: string
 }
 
@@ -130,6 +132,8 @@ export type Order = {
   status: string
   subtotal: number
   language?: string
+  // 1 for an order made in test mode.
+  test?: number
   total: number
 }
 

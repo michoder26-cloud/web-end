@@ -66,6 +66,21 @@ mkdirSync(notSite)
 write(notSite, 'precious.txt', 'keep\n')
 check(run(makeRelease('0.2.0'), notSite).status === 1 && existsSync(path.join(notSite, 'precious.txt')), 'changes nothing in a folder that is not a site')
 
+// A site whose code was changed by hand is not overwritten unless the owner says so.
+const runForced = (source, target) => spawnSync(process.execPath, [script, source, target, '--force'], { encoding: 'utf8' })
+const tracked = makeSite('0.1.0')
+const firstRun = run(makeRelease('0.2.0'), tracked)
+const manifest = JSON.parse(readFileSync(path.join(tracked, '.web-end-files.json'), 'utf8'))
+check(firstRun.status === 0 && firstRun.stdout.includes('check for code changed by hand starts from the next update') && manifest.version === '0.2.0' && manifest.files['src/new-feature.ts'] && !manifest.files['wrangler.jsonc'], 'an update writes down a fingerprint of the files it put in place')
+check(run(makeRelease('0.3.0'), tracked).status === 0 && existsSync(path.join(tracked, '.web-end-files.json')), 'a site nobody changed by hand keeps updating')
+write(tracked, 'src/new-feature.ts', 'export const added = "changed by a developer"\n')
+write(tracked, 'src/my-extra.ts', 'export const mine = 1\n')
+const stopped = run(makeRelease('0.4.0'), tracked)
+check(stopped.status === 1 && stopped.stderr.includes('src/new-feature.ts') && stopped.stderr.includes('src/my-extra.ts') && readFileSync(path.join(tracked, 'src/new-feature.ts'), 'utf8').includes('developer') && readFileSync(path.join(tracked, 'src/version.ts'), 'utf8').includes('0.3.0'), 'stops and lists the files changed by hand, changing nothing')
+check(runForced(makeRelease('0.4.0'), tracked).status === 0 && readFileSync(path.join(tracked, 'src/version.ts'), 'utf8').includes('0.4.0'), 'updates anyway when the owner ticks the box')
+write(tracked, 'wrangler.jsonc', readFileSync(path.join(tracked, 'wrangler.jsonc'), 'utf8') + '\n')
+check(run(makeRelease('0.5.0'), tracked).status === 0, "the site's own settings file may change without stopping updates")
+
 // The real settings file of this version, with its schedule, reaches a site installed before schedules existed.
 const realRelease = makeRelease('0.3.0')
 write(realRelease, 'wrangler.jsonc', readFileSync(path.join(path.dirname(script), '../wrangler.jsonc'), 'utf8'))

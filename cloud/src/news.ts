@@ -163,7 +163,8 @@ export type NewSubscriber = { customerId?: null | number; detail?: string; email
  */
 export async function addSubscriber(env: Env, site: SiteRow, origin: string, input: NewSubscriber) {
   const email = input.email.trim().toLowerCase()
-  if (!isEmail(email)) return null
+  // Nobody joins the real news list from a test.
+  if (!isEmail(email) || env.test) return null
   const now = Date.now()
   const name = (input.name ?? '').replace(/[\r\n\t]+/g, ' ').trim().slice(0, 120)
   const detail = (input.detail ?? '').slice(0, 200)

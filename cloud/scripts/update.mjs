@@ -1,16 +1,22 @@
 // Copies a new version of web-end into an installed site's repository.
 // The owner's site name and database stay as they are, and nothing else in Git is touched.
-// Usage: node update.mjs <new version folder> <site repository folder>
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+// Usage: node update.mjs <new version folder> <site repository folder> [--force]
+// Each update writes down a fingerprint of every file it put in place. The next update first checks them, and stops
+// without changing anything if someone changed the code by hand since, unless --force says to update anyway.
+import { createHash } from 'node:crypto'
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
-const [source, target] = process.argv.slice(2).map((folder) => path.resolve(folder))
+const args = process.argv.slice(2)
+const force = args.includes('--force')
+const [source, target] = args.filter((arg) => arg !== '--force').map((folder) => path.resolve(folder))
 if (!source || !target || source === target) {
   console.error('Usage: node update.mjs <new version folder> <site repository folder>')
   process.exit(2)
 }
 
-const skipped = new Set(['.git', '.github', '.wrangler', 'node_modules'])
+const manifestName = '.web-end-files.json'
+const skipped = new Set(['.git', '.github', '.wrangler', 'node_modules', manifestName])
 const versionOf = (folder) => {
   const file = path.join(folder, 'src/version.ts')
   return existsSync(file) ? (/version = '(\d+)\.(\d+)\.(\d+)'/.exec(readFileSync(file, 'utf8'))?.slice(1).map(Number) ?? [0, 0, 0]) : [0, 0, 0]
@@ -55,6 +61,32 @@ if (!newConfig.includes(`"database_id": "${databaseId}"`) || !newConfig.includes
   process.exit(1)
 }
 
+// The site's own settings change by design, so they are not fingerprinted.
+const ownSettings = new Set(['wrangler.jsonc', 'package-lock.json'])
+const filesIn = (folder, prefix = '') =>
+  readdirSync(path.join(folder, prefix)).flatMap((name) => {
+    const relative = path.join(prefix, name).split(path.sep).join('/')
+    if (!prefix && (skipped.has(name) || ownSettings.has(name))) return []
+    return statSync(path.join(folder, relative)).isDirectory() ? filesIn(folder, relative) : [relative]
+  })
+const fingerprints = (folder) => Object.fromEntries(filesIn(folder).sort().map((file) => [file, createHash('sha256').update(readFileSync(path.join(folder, file))).digest('hex')]))
+
+const manifestFile = path.join(target, manifestName)
+if (!force && existsSync(manifestFile)) {
+  const before = JSON.parse(readFileSync(manifestFile, 'utf8')).files ?? {}
+  const now = fingerprints(target)
+  const changed = [...new Set([...Object.keys(before), ...Object.keys(now)])].filter((file) => before[file] !== now[file]).sort()
+  if (changed.length) {
+    console.error(`Stopped, so nothing was changed. These files were changed by hand since the last update:`)
+    for (const file of changed.slice(0, 30)) console.error(`  ${file}`)
+    if (changed.length > 30) console.error(`  and ${changed.length - 30} more`)
+    console.error('To update anyway, run the updater again with "Update even if the code was changed by hand" ticked. Your changes stay in the GitHub history.')
+    process.exit(1)
+  }
+} else if (!force) {
+  console.log('This is the first update with a record of its files, so the check for code changed by hand starts from the next update.')
+}
+
 const names = (folder) => readdirSync(folder).filter((name) => !skipped.has(name))
 const keep = new Set(names(source))
 for (const name of names(target)) {
@@ -66,4 +98,5 @@ for (const name of keep) {
   cpSync(path.join(source, name), path.join(target, name), { recursive: true })
 }
 writeFileSync(wranglerFile, newConfig)
+writeFileSync(manifestFile, `${JSON.stringify({ files: fingerprints(target), note: 'Written by the web-end updater, to notice code changed by hand. Leave it in place.', version: next.join('.') }, null, 2)}\n`)
 console.log(`Updated from ${current.join('.')} to ${next.join('.')}.`)

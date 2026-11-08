@@ -22,6 +22,7 @@ import { eventNames, safeWebUrl, validWebhookUrl } from './webhooks'
 import { redirectionCsv, woocommerceCsv, wordpressPlan, wordpressReport, wordpressXml } from './wordpress'
 import { secretsHelp } from './secret-help'
 import { handleBackup } from './backup'
+import { testCounts } from './test-mode'
 import { backupCard, backupScript } from './backup-page'
 import type { Env, Settings, SiteRow } from './types'
 
@@ -394,7 +395,7 @@ async function handlePublish(request: Request, env: Env, url: URL, site: SiteRow
 export async function systemStatus(env: Env, site: SiteRow, origin: string) {
   const settings = JSON.parse(site.settings) as Settings
   const count = async (sql: string) => (await env.DB.prepare(sql).bind(site.id).first<{ total: number }>())?.total ?? 0
-  const [latest, waiting, tables, customers, orders, pages, imageBytes, records, keys, hooks, viewsToday, newsToday, size] = await Promise.all([
+  const [latest, waiting, tables, customers, orders, pages, imageBytes, records, keys, hooks, viewsToday, newsToday, size, tests] = await Promise.all([
     latestRelease(),
     unpublishedChanges(env, site),
     count('SELECT COUNT(*) AS total FROM data_tables WHERE site_id = ?'),
@@ -409,6 +410,7 @@ export async function systemStatus(env: Env, site: SiteRow, origin: string) {
     count("SELECT COALESCE(SUM(sent), 0) AS total FROM news_daily WHERE site_id = ? AND day = strftime('%Y-%m-%d', 'now')"),
     // D1 reports the whole database's size with every query.
     env.DB.prepare('SELECT 1').run().then((result) => Number((result.meta as { size_after?: number }).size_after ?? 0)).catch(() => 0),
+    testCounts(env),
   ])
   return {
     address: origin,
@@ -417,6 +419,7 @@ export async function systemStatus(env: Env, site: SiteRow, origin: string) {
     latestVersion: latest?.version ?? 'unknown',
     publishing: { liveVersion: site.live_version ?? null, waiting },
     database: { imageBytes, customers, orders, pages, records, tables },
+    testData: { active: Boolean(tests.active), customers: tests.customers, entries: tests.entries, orders: tests.orders, records: tests.records },
     // Against the free plans. Nothing here can turn into a bill: on Cloudflare's free plan a limit stops, it never charges.
     freeUsage: { databaseBytes: size, databaseLimit: 5_000_000_000, imageBytes, imageLimit: 200_000_000, newsToday, newsLimit: 100, records, recordsLimit: 50 * 50_000, viewsToday, requestsLimit: 100_000 },
     login: { customerAccounts: Boolean(settings.accounts) },

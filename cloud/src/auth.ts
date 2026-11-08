@@ -45,8 +45,8 @@ export async function registerCustomer(env: Env, siteId: number, details: { emai
   if (!name || email.length > 254 || !emailPattern.test(email)) return { problem: 'email' as const }
   if (details.password.length < 8 || details.password.length > 200) return { problem: 'password' as const }
   const secret = await hashPassword(details.password)
-  const created = await env.DB.prepare('INSERT INTO customers (site_id, email, name, password_hash, salt, iterations) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (site_id, email) DO NOTHING RETURNING id')
-    .bind(siteId, email, name, secret.password_hash, secret.salt, secret.iterations)
+  const created = await env.DB.prepare('INSERT INTO customers (site_id, email, name, password_hash, salt, iterations, test) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (site_id, email) DO NOTHING RETURNING id')
+    .bind(siteId, email, name, secret.password_hash, secret.salt, secret.iterations, env.test ? 1 : 0)
     .first<{ id: number }>()
   if (!created) return { problem: 'email' as const }
   await fireEvent(env, siteId, 'customer.created', { email, id: created.id, name })

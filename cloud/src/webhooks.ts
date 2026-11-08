@@ -163,6 +163,8 @@ export const onEvent = (hook: EventHook) => {
 export async function fireEvent(env: Env, siteId: number, event: (typeof eventNames)[number], data: unknown, before?: Record<string, unknown>) {
   // Every write that other systems hear about can also start the owner's automations. They never throw.
   for (const hook of afterEvent) await hook(env, siteId, event, data, before)
+  // A test never reaches the owner's other systems or chats.
+  if (env.test) return
   await enqueue(env, siteId, event, data)
   const work = runWebhookOutbox(env)
   if (env.defer) env.defer(work)
