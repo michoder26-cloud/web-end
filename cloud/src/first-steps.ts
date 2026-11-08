@@ -205,7 +205,7 @@ export function guidedStart(origin: string, code: string, t: OfficeWords) {
 <li><h3>${copy.step2}</h3><p><a class="button button--ghost" href="https://claude.ai/settings/connectors" rel="noopener" target="_blank">${copy.step2Open}</a></p><p>${copy.step2Help}</p></li>
 <li><h3>${copy.step3}</h3><p>${copy.step3Help}</p>${copyField('first-message', copy.step3, s.firstMessage, t, 5)}</li></ol>
 <p>${copy.auto}</p><p><small>${s.teamPlan}</small></p></section>`
-  const body = `<section class="launch launch--claimed"><p class="launch__eyebrow">${copy.eyebrow}</p><h1>${copy.title}</h1>
+  const body = `<section class="launch launch--claimed launch--warm"><p class="launch__eyebrow">${copy.eyebrow}</p><h1>${copy.title}</h1>
 <p class="lead">${copy.intro}</p>
 <section class="launch__templates"><h2>${copy.pathOne}</h2><p>${copy.pathOneHelp}</p><div class="grid starters">${starters}</div></section>
 ${claude}
