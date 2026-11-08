@@ -1352,6 +1352,46 @@ details p:first-of-type {
   color: #fff;
 }
 
+.cms-nav-more summary {
+  padding: 8px 10px;
+  border-radius: 7px;
+  color: var(--cms-muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.cms-nav-more summary:hover {
+  background: var(--cms-panel-raised);
+  color: #fff;
+}
+
+.cms-nav-more[open] summary {
+  margin-bottom: 3px;
+}
+
+.cms-nav-more__links {
+  display: grid;
+  gap: 3px;
+}
+
+.cms-keep-key {
+  margin: 12px 16px 0;
+}
+
+.owner-account-card {
+  margin: 0 0 24px;
+  padding: clamp(18px, 3vw, 28px);
+  border: 1px solid #2b765f;
+  border-radius: 14px;
+  background: var(--cms-panel);
+  color: var(--cms-text);
+}
+
+.owner-account-card h2 {
+  margin-top: 0;
+}
+
 .cms-user {
   display: grid;
   gap: 6px;
@@ -1564,11 +1604,17 @@ details p:first-of-type {
     gap: 12px;
   }
 
-  .cms-nav-group {
+  .cms-nav-group,
+  .cms-nav-more__links {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .cms-nav-group h2 {
+  .cms-nav-more {
+    display: block;
+  }
+
+  .cms-nav-group h2,
+  .cms-nav-more summary {
     grid-column: 1 / -1;
   }
 
@@ -2535,4 +2581,18 @@ details p:first-of-type {
 .form-note {
   font-size: 0.9rem;
   opacity: 0.8;
+}
+
+.secret-help {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+
+.secret-help p {
+  margin: 0;
+}
+
+.secret-help__name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }

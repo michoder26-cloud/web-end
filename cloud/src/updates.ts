@@ -13,8 +13,9 @@ export const autoUpdateLines = `on:
   workflow_dispatch:
   schedule:
     - cron: '23 2 * * *'`
-const workflow = `name: Update web-end
-${autoUpdateLines}
+// Kept the same as .github/workflows/update-web-end.yml, which new sites get from the Deploy button. The tests compare them.
+const workflowFor = (name: string, on: string) => `name: ${name}
+${on}
 # Two runs at once could both try to push the same update.
 concurrency: update-web-end
 permissions:
@@ -38,6 +39,12 @@ jobs:
           git commit -m "Update web-end to $latest"
           git push
 `
+const workflow = workflowFor('Update web-end', autoUpdateLines)
+// For sites whose updater only runs from the button: a second file that runs the same update once a day.
+const dailyFile = 'update-web-end-daily.yml'
+const dailyWorkflow = workflowFor('Update web-end daily', `on:
+  schedule:
+    - cron: '23 2 * * *'`)
 
 const parts = (value: string) => value.split('.').map(Number)
 export const isNewer = (candidate: string, current: string) => {
@@ -83,7 +90,6 @@ export function updatesBody(base: string, repo: string | undefined, latest: Awai
 </ol>
 <p>${t.updateKeeps}</p>
 <h2>${t.updateOldTitle}</h2>
-<p>${t.updateOldHelp(escapeHtml(`https://github.com/${repo}/edit/main/.github/workflows/${workflowFile}`))}</p>
-<pre class="pre-line"><code>${escapeHtml(autoUpdateLines)}</code></pre>
+<p>${t.updateOldHelp(escapeHtml(`https://github.com/${repo}/new/main?filename=${encodeURIComponent(`.github/workflows/${dailyFile}`)}&value=${encodeURIComponent(dailyWorkflow)}`))}</p>
 <h2>${t.repository}</h2>${repoForm}`
 }

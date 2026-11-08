@@ -1,4 +1,4 @@
 {
-  "version": "0.19.0",
-  "notes": "The first-run experience is now a simple build choice: start with an example or connect Claude, then enter one owner workspace. Technical links stay behind their related actions, and the public site no longer exposes setup instructions."
+  "version": "0.20.0",
+  "notes": "Easier to use: create your owner sign-in right from the back office with nothing to paste, a reminder until you do, sign-in pages in Thai, a Claude link you can make from /admin, a shorter menu with the rarer pages under More, one-click daily updates (built in for new sites), and direct Cloudflare links with exact secret names."
 }

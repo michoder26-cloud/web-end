@@ -160,6 +160,12 @@ export const connectGuide = (t: OfficeWords) => {
 
 export const claudeLinkField = (mcpUrl: string, t: OfficeWords) => copyField('claude-link', t.start.claudeLink, mcpUrl, t)
 
+/** Creates the owner's email sign-in straight from a page that already holds the private code, so nothing needs pasting. */
+export const ownerAccountForm = (code: string, t: OfficeWords) => {
+  const a = t.admin
+  return `<form action="/admin/claim" class="contact-form owner-account" method="post"><input name="code" type="hidden" value="${escapeHtml(code)}"><label>${a.name}<input autocomplete="name" maxlength="120" name="name" required></label><label>${a.email}<input autocomplete="email" maxlength="254" name="email" required type="email"></label><label>${a.newPasswordHint}<input autocomplete="new-password" maxlength="200" minlength="8" name="password" required type="password"></label><button class="button" type="submit">${a.createAccount}</button></form>`
+}
+
 // The guided start
 
 // The only script on any of the owner's pages: it fills in the copy buttons. It runs under a nonce made for this one response.
@@ -183,11 +189,10 @@ const copyScript = `for (const button of document.querySelectorAll('[data-copy]'
  * It keeps the old rules: shown once, never cached, never indexed, and it sends its address nowhere.
  */
 export function guidedStart(origin: string, code: string, t: OfficeWords) {
-  const nonce = newToken()
   const s = t.start
   const copy = t.lang === 'th'
-    ? { eyebrow: 'พร้อมแล้ว', pageTitle: 'เริ่มต้นใช้งาน', title: 'เริ่มจากตรงนี้ได้เลย', intro: 'เลือกทางใดทางหนึ่ง ไม่ต้องทำทั้งสองอย่าง และแก้ไขทุกอย่างได้ภายหลัง', pathOne: 'เริ่มจากตัวอย่าง (เห็นผลทันที)', pathOneHelp: 'กดเลือกแบบที่ใกล้กับธุรกิจคุณ ได้เว็บตัวอย่างพร้อมใช้ภายในไม่กี่วินาที', pathTwo: 'หรือ สร้างกับ Claude', pathTwoHelp: 'คุยกับ Claude เป็นภาษาปกติ แล้วให้มันสร้างเว็บให้ ทำตาม 3 ขั้นนี้ครั้งเดียว', step1: 'ขั้นที่ 1 คัดลอกลิงก์นี้', step2: 'ขั้นที่ 2 เปิด Claude แล้ววางลิงก์', step2Open: 'เปิดการตั้งค่า Connectors ของ Claude', step2Help: 'ใน Claude กด <b>Add custom connector</b> ตั้งชื่ออะไรก็ได้ แล้ววางลิงก์ที่คัดลอกไว้ในช่อง URL จากนั้นกด <b>Add</b>', step3: 'ขั้นที่ 3 เริ่มคุยกับ Claude', step3Help: 'เริ่มแชตใหม่ เปิด connector นี้ แล้วส่งข้อความด้านล่าง', auto: 'เมื่อ Claude เชื่อมสำเร็จ จะขึ้น “✓ เชื่อม Claude แล้ว” ในหน้า Dashboard เอง', more: 'ลิงก์อื่น', workspace: 'เปิด Dashboard ของฉัน', saveTitle: 'เก็บลิงก์นี้ไว้เผื่อใช้ (ไม่ต้องรีบ)', saveHelp: 'ลิงก์นี้ใช้กลับเข้า Dashboard ได้ หน้านี้จะไม่แสดงลิงก์นี้อีก จึงควรเก็บไว้ หรือสร้างบัญชีเจ้าของตอนนี้เพื่อเข้าใช้ด้วยอีเมลและรหัสผ่านทุกครั้ง', account: 'สร้างบัญชีเจ้าของ (อีเมล + รหัสผ่าน)', ownerLink: 'ลิงก์เข้า Dashboard (ใช้วางตอนสร้างบัญชี)' }
-    : { eyebrow: 'All set', pageTitle: 'Get started', title: 'Start right here', intro: 'Pick either way. You do not need both, and you can change everything later.', pathOne: 'Start from an example (see results at once)', pathOneHelp: 'Choose the one closest to your business and get a working sample site in seconds.', pathTwo: 'Or build with Claude', pathTwoHelp: 'Chat with Claude in plain words and let it build for you. Follow these 3 steps, once.', step1: 'Step 1: Copy this link', step2: 'Step 2: Open Claude and paste the link', step2Open: 'Open the Claude Connectors settings', step2Help: 'In Claude, click <b>Add custom connector</b>, give it any name, paste the link into the URL box, then click <b>Add</b>.', step3: 'Step 3: Start talking to Claude', step3Help: 'Start a new chat, switch this connector on, and send the message below.', auto: 'When Claude connects, “✓ Claude connected” appears on your Dashboard by itself.', more: 'More links', workspace: 'Open my Dashboard', saveTitle: 'Keep this link in case you need it (no rush)', saveHelp: 'This link gets you back into your Dashboard. This page will not show it again, so keep it, or create an owner account now and sign in with your email and password every time.', account: 'Create owner account (email + password)', ownerLink: 'Dashboard link (paste it when creating the account)' }
+    ? { eyebrow: 'พร้อมแล้ว', pageTitle: 'เริ่มต้นใช้งาน', title: 'เริ่มจากตรงนี้ได้เลย', intro: 'เลือกทางใดทางหนึ่ง ไม่ต้องทำทั้งสองอย่าง และแก้ไขทุกอย่างได้ภายหลัง', pathOne: 'เริ่มจากตัวอย่าง (เห็นผลทันที)', pathOneHelp: 'กดเลือกแบบที่ใกล้กับธุรกิจคุณ ได้เว็บตัวอย่างพร้อมใช้ภายในไม่กี่วินาที', pathTwo: 'หรือ สร้างกับ Claude', pathTwoHelp: 'คุยกับ Claude เป็นภาษาปกติ แล้วให้มันสร้างเว็บให้ ทำตาม 3 ขั้นนี้ครั้งเดียว', step1: 'ขั้นที่ 1 คัดลอกลิงก์นี้', step2: 'ขั้นที่ 2 เปิด Claude แล้ววางลิงก์', step2Open: 'เปิดการตั้งค่า Connectors ของ Claude', step2Help: 'ใน Claude กด <b>Add custom connector</b> ตั้งชื่ออะไรก็ได้ แล้ววางลิงก์ที่คัดลอกไว้ในช่อง URL จากนั้นกด <b>Add</b>', step3: 'ขั้นที่ 3 เริ่มคุยกับ Claude', step3Help: 'เริ่มแชตใหม่ เปิด connector นี้ แล้วส่งข้อความด้านล่าง', auto: 'เมื่อ Claude เชื่อมสำเร็จ จะขึ้น “✓ เชื่อม Claude แล้ว” ในหน้า Dashboard เอง', more: 'ลิงก์อื่น', workspace: 'เปิด Dashboard ของฉัน', saveTitle: 'เก็บลิงก์นี้ไว้เผื่อใช้ (ไม่ต้องรีบ)', saveHelp: 'ลิงก์นี้ใช้กลับเข้า Dashboard ได้ หน้านี้จะไม่แสดงลิงก์นี้อีก จึงควรเก็บไว้ หรือสร้างบัญชีเจ้าของตอนนี้เพื่อเข้าใช้ด้วยอีเมลและรหัสผ่านทุกครั้ง', account: 'สร้างบัญชีเจ้าของ (อีเมล + รหัสผ่าน)', ownerLink: 'ลิงก์เข้า Dashboard' }
+    : { eyebrow: 'All set', pageTitle: 'Get started', title: 'Start right here', intro: 'Pick either way. You do not need both, and you can change everything later.', pathOne: 'Start from an example (see results at once)', pathOneHelp: 'Choose the one closest to your business and get a working sample site in seconds.', pathTwo: 'Or build with Claude', pathTwoHelp: 'Chat with Claude in plain words and let it build for you. Follow these 3 steps, once.', step1: 'Step 1: Copy this link', step2: 'Step 2: Open Claude and paste the link', step2Open: 'Open the Claude Connectors settings', step2Help: 'In Claude, click <b>Add custom connector</b>, give it any name, paste the link into the URL box, then click <b>Add</b>.', step3: 'Step 3: Start talking to Claude', step3Help: 'Start a new chat, switch this connector on, and send the message below.', auto: 'When Claude connects, “✓ Claude connected” appears on your Dashboard by itself.', more: 'More links', workspace: 'Open my Dashboard', saveTitle: 'Keep this link in case you need it (no rush)', saveHelp: 'This link gets you back into your Dashboard. This page will not show it again, so keep it, or create an owner account now and sign in with your email and password every time.', account: 'Create owner account (email + password)', ownerLink: 'Dashboard link' }
   const officeUrl = `${origin}/owner/${code}`
   const starters = starterIds
     .map((id) => {
@@ -204,9 +209,24 @@ export function guidedStart(origin: string, code: string, t: OfficeWords) {
 <p class="lead">${copy.intro}</p>
 <section class="launch__templates"><h2>${copy.pathOne}</h2><p>${copy.pathOneHelp}</p><div class="grid starters">${starters}</div></section>
 ${claude}
-<section class="launch__recovery"><h2>${copy.more}</h2><p><a href="/owner/${escapeHtml(code)}">${copy.workspace}</a> · <a href="/admin/claim">${copy.account}</a></p><details><summary>${copy.saveTitle}</summary><div class="contact-form launch__details"><p role="note">${copy.saveHelp}</p>${copyField('office-link', copy.ownerLink, officeUrl, t)}</div></details></section></section>`
+<section class="launch__recovery"><h2>${copy.more}</h2><p><a href="/owner/${escapeHtml(code)}">${copy.workspace}</a></p><details><summary>${copy.account}</summary><div class="launch__details"><p>${t.admin.accountHelp}</p>${ownerAccountForm(code, t)}</div></details><details><summary>${copy.saveTitle}</summary><div class="contact-form launch__details"><p role="note">${copy.saveHelp}</p>${copyField('office-link', copy.ownerLink, officeUrl, t)}</div></details></section></section>`
+  return withCopyButtons(copy.pageTitle, body, t)
+}
+
+/** A private page whose copy fields get working copy buttons. */
+const withCopyButtons = (title: string, body: string, t: OfficeWords) => {
+  const nonce = newToken()
   const headers = { ...privateHeaders, 'Content-Security-Policy': privateHeaders['Content-Security-Policy'].replace("script-src 'none'", `script-src 'nonce-${nonce}'`) }
-  return html(shell(copy.pageTitle, body, false, t.lang, `<script nonce="${nonce}">${copyScript}</script>`), 200, headers)
+  return html(shell(title, body, false, t.lang, `<script nonce="${nonce}">${copyScript}</script>`), 200, headers)
+}
+
+/** Shown once, to the signed-in owner, after making a new private link at /admin. */
+export function claudeLinkPage(origin: string, code: string, t: OfficeWords) {
+  const a = t.admin
+  const body = `<section class="launch launch--claimed"><h1>${a.linkTitle}</h1><p class="lead">${a.linkIntro}</p><div class="contact-form">${claudeLinkField(`${origin}/mcp/${code}`, t)}${connectGuide(t)}</div>
+<details><summary>${a.linkOffice}</summary><div class="contact-form launch__details">${copyField('office-link', a.linkOffice, `${origin}/owner/${code}`, t)}</div></details>
+<p><a class="button button--ghost" href="/admin">${a.back}</a></p></section>`
+  return withCopyButtons(a.linkTitle, body, t)
 }
 
 // The starters page of the back office

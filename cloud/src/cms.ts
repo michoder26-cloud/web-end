@@ -8,7 +8,9 @@ import { itemInLanguage, itemLanguageLinks, languageTabs, pageInLanguage, settin
 import { handlePlatform } from './cms-platform'
 import { zoneOf } from './clock'
 import { canSendEmail } from './email'
-import { checklist, claudeLinkField, connectGuide, firstSteps, handleStarters, isStarter } from './first-steps'
+import { checklist, claudeLinkField, connectGuide, firstSteps, handleStarters, isStarter, ownerAccountForm } from './first-steps'
+import type { FirstSteps } from './first-steps'
+import { secretsHelp } from './secret-help'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { saveImage } from './items'
 import { extraLanguages, languageName, localizePage, mainLanguage, siteMissing } from './languages'
@@ -95,8 +97,8 @@ export const office = (site: SiteRow, at: Desk | string, title: string, body: st
   // Any staff member may be an approver, so Approvals is always in their menu. The page shows only what they may see.
   const shown = desk.staff ? links.filter(([path]) => !path || path === '/approvals' || (staffMenu[path] && allows(desk, staffMenu[path]))) : links
   const copy = t.lang === 'th'
-    ? { build: 'สร้างและจัดการ', run: 'ดูแลระบบ', connect: 'เชื่อมต่อและย้าย', preview: 'ดูเว็บ', dashboard: 'หลังบ้าน', edit: 'แก้ไขเว็บ', live: 'เปิดหน้าเว็บ', workspace: 'พื้นที่ของเจ้าของ' }
-    : { build: 'Build and manage', run: 'Run the business', connect: 'Connect and move', preview: 'Preview', dashboard: 'Dashboard', edit: 'Edit site', live: 'Open site', workspace: 'Owner workspace' }
+    ? { build: 'สร้างและจัดการ', run: 'ดูแลระบบ', more: 'เพิ่มเติม: เชื่อมต่อ ย้ายเว็บ ระบบ', preview: 'ดูเว็บ', dashboard: 'หลังบ้าน', edit: 'แก้ไขเว็บ', live: 'เปิดหน้าเว็บ', workspace: 'พื้นที่ของเจ้าของ' }
+    : { build: 'Build and manage', run: 'Run the business', more: 'More: connect, move, system', preview: 'Preview', dashboard: 'Dashboard', edit: 'Edit site', live: 'Open site', workspace: 'Owner workspace' }
   const item = new Map(shown)
   const isAvailable = (path: string) => item.has(path)
   const activePath = links.find(([, label]) => label === title)?.[0] ?? ''
@@ -109,6 +111,12 @@ export const office = (site: SiteRow, at: Desk | string, title: string, body: st
     const items = paths.map((path) => navLink(path)).join('')
     return items ? `<section class="cms-nav-group"><h2>${escapeHtml(label)}</h2>${items}</section>` : ''
   }
+  // Pages most owners rarely need sit folded under More, and open by themselves while one of them is in use.
+  const more = (label: string, paths: string[]) => {
+    const items = paths.map((path) => navLink(path)).join('')
+    return items ? `<details class="cms-nav-group cms-nav-more"${paths.includes(activePath) ? ' open' : ''}><summary>${escapeHtml(label)}</summary><div class="cms-nav-more__links">${items}</div></details>` : ''
+  }
+  const keepKey = desk.code && !site.owner_customer_id ? `<p class="cms-notice cms-keep-key" role="note"><b>${t.admin.bannerTitle}.</b> ${t.admin.banner} ${t.admin.bannerLink(`${base}#owner-account`)}</p>` : ''
   const previewHref = desk.staff && !allows(desk, 'pages') ? '/' : `${base}/preview`
   const editHref = isAvailable('/pages') ? `${base}/pages` : base
   const canPublish = isAvailable('/publish')
@@ -130,13 +138,13 @@ export const office = (site: SiteRow, at: Desk | string, title: string, body: st
   <p class="cms-site-name">${escapeHtml(settings.name)}</p>
   <div class="cms-top-actions"><a class="cms-open-site" href="/" target="_blank" rel="noopener">${escapeHtml(copy.live)} ↗</a>${canPublish ? `<a class="cms-publish" href="${base}/publish">${escapeHtml(t.nav.publish)}</a>` : ''}</div>
 </header>
-<div class="cms-console">
+${keepKey}<div class="cms-console">
   <aside class="cms-sidebar">
     <p class="cms-sidebar-label">${escapeHtml(copy.dashboard)}</p>
     <nav aria-label="${escapeHtml(t.navLabel)}" class="cms-nav">
       ${group(copy.build, ['', '/pages', '/items', '/data', '/media', '/news'])}
-      ${group(copy.run, ['/stats', '/orders', '/customers', '/approvals', '/automations', '/publish'])}
-      ${group(copy.connect, ['/connect', '/wordpress', '/move', '/settings', '/system', '/updates'])}
+      ${group(copy.run, ['/stats', '/orders', '/customers', '/approvals', '/automations', '/publish', '/settings'])}
+      ${more(copy.more, ['/connect', '/move', '/wordpress', '/system', '/updates'])}
     </nav>
     ${who}
   </aside>
@@ -312,6 +320,13 @@ async function messageList(env: Env, site: SiteRow, desk: Desk) {
     : `<p>${t.noEntries}</p>`
 }
 
+/** On the account dashboard the private link is never shown, but the owner can make a fresh one for Claude here. */
+const adminClaude = (steps: FirstSteps | null, t: OfficeWords) => {
+  const a = t.admin
+  if (steps && !steps.claude) return `<p>${a.claudeNotYet}</p><form action="/admin/claude-link" method="post"><button class="button" type="submit">${a.makeLink}</button></form>`
+  return `<p role="status"><b>${t.start.claudeConnected}</b></p><details><summary>${a.makeNewLink}</summary><form action="/admin/claude-link" class="contact-form" method="post"><p>${a.claudeConnected}</p><label class="check"><input name="confirm" required type="checkbox"> ${a.confirmNewLink}</label><button class="button" type="submit">${a.makeNewLink}</button></form></details>`
+}
+
 async function overview(env: Env, url: URL, site: SiteRow, desk: Desk) {
   const t = officeText(site)
   const settings = JSON.parse(site.settings) as Settings
@@ -337,15 +352,17 @@ async function overview(env: Env, url: URL, site: SiteRow, desk: Desk) {
 <a class="cms-command-card" href="${escapeHtml(desk.base)}/connect"><small>${escapeHtml(dashboard.connect)}</small><strong>${escapeHtml(dashboard.integrations)} →</strong></a>
 <a class="cms-command-card cms-command-card--accent" href="${escapeHtml(desk.base)}/publish"><small>${escapeHtml(dashboard.publish)}</small><strong>${escapeHtml(dashboard.release)} →</strong></a>
 </div></section>`
+  // Until the owner has an email sign-in, the private link is their only way back in, so the overview offers one.
+  const account = desk.code && !site.owner_customer_id ? `<section class="owner-account-card" id="owner-account"><h2>${t.admin.accountHeading}</h2><p>${t.admin.accountHelp}</p>${ownerAccountForm(desk.code, t)}</section>` : ''
   return office(
     site,
     desk,
     t.nav.overview,
-    `${started}${newer}${firstTime}${commandCenter}<h2>${t.messagesHeading}</h2>${await messageList(env, site, desk)}
+    `${started}${newer}${account}${firstTime}${commandCenter}<h2>${t.messagesHeading}</h2>${await messageList(env, site, desk)}
 ${site.live_version ? `<p>${t.seeWaiting(`${escapeHtml(desk.base)}/publish`)}</p>` : ''}
 <h2 id="claude">${t.claudeHeading}</h2>
 <p>${t.claudeHelp}</p>
-${desk.code ? (steps && !steps.claude ? `<div class="contact-form">${claudeLinkField(mcpUrl, t)}${connectGuide(t)}</div>` : `${steps?.claude ? `<p role="status"><b>${t.start.claudeConnected}</b></p>` : ''}<p><code style="overflow-wrap:anywhere">${escapeHtml(mcpUrl)}</code></p>`) : `<p>Claude is connected with the private link shown during setup. This account dashboard never reveals it.</p>`}`,
+${desk.code ? (steps && !steps.claude ? `<div class="contact-form">${claudeLinkField(mcpUrl, t)}${connectGuide(t)}</div>` : `${steps?.claude ? `<p role="status"><b>${t.start.claudeConnected}</b></p>` : ''}<p><code style="overflow-wrap:anywhere">${escapeHtml(mcpUrl)}</code></p>`) : adminClaude(steps, t)}`,
   )
 }
 
@@ -560,7 +577,7 @@ async function customersPage(env: Env, url: URL, site: SiteRow, desk: Desk, noti
   return office(site, desk, t.nav.customers, `${help}${resetLink ? `<p role="status">${t.resetLinkHelp}<br><code style="overflow-wrap:anywhere">${escapeHtml(`${url.origin}${resetLink}`)}</code></p>` : ''}${rows || `<p>${t.noCustomers}</p>`}`, notice)
 }
 
-const settingsForm = (site: SiteRow, desk: Desk, notice?: { error?: string; saved?: string }, draft?: Partial<Settings>) => {
+const settingsForm = (site: SiteRow, desk: Desk, host: string, notice?: { error?: string; saved?: string }, draft?: Partial<Settings>) => {
   const settings = { ...(JSON.parse(site.settings) as Settings), ...draft }
   const t = officeText(site)
   const text = (key: keyof Settings, label: string, kind = 'text') => `<label>${label}<input name="${key}" type="${kind}" value="${escapeHtml(settings[key])}"></label>`
@@ -594,6 +611,7 @@ ${text('accent', t.accent, 'color').replace('value=""', 'value="#1f4d3a"')}${tex
 <label>${t.currency}<input maxlength="3" name="currency" value="${escapeHtml(settings.currency)}"></label>
 <label class="check"><input name="payCard" type="checkbox"${settings.payCard ? ' checked' : ''}> ${t.payCard}</label>
 <p>${t.stripeHelp}</p>
+${secretsHelp(host, ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'], t)}
 </fieldset>
 <label>${t.menu}<textarea name="nav" rows="5">${escapeHtml((settings.nav ?? []).map((item) => `${item.label} | ${item.href}`).join('\n'))}</textarea></label>
 ${text('headerButtonLabel', t.headerButtonLabel)}${text('headerButtonHref', t.headerButtonHref)}
@@ -601,6 +619,8 @@ ${text('headerButtonLabel', t.headerButtonLabel)}${text('headerButtonHref', t.he
 ${text('email', t.email, 'email')}${text('phone', t.phone)}<label>${t.address}<textarea name="address" rows="2">${escapeHtml(settings.address)}</textarea></label>
 <fieldset class="cms-block"><legend>${t.emailHeading}</legend>
 <p>${t.emailHelp}</p>
+<p role="note">${t.secrets.emailFirst.replace(t.nav.connect, `<a href="${escapeHtml(desk.base)}/connect">${t.nav.connect}</a>`)}</p>
+${secretsHelp(host, ['RESEND_API_KEY'], t)}
 ${text('emailFrom', t.emailFrom, 'email')}${text('notifyEmail', t.notifyEmail, 'email')}
 </fieldset>
 <label>${t.customCss}<textarea name="customCss" rows="6">${escapeHtml(settings.customCss)}</textarea></label>
@@ -643,9 +663,9 @@ async function saveSettings(request: Request, env: Env, url: URL, site: SiteRow,
     .map(([label, href]) => ({ href, label }))
   const t = officeText(site)
   // A wrong digit would send customers' money nowhere, so say exactly what is wrong, in the owner's language.
-  if (draft.promptPayId && !validPromptPayId(draft.promptPayId)) return settingsForm(site, desk, { error: t.promptPayIdBad }, draft as Partial<Settings>)
+  if (draft.promptPayId && !validPromptPayId(draft.promptPayId)) return settingsForm(site, desk, url.host, { error: t.promptPayIdBad }, draft as Partial<Settings>)
   const parsed = z.object(settingsShape).safeParse(draft)
-  if (!parsed.success || !draft.name) return settingsForm(site, desk, { error: parsed.success ? t.needName : t.notSaved(firstProblem(parsed.error)) }, draft as Partial<Settings>)
+  if (!parsed.success || !draft.name) return settingsForm(site, desk, url.host, { error: parsed.success ? t.needName : t.notSaved(firstProblem(parsed.error)) }, draft as Partial<Settings>)
   // Translations of the menu and footer have their own page, so this form keeps them. The main language is the first of the languages.
   const next = { ...parsed.data, translations: (JSON.parse(site.settings) as Settings).translations } as Settings
   if (extraLanguages(next).length) next.language = mainLanguage(next)
@@ -843,7 +863,7 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
   if (area === 'settings' && !id) {
     const other = await settingsInLanguage(request, env, url, site, desk, saved)
     if (other) return other
-    return post ? saveSettings(request, env, url, site, desk) : settingsForm(site, desk, saved)
+    return post ? saveSettings(request, env, url, site, desk) : settingsForm(site, desk, url.host, saved)
   }
   if (area === 'starters' && !id) return handleStarters(request, env, url, site, desk)
   return notFound()

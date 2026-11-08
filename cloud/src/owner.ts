@@ -6,7 +6,7 @@ import type { Block, Env, FormField, Settings, SiteRow } from './types'
 
 export const hashCode = sha256
 
-const newCode = () => {
+export const newCode = () => {
   const alphabet = 'abcdefghijkmnpqrstuvwxyz23456789'
   const code = [...crypto.getRandomValues(new Uint8Array(32))].map((byte) => alphabet[byte % alphabet.length]).join('')
   return code.match(/.{1,8}/g)!.join('-')

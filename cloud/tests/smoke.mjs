@@ -316,6 +316,14 @@ for (const area of ['', '/pages', '/page/home', '/items', '/media', '/customers'
 }
 const ownerDashboard = await (await fetch(owner)).text()
 check(ownerDashboard.includes('cms-mode-tabs') && ownerDashboard.includes('Preview') && ownerDashboard.includes('Dashboard') && ownerDashboard.includes('Edit site') && ownerDashboard.includes('cms-command-card') && ownerDashboard.includes('/automations'), 'the owner dashboard groups preview, editing and operational controls')
+// Until there is an email sign-in, the private link is the only key, so the back office offers one without pasting anything.
+const accountCard = ownerDashboard.slice(ownerDashboard.indexOf('id="owner-account"'))
+check(ownerDashboard.includes('id="owner-account"') && accountCard.includes('action="/admin/claim"') && accountCard.includes(`name="code" type="hidden" value="${code}"`), 'the overview offers to create the owner sign-in, with the private code already filled in')
+const ordersBanner = await (await fetch(`${owner}/orders`)).text()
+check(ordersBanner.includes('Keep your way back in') && ordersBanner.includes(`${owner.slice(base.length)}#owner-account`), 'other back office pages remind the owner to keep a way back in')
+// Everyday pages stay in view; the rarely used ones fold under More, which opens while one of them is in use.
+const moreMenu = ownerDashboard.slice(ownerDashboard.indexOf('cms-nav-more'), ownerDashboard.indexOf('</details>', ownerDashboard.indexOf('cms-nav-more')))
+check(['/connect', '/move', '/wordpress', '/system', '/updates'].every((path) => moreMenu.includes(`${path}"`)) && !moreMenu.includes('/orders"') && !moreMenu.includes(' open>') && (await (await fetch(`${owner}/system`)).text()).includes('cms-nav-more" open'), 'the menu folds Connect, Move, WordPress, System and Updates under More')
 for (const [method, area] of [['GET', '/settings'], ['POST', '/settings'], ['POST', '/pages'], ['POST', '/items'], ['POST', '/customers/1/reset']]) {
   check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd${area}`, { method, redirect: 'manual' })).status === 404, `a wrong link cannot reach: ${method} ${area}`)
 }
@@ -849,6 +857,14 @@ const addLink = decode(updatesPage.match(/href="(https:\/\/github\.com\/someone\
 const prefilled = new URL(addLink || 'https://x.test')
 check(prefilled.searchParams.get('filename') === '.github/workflows/update-web-end.yml' && prefilled.searchParams.get('value')?.includes('workflow_dispatch') && prefilled.searchParams.get('value')?.includes('--branch "v$latest"') && prefilled.searchParams.get('value')?.includes('--branch "v${latest%.0}"') && prefilled.searchParams.get('value')?.includes("cron: '23 2 * * *'") && prefilled.searchParams.get('value')?.includes('concurrency: update-web-end'), 'the page gives a ready-made updater that uses only releases, finds a tag without its last .0, and runs by itself once a day')
 check(updatesPage.includes('https://github.com/someone/my-shop/actions/workflows/update-web-end.yml'), 'the page links to where the owner runs the update')
+const dailyLink = new URL(decode(updatesPage.match(/href="(https:\/\/github\.com\/someone\/my-shop\/new\/main\?filename=[^"]*daily[^"]*)"/)?.[1] ?? '') || 'https://x.test')
+check(dailyLink.searchParams.get('filename') === '.github/workflows/update-web-end-daily.yml' && dailyLink.searchParams.get('value')?.includes("cron: '23 2 * * *'") && !dailyLink.searchParams.get('value')?.includes('workflow_dispatch') && dailyLink.searchParams.get('value')?.includes('concurrency: update-web-end'), 'older sites get a one-click daily updater file, with nothing to edit by hand')
+const shippedUpdater = (await import('node:fs')).readFileSync(new URL('../.github/workflows/update-web-end.yml', import.meta.url), 'utf8')
+check(shippedUpdater === prefilled.searchParams.get('value'), 'new sites get the same daily updater from the Deploy button')
+const settingsHelp = await (await fetch(`${owner}/settings`)).text()
+check(settingsHelp.includes('value="RESEND_API_KEY"') && settingsHelp.includes('value="STRIPE_SECRET_KEY"') && settingsHelp.includes('https://dash.cloudflare.com/?to=/:account/workers-and-pages') && settingsHelp.includes('Telegram or Discord'), 'settings name each secret exactly, link to Cloudflare, and suggest free chat notices first')
+const workerHelp = await (await fetch(`${owner}/system`)).text()
+check(workerHelp.includes('value="GOOGLE_CLIENT_ID"') && workerHelp.includes('value="GOOGLE_CLIENT_SECRET"'), 'the System page names the Google secrets exactly')
 const repoSettings = formValues(await (await fetch(`${owner}/settings`)).text())
 await fetch(`${owner}/settings`, { body: repoSettings, method: 'POST', redirect: 'manual' })
 check((await call('get_site')).data.settings.githubRepo === 'someone/my-shop' && /^\d+\.\d+\.\d+$/.test((await call('get_site')).data.version), 'saving settings keeps the repository, and Claude can see the version')
@@ -3304,6 +3320,9 @@ await call('update_site', { language: 'en', officeLanguage: 'auto' })
 
 // The owner can replace the one-time capability URL with a normal account login.
 const adminGuest = await (await fetch(`${base}/admin`)).text()
+await call('update_site', { officeLanguage: 'th' })
+check((await (await fetch(`${base}/admin`)).text()).includes('สร้างบัญชีเจ้าของ'), 'the owner set-up page is in Thai on a Thai back office')
+await call('update_site', { officeLanguage: 'en' })
 const adminClaim = await fetch(`${base}/admin/claim`, { body: new URLSearchParams({ code, email: 'owner@admin.test', name: 'Site owner', password: 'owner-password-123' }), method: 'POST', redirect: 'manual' })
 const adminCookie = (adminClaim.headers.get('set-cookie') ?? '').split(';')[0]
 const adminHome = await (await fetch(`${base}/admin`, { headers: { Cookie: adminCookie } })).text()
@@ -3312,6 +3331,13 @@ const crossSiteAdminWrite = await fetch(`${base}/admin/settings`, { body: new UR
 const crossSiteLogin = await fetch(`${base}/admin/login`, { body: new URLSearchParams({ email: 'owner@admin.test', password: 'owner-password-123' }), headers: { Origin: 'https://not-your-site.test' }, method: 'POST', redirect: 'manual' })
 const crossSiteRecover = await fetch(`${base}/admin/recover`, { body: new URLSearchParams({ code, password: 'stolen-password-123' }), headers: { 'Sec-Fetch-Site': 'cross-site' }, method: 'POST', redirect: 'manual' })
 check(crossSiteLogin.status === 403 && !(crossSiteLogin.headers.get('set-cookie') ?? '').includes('session=') && crossSiteRecover.status === 403, 'another website cannot post to the owner sign-in or recovery forms')
+check(!(await (await fetch(owner)).text()).includes('id="owner-account"') && !(await (await fetch(`${owner}/orders`)).text()).includes('Keep your way back in'), 'once the owner has a sign-in, the reminder goes away')
+check(adminHome.includes('action="/admin/claude-link"') && !adminHome.includes(`/mcp/${code}`), 'the account dashboard offers a new Claude link without showing the current one')
+const crossSiteLink = await fetch(`${base}/admin/claude-link`, { body: new URLSearchParams({ confirm: 'on' }), headers: { Cookie: adminCookie, Origin: 'https://not-your-site.test' }, method: 'POST', redirect: 'manual' })
+const unconfirmedLink = await fetch(`${base}/admin/claude-link`, { body: new URLSearchParams({}), headers: { Cookie: adminCookie }, method: 'POST', redirect: 'manual' })
+const guestLink = await fetch(`${base}/admin/claude-link`, { body: new URLSearchParams({ confirm: 'on' }), method: 'POST', redirect: 'manual' })
+const guestBody = await guestLink.text()
+check(crossSiteLink.status === 403 && unconfirmedLink.status === 303 && guestBody.includes('Owner sign in') && !guestBody.includes('/mcp/') && !(await call('get_site')).isError, 'a new Claude link needs the signed-in owner, this site and a confirmation once Claude is connected')
 const ownerAccountId = (await call('list_customers', {})).data.find((row) => row.email === 'owner@admin.test')?.id
 await fetch(`${owner}/customers/${ownerAccountId}/delete`, { body: new URLSearchParams({ confirm: 'on' }), method: 'POST', redirect: 'manual' })
 check((await call('list_customers', {})).data.some((row) => row.id === ownerAccountId), "the owner's own sign-in account can't be deleted from the customers page")
@@ -3342,6 +3368,13 @@ if (loadCount) {
     console.log(`      median ${times[times.length >> 1]}ms, max ${times.at(-1)}ms`)
   }
 }
+
+// Last, because it replaces the private link every check above uses: the signed-in owner makes a new Claude link.
+const ownerLogin = await fetch(`${base}/admin/login`, { body: new URLSearchParams({ email: 'owner@admin.test', password: 'new-owner-password-123' }), method: 'POST', redirect: 'manual' })
+const ownerCookie = (ownerLogin.headers.get('set-cookie') ?? '').split(';')[0]
+const newLinkPage = await (await fetch(`${base}/admin/claude-link`, { body: new URLSearchParams({ confirm: 'on' }), headers: { Cookie: ownerCookie }, method: 'POST' })).text()
+const newCode = newLinkPage.match(/\/mcp\/([a-z0-9-]{20,60})/)?.[1]
+check(Boolean(newCode) && newCode !== code && newLinkPage.includes('data-copy="claude-link"') && newLinkPage.includes(`/owner/${newCode}`) && (await fetch(`${base}/owner/${newCode}`)).status === 200 && (await fetch(owner)).status === 404, 'a new Claude link works at once, and the old private link stops working')
 
 await client.close()
 console.log(failed ? `\n${failed} checks failed.` : '\nAll checks passed.')
