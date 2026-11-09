@@ -602,7 +602,7 @@ const en = {
     replaceNote: (pages: number) => `Your site already has ${pages} pages, or products or tables. A starter replaces all your pages and the design. Products, tables, records, orders, customers and messages are kept, and the starter's samples are added beside them.`,
     replaceConfirm: 'Replace my pages and design with this starter',
     notEmpty: 'Nothing changed. Your site already has content, so tick the box to confirm that the starter may replace your pages.',
-    started: 'Your starter site is ready. <a href="/" rel="noopener" target="_blank">Open your website</a>. Every word, price and time is a sample: change them under Pages and Products, or ask Claude.',
+    started: (preview: string, publish: string) => `Your starter is ready to <a href="${preview}">preview</a>. Replace the sample details under Pages, Products or Data, then <a href="${publish}">publish</a> it.`,
     startedLive: (href: string) => `Your starter is in place. Visitors still see your published site until you <a href="${href}">publish</a>.`,
 
     // The checklist on the overview of a new site
@@ -1559,7 +1559,7 @@ const th: OfficeWords = {
     replaceNote: (pages: number) => `เว็บของคุณมีอยู่แล้ว ${pages} หน้า หรือมีสินค้าหรือตารางข้อมูลแล้ว เว็บตั้งต้นจะแทนที่หน้าเว็บทั้งหมดและดีไซน์ สินค้า ตารางข้อมูล ข้อมูลในตาราง คำสั่งซื้อ ลูกค้า และข้อความยังอยู่ครบ และจะเพิ่มข้อมูลตัวอย่างของเว็บตั้งต้นเข้าไป`,
     replaceConfirm: 'แทนที่หน้าเว็บและดีไซน์ของฉันด้วยเว็บตั้งต้นนี้',
     notEmpty: 'ยังไม่ได้เปลี่ยนอะไร เว็บของคุณมีเนื้อหาอยู่แล้ว ให้ติ๊กช่องเพื่อยืนยันว่าเว็บตั้งต้นแทนที่หน้าเว็บของคุณได้',
-    started: 'เว็บตั้งต้นของคุณพร้อมแล้ว <a href="/" rel="noopener" target="_blank">เปิดเว็บไซต์</a> ข้อความ ราคา และเวลาทุกอย่างเป็นตัวอย่าง แก้ไขได้ที่หน้าเว็บและสินค้า หรือให้ Claude ช่วย',
+    started: (preview: string, publish: string) => `เว็บตั้งต้นพร้อมให้<a href="${preview}">ดูตัวอย่าง</a>แล้ว เปลี่ยนข้อมูลตัวอย่างในหน้าเว็บ สินค้า หรือข้อมูล แล้วจึง<a href="${publish}">เผยแพร่</a>`,
     startedLive: (href: string) => `ใส่เว็บตั้งต้นแล้ว ผู้เข้าชมยังเห็นเว็บที่เผยแพร่ไว้จนกว่าคุณจะ<a href="${href}">เผยแพร่</a>`,
 
     checklistHeading: 'ขั้นตอนแรกของคุณ',

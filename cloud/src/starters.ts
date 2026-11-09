@@ -9,7 +9,7 @@ import type { Block, Settings } from './types'
 // no reviews, no awards, no figures, no addresses, no phone numbers and no people's names.
 // Each one must pass check_site with no problems, which the smoke tests prove.
 
-export const starterIds = ['cafe', 'shop', 'classes', 'services', 'portfolio'] as const
+export const starterIds = ['cafe', 'shop', 'classes', 'appointments', 'services', 'portfolio'] as const
 export type StarterId = (typeof starterIds)[number]
 export const starterLanguages = ['en', 'th'] as const
 export type StarterLanguage = (typeof starterLanguages)[number]
@@ -26,7 +26,7 @@ export type StarterContent = {
   label: string
   pages: StarterPage[]
   /** Records added to a table only when the starter creates it, so samples are never added twice. */
-  records: Record<string, Record<string, number | string>[]>
+  records: Record<string, Record<string, number | string>[] | (() => Record<string, number | string>[] )>
   settings: Partial<Settings> & { name: string }
   tables: StarterTable[]
 }
@@ -326,6 +326,89 @@ const classes: Record<StarterLanguage, StarterContent> = {
   },
 }
 
+const appointmentTables = (language: StarterLanguage): StarterTable[] => {
+  const en = language === 'en'
+  const statuses = en ? ['New', 'Confirmed', 'Cancelled'] : ['ใหม่', 'ยืนยันแล้ว', 'ยกเลิก']
+  return [
+    {
+      name: 'appointment_slots', label: en ? 'Available appointments' : 'ช่วงเวลาที่เปิดให้จอง', readAccess: 'public', writeAccess: 'owner',
+      fields: [
+        { name: 'title', label: en ? 'Service, date and time' : 'บริการ วันและเวลา', type: 'text', required: true },
+        { name: 'date', label: en ? 'Date' : 'วันที่', type: 'date', required: true },
+        { name: 'time', label: en ? 'Start time' : 'เวลาเริ่ม', type: 'time', required: true },
+        { name: 'places', label: en ? 'Places available' : 'จำนวนที่รับ', type: 'number', required: true, default: 1 },
+        { name: 'staff', label: en ? 'Staff member (optional)' : 'ผู้ให้บริการ (ไม่บังคับ)', type: 'text' },
+      ],
+    },
+    {
+      name: 'appointment_bookings', label: en ? 'Appointment bookings' : 'รายการจองคิว', readAccess: 'owner', writeAccess: 'public',
+      fields: [
+        { name: 'slot', label: en ? 'Appointment' : 'ช่วงเวลานัดหมาย', type: 'reference', table: 'appointment_slots', required: true, capacityField: 'places', ignoreField: 'status', ignoreValues: [statuses[2]] },
+        { name: 'name', label: en ? 'Your name' : 'ชื่อของคุณ', type: 'text', required: true },
+        { name: 'email', label: en ? 'Email' : 'อีเมล', type: 'email', required: true },
+        { name: 'phone', label: en ? 'Phone (optional)' : 'เบอร์โทร (ไม่บังคับ)', type: 'phone' },
+        { name: 'note', label: en ? 'Anything we should know?' : 'มีอะไรที่เราควรรู้ไหม', type: 'textarea' },
+        { name: 'status', label: en ? 'Status' : 'สถานะ', type: 'select', options: statuses, default: statuses[0], readOnly: true },
+        { name: 'ref', label: en ? 'Booking number' : 'เลขที่การจอง', type: 'text', readOnly: true },
+      ],
+    },
+  ]
+}
+
+const appointmentSamples = (language: StarterLanguage) => {
+  const date = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10)
+  const sample = language === 'th' ? 'ตัวอย่าง' : 'sample'
+  const services = language === 'th' ? ['ตัดผม', 'ปรึกษา', 'บริการ'] : ['Haircut', 'Consultation', 'Service']
+  return [
+    { title: `${services[0]} · ${date(7)} 10:00 (${sample})`, date: date(7), time: '10:00', places: 1 },
+    { title: `${services[1]} · ${date(7)} 14:00 (${sample})`, date: date(7), time: '14:00', places: 1 },
+    { title: `${services[2]} · ${date(9)} 11:00 (${sample})`, date: date(9), time: '11:00', places: 1 },
+  ]
+}
+
+const appointments: Record<StarterLanguage, StarterContent> = {
+  en: {
+    label: 'Service appointments',
+    description: 'Customers choose an available time and send a booking request. One place per slot prevents double booking.',
+    includes: ['Home page with available sample times', 'Booking form without customer sign-up', 'Three sample slots and an owner booking list', 'Before publishing, replace sample slots under Data → Available appointments'],
+    settings: { name: 'Sample Appointments', tagline: 'Choose a time that works for you', style: 'calm', accent: '#176c69', cart: false, nav: [{ label: 'Appointments', href: '/#slots' }, { label: 'Book', href: '/book' }], headerButtonLabel: 'Book a time', headerButtonHref: '/book', footerText: footer.en },
+    pages: [
+      { slug: 'home', title: 'Sample Appointments', description: 'A sample local service website with available appointments and online booking.', blocks: [
+        { type: 'hero', layout: 'centered', eyebrow: 'Sample service', heading: 'Book a time in a minute', text: 'See the available sample times below. Replace them with your real services and opening hours before publishing.', buttonLabel: 'See available times', buttonHref: '#slots' },
+        { type: 'records', id: 'slots', table: 'appointment_slots', heading: 'Available appointments', intro: 'These are sample times. A time disappears from the booking choices when it is full.', fields: ['title', 'date', 'time'], newestFirst: false, tone: 'tint' },
+        { type: 'steps', heading: 'How it works', items: [{ title: 'Choose a time', text: 'Pick one of the open appointments.' }, { title: 'Send your request', text: 'Leave your name and email. No account is needed.' }, { title: 'Wait for confirmation', text: 'The business reviews your request and contacts you.' }] },
+        { type: 'cta', heading: 'Ready to book?', buttonLabel: 'Book a time', buttonHref: '/book' },
+      ] },
+      { slug: 'book', title: 'Book an appointment', description: 'Sample booking page. Choose an available appointment and send a booking request.', blocks: [
+        { type: 'hero', heading: 'Book an appointment', text: 'Choose an open time. The business will contact you to confirm your request.' },
+        { type: 'record-form', table: 'appointment_bookings', heading: 'Your booking request', intro: 'A full time cannot be chosen.', fields: ['slot', 'name', 'email', 'phone', 'note'], buttonLabel: 'Send booking request', sentMessage: 'Your booking request was saved. The business will contact you to confirm it.', tone: 'tint' },
+      ] },
+    ],
+    items: [], tables: appointmentTables('en'), records: { appointment_slots: () => appointmentSamples('en') },
+    automations: [{ name: 'Appointment number', trigger: { on: 'record_added', table: 'appointment_bookings' }, actions: [{ do: 'set_fields', values: { ref: 'AP-{{number}}' } }] }],
+  },
+  th: {
+    label: 'จองคิวบริการ',
+    description: 'ลูกค้าเลือกเวลาที่ว่างแล้วส่งคำขอจอง หนึ่งช่วงเวลารับหนึ่งคน จึงไม่จองชนกัน',
+    includes: ['หน้าแรกแสดงเวลาตัวอย่างที่ว่าง', 'หน้าจองโดยไม่ต้องสมัครสมาชิก', 'ช่วงเวลาตัวอย่าง 3 ช่วงและรายการจองในหลังบ้าน', 'ก่อนเผยแพร่ ให้เปลี่ยนช่วงเวลาตัวอย่างที่ ข้อมูล → ช่วงเวลาที่เปิดให้จอง'],
+    settings: { name: 'ร้านบริการตัวอย่าง', tagline: 'เลือกเวลาที่สะดวก', style: 'calm', accent: '#176c69', cart: false, nav: [{ label: 'เวลาที่ว่าง', href: '/#slots' }, { label: 'จองคิว', href: '/book' }], headerButtonLabel: 'จองคิว', headerButtonHref: '/book', footerText: footer.th },
+    pages: [
+      { slug: 'home', title: 'ร้านบริการตัวอย่าง', description: 'เว็บบริการตัวอย่างที่มีเวลาว่างและแบบฟอร์มจองคิวออนไลน์', blocks: [
+        { type: 'hero', layout: 'centered', eyebrow: 'บริการตัวอย่าง', heading: 'จองเวลาที่สะดวกได้ในหนึ่งนาที', text: 'ดูเวลาตัวอย่างที่ว่างด้านล่าง เปลี่ยนเป็นบริการและเวลาเปิดจริงของคุณก่อนเผยแพร่', buttonLabel: 'ดูเวลาที่ว่าง', buttonHref: '#slots' },
+        { type: 'records', id: 'slots', table: 'appointment_slots', heading: 'เวลาที่เปิดให้จอง', intro: 'เวลาทั้งหมดเป็นตัวอย่าง เมื่อช่วงเวลาเต็มจะเลือกจองไม่ได้', fields: ['title', 'date', 'time'], newestFirst: false, tone: 'tint' },
+        { type: 'steps', heading: 'วิธีจอง', items: [{ title: 'เลือกเวลา', text: 'เลือกช่วงเวลาที่ยังว่าง' }, { title: 'ส่งคำขอ', text: 'ใส่ชื่อและอีเมล ไม่ต้องสมัครสมาชิก' }, { title: 'รอการยืนยัน', text: 'ร้านจะตรวจคำขอแล้วติดต่อกลับ' }] },
+        { type: 'cta', heading: 'พร้อมจองแล้วใช่ไหม', buttonLabel: 'จองคิว', buttonHref: '/book' },
+      ] },
+      { slug: 'book', title: 'จองคิว', description: 'หน้าจองตัวอย่าง เลือกเวลาที่ว่างและส่งคำขอจองคิว ร้านจะตรวจคำขอและติดต่อกลับเพื่อยืนยันเวลานัดหมาย', blocks: [
+        { type: 'hero', heading: 'จองคิว', text: 'เลือกเวลาที่ยังว่าง ร้านจะติดต่อกลับเพื่อยืนยันคำขอ' },
+        { type: 'record-form', table: 'appointment_bookings', heading: 'ข้อมูลการจอง', intro: 'ช่วงเวลาที่เต็มแล้วจะเลือกไม่ได้', fields: ['slot', 'name', 'email', 'phone', 'note'], buttonLabel: 'ส่งคำขอจอง', sentMessage: 'บันทึกคำขอจองแล้ว ร้านจะติดต่อกลับเพื่อยืนยัน', tone: 'tint' },
+      ] },
+    ],
+    items: [], tables: appointmentTables('th'), records: { appointment_slots: () => appointmentSamples('th') },
+    automations: [{ name: 'เลขที่การจองคิว', trigger: { on: 'record_added', table: 'appointment_bookings' }, actions: [{ do: 'set_fields', values: { ref: 'AP-{{number}}' } }] }],
+  },
+}
+
 const services: Record<StarterLanguage, StarterContent> = {
   en: {
     label: 'Services or coaching',
@@ -520,4 +603,4 @@ const portfolio: Record<StarterLanguage, StarterContent> = {
   },
 }
 
-export const starterSites: Record<StarterId, Record<StarterLanguage, StarterContent>> = { cafe, shop, classes, services, portfolio }
+export const starterSites: Record<StarterId, Record<StarterLanguage, StarterContent>> = { cafe, shop, classes, appointments, services, portfolio }

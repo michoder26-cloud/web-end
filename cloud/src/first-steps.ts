@@ -68,7 +68,8 @@ export async function applyStarter(env: Env, site: SiteRow, id: StarterId, langu
     if (problem) throw new Error(`Starter ${id}: ${problem}`)
     tables.push(table.name)
     const created = await getTable(env, site.id, table.name)
-    for (const values of content.records[table.name] ?? []) if (created) await createRecord(env, site.id, created, values, ownerActor)
+    const sampleRows = content.records[table.name]
+    for (const values of typeof sampleRows === 'function' ? sampleRows() : sampleRows ?? []) if (created) await createRecord(env, site.id, created, values, ownerActor)
   }
 
   let items = 0
