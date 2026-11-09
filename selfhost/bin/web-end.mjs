@@ -53,12 +53,23 @@ async function main() {
   if (command === 'launcher') {
     if (!existsSync(join(root, 'dist', 'engine.mjs'))) throw new Error('Build the engine first: npm run build')
     const { startLauncher } = await import('../host/launcher.mjs')
-    const launcher = await startLauncher({ sitesDir: process.env.WEB_END_SITES_DIR })
-    console.log(`Open web-end: ${launcher.url}`)
+    let launcher
+    let address = 'http://127.0.0.1:8798'
+    try {
+      launcher = await startLauncher({ sitesDir: process.env.WEB_END_SITES_DIR })
+      address = launcher.url
+    } catch (error) {
+      if (error.code !== 'EADDRINUSE') throw error
+      const existing = await fetch(address).catch(() => null)
+      if (!existing?.ok || !(await existing.text()).includes('เว็บของฉัน · web-end')) throw error
+      console.log('web-end is already open. Returning to its browser page.')
+    }
+    console.log(`Open web-end: ${address}`)
     if (process.platform === 'win32' && !process.env.WEB_END_NO_BROWSER) {
       const { spawn } = await import('node:child_process')
-      spawn('cmd.exe', ['/d', '/s', '/c', `start "" "${launcher.url}"`], { stdio: 'ignore', detached: true, windowsHide: true }).unref()
+      spawn('cmd.exe', ['/d', '/s', '/c', `start "" "${address}"`], { stdio: 'ignore', detached: true, windowsHide: true }).unref()
     }
+    if (!launcher) return
     const stop = async () => { await launcher.close(); process.exit(0) }
     process.on('SIGINT', stop)
     process.on('SIGTERM', stop)
