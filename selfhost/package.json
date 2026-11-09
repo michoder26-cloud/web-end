@@ -1,0 +1,33 @@
+{
+  "name": "web-end-selfhost",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Runs the web-end engine on any computer with Node.js and one SQLite file, with a built-in AI builder that works with any provider or a local model.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "bin": {
+    "web-end": "bin/web-end.mjs"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node bin/web-end.mjs serve",
+    "backup": "node bin/web-end.mjs backup",
+    "restore": "node bin/web-end.mjs restore",
+    "test": "node tests/run-all.mjs",
+    "test:d1": "node tests/d1-conformance.mjs",
+    "test:rewriter": "node tests/html-rewriter.mjs",
+    "test:smoke": "node tests/run-smoke.mjs",
+    "test:ownership": "node tests/ownership.mjs",
+    "test:builder": "node tests/builder.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

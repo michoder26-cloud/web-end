@@ -379,7 +379,7 @@ async function overview(env: Env, url: URL, site: SiteRow, desk: Desk) {
     t.nav.overview,
     `${started}${changed}${newer}${buildChoice}${firstTime}${commandCenter}${account}${testCard}<h2>${t.messagesHeading}</h2>${await messageList(env, site, desk)}
 ${site.live_version ? `<p>${t.seeWaiting(`${escapeHtml(desk.base)}/publish`)}</p>` : ''}
-${steps?.build && !steps.claude ? `<details class="cms-claude-help"><summary>${escapeHtml(dashboard.claude)}</summary><div class="contact-form"><p>${escapeHtml(dashboard.claudeHelp)}</p>${claudeSetup}</div></details>` : ''}`,
+${steps?.build ? `<details class="cms-claude-help"><summary>${escapeHtml(t.claudeHeading)}</summary><div class="contact-form"><p>${escapeHtml(dashboard.claudeHelp)}</p>${claudeSetup}</div></details>` : ''}`,
   )
 }
 

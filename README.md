@@ -4,6 +4,8 @@ Build and run a full-stack site or simple app by talking to Claude: your own dat
 
 **Status: early test.** The install button and the connection to Claude have worked from start to finish once. Nobody outside the project has tried it yet.
 
+There is also an [experimental local/self-hosted mode](selfhost/README.md): Node.js + SQLite with a built-in AI Studio, provider choice, and a tested backup/restore path. It uses the same engine as the Cloudflare version.
+
 ## How it works
 
 You need three free accounts: [Cloudflare](https://dash.cloudflare.com/sign-up), [GitHub](https://github.com/signup) and [Claude](https://claude.ai).
