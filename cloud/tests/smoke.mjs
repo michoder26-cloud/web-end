@@ -3437,9 +3437,11 @@ check((await call('get_site')).data.settings.name === settingsBefore && firstCha
 check((await (await fetch(owner)).text()).includes('/changes">See what changed</a>'), 'the overview says how many changes Claude made today')
 await call('delete_page', { slug: 'loop-test' })
 
-// Free usage: what the site uses against the free limits, and what happens at each one.
+// Site usage: reference limits and page views are not mistaken for Worker requests.
 const usagePage = await (await fetch(`${owner}/system`)).text()
-check(usagePage.includes('id="free-usage"') && usagePage.includes('of 5 GB') && usagePage.includes('of 200 MB') && usagePage.includes('never charged') && typeof (await call('get_status')).data.freeUsage?.databaseBytes === 'number', 'the System page shows free usage against each limit, and so does get_status')
+const usageStatus = (await call('get_status')).data.freeUsage
+const pageViewsRow = usagePage.match(/<dt>Page views today<\/dt><dd>[\s\S]*?<\/dd>/)?.[0] ?? ''
+check(usagePage.includes('id="free-usage"') && usagePage.includes('of 5 GB') && usagePage.includes('of 200 MB') && pageViewsRow.includes('Page views are not Cloudflare Worker requests') && !pageViewsRow.includes('<meter') && !usagePage.includes('never charged') && typeof usageStatus?.databaseBytes === 'number' && !('requestsLimit' in usageStatus), 'the System page distinguishes local usage from provider quotas and billing')
 
 // Backup and restore, done the way the System page's script does it.
 const backupGet = async (path) => (await fetch(`${owner}${path}`)).json()

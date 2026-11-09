@@ -420,8 +420,8 @@ export async function systemStatus(env: Env, site: SiteRow, origin: string) {
     publishing: { liveVersion: site.live_version ?? null, waiting },
     database: { imageBytes, customers, orders, pages, records, tables },
     testData: { active: Boolean(tests.active), customers: tests.customers, entries: tests.entries, orders: tests.orders, records: tests.records },
-    // Against the free plans. Nothing here can turn into a bill: on Cloudflare's free plan a limit stops, it never charges.
-    freeUsage: { databaseBytes: size, databaseLimit: 5_000_000_000, imageBytes, imageLimit: 200_000_000, newsToday, newsLimit: 100, records, recordsLimit: 50 * 50_000, viewsToday, requestsLimit: 100_000 },
+    // Local measurements with reference limits; the owner's provider plans and billing are not available here.
+    freeUsage: { databaseBytes: size, databaseLimit: 5_000_000_000, imageBytes, imageLimit: 200_000_000, newsToday, newsLimit: 100, records, recordsLimit: 50 * 50_000, viewsToday },
     login: { customerAccounts: Boolean(settings.accounts) },
     payments: { bankTransfer: Boolean(settings.payTransfer), promptPay: Boolean(settings.payPromptPay), promptPayReady: canPayByPromptPay(settings), card: Boolean(settings.payCard), cardSecretsSet: Boolean(env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET), payOnDelivery: Boolean(settings.payCod), cart: Boolean(settings.cart) },
     email: emailStatus(env, settings),
@@ -432,7 +432,7 @@ export async function systemStatus(env: Env, site: SiteRow, origin: string) {
 
 const size = (bytes: number) => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)} MB` : `${Math.ceil(bytes / 1e3)} KB`)
 
-/** How much of each free limit the site uses, and what happens at the limit. */
+/** Local usage with reference limits. Provider request counts and billing are not measured here. */
 const usageCard = (u: Awaited<ReturnType<typeof systemStatus>>['freeUsage'], t: OfficeWords) => {
   const w = t.usage
   const number = (value: number) => value.toLocaleString('en')
@@ -441,7 +441,7 @@ const usageCard = (u: Awaited<ReturnType<typeof systemStatus>>['freeUsage'], t: 
 ${row(w.database, u.databaseBytes, u.databaseLimit, w.of(size(u.databaseBytes), '5 GB'), w.databaseFull)}
 ${row(w.images, u.imageBytes, u.imageLimit, w.of(size(u.imageBytes), '200 MB'), w.imagesFull)}
 ${row(w.records, u.records, u.recordsLimit, w.of(number(u.records), number(u.recordsLimit)), w.recordsFull)}
-${row(w.views, u.viewsToday, u.requestsLimit, number(u.viewsToday), w.viewsFull)}
+<div class="usage"><dt>${w.views}</dt><dd>${number(u.viewsToday)}<small>${w.viewsFull}</small></dd></div>
 ${row(w.news, u.newsToday, u.newsLimit, w.of(number(u.newsToday), number(u.newsLimit)), w.newsFull)}
 </dl><p><small>${w.claude}</small></p></article>`
 }

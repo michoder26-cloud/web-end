@@ -704,8 +704,8 @@ const en = {
   },
   // Free usage on the System page
   usage: {
-    heading: 'Free usage',
-    intro: 'Your site runs on free plans, with no credits. Nothing here can turn into a bill: on Cloudflare\'s free plan, reaching a limit pauses that one thing until it resets. You are never charged.',
+    heading: 'Usage and limits',
+    intro: 'These are measurements from this site and reference limits for free plans. Your Cloudflare and Resend plans may differ. Check their dashboards for your actual limits, usage and charges. web-end does not charge credits.',
     database: 'Database',
     images: 'Images',
     records: 'Table records',
@@ -715,9 +715,9 @@ const en = {
     databaseFull: 'When full, new orders and changes can\'t be saved until you delete old data.',
     imagesFull: 'When full, new images can\'t be uploaded until you delete some.',
     recordsFull: 'Each table holds up to 50,000 records, in up to 50 tables.',
-    viewsFull: 'Cloudflare\'s free plan allows 100,000 requests a day, and each page view uses a few. Above that, visitors see an error until midnight UTC.',
+    viewsFull: 'Page views are not Cloudflare Worker requests. Check your Cloudflare dashboard for the actual request count and limit.',
     newsFull: 'Resend\'s free plan sends 100 emails a day. The rest wait until tomorrow by themselves.',
-    claude: 'Building with Claude uses your own Claude plan. web-end never charges credits for changes, fixes or tries.',
+    claude: 'Building with Claude uses your own Claude plan or API key. Check your Claude account for its usage and charges. web-end never charges credits for changes, fixes or tries.',
   },
   // What changed, and undo
   changes: {
@@ -1657,8 +1657,8 @@ const th: OfficeWords = {
     emailActor: 'โหมดทดลอง (ไม่ได้ส่ง)',
   },
   usage: {
-    heading: 'การใช้งานแบบฟรี',
-    intro: 'เว็บของคุณทำงานบนแพ็กเกจฟรี ไม่มีเครดิต และไม่มีอะไรในนี้กลายเป็นค่าใช้จ่ายได้ บนแพ็กเกจฟรีของ Cloudflare เมื่อใช้ถึงขีดจำกัด สิ่งนั้นจะหยุดชั่วคราวจนกว่าจะเริ่มนับใหม่ ไม่มีการเรียกเก็บเงิน',
+    heading: 'การใช้งานและขีดจำกัด',
+    intro: 'ตัวเลขนี้วัดจากเว็บของคุณและเทียบกับขีดจำกัดอ้างอิงของแพ็กเกจฟรี แพ็กเกจ Cloudflare และ Resend ของคุณอาจต่างออกไป ตรวจยอดใช้จริง ขีดจำกัด และค่าใช้จ่ายในบัญชีของแต่ละบริการ web-end ไม่เก็บเครดิต',
     database: 'ฐานข้อมูล',
     images: 'รูปภาพ',
     records: 'รายการในตาราง',
@@ -1668,9 +1668,9 @@ const th: OfficeWords = {
     databaseFull: 'ถ้าเต็ม จะบันทึกคำสั่งซื้อและการแก้ไขใหม่ไม่ได้จนกว่าจะลบข้อมูลเก่า',
     imagesFull: 'ถ้าเต็ม จะอัปโหลดรูปใหม่ไม่ได้จนกว่าจะลบรูปบางส่วน',
     recordsFull: 'แต่ละตารางเก็บได้ถึง 50,000 รายการ และมีได้ถึง 50 ตาราง',
-    viewsFull: 'แพ็กเกจฟรีของ Cloudflare รับได้ 100,000 คำขอต่อวัน การเปิดหน้าเว็บหนึ่งครั้งใช้ไม่กี่คำขอ ถ้าเกิน ผู้เข้าชมจะเห็นข้อผิดพลาดจนถึงเที่ยงคืนตามเวลา UTC (7 โมงเช้าเวลาไทย)',
+    viewsFull: 'จำนวนเปิดหน้าเว็บไม่ใช่จำนวนคำขอของ Cloudflare Worker ตรวจยอดคำขอจริงและขีดจำกัดในแดชบอร์ด Cloudflare ของคุณ',
     newsFull: 'แพ็กเกจฟรีของ Resend ส่งได้วันละ 100 ฉบับ ที่เหลือจะรอส่งพรุ่งนี้เอง',
-    claude: 'การสร้างด้วย Claude ใช้แพ็กเกจ Claude ของคุณเอง web-end ไม่เคยเก็บเครดิตสำหรับการเปลี่ยนแปลง การแก้ไข หรือการลองใหม่',
+    claude: 'การสร้างด้วย Claude ใช้แพ็กเกจหรือ API key ของคุณเอง ตรวจยอดใช้และค่าใช้จ่ายในบัญชี Claude ของคุณ web-end ไม่เก็บเครดิตสำหรับการเปลี่ยนแปลง การแก้ไข หรือการลองใหม่',
   },
   changes: {
     title: 'มีอะไรเปลี่ยนบ้าง',
