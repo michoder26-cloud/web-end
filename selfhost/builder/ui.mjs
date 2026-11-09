@@ -182,7 +182,12 @@ $('composer').onsubmit = async (event) => {
 }
 $('text').onkeydown = (event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) $('composer').requestSubmit() }
 $('stop').onclick = () => current && api('runs/' + current.id + '/stop', { method: 'POST' })
+let settingsDirty = false
+let settingsRevision = 0
+$('settings').addEventListener('input', () => { settingsDirty = true; settingsRevision++ })
+$('settings').addEventListener('change', () => { settingsDirty = true; settingsRevision++ })
 function fillSettings(state) {
+  if (settingsDirty) return
   const select = $('provider')
   if (!select.options.length) for (const [id, kind] of Object.entries(state.kinds)) select.append(new Option(kind.label, id))
   const s = state.settings
@@ -193,10 +198,11 @@ function fillSettings(state) {
 }
 $('settings').onsubmit = async (event) => {
   event.preventDefault()
+  const revision = settingsRevision
   const data = Object.fromEntries(new FormData($('settings')))
   const result = await api('settings', { body: JSON.stringify(data), method: 'POST' })
   $('settingsNote').textContent = result.error ?? w.saved
-  if (!result.error) fillSettings(result)
+  if (!result.error && revision === settingsRevision) { settingsDirty = false; fillSettings(result) }
 }
 $('clearKey').onclick = async () => { const result = await api('settings', { body: JSON.stringify({ clearKey: true }), method: 'POST' }); fillSettings(result); $('settingsNote').textContent = w.saved }
 $('test').onclick = async () => {

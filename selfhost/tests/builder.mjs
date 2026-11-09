@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { startServer } from '../host/server.mjs'
 import { contextWindow } from '../builder/agent.mjs'
+import { runInNewContext } from 'node:vm'
+import { studioPage } from '../builder/ui.mjs'
 
 let failed = 0
 let passed = 0
@@ -14,6 +16,12 @@ const check = (ok, name, detail = '') => {
   console.log(`${ok ? 'ok  ' : 'FAIL'}  ${name}${ok || !detail ? '' : `: ${detail}`}`)
   ok ? passed++ : failed++
 }
+
+// An automatic run refresh must not erase settings the owner is still editing.
+const settingsFunction = studioPage({ lang: 'en', nonce: 'test' }).match(/function fillSettings\(state\) \{[\s\S]*?\n\}/)[0]
+const fields = Object.fromEntries(['provider', 'model', 'baseUrl', 'approval', 'maxStepsPerTurn', 'maxTokensPerTurn', 'maxTokensPerDay', 'maxSecondsPerTurn', 'keyhint', 'apiKey'].map((name) => [name, { options: [{}], value: 'draft', textContent: '' }]))
+runInNewContext(`${settingsFunction}; fillSettings(state)`, { $: (id) => fields[id], settingsDirty: true, state: { kinds: {}, hints: {}, settings: { provider: 'openai', model: 'saved', baseUrl: '', approval: 'risky' } } })
+check(fields.model.value === 'draft' && fields.apiKey.value === 'draft', 'automatic refresh preserves unsaved settings and API key')
 
 // A stand-in AI: each request takes the next scripted answer, and every request is kept for checks.
 const script = []
