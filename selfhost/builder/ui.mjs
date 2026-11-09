@@ -8,6 +8,7 @@ const words = {
     approve: 'Allow', baseUrl: 'Address (optional)', baseUrlHint: 'Leave empty for the provider\'s usual address. For LM Studio, vLLM or another OpenAI-compatible server, put its …/v1 address here.',
     budget: 'Limits', clearKey: 'Remove saved key', dashboard: 'Dashboard', dashboardIntro: 'Manage this site from one place. Its data and settings belong to this site.', decline: 'Don\'t allow', empty: 'Tell the Studio what you want to build, for example: "A booking system for my yoga classes: customers sign up, book a class with limited seats, and I see the list each morning."',
     intro: 'Your own builder. It runs on your computer or server, and uses the AI service you choose.', link: 'Your owner link', linkHint: 'Paste the private owner link you got when you set up the site (it ends in four groups of 8 letters and numbers).',
+    documentTitle: 'Review a document', documentIntro: 'Paste text from one invoice or receipt. The AI suggests a draft; you review every field before saving it privately. Text only: PDF files and OCR are not supported.', documentDestination: 'Text goes to', documentText: 'Original document text', documentExtract: 'Extract draft', documentReview: 'Review and edit the draft', documentSave: 'Save private draft', documentSaved: 'Saved privately. Open Data → Document entries to see it.', documentReady: 'Review the original text and every field before saving.', documentKind: 'Type', documentSupplier: 'Supplier', documentNumber: 'Document number', documentDate: 'Issue date', documentAmount: 'Amount (digits and dot)', documentCurrency: 'Currency (three letters)', documentNote: 'Note', documentInvoice: 'Invoice', documentReceipt: 'Receipt', documentPrivacy: 'This text is sent to your selected AI service. It is not added to Studio chat or saved with the entry.',
     live: 'Live site', maxDay: 'AI tokens per day', maxSeconds: 'Seconds per message', maxSteps: 'Steps per message', maxTokens: 'AI tokens per message', model: 'Model', modelHint: 'For example gpt-5-mini, claude-sonnet-5-5, gemini-3-flash or, with Ollama, qwen3:14b.',
     noActivity: 'Nothing yet.', office: 'Back office', orders: 'Orders', pages: 'Pages', data: 'Data', products: 'Products', publish: 'Publish', system: 'System', manageSite: 'Manage your site', aiToday: 'AI tokens used today', aiProvider: 'AI service for this site', aiNotReady: 'Set up in Settings', aiCosts: 'AI costs, if any, are billed by the provider you chose. web-end does not charge credits.', pending: 'The Studio wants to', preview: 'Preview', provider: 'AI service', save: 'Save settings', saved: 'Saved.', send: 'Send', settings: 'Settings',
     signIn: 'Open the Studio', signInBad: 'That link is not right for this site. Check it and try again.', signOut: 'Sign out', stop: 'Stop', test: 'Test connection', testing: 'Testing…', thinking: 'Working…',
@@ -19,6 +20,7 @@ const words = {
     approve: 'อนุญาต', baseUrl: 'ที่อยู่บริการ (ไม่บังคับ)', baseUrlHint: 'เว้นว่างเพื่อใช้ที่อยู่ปกติของผู้ให้บริการ ถ้าใช้ LM Studio, vLLM หรือเซิร์ฟเวอร์แบบ OpenAI-compatible อื่น ให้ใส่ที่อยู่ที่ลงท้ายด้วย /v1',
     budget: 'ขีดจำกัด', clearKey: 'ลบ key ที่บันทึกไว้', dashboard: 'Dashboard', dashboardIntro: 'จัดการเว็บนี้ได้จากที่เดียว ข้อมูลและการตั้งค่าของแต่ละเว็บแยกจากกัน', decline: 'ไม่อนุญาต', empty: 'บอก Studio ว่าอยากสร้างอะไร เช่น "ระบบจองคลาสโยคะ ลูกค้าสมัครสมาชิก จองคลาสที่มีที่นั่งจำกัด และฉันดูรายชื่อได้ทุกเช้า"',
     intro: 'เครื่องมือสร้างแอปของคุณเอง ทำงานบนเครื่องหรือเซิร์ฟเวอร์ของคุณ และใช้บริการ AI ที่คุณเลือก', link: 'ลิงก์เจ้าของเว็บ', linkHint: 'วางลิงก์ส่วนตัวของเจ้าของที่ได้ตอนตั้งค่าเว็บ (ท้ายลิงก์เป็นตัวอักษรและตัวเลข 4 ชุด ชุดละ 8 ตัว)',
+    documentTitle: 'ตรวจเอกสาร', documentIntro: 'วางข้อความจากใบแจ้งหนี้หรือใบเสร็จหนึ่งฉบับ AI จะเสนอร่างให้คุณตรวจและแก้ทุกช่องก่อนบันทึกส่วนตัว รองรับข้อความเท่านั้น ยังไม่รองรับ PDF หรือ OCR', documentDestination: 'ข้อความจะส่งไปที่', documentText: 'ข้อความต้นฉบับ', documentExtract: 'ดึงข้อมูลร่าง', documentReview: 'ตรวจและแก้ข้อมูลร่าง', documentSave: 'บันทึกร่างส่วนตัว', documentSaved: 'บันทึกส่วนตัวแล้ว เปิด ข้อมูล → Document entries เพื่อดู', documentReady: 'ตรวจข้อความต้นฉบับและข้อมูลทุกช่องก่อนบันทึก', documentKind: 'ชนิด', documentSupplier: 'ผู้ขาย', documentNumber: 'เลขที่เอกสาร', documentDate: 'วันที่ออก', documentAmount: 'ยอดเงิน (ตัวเลขและจุด)', documentCurrency: 'สกุลเงิน (สามตัวอักษร)', documentNote: 'หมายเหตุ', documentInvoice: 'ใบแจ้งหนี้', documentReceipt: 'ใบเสร็จ', documentPrivacy: 'ข้อความนี้จะส่งไปยังบริการ AI ที่คุณเลือก แต่จะไม่อยู่ในแชต Studio หรือบันทึกพร้อมรายการ',
     live: 'เว็บจริง', maxDay: 'จำนวน token ต่อวัน', maxSeconds: 'วินาทีต่อข้อความ', maxSteps: 'จำนวนขั้นตอนต่อข้อความ', maxTokens: 'จำนวน token ต่อข้อความ', model: 'โมเดล', modelHint: 'เช่น gpt-5-mini, claude-sonnet-5-5, gemini-3-flash หรือถ้าใช้ Ollama เช่น qwen3:14b',
     noActivity: 'ยังไม่มี', office: 'หลังร้าน', orders: 'คำสั่งซื้อ', pages: 'หน้าเว็บ', data: 'ข้อมูล', products: 'สินค้า', publish: 'เผยแพร่', system: 'ระบบ', manageSite: 'จัดการเว็บของคุณ', aiToday: 'AI token ที่ใช้วันนี้', aiProvider: 'บริการ AI ของเว็บนี้', aiNotReady: 'ตั้งค่าในแท็บตั้งค่า', aiCosts: 'หากมีค่าใช้ AI ผู้ให้บริการที่คุณเลือกจะเป็นผู้คิดค่าใช้จ่าย web-end ไม่เก็บเครดิต', pending: 'Studio ขออนุญาต', preview: 'ตัวอย่าง', provider: 'บริการ AI', save: 'บันทึกการตั้งค่า', saved: 'บันทึกแล้ว', send: 'ส่ง', settings: 'ตั้งค่า',
     signIn: 'เปิด Studio', signInBad: 'ลิงก์นี้ไม่ตรงกับเว็บนี้ ตรวจแล้วลองใหม่', signOut: 'ออกจากระบบ', stop: 'หยุด', test: 'ทดสอบการเชื่อมต่อ', testing: 'กำลังทดสอบ…', thinking: 'กำลังทำงาน…',
@@ -55,6 +57,7 @@ table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px
 .wrap{padding:16px 20px;display:grid;gap:18px}.signin{max-width:520px;margin:10vh auto;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:28px;display:grid;gap:16px}
 .dashboard{padding:24px;display:grid;align-content:start;gap:24px}.dashboard h2{margin:0 0 6px;font-size:27px}.dashboard p{margin:0;color:var(--soft);line-height:1.5}.dashboard-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.dashboard-link{display:flex;align-items:center;justify-content:space-between;padding:18px;border:1px solid var(--line);border-radius:12px;background:var(--card);font-weight:650;text-decoration:none}.dashboard-link:hover{border-color:var(--accent);background:#f1f8f4}.dashboard-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.dashboard-metric{padding:18px;border:1px solid var(--line);border-radius:12px;background:var(--card)}.dashboard-metric small{display:block;color:var(--soft);margin-bottom:9px}.dashboard-metric strong{font-size:20px;overflow-wrap:anywhere}.dashboard-note{font-size:13px}
 .error{color:var(--bad)}.stack{display:grid;gap:6px}.row{display:flex;gap:8px;flex-wrap:wrap}
+.document-box{padding:18px;border:1px solid var(--line);border-radius:12px;background:var(--card);display:grid;gap:12px}.document-box h3{margin:0}.document-box textarea{width:100%;min-height:140px}.document-box label{font-weight:600}.document-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.document-fields label:last-child{grid-column:1/-1}.document-fields textarea{min-height:68px}.document-destination{overflow-wrap:anywhere;color:var(--ink);font-weight:600}.document-status{min-height:1.5em}
 `
 
 const escape = (text) => String(text).replace(/[&<>"']/g, (char) => ({ '"': '&quot;', '&': '&amp;', "'": '&#39;', '<': '&lt;', '>': '&gt;' })[char])
@@ -79,7 +82,7 @@ export function studioPage({ lang, nonce }) {
 <form id="composer"><textarea id="text" placeholder="${escape(w.empty)}" aria-label="${escape(w.send)}"></textarea><div class="stack"><button id="send" type="submit">${w.send}</button><button id="stop" class="quiet" type="button" hidden>${w.stop}</button></div></form></section>
 <section id="side">
 <div class="tabs" role="tablist"><button role="tab" aria-selected="true" data-tab="dashboard">${w.dashboard}</button><button role="tab" aria-selected="false" data-tab="preview">${w.preview}</button><button role="tab" aria-selected="false" data-tab="settings">${w.settings}</button><button role="tab" aria-selected="false" data-tab="activity">${w.activity}</button></div>
-<div class="panel" id="panel-dashboard"><div class="dashboard"><div><h2>${w.manageSite}</h2><p>${w.dashboardIntro}</p></div><div class="dashboard-grid">${[['pages', w.pages], ['data', w.data], ['products', w.products], ['orders', w.orders], ['publish', w.publish], ['system', w.system]].map(([path, label]) => `<a class="dashboard-link" href="/studio/office/${path}" target="_blank" rel="noreferrer">${label}<span aria-hidden="true">↗</span></a>`).join('')}</div><div class="dashboard-metrics"><div class="dashboard-metric"><small>${w.aiToday}</small><strong id="tokens-today">0</strong></div><div class="dashboard-metric"><small>${w.aiProvider}</small><strong id="provider-name">—</strong></div></div><p class="dashboard-note">${w.aiCosts}</p></div></div>
+<div class="panel" id="panel-dashboard"><div class="dashboard"><div><h2>${w.manageSite}</h2><p>${w.dashboardIntro}</p></div><div class="dashboard-grid">${[['pages', w.pages], ['data', w.data], ['products', w.products], ['orders', w.orders], ['publish', w.publish], ['system', w.system]].map(([path, label]) => `<a class="dashboard-link" href="/studio/office/${path}" target="_blank" rel="noreferrer">${label}<span aria-hidden="true">↗</span></a>`).join('')}</div><div class="dashboard-metrics"><div class="dashboard-metric"><small>${w.aiToday}</small><strong id="tokens-today">0</strong></div><div class="dashboard-metric"><small>${w.aiProvider}</small><strong id="provider-name">—</strong></div></div><p class="dashboard-note">${w.aiCosts}</p><form id="document-form" class="document-box"><h3>${w.documentTitle}</h3><p>${w.documentIntro}</p><p>${w.documentDestination}: <span id="document-destination" class="document-destination">—</span></p><p class="hint">${w.documentPrivacy}</p><label>${w.documentText}<textarea id="document-text" maxlength="10000" required></textarea></label><button id="document-extract" type="submit">${w.documentExtract}</button><p id="document-status" class="document-status" role="status"></p><div id="document-review" hidden><h4>${w.documentReview}</h4><p class="hint">${w.documentReady}</p><div class="document-fields"><label>${w.documentKind}<select id="document-kind"><option value="invoice">${w.documentInvoice}</option><option value="receipt">${w.documentReceipt}</option></select></label><label>${w.documentSupplier}<input id="document-supplier" maxlength="120" required></label><label>${w.documentNumber}<input id="document-document_number" maxlength="100"></label><label>${w.documentDate}<input id="document-issue_date" type="date"></label><label>${w.documentAmount}<input id="document-amount" inputmode="decimal" maxlength="40" required></label><label>${w.documentCurrency}<input id="document-currency" maxlength="3" required></label><label>${w.documentNote}<textarea id="document-note" maxlength="1000"></textarea></label></div><button id="document-save" type="button">${w.documentSave}</button></div></form></div></div>
 <div class="panel" id="panel-preview" hidden><iframe id="frame" title="${w.preview}" src="/studio/preview"></iframe></div>
 <div class="panel" id="panel-settings" hidden><form class="form" id="settings">
 <label>${w.provider}<select name="provider" id="provider"></select></label>
@@ -108,6 +111,15 @@ const node = (tag, className, text) => { const el = document.createElement(tag);
 try { $('text').value = sessionStorage.getItem('first-prompt') || ''; $('text').addEventListener('input', () => sessionStorage.setItem('first-prompt', $('text').value)) } catch {}
 let current = null
 let timer = null
+let documentSelection = null
+let documentDraftId = null
+const documentFields = ['kind', 'supplier', 'document_number', 'issue_date', 'amount', 'currency', 'note']
+function documentDestination(state) {
+  const s = state.settings
+  const destination = s.baseUrl || state.kinds[s.provider]?.baseUrl || ''
+  documentSelection = { provider: s.provider, model: s.model, destination }
+  $('document-destination').textContent = s.model ? (state.kinds[s.provider]?.label || s.provider) + ' · ' + s.model + ' · ' + destination : w.aiNotReady
+}
 function renderMessages(messages) {
   const log = $('log'); log.textContent = ''
   if (!messages.length) log.append(node('p', 'hint', w.empty))
@@ -146,6 +158,7 @@ async function refresh() {
   fillSettings(state)
   $('tokens-today').textContent = Number(state.tokensToday ?? 0).toLocaleString()
   $('provider-name').textContent = state.settings.model ? (state.kinds[state.settings.provider]?.label ?? w.provider) + ' · ' + state.settings.model : w.aiNotReady
+  documentDestination(state)
   if (current && current.status === 'running') poll()
 }
 function poll() {
@@ -176,6 +189,32 @@ $('composer').onsubmit = async (event) => {
 }
 $('text').onkeydown = (event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) $('composer').requestSubmit() }
 $('stop').onclick = () => current && api('runs/' + current.id + '/stop', { method: 'POST' })
+$('document-form').onsubmit = async (event) => {
+  event.preventDefault()
+  documentDraftId = null; $('document-review').hidden = true
+  $('document-extract').disabled = true; $('document-status').textContent = w.thinking
+  try {
+    const result = await api('documents/extract', { method: 'POST', body: JSON.stringify({ text: $('document-text').value, ...documentSelection }) })
+    if (result.error) { $('document-status').textContent = result.error; return }
+    documentDraftId = result.id
+    for (const field of documentFields) $('document-' + field).value = result.draft[field]
+    $('document-review').hidden = false; $('document-status').textContent = w.documentReady
+    await refresh()
+  } catch (error) { $('document-status').textContent = error.message }
+  finally { $('document-extract').disabled = false }
+}
+$('document-save').onclick = async () => {
+  if (!documentDraftId) return
+  const draft = Object.fromEntries(documentFields.map((field) => [field, $('document-' + field).value]))
+  $('document-save').disabled = true; $('document-status').textContent = w.thinking
+  try {
+    const result = await api('documents/' + documentDraftId + '/save', { method: 'POST', body: JSON.stringify(draft) })
+    if (result.error) { $('document-status').textContent = result.error; return }
+    documentDraftId = null; $('document-text').value = ''; $('document-review').hidden = true
+    $('document-status').textContent = w.documentSaved
+  } catch (error) { $('document-status').textContent = error.message }
+  finally { $('document-save').disabled = false }
+}
 function fillSettings(state) {
   const select = $('provider')
   if (!select.options.length) for (const [id, kind] of Object.entries(state.kinds)) select.append(new Option(kind.label, id))

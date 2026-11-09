@@ -10,6 +10,7 @@ const suites = [
   ['web-end smoke suite (all optional parts)', ['tests/run-smoke.mjs'], { AUTOMATION_TEST: '1', EMAIL_TEST: '1', GOOGLE_TEST: '1', NEWS_TEST: '1', SCHEDULE_TEST: '1', WEBHOOK_TEST: '1' }],
   ['First run', ['tests/first-run.mjs'], {}],
   ['Studio (AI builder)', ['tests/builder.mjs'], {}],
+  ['Private document review', ['tests/documents.mjs'], {}],
   ['Ownership checklist', ['tests/ownership.mjs'], {}],
   ['Independent sites', ['tests/sites.mjs'], {}],
 ]

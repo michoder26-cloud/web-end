@@ -2,6 +2,7 @@
 // after that a short-lived HttpOnly cookie is used, so the secret never sits in an address bar or a log.
 import { createHash, randomBytes } from 'node:crypto'
 import { connectTools, runTurn } from './agent.mjs'
+import { compatibleDocumentTable, documentTable, extractionSystem, parseDocument, parseModelDocument } from './document.mjs'
 import { makeProvider, probeProvider, providerKinds } from './providers.mjs'
 import { openStore } from './store.mjs'
 import { studioPage, signInPage } from './ui.mjs'
@@ -22,6 +23,24 @@ const languageOf = (request) => {
   return /^th\b/i.test(request.headers.get('accept-language') ?? '') || /(^|,)\s*th/i.test(request.headers.get('accept-language') ?? '') ? 'th' : 'en'
 }
 const readCookie = (request, name) => (request.headers.get('cookie') ?? '').split(/;\s*/).map((part) => part.split('=')).find(([key]) => key === name)?.[1] ?? ''
+const readSmallJson = async (request) => {
+  if (!(request.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')) throw new Error('Send JSON.')
+  const reader = request.body?.getReader()
+  if (!reader) throw new Error('Send JSON.')
+  const chunks = []
+  let bytes = 0
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    bytes += value.byteLength
+    if (bytes > 16_384) { await reader.cancel(); throw new Error('The request is too large.') }
+    chunks.push(value)
+  }
+  const joined = new Uint8Array(bytes)
+  let at = 0
+  for (const chunk of chunks) { joined.set(chunk, at); at += chunk.byteLength }
+  try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(joined)) } catch { throw new Error('Send valid JSON.') }
+}
 
 /** The owner link (…/owner/<code> or …/mcp/<code>) or the bare code. */
 export const codeFrom = (text) => /(?:\/(?:owner|mcp)\/)?([a-z0-9]{8}(?:-[a-z0-9]{8}){3})\b/.exec(String(text ?? '').trim().toLowerCase())?.[1] ?? ''
@@ -29,6 +48,8 @@ export const codeFrom = (text) => /(?:\/(?:owner|mcp)\/)?([a-z0-9]{8}(?:-[a-z0-9
 export function createStudio({ config, engineFetch, verifyOwner }) {
   const store = openStore(config)
   const active = new Map() // run id → { run, controller }
+  const documentDrafts = new Map() // random id → { session hash, draft, expiry, saving }
+  const documentExpiry = 10 * 60 * 1000
 
   const providerFromSettings = (settings) =>
     makeProvider({ apiKey: store.secret(`provider:${settings.provider}`), baseUrl: settings.baseUrl, kind: settings.provider, model: settings.model })
@@ -145,6 +166,64 @@ export function createStudio({ config, engineFetch, verifyOwner }) {
     if (parts[0] !== 'api') return json({ error: 'Not found' }, 404)
 
     const route = `${request.method} ${parts.slice(1).join('/')}`
+    if (route === 'POST documents/extract') {
+      if (request.headers.get('origin') !== url.origin) return json({ error: 'Same-origin request required.' }, 403)
+      let body
+      try { body = await readSmallJson(request) } catch (error) { return json({ error: error.message }, 400) }
+      if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some((key) => !['text', 'provider', 'model', 'destination'].includes(key))) return json({ error: 'Send document text and the selected AI service.' }, 400)
+      const source = body.text
+      if (typeof source !== 'string' || source.trim().length < 15 || source.length > 10_000) return json({ error: 'Paste 15 to 10,000 characters of invoice or receipt text.' }, 400)
+      const settings = store.settings()
+      const destination = settings.baseUrl || providerKinds[settings.provider]?.baseUrl
+      if (body.provider !== settings.provider || body.model !== settings.model || body.destination !== destination) return json({ error: 'AI service settings changed. Review the destination and try again.' }, 409)
+      let provider
+      try { provider = providerFromSettings(settings) } catch (error) { return json({ error: error.message }, 400) }
+      const today = new Date(); today.setHours(0, 0, 0, 0)
+      if (store.tokensSince(today.getTime()) >= settings.maxTokensPerDay) return json({ error: 'Today’s AI token limit is used up.' }, 429)
+      try {
+        const answer = await provider.chat({ maxTokens: 700, messages: [{ role: 'user', text: source }], signal: AbortSignal.timeout(30_000), system: extractionSystem, tools: [] })
+        store.recordUsage({ runId: `doc_${randomBytes(9).toString('base64url')}`, provider: provider.kind, model: provider.model, inputTokens: answer.usage?.input ?? 0, outputTokens: answer.usage?.output ?? 0, toolCalls: answer.toolCalls?.length ?? 0, outcome: 'document-extract' })
+        const draft = parseModelDocument(answer)
+        const now = Date.now()
+        for (const [id, entry] of documentDrafts) if (entry.expires <= now) documentDrafts.delete(id)
+        if (documentDrafts.size >= 100) documentDrafts.delete(documentDrafts.keys().next().value)
+        const id = randomBytes(24).toString('base64url')
+        documentDrafts.set(id, { draft, expires: now + documentExpiry, session: createHash('sha256').update(token).digest('hex'), saving: false })
+        return json({ draft, id, expiresInSeconds: documentExpiry / 1000 })
+      } catch (error) {
+        return json({ error: error.message || 'The AI service could not extract the document.' }, 502)
+      }
+    }
+    if (request.method === 'POST' && parts[1] === 'documents' && parts[2] && parts[3] === 'save' && parts.length === 4) {
+      if (request.headers.get('origin') !== url.origin) return json({ error: 'Same-origin request required.' }, 403)
+      const entry = documentDrafts.get(parts[2])
+      if (!entry || entry.expires <= Date.now() || entry.session !== createHash('sha256').update(token).digest('hex')) return json({ error: 'This draft expired or belongs to another session. Extract the text again.' }, 404)
+      if (entry.saving) return json({ error: 'This draft is already being saved.' }, 409)
+      let values
+      try { values = parseDocument(await readSmallJson(request), { save: true }) } catch (error) { return json({ error: error.message }, 400) }
+      entry.saving = true
+      let tools
+      try {
+        tools = await connectTools(engineFetch, code)
+        const listed = await tools.call('list_tables', {})
+        if (listed.isError) throw new Error('Could not check the private document table.')
+        const existing = JSON.parse(listed.text).find((table) => table.name === documentTable.name)
+        if (existing && !compatibleDocumentTable(existing)) return json({ error: 'The existing document_entries table is not private or has different fields. Review it in Data before saving.' }, 409)
+        if (!existing) {
+          const created = await tools.call('save_table', documentTable)
+          if (created.isError) throw new Error(`Could not create the private document table: ${created.text}`)
+        }
+        const saved = await tools.call('save_record', { table: documentTable.name, values })
+        if (saved.isError) throw new Error(`Could not save the reviewed document: ${saved.text}`)
+        documentDrafts.delete(parts[2])
+        return json({ saved: JSON.parse(saved.text).saved })
+      } catch (error) {
+        return json({ error: error.message }, 500)
+      } finally {
+        entry.saving = false
+        await tools?.close()
+      }
+    }
     if (route === 'GET state') {
       const messages = store.messages(conversation).filter((message) => message.role === 'user' || (message.role === 'assistant' && message.text)).slice(-80).map((message) => ({ role: message.role, text: message.text }))
       const last = [...active.values()].map((entry) => entry.run).find((run) => run.conversation === conversation)
@@ -225,6 +304,7 @@ export function createStudio({ config, engineFetch, verifyOwner }) {
   return {
     close() {
       for (const entry of active.values()) entry.controller.abort()
+      documentDrafts.clear()
       store.close()
     },
     handle,
