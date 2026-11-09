@@ -2,7 +2,7 @@
 
 This is an early Node.js + SQLite host for the same engine in `../cloud`. The site, back office, API and Studio run in one process. Data lives in one local folder. No Cloudflare, GitHub or central web-end account is needed for this mode. The Studio calls only the AI provider you configure; an API provider may charge for usage. Ollama can run locally when your computer supports the model.
 
-Requires Node.js 22.13 or newer. On Windows, double-click [Open web-end.cmd](../Open%20web-end.cmd) in the project folder. It installs the local dependencies on first use, builds the app, and opens the site creator in your browser. Type a name and press **สร้างเว็บใหม่**. Each site then guides you through its own setup and Dashboard.
+Requires Node.js 22.13 or newer. On Windows, double-click [Open web-end.cmd](../Open%20web-end.cmd) in the project folder. It installs the local dependencies on first use, builds the app, and opens the site creator in your browser. Type a name and your idea, then press **สร้างเว็บใหม่**. Allow pop-ups to open the new site when you enter an idea. Each site then guides you through its own setup and Dashboard.
 
 On other systems, from this folder:
 
@@ -12,7 +12,7 @@ npm run build
 npm run start:local
 ```
 
-Open `http://127.0.0.1:8798` if your browser did not open automatically. The creator lists your existing sites and has one button to open each Dashboard. When you create a site, keep its owner link. Open that site's `/studio` to build by chatting with your chosen AI provider. The Studio asks before publishing, deleting, sending, or changing sensitive settings. Its Settings page sets per-turn and daily AI budgets. You can also use the back office directly without AI.
+Open `http://127.0.0.1:8798` if your browser did not open automatically. Create or open a site in the local creator, then use its setup page to describe your idea without secrets. Save the one-time owner link before continuing; the Studio session expires after 12 hours and Studio sign-in requires that link. You may also create an owner account for the back office. Your draft stays in the site browser tab until sent; configure an AI provider in Studio Settings before sending. The Studio asks before publishing, deleting, sending, or changing sensitive settings. Its Settings page sets per-turn and daily AI budgets. You can also use the back office directly without AI.
 
 The browser creator runs on this computer only. Each site gets its own port, SQLite databases, owner account and Dashboard. Keep the command window open while using a local site. The commands below are optional for people who prefer a terminal:
 
