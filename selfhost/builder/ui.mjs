@@ -76,6 +76,7 @@ export function studioPage({ lang, nonce }) {
 <form method="post" action="/studio/sign-out"><button class="quiet" type="submit">${w.signOut}</button></form></nav></header>
 <main>
 <section id="chat" aria-label="Chat"><div id="log" aria-live="polite"></div>
+<details><summary>${lang === 'th' ? 'นำเข้าแผนเว็บไซต์ JSON' : 'Import a website plan (JSON)'}</summary><p>${lang === 'th' ? 'วางแผน JSON เพื่อตรวจสอบก่อนสร้างหน้าแบบร่าง ฟีเจอร์ยังไม่ถูกสร้างและไม่มีการเผยแพร่' : 'Paste a plan as JSON to review before creating draft pages. Features are not implemented and nothing is published.'}</p><textarea id="plan-input" aria-label="Website plan JSON" rows="6"></textarea><button type="button" id="plan-review">${lang === 'th' ? 'ตรวจสอบแผน' : 'Review plan'}</button><pre id="plan-preview"></pre><button type="button" id="plan-approve" hidden>${lang === 'th' ? 'อนุมัติสร้างหน้าแบบร่าง' : 'Approve and create draft pages'}</button><p id="plan-status" role="status"></p></details>
 <form id="composer"><textarea id="text" placeholder="${escape(w.empty)}" aria-label="${escape(w.send)}"></textarea><div class="stack"><button id="send" type="submit">${w.send}</button><button id="stop" class="quiet" type="button" hidden>${w.stop}</button></div></form></section>
 <section id="side">
 <div class="tabs" role="tablist"><button role="tab" aria-selected="true" data-tab="dashboard">${w.dashboard}</button><button role="tab" aria-selected="false" data-tab="preview">${w.preview}</button><button role="tab" aria-selected="false" data-tab="settings">${w.settings}</button><button role="tab" aria-selected="false" data-tab="activity">${w.activity}</button></div>
@@ -111,6 +112,24 @@ const api = async (path, options = {}) => {
   return response.json()
 }
 const node = (tag, className, text) => { const el = document.createElement(tag); if (className) el.className = className; if (text !== undefined) el.textContent = text; return el }
+let planId = null
+$('plan-input').oninput = () => { planId = null; $('plan-approve').hidden = true; $('plan-preview').textContent = '' }
+$('plan-review').onclick = async () => {
+  planId = null; $('plan-approve').hidden = true; $('plan-preview').textContent = ''; $('plan-status').textContent = ''
+  const source = $('plan-input').value
+  let plan
+  try { plan = JSON.parse(source) } catch { $('plan-status').textContent = 'Invalid JSON.'; return }
+  const result = await api('plans', { method: 'POST', body: JSON.stringify({ plan }) })
+  if ($('plan-input').value !== source) return
+  if (result.error) { $('plan-status').textContent = result.error; return }
+  planId = result.id; $('plan-preview').textContent = JSON.stringify({ plan: result.plan, draftPages: result.pages }, null, 2); $('plan-approve').hidden = false
+}
+$('plan-approve').onclick = async () => {
+  const id = planId; planId = null; $('plan-approve').hidden = true
+  if (!id) return
+  const result = await api('plans/' + id + '/approve', { method: 'POST', body: JSON.stringify({ approved: true }) })
+  $('plan-status').textContent = result.error ? result.error + ' ' + (result.saved || []).join(', ') : 'Draft pages created: ' + result.saved.join(', ') + '. Edit them in Pages; they are not published.'
+}
 try { $('text').value = sessionStorage.getItem('first-prompt') || ''; $('text').addEventListener('input', () => sessionStorage.setItem('first-prompt', $('text').value)) } catch {}
 let current = null
 let timer = null

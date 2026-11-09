@@ -2,6 +2,7 @@
 // after that a short-lived HttpOnly cookie is used, so the secret never sits in an address bar or a log.
 import { createHash, randomBytes } from 'node:crypto'
 import { connectTools, runTurn } from './agent.mjs'
+import { planDraft } from './plan.mjs'
 import { makeProvider, probeProvider, providerKinds } from './providers.mjs'
 import { openStore } from './store.mjs'
 import { studioPage, signInPage } from './ui.mjs'
@@ -29,6 +30,7 @@ export const codeFrom = (text) => /(?:\/(?:owner|mcp)\/)?([a-z0-9]{8}(?:-[a-z0-9
 export function createStudio({ config, engineFetch, verifyOwner }) {
   const store = openStore(config)
   const active = new Map() // run id → { run, controller }
+  const proposals = new Map() // short-lived, bound to the authenticated session
 
   const providerFromSettings = (settings) =>
     makeProvider({ apiKey: store.secret(`provider:${settings.provider}`), baseUrl: settings.baseUrl, kind: settings.provider, model: settings.model })
@@ -145,6 +147,47 @@ export function createStudio({ config, engineFetch, verifyOwner }) {
     if (parts[0] !== 'api') return json({ error: 'Not found' }, 404)
 
     const route = `${request.method} ${parts.slice(1).join('/')}`
+    // This import path never launches an AI process. The owner reviews a server-held,
+    // one-use proposal before the fixed save_page calls can run.
+    if (request.method === 'POST' && parts[1] === 'plans') {
+      if (request.headers.get('origin') !== url.origin || !(request.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')) return json({ error: 'Same-origin JSON required.' }, 403)
+      let body
+      try {
+        const raw = await request.text()
+        if (Buffer.byteLength(raw, 'utf8') > 32768) return json({ error: 'Plan too large.' }, 400)
+        body = JSON.parse(raw)
+      } catch { return json({ error: 'Invalid JSON.' }, 400) }
+      for (const [key, proposal] of proposals) if (proposal.expires < Date.now()) proposals.delete(key)
+      if (parts.length === 2) {
+        if (!body || typeof body !== 'object' || Object.keys(body).join() !== 'plan') return json({ error: 'Invalid plan.' }, 400)
+        if (proposals.size >= 100) return json({ error: 'Too many proposals.' }, 429)
+        const id = randomBytes(16).toString('hex')
+        try {
+          const draft = planDraft(body.plan, id)
+          proposals.set(id, { ...draft, token, expires: Date.now() + 10 * 60_000 })
+          return json({ id, ...draft })
+        } catch { return json({ error: 'Invalid plan.' }, 400) }
+      }
+      if (parts.length === 4 && parts[3] === 'approve') {
+        if (!body || Object.keys(body).join() !== 'approved' || body.approved !== true) return json({ error: 'Explicit approval required.' }, 400)
+        const proposal = proposals.get(parts[2])
+        if (!proposal || proposal.token !== token) return json({ error: 'Proposal unavailable or expired.' }, 409)
+        proposals.delete(parts[2]) // consume synchronously, before any await
+        let tools
+        const saved = []
+        try {
+          tools = await connectTools(engineFetch, code)
+          for (const page of proposal.pages) {
+            const result = await tools.call('save_page', page)
+            if (result.isError) return json({ error: 'Draft creation stopped; some pages may have been saved.', saved }, 502)
+            saved.push(page.slug)
+          }
+          return json({ saved })
+        } catch { return json({ error: 'Draft creation stopped; some pages may have been saved.', saved }, 502) }
+        finally { await tools?.close() }
+      }
+      return json({ error: 'Not found' }, 404)
+    }
     if (route === 'GET state') {
       const messages = store.messages(conversation).filter((message) => message.role === 'user' || (message.role === 'assistant' && message.text)).slice(-80).map((message) => ({ role: message.role, text: message.text }))
       const last = [...active.values()].map((entry) => entry.run).find((run) => run.conversation === conversation)
