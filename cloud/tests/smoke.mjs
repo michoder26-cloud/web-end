@@ -36,7 +36,7 @@ check(claimedBody.includes('will not show it again') && !claimedBody.includes('s
 check(Boolean(claimedNonce) && claimedPolicy.includes(`script-src 'nonce-${claimedNonce}';`) && claimedBody.includes(`<script nonce="${claimedNonce}">`) && (claimedBody.match(/<script/g) ?? []).length === 1, 'only the copy buttons\' own script may run, by a nonce made for this page')
 check(claimedBody.includes(`value="${base}/mcp/${code}"`) && claimedBody.includes(`value="${base}/owner/${code}"`) && claimedBody.includes('data-copy="claude-link"') && claimedBody.includes(' hidden type="button"'), 'both links are in fields to copy, with copy buttons that appear only when the script runs')
 check(claimedBody.includes('https://claude.ai/settings/connectors') && claimedBody.includes('Add custom connector') && claimedBody.includes('id="first-message"') && claimedBody.includes('ask me a few short questions about my business'), 'the guided start shows where to paste the link in Claude, and a first message to send')
-check(['cafe', 'shop', 'classes', 'appointments', 'trades', 'services', 'portfolio'].every((id) => claimedBody.includes(`<input name="starter" type="hidden" value="${id}">`)) && claimedBody.includes(`action="/owner/${code}/starters"`) && claimedBody.includes('Open my Dashboard') && claimedBody.indexOf('Start from an example') < claimedBody.indexOf('Or build with Claude'), 'the guided start offers every starter first, then Claude, and a small link into the workspace')
+check(['cafe', 'shop', 'classes', 'appointments', 'trades', 'clubs', 'services', 'portfolio'].every((id) => claimedBody.includes(`<input name="starter" type="hidden" value="${id}">`)) && claimedBody.includes(`action="/owner/${code}/starters"`) && claimedBody.includes('Open my Dashboard') && claimedBody.indexOf('Start from an example') < claimedBody.indexOf('Or build with Claude'), 'the guided start offers every starter first, then Claude, and a small link into the workspace')
 check(claimedBody.includes('Step 1: Copy this link') && claimedBody.includes('Step 2: Open Claude') && claimedBody.includes('Step 3: Start talking') && !/<details[^>]*>(?:(?!<\/details>)[\s\S])*claude-link/.test(claimedBody), 'the Claude steps are shown in the open, not hidden in a details box')
 const setupAgain = await fetch(`${base}/setup`, { redirect: 'manual' })
 check(setupAgain.status === 303 && !(await (await fetch(base)).text()).includes(code), 'the guided start and its links are never shown again')
@@ -49,7 +49,7 @@ check(['claude', 'build', 'phone', 'publish'].every((step) => stepDone(firstOver
 check(firstOverview.includes(`href="/owner/${code}/starters"`) && firstOverview.includes('Add custom connector') && firstOverview.includes(`value="${base}/mcp/${code}"`), 'the overview of an empty site links to the starters and shows how to connect Claude')
 check(firstOverview.includes('cms-build-choice') && firstOverview.includes('Choose an example') && firstOverview.includes('Build with Claude') && !firstOverview.includes('<h2 id="claude">'), 'an empty dashboard leads with build choices and keeps technical setup folded away')
 const startersPage = await (await fetch(`${base}/owner/${code}/starters`)).text()
-check(startersPage.includes('>Starters</h1>') && (startersPage.match(/class="card starter contact-form"/g) ?? []).length === 7 && !startersPage.includes('name="confirm"'), 'the starters page lists every starter, with no question to answer on an empty site')
+check(startersPage.includes('>Starters</h1>') && (startersPage.match(/class="card starter contact-form"/g) ?? []).length === 8 && !startersPage.includes('name="confirm"'), 'the starters page lists every starter, with no question to answer on an empty site')
 check((await (await fetch(`${base}/owner/${code}/starters?lang=th`)).text()).includes('ร้านกาแฟหรือร้านอาหาร'), 'the starters page has the Thai starters')
 
 const client = new Client({ name: 'web-end-smoke', version: '1.0.0' })
@@ -2661,7 +2661,7 @@ const emailPattern = /[\w.+-]+@[\w-]+\.[a-z]{2,}/i
 const phonePattern = /\+?\d[\d -]{7,}\d/
 const placePattern = /\b(street|road|avenue|suite)\b|ถนน|ซอย|แขวง|เขต /i
 for (const language of ['en', 'th']) {
-  for (const starter of ['cafe', 'shop', 'classes', 'appointments', 'trades', 'services', 'portfolio']) {
+  for (const starter of ['cafe', 'shop', 'classes', 'appointments', 'trades', 'clubs', 'services', 'portfolio']) {
     await emptySite()
     const applied = await call('apply_starter', { starter, language })
     const problems = (await call('check_site')).data.problems
@@ -2676,8 +2676,8 @@ for (const language of ['en', 'th']) {
     const everything = JSON.stringify([footerText, nav, tagline, starter === 'shop' ? transferDetails : '', pages, items.map(({ body, category, price, title }) => [body, category, price, title]), records.map((rows) => rows.map(({ created_at, updated_at, ...values }) => values))])
     const sampleWord = language === 'th' ? 'ตัวอย่าง' : /sample/i
     check(siteNow.settings.language === language && pages.every((one) => (typeof sampleWord === 'string' ? JSON.stringify(one).includes(sampleWord) : sampleWord.test(JSON.stringify(one)))) && items.every((one) => (language === 'th' ? one.body.includes('ตัวอย่าง') : /sample/i.test(one.body))), `every page and item of the ${starter} starter in ${language} says it is a sample`)
-    const withoutAppointmentDates = starter === 'appointments' ? everything.replace(/\d{4}-\d{2}-\d{2}/g, '') : everything
-    check(!emailPattern.test(everything) && !phonePattern.test(withoutAppointmentDates) && !placePattern.test(everything) && !pages.some((one) => one.blocks.some((block) => ['testimonials', 'stats', 'team'].includes(block.type))), `the ${starter} starter in ${language} has no emails, phone numbers, addresses, reviews or figures that could look real`, everything.match(emailPattern)?.[0] ?? withoutAppointmentDates.match(phonePattern)?.[0] ?? everything.match(placePattern)?.[0] ?? '')
+    const withoutSampleDates = ['appointments', 'clubs'].includes(starter) ? everything.replace(/\d{4}-\d{2}-\d{2}/g, '') : everything
+    check(!emailPattern.test(everything) && !phonePattern.test(withoutSampleDates) && !placePattern.test(everything) && !pages.some((one) => one.blocks.some((block) => ['testimonials', 'stats', 'team'].includes(block.type))), `the ${starter} starter in ${language} has no emails, phone numbers, addresses, reviews or figures that could look real`, everything.match(emailPattern)?.[0] ?? withoutSampleDates.match(phonePattern)?.[0] ?? everything.match(placePattern)?.[0] ?? '')
     const resaved = await Promise.all(pages.map((one) => call('save_page', { slug: one.slug, title: one.title, description: one.description, published: true, blocks: one.blocks })))
     check(resaved.every((result) => !result.isError), `the ${starter} starter's pages in ${language} can be edited and saved like any page`, resaved.find((result) => result.isError)?.text)
     const home = await fetch(`${base}/owner/${code}/preview`)
@@ -2733,10 +2733,39 @@ for (const language of ['en', 'th']) {
         check(!scheduled.isError && scheduled.data.saved.status === 'Scheduled' && scheduled.data.saved.scheduled_time === '09:30', 'the owner can schedule and track the repair job')
       }
     }
+    if (starter === 'clubs') {
+      const events = records[siteNow.tables.findIndex((table) => table.name === 'club_events')]
+      check(siteNow.settings.accounts && events.length === 2 && events.every((event) => event.date > new Date().toISOString().slice(0, 10)) && siteNow.tables.some((table) => table.name === 'event_signups'), `the ${language} club starter enables accounts and has future sample events with private registrations`)
+      if (language === 'en') {
+        await call('publish_site', { note: 'Test club registrations' })
+        const anonymous = await (await fetch(`${base}/events`)).text()
+        check(anonymous.includes(events[0].title) && !anonymous.includes('action="/data/event_signups"') && (await apiJson('/data/event_signups')).status >= 400, 'visitors can see events but cannot see or submit private registrations')
+        const limited = await call('save_record', { table: 'club_events', id: events[0].id, values: { places: 1 } })
+        check(!limited.isError, 'the owner can change the number of event places')
+        const clubUser = async (name) => (await apiJson('/auth/signup', { body: asJson({ email: `${name}@club.test`, name, password: 'a-good-password' }), headers: { 'CF-Connecting-IP': `203.0.113.${name === 'ClubA' ? '71' : '72'}` }, method: 'POST' })).body.token
+        const clubA = await clubUser('ClubA')
+        const clubB = await clubUser('ClubB')
+        const signedIn = await (await fetch(`${base}/events`, { headers: { Cookie: `session=${clubA}` } })).text()
+        check(signedIn.includes('action="/data/event_signups"') && signedIn.includes(`value="${events[0].id}"`), 'a signed-in person can choose a real event on the published page')
+        const register = (token, name) => apiJson('/data/event_signups', { body: asJson({ event: events[0].id, name, email: `${name}@club.test`, status: 'Cancelled' }), method: 'POST', token })
+        const attempts = await Promise.all([register(clubA, 'ClubA'), register(clubB, 'ClubB')])
+        const winner = attempts.find((row) => row.status === 201)
+        const loserToken = attempts[0].status === 201 ? clubB : clubA
+        const winnerToken = attempts[0].status === 201 ? clubA : clubB
+        const signups = (await call('list_records', { table: 'event_signups' })).data.records
+        check(attempts.filter((row) => row.status === 201).length === 1 && attempts.filter((row) => row.body.error?.code === 'full').length === 1 && signups.length === 1 && signups[0].status === 'Registered', 'two people racing for one event place produce one registration and cannot forge cancellation', JSON.stringify(attempts.map((row) => [row.status, row.body.error?.code])))
+        check((await apiJson('/data/event_signups', { token: winnerToken })).body.records.length === 1 && (await apiJson('/data/event_signups', { token: loserToken })).body.records.length === 0, 'each club participant can read only their own registrations')
+        check((await register(winnerToken, winner.body.record.name)).body.error?.code === 'duplicate', 'the same person cannot register for the same event twice')
+        check((await ownerPage('/data/event_signups')).includes(signups[0].name), 'the owner sees the event registration in the back office')
+        const cancelled = await call('save_record', { table: 'event_signups', id: signups[0].id, values: { status: 'Cancelled' } })
+        const reopened = await register(loserToken, attempts[0].status === 201 ? 'ClubB' : 'ClubA')
+        check(!cancelled.isError && reopened.status === 201, 'cancelling a club registration frees its place for another person', JSON.stringify(reopened.body))
+      }
+    }
   }
   check((await ownerPage('/starters')).includes(language === 'th' ? '>เว็บตั้งต้น</h1>' : '>Starters</h1>'), `the starters page follows the site's language: ${language}`)
 }
-check((await call('apply_starter', {})).data.starters.length === 7, 'Claude can list the starters')
+check((await call('apply_starter', {})).data.starters.length === 8, 'Claude can list the starters')
 await call('update_site', { language: 'en' })
 
 // One site in two languages: Thai first, English for tourists, under /en

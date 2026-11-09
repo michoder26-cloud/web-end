@@ -9,7 +9,7 @@ import type { Block, Settings } from './types'
 // no reviews, no awards, no figures, no addresses, no phone numbers and no people's names.
 // Each one must pass check_site with no problems, which the smoke tests prove.
 
-export const starterIds = ['cafe', 'shop', 'classes', 'appointments', 'trades', 'services', 'portfolio'] as const
+export const starterIds = ['cafe', 'shop', 'classes', 'appointments', 'trades', 'clubs', 'services', 'portfolio'] as const
 export type StarterId = (typeof starterIds)[number]
 export const starterLanguages = ['en', 'th'] as const
 export type StarterLanguage = (typeof starterLanguages)[number]
@@ -474,6 +474,78 @@ const trades: Record<StarterLanguage, StarterContent> = {
   },
 }
 
+const clubTables = (language: StarterLanguage): StarterTable[] => {
+  const en = language === 'en'
+  const statuses = en ? ['Registered', 'Cancelled'] : ['ลงทะเบียนแล้ว', 'ยกเลิก']
+  return [
+    { name: 'club_events', label: en ? 'Club events' : 'กิจกรรมชมรม', readAccess: 'public', writeAccess: 'owner', fields: [
+      { name: 'title', label: en ? 'Event' : 'กิจกรรม', type: 'text', required: true },
+      { name: 'date', label: en ? 'Date' : 'วันที่', type: 'date', required: true },
+      { name: 'time', label: en ? 'Start time' : 'เวลาเริ่ม', type: 'time', required: true },
+      { name: 'places', label: en ? 'Places' : 'จำนวนที่รับ', type: 'number', required: true },
+      { name: 'details', label: en ? 'Details' : 'รายละเอียด', type: 'textarea' },
+    ] },
+    { name: 'event_signups', label: en ? 'Event signups' : 'การลงชื่อเข้าร่วม', readAccess: 'own', writeAccess: 'members', fields: [
+      { name: 'event', label: en ? 'Event' : 'กิจกรรม', type: 'reference', table: 'club_events', required: true, capacityField: 'places', unique: 'customer', ignoreField: 'status', ignoreValues: [statuses[1]] },
+      { name: 'name', label: en ? 'Your name' : 'ชื่อของคุณ', type: 'text', required: true },
+      { name: 'email', label: en ? 'Email' : 'อีเมล', type: 'email', required: true },
+      { name: 'status', label: en ? 'Status' : 'สถานะ', type: 'select', options: statuses, default: statuses[0], readOnly: true },
+    ] },
+  ]
+}
+
+const clubEvents = (language: StarterLanguage) => {
+  const date = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10)
+  const en = language === 'en'
+  return [
+    { title: en ? 'Community meetup (sample)' : 'พบปะสมาชิก (ตัวอย่าง)', date: date(14), time: '10:00', places: 12, details: en ? 'Sample event. Replace the date, time and details before publishing.' : 'กิจกรรมตัวอย่าง เปลี่ยนวัน เวลา และรายละเอียดก่อนเผยแพร่' },
+    { title: en ? 'Skills workshop (sample)' : 'เวิร์กช็อป (ตัวอย่าง)', date: date(21), time: '14:00', places: 8, details: en ? 'Sample event. Bring your own real programme and venue.' : 'กิจกรรมตัวอย่าง ใส่กำหนดการและสถานที่จริงของคุณ' },
+  ]
+}
+
+const clubs: Record<StarterLanguage, StarterContent> = {
+  en: {
+    label: 'Club events',
+    description: 'People create a site account, see events and register for available places. The owner manages the list.',
+    includes: ['Public event list and private signups', 'A site account lets each person see their own registrations', 'Full events close automatically; cancelling frees a place', 'This starter does not approve club membership or collect recurring dues'],
+    settings: { name: 'Sample Club', tagline: 'Meet, learn and take part', style: 'warm', accent: '#7b4b28', cart: false, accounts: true, nav: [{ label: 'Events', href: '/events' }, { label: 'Join an event', href: '/events#signup' }], headerButtonLabel: 'See events', headerButtonHref: '/events', footerText: footer.en },
+    pages: [
+      { slug: 'home', title: 'Sample Club', description: 'A sample club website with events and online registration for people with a site account.', blocks: [
+        { type: 'hero', layout: 'centered', eyebrow: 'Sample club', heading: 'Good things happen together', text: 'Explore sample events and sign up for a place. Replace all sample dates and details before publishing.', buttonLabel: 'See events', buttonHref: '/events' },
+        { type: 'features', heading: 'Take part', items: [{ title: 'Meet people', text: 'Join a sample community meetup.' }, { title: 'Learn together', text: 'Try a sample skills workshop.' }, { title: 'Stay involved', text: 'See your own event registrations after signing in.' }] },
+        { type: 'cta', heading: 'Want to register?', text: 'Create a site account to register for events. An account does not mean approved or paid club membership.', buttonLabel: 'Create a site account', buttonHref: '/signup?next=%2Fevents' },
+      ] },
+      { slug: 'events', title: 'Club events', description: 'Sample club events with available places and a registration form for site account holders.', blocks: [
+        { type: 'hero', heading: 'Events', text: 'Choose an event with places left. These dates and details are samples.' },
+        { type: 'records', table: 'club_events', heading: 'Upcoming events', fields: ['title', 'date', 'time', 'details'], newestFirst: false, tone: 'tint' },
+        { type: 'record-form', id: 'signup', table: 'event_signups', heading: 'Register for an event', intro: 'Sign in or create a site account first. A full event cannot be chosen.', fields: ['event', 'name', 'email'], buttonLabel: 'Register', sentMessage: 'Your event registration was saved.', tone: 'plain' },
+        { type: 'records', table: 'event_signups', heading: 'My registrations', fields: ['event', 'status'], allowDelete: true, tone: 'tint' },
+      ] },
+    ],
+    items: [], tables: clubTables('en'), records: { club_events: () => clubEvents('en') }, automations: [],
+  },
+  th: {
+    label: 'กิจกรรมชมรม',
+    description: 'ผู้เข้าร่วมสร้างบัญชีเว็บ ดูกิจกรรมและลงชื่อในที่ว่าง เจ้าของดูรายชื่อในหลังบ้าน',
+    includes: ['รายการกิจกรรมและการลงชื่อที่เป็นส่วนตัว', 'แต่ละคนเห็นเฉพาะรายการของตนหลังเข้าสู่ระบบ', 'กิจกรรมเต็มแล้วเลือกไม่ได้ ยกเลิกแล้วคืนที่ว่าง', 'ยังไม่อนุมัติสมาชิกชมรมหรือเก็บค่าสมาชิกต่ออายุ'],
+    settings: { name: 'ชมรมตัวอย่าง', tagline: 'พบกัน เรียนรู้ และร่วมกิจกรรม', style: 'warm', accent: '#7b4b28', cart: false, accounts: true, nav: [{ label: 'กิจกรรม', href: '/events' }, { label: 'ลงชื่อ', href: '/events#signup' }], headerButtonLabel: 'ดูกิจกรรม', headerButtonHref: '/events', footerText: footer.th },
+    pages: [
+      { slug: 'home', title: 'ชมรมตัวอย่าง', description: 'เว็บชมรมตัวอย่างพร้อมกิจกรรมและระบบลงทะเบียนสำหรับผู้ที่มีบัญชีบนเว็บ', blocks: [
+        { type: 'hero', layout: 'centered', eyebrow: 'ชมรมตัวอย่าง', heading: 'มาทำสิ่งดี ๆ ร่วมกัน', text: 'ดูกิจกรรมตัวอย่างและลงชื่อเข้าร่วม เปลี่ยนวันและรายละเอียดตัวอย่างก่อนเผยแพร่', buttonLabel: 'ดูกิจกรรม', buttonHref: '/events' },
+        { type: 'features', heading: 'มาร่วมกัน', items: [{ title: 'พบเพื่อนใหม่', text: 'เข้าร่วมกิจกรรมพบปะตัวอย่าง' }, { title: 'เรียนรู้ด้วยกัน', text: 'ลองเวิร์กช็อปตัวอย่าง' }, { title: 'ติดตามของคุณ', text: 'ดูรายการที่ลงชื่อไว้หลังเข้าสู่ระบบ' }] },
+        { type: 'cta', heading: 'อยากลงชื่อไหม', text: 'สร้างบัญชีเว็บเพื่อลงชื่อร่วมกิจกรรม บัญชีเว็บไม่ใช่การอนุมัติหรือชำระค่าสมาชิกชมรม', buttonLabel: 'สร้างบัญชีเว็บ', buttonHref: '/signup?next=%2Fevents' },
+      ] },
+      { slug: 'events', title: 'กิจกรรมชมรม', description: 'หน้ากิจกรรมชมรมตัวอย่างที่แสดงที่ว่างและแบบฟอร์มลงชื่อสำหรับผู้ที่มีบัญชีบนเว็บ', blocks: [
+        { type: 'hero', heading: 'กิจกรรม', text: 'เลือกกิจกรรมที่ยังมีที่ว่าง วันและรายละเอียดในหน้านี้เป็นตัวอย่าง' },
+        { type: 'records', table: 'club_events', heading: 'กิจกรรมที่จะมาถึง', fields: ['title', 'date', 'time', 'details'], newestFirst: false, tone: 'tint' },
+        { type: 'record-form', id: 'signup', table: 'event_signups', heading: 'ลงชื่อเข้าร่วม', intro: 'เข้าสู่ระบบหรือสร้างบัญชีเว็บก่อน กิจกรรมที่เต็มแล้วจะเลือกไม่ได้', fields: ['event', 'name', 'email'], buttonLabel: 'ลงชื่อ', sentMessage: 'บันทึกการลงชื่อเข้าร่วมแล้ว', tone: 'plain' },
+        { type: 'records', table: 'event_signups', heading: 'รายการของฉัน', fields: ['event', 'status'], allowDelete: true, tone: 'tint' },
+      ] },
+    ],
+    items: [], tables: clubTables('th'), records: { club_events: () => clubEvents('th') }, automations: [],
+  },
+}
+
 const services: Record<StarterLanguage, StarterContent> = {
   en: {
     label: 'Services or coaching',
@@ -668,4 +740,4 @@ const portfolio: Record<StarterLanguage, StarterContent> = {
   },
 }
 
-export const starterSites: Record<StarterId, Record<StarterLanguage, StarterContent>> = { cafe, shop, classes, appointments, trades, services, portfolio }
+export const starterSites: Record<StarterId, Record<StarterLanguage, StarterContent>> = { cafe, shop, classes, appointments, trades, clubs, services, portfolio }

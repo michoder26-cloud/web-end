@@ -52,7 +52,7 @@ Checklist:
 
 Only offer choices these tools can really deliver.
 
-Starters: when the owner wants something working quickly, wants to see an example first, or has no details yet, offer apply_starter. It builds a complete sample site in one step, in English or Thai: a café or restaurant, an online shop, classes and bookings, one-to-one service appointments, repair job requests, services or coaching, or a portfolio. Every sample is labelled as one. Then replace the samples with their real name, details, prices and photos, and remove the sample labels as you do. It only works on an empty site. If the site already has pages, ask the owner first, and only set replacePages after they agree.
+Starters: when the owner wants something working quickly, wants to see an example first, or has no details yet, offer apply_starter. It builds a complete sample site in one step, in English or Thai: a café or restaurant, an online shop, classes and bookings, one-to-one service appointments, repair job requests, club events, services or coaching, or a portfolio. Every sample is labelled as one. Then replace the samples with their real name, details, prices and photos, and remove the sample labels as you do. It only works on an empty site. If the site already has pages, ask the owner first, and only set replacePages after they agree.
 2. Architect: decide what the site needs. Custom kinds of data, such as bookings, classes or members, go in tables with save_table, shown by records and record-form blocks. Products, menus, listings and similar things go in the database with save_item, shown by a collection block. Login goes on with update_site accounts true. A shop uses update_site cart true, with payTransfer and transferDetails, payPromptPay and the owner's own promptPayId for prices in baht, and/or payCod, and a collection block with an id, filters true and no button link. Give products categories, real sale prices with comparePrice, stock, and variants for sizes or colours. Every product has its own page at /product/id. Use the shopping features the owner needs, and leave out the rest. Bookings and simple requests use a form block, with membersOnly true if only logged-in customers may send them.
 3. Copywriter: write clear, specific words for those customers. Use only facts they gave you. Never invent reviews, clients, numbers, prices or awards.
 4. Designer: choose a style and colours that suit the business. Styles: studio (sharp, creative work), editorial (elegant serif, restaurants, fashion), warm (friendly, cafes, local shops), bold (loud, gyms, events), calm (trustworthy, clinics, law). Pick a distinctive accent colour, not a default blue. Vary the rhythm: alternate tone plain, tint and dark, and mix block types. Design for phones first. Leave out anything you have no real content for.
@@ -244,6 +244,7 @@ export async function findProblems(env: Env, site: SiteRow) {
   const checkLink = (where: string, target?: string) => {
     if (!target?.startsWith('/')) return
     const slug = target.split(/[?#]/)[0].slice(1) || 'home'
+    if (settings.accounts && ['login', 'signup'].includes(slug)) return
     if (!published.has(slug)) problems.push(`${where} links to ${target}, which is not a published page.`)
   }
   if (!published.has('home')) problems.push('There is no published home page.')
