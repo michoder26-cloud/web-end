@@ -36,7 +36,7 @@ check(claimedBody.includes('will not show it again') && !claimedBody.includes('s
 check(Boolean(claimedNonce) && claimedPolicy.includes(`script-src 'nonce-${claimedNonce}';`) && claimedBody.includes(`<script nonce="${claimedNonce}">`) && (claimedBody.match(/<script/g) ?? []).length === 1, 'only the copy buttons\' own script may run, by a nonce made for this page')
 check(claimedBody.includes(`value="${base}/mcp/${code}"`) && claimedBody.includes(`value="${base}/owner/${code}"`) && claimedBody.includes('data-copy="claude-link"') && claimedBody.includes(' hidden type="button"'), 'both links are in fields to copy, with copy buttons that appear only when the script runs')
 check(claimedBody.includes('https://claude.ai/settings/connectors') && claimedBody.includes('Add custom connector') && claimedBody.includes('id="first-message"') && claimedBody.includes('ask me a few short questions about my business'), 'the guided start shows where to paste the link in Claude, and a first message to send')
-check(['cafe', 'shop', 'classes', 'appointments', 'trades', 'clubs', 'services', 'portfolio'].every((id) => claimedBody.includes(`<input name="starter" type="hidden" value="${id}">`)) && claimedBody.includes(`action="/owner/${code}/starters"`) && claimedBody.includes('Open my Dashboard') && claimedBody.indexOf('Start from an example') < claimedBody.indexOf('Or build with Claude'), 'the guided start offers every starter first, then Claude, and a small link into the workspace')
+check(['cafe', 'shop', 'classes', 'appointments', 'trades', 'clubs', 'property', 'services', 'portfolio'].every((id) => claimedBody.includes(`<input name="starter" type="hidden" value="${id}">`)) && claimedBody.includes(`action="/owner/${code}/starters"`) && claimedBody.includes('Open my Dashboard') && claimedBody.indexOf('Start from an example') < claimedBody.indexOf('Or build with Claude'), 'the guided start offers every starter first, then Claude, and a small link into the workspace')
 check(claimedBody.includes('Step 1: Copy this link') && claimedBody.includes('Step 2: Open Claude') && claimedBody.includes('Step 3: Start talking') && !/<details[^>]*>(?:(?!<\/details>)[\s\S])*claude-link/.test(claimedBody), 'the Claude steps are shown in the open, not hidden in a details box')
 const setupAgain = await fetch(`${base}/setup`, { redirect: 'manual' })
 check(setupAgain.status === 303 && !(await (await fetch(base)).text()).includes(code), 'the guided start and its links are never shown again')
@@ -49,7 +49,7 @@ check(['claude', 'build', 'phone', 'publish'].every((step) => stepDone(firstOver
 check(firstOverview.includes(`href="/owner/${code}/starters"`) && firstOverview.includes('Add custom connector') && firstOverview.includes(`value="${base}/mcp/${code}"`), 'the overview of an empty site links to the starters and shows how to connect Claude')
 check(firstOverview.includes('cms-build-choice') && firstOverview.includes('Choose an example') && firstOverview.includes('Build with Claude') && !firstOverview.includes('<h2 id="claude">'), 'an empty dashboard leads with build choices and keeps technical setup folded away')
 const startersPage = await (await fetch(`${base}/owner/${code}/starters`)).text()
-check(startersPage.includes('>Starters</h1>') && (startersPage.match(/class="card starter contact-form"/g) ?? []).length === 8 && !startersPage.includes('name="confirm"'), 'the starters page lists every starter, with no question to answer on an empty site')
+check(startersPage.includes('>Starters</h1>') && (startersPage.match(/class="card starter contact-form"/g) ?? []).length === 9 && !startersPage.includes('name="confirm"'), 'the starters page lists every starter, with no question to answer on an empty site')
 check((await (await fetch(`${base}/owner/${code}/starters?lang=th`)).text()).includes('ร้านกาแฟหรือร้านอาหาร'), 'the starters page has the Thai starters')
 
 const client = new Client({ name: 'web-end-smoke', version: '1.0.0' })
@@ -2661,7 +2661,7 @@ const emailPattern = /[\w.+-]+@[\w-]+\.[a-z]{2,}/i
 const phonePattern = /\+?\d[\d -]{7,}\d/
 const placePattern = /\b(street|road|avenue|suite)\b|ถนน|ซอย|แขวง|เขต /i
 for (const language of ['en', 'th']) {
-  for (const starter of ['cafe', 'shop', 'classes', 'appointments', 'trades', 'clubs', 'services', 'portfolio']) {
+  for (const starter of ['cafe', 'shop', 'classes', 'appointments', 'trades', 'clubs', 'property', 'services', 'portfolio']) {
     await emptySite()
     const applied = await call('apply_starter', { starter, language })
     const problems = (await call('check_site')).data.problems
@@ -2762,10 +2762,31 @@ for (const language of ['en', 'th']) {
         check(!cancelled.isError && reopened.status === 201, 'cancelling a club registration frees its place for another person', JSON.stringify(reopened.body))
       }
     }
+    if (starter === 'property') {
+      const listings = records[siteNow.tables.findIndex((table) => table.name === 'properties')]
+      const automations = (await call('list_automations')).data
+      check(listings.length === 2 && (await call('list_tables')).data.find((table) => table.name === 'viewing_requests')?.readAccess === 'owner' && automations.length === 1 && automations[0].enabled, `the ${language} property starter has public sample listings and a private lead inbox`)
+      const tried = await call('test_automation', { id: automations[0].id, sample: { property: listings[0].id, name: 'Test', email: 'test@example.test' } })
+      check(!tried.isError && JSON.stringify(tried.data).includes('PV-'), `the ${language} viewing request number rule works`, tried.text.slice(0, 300))
+      if (language === 'en') {
+        await call('publish_site', { note: 'Test property requests' })
+        const publicPage = await (await fetch(`${base}/properties`)).text()
+        check(publicPage.includes(listings[0].title) && publicPage.includes('action="/data/viewing_requests"') && publicPage.includes('not a confirmed viewing'), 'visitors see sample properties and a form that clearly says a request is not a confirmed viewing')
+        const sent = await fetch(`${base}/data/viewing_requests`, { body: new URLSearchParams({ property: String(listings[0].id), name: 'Property Visitor', email: 'visitor@example.test', preferred_date: '2030-05-18', status: 'Viewing agreed', agreed_date: '2030-05-18', ref: 'FORGED', next: '/properties' }), method: 'POST', redirect: 'manual' })
+        const leads = (await call('list_records', { table: 'viewing_requests' })).data.records
+        check((sent.headers.get('location') ?? '').includes('sent=record-viewing_requests') && leads.length === 1 && leads[0].property === listings[0].id && leads[0].status === 'New' && !leads[0].agreed_date && leads[0].ref !== 'FORGED', 'a visitor can ask to view a real listing but cannot forge confirmation, date or reference number')
+        check((await ownerPage('/data/viewing_requests')).includes('Property Visitor'), 'the owner sees the viewing lead in the private back office')
+        const anonymousList = await apiJson('/data/viewing_requests')
+        const anonymousChange = await apiJson(`/data/viewing_requests/${leads[0].id}`, { body: asJson({ status: 'Viewing agreed' }), method: 'PATCH' })
+        check(anonymousList.status >= 400 && anonymousChange.status >= 400 && !(await apiJson('/data/properties')).body.records.some((row) => JSON.stringify(row).includes('Property Visitor')), 'public property listings do not expose private lead details')
+        const agreed = await call('save_record', { table: 'viewing_requests', id: leads[0].id, values: { status: 'Viewing agreed', agreed_date: '2030-05-18' } })
+        check(!agreed.isError && agreed.data.saved.status === 'Viewing agreed', 'the owner can follow up and agree a viewing date')
+      }
+    }
   }
   check((await ownerPage('/starters')).includes(language === 'th' ? '>เว็บตั้งต้น</h1>' : '>Starters</h1>'), `the starters page follows the site's language: ${language}`)
 }
-check((await call('apply_starter', {})).data.starters.length === 8, 'Claude can list the starters')
+check((await call('apply_starter', {})).data.starters.length === 9, 'Claude can list the starters')
 await call('update_site', { language: 'en' })
 
 // One site in two languages: Thai first, English for tourists, under /en

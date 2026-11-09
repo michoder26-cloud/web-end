@@ -9,7 +9,7 @@ import type { Block, Settings } from './types'
 // no reviews, no awards, no figures, no addresses, no phone numbers and no people's names.
 // Each one must pass check_site with no problems, which the smoke tests prove.
 
-export const starterIds = ['cafe', 'shop', 'classes', 'appointments', 'trades', 'clubs', 'services', 'portfolio'] as const
+export const starterIds = ['cafe', 'shop', 'classes', 'appointments', 'trades', 'clubs', 'property', 'services', 'portfolio'] as const
 export type StarterId = (typeof starterIds)[number]
 export const starterLanguages = ['en', 'th'] as const
 export type StarterLanguage = (typeof starterLanguages)[number]
@@ -546,6 +546,82 @@ const clubs: Record<StarterLanguage, StarterContent> = {
   },
 }
 
+const propertyTables = (language: StarterLanguage): StarterTable[] => {
+  const en = language === 'en'
+  const status = en ? ['New', 'Contacted', 'Viewing agreed', 'Closed'] : ['ใหม่', 'ติดต่อแล้ว', 'ตกลงนัดชม', 'ปิดเรื่อง']
+  return [
+    { name: 'properties', label: en ? 'Properties' : 'อสังหาริมทรัพย์', readAccess: 'public', writeAccess: 'owner', fields: [
+      { name: 'title', label: en ? 'Listing' : 'ประกาศ', type: 'text', required: true },
+      { name: 'kind', label: en ? 'Type' : 'ประเภท', type: 'select', options: en ? ['Apartment', 'House', 'Other'] : ['อพาร์ตเมนต์', 'บ้าน', 'อื่น ๆ'], required: true },
+      { name: 'area', label: en ? 'Area' : 'พื้นที่', type: 'text' },
+      { name: 'details', label: en ? 'Details' : 'รายละเอียด', type: 'textarea' },
+      { name: 'availability', label: en ? 'Availability' : 'สถานะประกาศ', type: 'select', options: en ? ['Available', 'Unavailable'] : ['ว่าง', 'ไม่ว่าง'], default: en ? 'Available' : 'ว่าง' },
+    ] },
+    { name: 'viewing_requests', label: en ? 'Viewing requests' : 'คำขอนัดชม', readAccess: 'owner', writeAccess: 'public', fields: [
+      { name: 'property', label: en ? 'Property' : 'อสังหาริมทรัพย์', type: 'reference', table: 'properties', required: true },
+      { name: 'name', label: en ? 'Your name' : 'ชื่อของคุณ', type: 'text', required: true },
+      { name: 'email', label: en ? 'Email' : 'อีเมล', type: 'email', required: true },
+      { name: 'phone', label: en ? 'Phone (optional)' : 'เบอร์โทร (ไม่บังคับ)', type: 'phone' },
+      { name: 'preferred_date', label: en ? 'Preferred viewing date (optional)' : 'วันที่อยากเข้าชม (ไม่บังคับ)', type: 'date' },
+      { name: 'message', label: en ? 'Message' : 'ข้อความ', type: 'textarea' },
+      { name: 'status', label: en ? 'Request status' : 'สถานะคำขอ', type: 'select', options: status, default: status[0], readOnly: true },
+      { name: 'agreed_date', label: en ? 'Agreed viewing date' : 'วันที่นัดชมจริง', type: 'date', readOnly: true },
+      { name: 'ref', label: en ? 'Request number' : 'เลขที่คำขอ', type: 'text', readOnly: true },
+    ] },
+  ]
+}
+
+const propertyListings = (language: StarterLanguage) => language === 'en' ? [
+  { title: 'Sample apartment listing', kind: 'Apartment', area: 'Add your real area', details: 'Sample listing. Add the real location, photos, size and terms before publishing.', availability: 'Available' },
+  { title: 'Sample house listing', kind: 'House', area: 'Add your real area', details: 'Sample listing. Check availability and add accurate details before publishing.', availability: 'Available' },
+] : [
+  { title: 'อพาร์ตเมนต์ตัวอย่าง', kind: 'อพาร์ตเมนต์', area: 'ใส่พื้นที่จริง', details: 'ประกาศตัวอย่าง ใส่ที่ตั้ง รูป ขนาด และเงื่อนไขจริงก่อนเผยแพร่', availability: 'ว่าง' },
+  { title: 'บ้านตัวอย่าง', kind: 'บ้าน', area: 'ใส่พื้นที่จริง', details: 'ประกาศตัวอย่าง ตรวจสถานะและใส่รายละเอียดที่ถูกต้องก่อนเผยแพร่', availability: 'ว่าง' },
+]
+
+const property: Record<StarterLanguage, StarterContent> = {
+  en: {
+    label: 'Property inquiries',
+    description: 'Show property listings, receive viewing requests, and follow each lead in the private back office.',
+    includes: ['Public property list and request form', 'Private lead status and agreed viewing date', 'Automatic request numbers', 'No automatic appointment confirmation, lease or document collection'],
+    settings: { name: 'Sample Property Desk', tagline: 'Find a place and ask to view it', style: 'calm', accent: '#45655c', cart: false, nav: [{ label: 'Properties', href: '/properties' }, { label: 'Ask to view', href: '/properties#request' }], headerButtonLabel: 'See properties', headerButtonHref: '/properties', footerText: footer.en },
+    pages: [
+      { slug: 'home', title: 'Sample Property Desk', description: 'A sample property site showing listings and collecting private viewing requests.', blocks: [
+        { type: 'hero', layout: 'centered', eyebrow: 'Sample property desk', heading: 'Explore places at your own pace', text: 'Browse sample listings and ask to view a place. Replace every sample detail before publishing.', buttonLabel: 'See properties', buttonHref: '/properties' },
+        { type: 'steps', heading: 'How it works', items: [{ title: 'Browse', text: 'Look through the sample property list.' }, { title: 'Ask', text: 'Send a viewing request without an account.' }, { title: 'Agree a time', text: 'The owner contacts you to arrange a visit.' }] },
+        { type: 'cta', heading: 'Have a place in mind?', buttonLabel: 'Ask to view', buttonHref: '/properties#request' },
+      ] },
+      { slug: 'properties', title: 'Properties', description: 'Sample property listings and a private viewing request form.', blocks: [
+        { type: 'hero', heading: 'Properties', text: 'These are sample listings. Ask about a real property after the owner replaces them.' },
+        { type: 'records', table: 'properties', heading: 'Places', fields: ['title', 'kind', 'area', 'details', 'availability'], tone: 'tint' },
+        { type: 'record-form', id: 'request', table: 'viewing_requests', heading: 'Ask to view', intro: 'A request is not a confirmed viewing. We contact you to agree a time.', fields: ['property', 'name', 'email', 'phone', 'preferred_date', 'message'], buttonLabel: 'Send request', sentMessage: 'Request saved. The owner will contact you about a viewing.', tone: 'plain' },
+      ] },
+    ],
+    items: [], tables: propertyTables('en'), records: { properties: () => propertyListings('en') },
+    automations: [{ name: 'Viewing request number', trigger: { on: 'record_added', table: 'viewing_requests' }, actions: [{ do: 'set_fields', values: { ref: 'PV-{{number}}' } }] }],
+  },
+  th: {
+    label: 'รับคำขอนัดชมอสังหาฯ',
+    description: 'แสดงประกาศ รับคำขอนัดชม และติดตามผู้สนใจในหลังบ้านส่วนตัว',
+    includes: ['หน้าประกาศและแบบฟอร์มขอนัดชม', 'สถานะผู้สนใจและวันนัดจริงในหลังบ้านส่วนตัว', 'เลขคำขออัตโนมัติ', 'ยังไม่ยืนยันนัดอัตโนมัติหรือจัดการสัญญาและเอกสาร'],
+    settings: { name: 'อสังหาฯ ตัวอย่าง', tagline: 'เลือกที่ที่ชอบ แล้วขอเข้าชม', style: 'calm', accent: '#45655c', cart: false, nav: [{ label: 'ประกาศ', href: '/properties' }, { label: 'ขอนัดชม', href: '/properties#request' }], headerButtonLabel: 'ดูประกาศ', headerButtonHref: '/properties', footerText: footer.th },
+    pages: [
+      { slug: 'home', title: 'อสังหาฯ ตัวอย่าง', description: 'เว็บอสังหาฯ ตัวอย่างที่แสดงประกาศและรับคำขอนัดชมแบบส่วนตัว', blocks: [
+        { type: 'hero', layout: 'centered', eyebrow: 'อสังหาฯ ตัวอย่าง', heading: 'ค่อย ๆ เลือกที่ที่ชอบ', text: 'ดูประกาศตัวอย่างและส่งคำขอนัดชม เปลี่ยนรายละเอียดตัวอย่างทั้งหมดก่อนเผยแพร่', buttonLabel: 'ดูประกาศ', buttonHref: '/properties' },
+        { type: 'steps', heading: 'ขั้นตอน', items: [{ title: 'ดูประกาศ', text: 'ดูรายการอสังหาฯ ตัวอย่าง' }, { title: 'ส่งคำขอ', text: 'ขอนัดชมได้โดยไม่ต้องสมัครบัญชี' }, { title: 'ตกลงเวลา', text: 'เจ้าของติดต่อกลับเพื่อตกลงวันเข้าชม' }] },
+        { type: 'cta', heading: 'มีที่ที่สนใจไหม', buttonLabel: 'ขอนัดชม', buttonHref: '/properties#request' },
+      ] },
+      { slug: 'properties', title: 'ประกาศอสังหาฯ', description: 'ประกาศอสังหาฯ ตัวอย่างและแบบฟอร์มขอนัดชมที่เก็บข้อมูลส่วนตัว', blocks: [
+        { type: 'hero', heading: 'ประกาศ', text: 'รายการนี้เป็นตัวอย่าง เจ้าของต้องใส่ข้อมูลทรัพย์จริงก่อนรับคำขอ' },
+        { type: 'records', table: 'properties', heading: 'รายการ', fields: ['title', 'kind', 'area', 'details', 'availability'], tone: 'tint' },
+        { type: 'record-form', id: 'request', table: 'viewing_requests', heading: 'ขอนัดชม', intro: 'นี่เป็นเพียงคำขอ ไม่ใช่การยืนยันนัด เจ้าของจะติดต่อเพื่อตกลงเวลา', fields: ['property', 'name', 'email', 'phone', 'preferred_date', 'message'], buttonLabel: 'ส่งคำขอ', sentMessage: 'บันทึกคำขอแล้ว เจ้าของจะติดต่อเรื่องการเข้าชม', tone: 'plain' },
+      ] },
+    ],
+    items: [], tables: propertyTables('th'), records: { properties: () => propertyListings('th') },
+    automations: [{ name: 'เลขที่คำขอนัดชม', trigger: { on: 'record_added', table: 'viewing_requests' }, actions: [{ do: 'set_fields', values: { ref: 'PV-{{number}}' } }] }],
+  },
+}
+
 const services: Record<StarterLanguage, StarterContent> = {
   en: {
     label: 'Services or coaching',
@@ -740,4 +816,4 @@ const portfolio: Record<StarterLanguage, StarterContent> = {
   },
 }
 
-export const starterSites: Record<StarterId, Record<StarterLanguage, StarterContent>> = { cafe, shop, classes, appointments, trades, clubs, services, portfolio }
+export const starterSites: Record<StarterId, Record<StarterLanguage, StarterContent>> = { cafe, shop, classes, appointments, trades, clubs, property, services, portfolio }
