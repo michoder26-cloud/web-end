@@ -9,7 +9,7 @@ import type { Block, Settings } from './types'
 // no reviews, no awards, no figures, no addresses, no phone numbers and no people's names.
 // Each one must pass check_site with no problems, which the smoke tests prove.
 
-export const starterIds = ['cafe', 'shop', 'classes', 'appointments', 'services', 'portfolio'] as const
+export const starterIds = ['cafe', 'shop', 'classes', 'appointments', 'trades', 'services', 'portfolio'] as const
 export type StarterId = (typeof starterIds)[number]
 export const starterLanguages = ['en', 'th'] as const
 export type StarterLanguage = (typeof starterLanguages)[number]
@@ -409,6 +409,71 @@ const appointments: Record<StarterLanguage, StarterContent> = {
   },
 }
 
+const tradeTable = (language: StarterLanguage): StarterTable => {
+  const en = language === 'en'
+  const statuses = en ? ['New', 'Scheduled', 'In progress', 'Done', 'Cancelled'] : ['ใหม่', 'นัดแล้ว', 'กำลังทำ', 'เสร็จแล้ว', 'ยกเลิก']
+  return {
+    name: 'work_requests', label: en ? 'Work requests' : 'คำขอรับงาน', readAccess: 'owner', writeAccess: 'public',
+    fields: [
+      { name: 'service', label: en ? 'What needs help?' : 'ต้องการให้ช่วยเรื่องอะไร', type: 'select', required: true, options: en ? ['Electrical', 'Plumbing', 'Repair', 'Other'] : ['ไฟฟ้า', 'ประปา', 'ซ่อมแซม', 'อื่น ๆ'] },
+      { name: 'name', label: en ? 'Your name' : 'ชื่อของคุณ', type: 'text', required: true },
+      { name: 'email', label: en ? 'Email' : 'อีเมล', type: 'email', required: true },
+      { name: 'phone', label: en ? 'Phone (optional)' : 'เบอร์โทร (ไม่บังคับ)', type: 'phone' },
+      { name: 'details', label: en ? 'Describe the job' : 'เล่ารายละเอียดงาน', type: 'textarea', required: true },
+      { name: 'location', label: en ? 'Area or location (optional)' : 'พื้นที่หรือสถานที่ (ไม่บังคับ)', type: 'text' },
+      { name: 'preferred_date', label: en ? 'Preferred date (optional)' : 'วันที่สะดวก (ไม่บังคับ)', type: 'date' },
+      { name: 'status', label: en ? 'Work status' : 'สถานะงาน', type: 'select', options: statuses, default: statuses[0], readOnly: true },
+      { name: 'scheduled_date', label: en ? 'Agreed date' : 'วันที่นัดจริง', type: 'date', readOnly: true },
+      { name: 'scheduled_time', label: en ? 'Agreed time' : 'เวลานัดจริง', type: 'time', readOnly: true },
+      { name: 'assigned_to', label: en ? 'Assigned to' : 'ผู้รับผิดชอบ', type: 'text', readOnly: true },
+      { name: 'ref', label: en ? 'Job number' : 'เลขที่งาน', type: 'text', readOnly: true },
+    ],
+  }
+}
+
+const trades: Record<StarterLanguage, StarterContent> = {
+  en: {
+    label: 'Repair job requests',
+    description: 'Customers describe a repair job. The owner reviews requests, agrees a time and tracks each job.',
+    includes: ['Service page and private request form', 'Owner-only work requests with status, agreed date and assigned person', 'Automatic job numbers', 'This starter does not create quotes, invoices or a technician calendar'],
+    settings: { name: 'Sample Repair Service', tagline: 'Tell us what needs fixing', style: 'solid', accent: '#31576b', cart: false, nav: [{ label: 'Services', href: '/#services' }, { label: 'Request a visit', href: '/request' }], headerButtonLabel: 'Request a visit', headerButtonHref: '/request', footerText: footer.en },
+    pages: [
+      { slug: 'home', title: 'Sample Repair Service', description: 'A sample repair service website where customers can request a visit and the owner tracks jobs privately.', blocks: [
+        { type: 'hero', layout: 'centered', eyebrow: 'Sample repair service', heading: 'Tell us what needs fixing', text: 'Send a short request. We review it and contact you to agree a visit. These service descriptions are samples.', buttonLabel: 'Request a visit', buttonHref: '/request' },
+        { type: 'features', id: 'services', heading: 'How we can help', items: [{ title: 'Electrical', text: 'Describe the electrical issue and where it happens. Sample service.' }, { title: 'Plumbing', text: 'Tell us about a leak or a fitting that needs attention. Sample service.' }, { title: 'Repairs', text: 'Explain what is broken and when you are available. Sample service.' }] },
+        { type: 'steps', heading: 'What happens next', items: [{ title: 'Send a request', text: 'Tell us what needs doing. No account is needed.' }, { title: 'Agree a time', text: 'We contact you before scheduling a visit.' }, { title: 'Follow the job', text: 'Our team tracks the work in its private back office.' }] },
+        { type: 'cta', heading: 'Need help with a job?', buttonLabel: 'Send a request', buttonHref: '/request' },
+      ] },
+      { slug: 'request', title: 'Request a visit', description: 'Sample repair service request page. Describe the job and the owner will contact you about the next step.', blocks: [
+        { type: 'hero', heading: 'Request a visit', text: 'Tell us what needs doing. This is a request, not a confirmed appointment or price quote.' },
+        { type: 'record-form', table: 'work_requests', heading: 'Your work request', fields: ['service', 'name', 'email', 'phone', 'details', 'location', 'preferred_date'], buttonLabel: 'Send request', sentMessage: 'Your request was saved. The business will contact you about the next step.', tone: 'tint' },
+      ] },
+    ],
+    items: [], tables: [tradeTable('en')], records: {},
+    automations: [{ name: 'Job number', trigger: { on: 'record_added', table: 'work_requests' }, actions: [{ do: 'set_fields', values: { ref: 'WR-{{number}}' } }] }],
+  },
+  th: {
+    label: 'รับงานช่าง',
+    description: 'ลูกค้าเล่าเรื่องที่ต้องซ่อม เจ้าของตรวจคำขอ นัดหมาย และติดตามสถานะของแต่ละงาน',
+    includes: ['หน้าบริการและแบบฟอร์มรับงานส่วนตัว', 'รายการงานในหลังบ้านพร้อมสถานะ วันนัด และผู้รับผิดชอบ', 'เลขที่งานอัตโนมัติ', 'ยังไม่มีใบเสนอราคา ใบแจ้งหนี้ หรือปฏิทินช่าง'],
+    settings: { name: 'ร้านซ่อมตัวอย่าง', tagline: 'บอกเราว่าต้องซ่อมอะไร', style: 'solid', accent: '#31576b', cart: false, nav: [{ label: 'บริการ', href: '/#services' }, { label: 'แจ้งงาน', href: '/request' }], headerButtonLabel: 'แจ้งงาน', headerButtonHref: '/request', footerText: footer.th },
+    pages: [
+      { slug: 'home', title: 'ร้านซ่อมตัวอย่าง', description: 'เว็บร้านซ่อมตัวอย่างที่ลูกค้าส่งคำขอและเจ้าของติดตามงานในหลังบ้านได้', blocks: [
+        { type: 'hero', layout: 'centered', eyebrow: 'ร้านซ่อมตัวอย่าง', heading: 'บอกเราว่าต้องซ่อมอะไร', text: 'ส่งคำขอสั้น ๆ ร้านจะตรวจแล้วติดต่อกลับเพื่อนัดหมาย รายการบริการในหน้านี้เป็นตัวอย่าง', buttonLabel: 'แจ้งงาน', buttonHref: '/request' },
+        { type: 'features', id: 'services', heading: 'บริการที่ช่วยได้', items: [{ title: 'งานไฟฟ้า', text: 'เล่าปัญหาไฟฟ้าและจุดที่เกิดปัญหา บริการตัวอย่าง' }, { title: 'งานประปา', text: 'บอกเรื่องรั่วหรืออุปกรณ์ที่ต้องซ่อม บริการตัวอย่าง' }, { title: 'งานซ่อม', text: 'เล่าว่าอะไรเสียและคุณสะดวกเมื่อไร บริการตัวอย่าง' }] },
+        { type: 'steps', heading: 'หลังจากส่งคำขอ', items: [{ title: 'แจ้งงาน', text: 'บอกปัญหาโดยไม่ต้องสมัครสมาชิก' }, { title: 'ตกลงเวลา', text: 'ร้านติดต่อกลับก่อนนัดไปทำงาน' }, { title: 'ติดตามงาน', text: 'ทีมงานดูสถานะในหลังบ้านส่วนตัว' }] },
+        { type: 'cta', heading: 'มีงานให้ช่วยไหม', buttonLabel: 'ส่งคำขอ', buttonHref: '/request' },
+      ] },
+      { slug: 'request', title: 'แจ้งงาน', description: 'หน้าแจ้งงานซ่อมตัวอย่าง เล่าปัญหาที่พบและวันที่สะดวก ร้านจะติดต่อกลับเพื่อคุยขั้นตอนถัดไป', blocks: [
+        { type: 'hero', heading: 'แจ้งงาน', text: 'เล่าเรื่องที่ต้องซ่อม คำขอนี้ยังไม่ใช่การยืนยันวันนัดหรือราคา' },
+        { type: 'record-form', table: 'work_requests', heading: 'รายละเอียดคำขอ', fields: ['service', 'name', 'email', 'phone', 'details', 'location', 'preferred_date'], buttonLabel: 'ส่งคำขอ', sentMessage: 'บันทึกคำขอแล้ว ร้านจะติดต่อกลับเพื่อคุยขั้นตอนถัดไป', tone: 'tint' },
+      ] },
+    ],
+    items: [], tables: [tradeTable('th')], records: {},
+    automations: [{ name: 'เลขที่งาน', trigger: { on: 'record_added', table: 'work_requests' }, actions: [{ do: 'set_fields', values: { ref: 'WR-{{number}}' } }] }],
+  },
+}
+
 const services: Record<StarterLanguage, StarterContent> = {
   en: {
     label: 'Services or coaching',
@@ -603,4 +668,4 @@ const portfolio: Record<StarterLanguage, StarterContent> = {
   },
 }
 
-export const starterSites: Record<StarterId, Record<StarterLanguage, StarterContent>> = { cafe, shop, classes, appointments, services, portfolio }
+export const starterSites: Record<StarterId, Record<StarterLanguage, StarterContent>> = { cafe, shop, classes, appointments, trades, services, portfolio }

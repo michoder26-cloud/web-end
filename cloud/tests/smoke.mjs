@@ -36,7 +36,7 @@ check(claimedBody.includes('will not show it again') && !claimedBody.includes('s
 check(Boolean(claimedNonce) && claimedPolicy.includes(`script-src 'nonce-${claimedNonce}';`) && claimedBody.includes(`<script nonce="${claimedNonce}">`) && (claimedBody.match(/<script/g) ?? []).length === 1, 'only the copy buttons\' own script may run, by a nonce made for this page')
 check(claimedBody.includes(`value="${base}/mcp/${code}"`) && claimedBody.includes(`value="${base}/owner/${code}"`) && claimedBody.includes('data-copy="claude-link"') && claimedBody.includes(' hidden type="button"'), 'both links are in fields to copy, with copy buttons that appear only when the script runs')
 check(claimedBody.includes('https://claude.ai/settings/connectors') && claimedBody.includes('Add custom connector') && claimedBody.includes('id="first-message"') && claimedBody.includes('ask me a few short questions about my business'), 'the guided start shows where to paste the link in Claude, and a first message to send')
-check(['cafe', 'shop', 'classes', 'appointments', 'services', 'portfolio'].every((id) => claimedBody.includes(`<input name="starter" type="hidden" value="${id}">`)) && claimedBody.includes(`action="/owner/${code}/starters"`) && claimedBody.includes('Open my Dashboard') && claimedBody.indexOf('Start from an example') < claimedBody.indexOf('Or build with Claude'), 'the guided start offers every starter first, then Claude, and a small link into the workspace')
+check(['cafe', 'shop', 'classes', 'appointments', 'trades', 'services', 'portfolio'].every((id) => claimedBody.includes(`<input name="starter" type="hidden" value="${id}">`)) && claimedBody.includes(`action="/owner/${code}/starters"`) && claimedBody.includes('Open my Dashboard') && claimedBody.indexOf('Start from an example') < claimedBody.indexOf('Or build with Claude'), 'the guided start offers every starter first, then Claude, and a small link into the workspace')
 check(claimedBody.includes('Step 1: Copy this link') && claimedBody.includes('Step 2: Open Claude') && claimedBody.includes('Step 3: Start talking') && !/<details[^>]*>(?:(?!<\/details>)[\s\S])*claude-link/.test(claimedBody), 'the Claude steps are shown in the open, not hidden in a details box')
 const setupAgain = await fetch(`${base}/setup`, { redirect: 'manual' })
 check(setupAgain.status === 303 && !(await (await fetch(base)).text()).includes(code), 'the guided start and its links are never shown again')
@@ -49,7 +49,7 @@ check(['claude', 'build', 'phone', 'publish'].every((step) => stepDone(firstOver
 check(firstOverview.includes(`href="/owner/${code}/starters"`) && firstOverview.includes('Add custom connector') && firstOverview.includes(`value="${base}/mcp/${code}"`), 'the overview of an empty site links to the starters and shows how to connect Claude')
 check(firstOverview.includes('cms-build-choice') && firstOverview.includes('Choose an example') && firstOverview.includes('Build with Claude') && !firstOverview.includes('<h2 id="claude">'), 'an empty dashboard leads with build choices and keeps technical setup folded away')
 const startersPage = await (await fetch(`${base}/owner/${code}/starters`)).text()
-check(startersPage.includes('>Starters</h1>') && (startersPage.match(/class="card starter contact-form"/g) ?? []).length === 6 && !startersPage.includes('name="confirm"'), 'the starters page lists every starter, with no question to answer on an empty site')
+check(startersPage.includes('>Starters</h1>') && (startersPage.match(/class="card starter contact-form"/g) ?? []).length === 7 && !startersPage.includes('name="confirm"'), 'the starters page lists every starter, with no question to answer on an empty site')
 check((await (await fetch(`${base}/owner/${code}/starters?lang=th`)).text()).includes('ร้านกาแฟหรือร้านอาหาร'), 'the starters page has the Thai starters')
 
 const client = new Client({ name: 'web-end-smoke', version: '1.0.0' })
@@ -2661,7 +2661,7 @@ const emailPattern = /[\w.+-]+@[\w-]+\.[a-z]{2,}/i
 const phonePattern = /\+?\d[\d -]{7,}\d/
 const placePattern = /\b(street|road|avenue|suite)\b|ถนน|ซอย|แขวง|เขต /i
 for (const language of ['en', 'th']) {
-  for (const starter of ['cafe', 'shop', 'classes', 'appointments', 'services', 'portfolio']) {
+  for (const starter of ['cafe', 'shop', 'classes', 'appointments', 'trades', 'services', 'portfolio']) {
     await emptySite()
     const applied = await call('apply_starter', { starter, language })
     const problems = (await call('check_site')).data.problems
@@ -2713,10 +2713,30 @@ for (const language of ['en', 'th']) {
         check(!cancelled.isError && (reopened.headers.get('location') ?? '').includes('sent=record-appointment_bookings'), 'cancelling a booking releases the appointment for another customer')
       }
     }
+    if (starter === 'trades') {
+      const automations = (await call('list_automations')).data
+      check(siteNow.tables.some((table) => table.name === 'work_requests') && automations.length === 1 && automations[0].enabled, `the ${language} repair starter has a private work-request table and a job-number rule`)
+      const tried = await call('test_automation', { id: automations[0].id, sample: { service: language === 'th' ? 'ไฟฟ้า' : 'Electrical', name: 'Test', email: 'test@example.test', details: 'Test job' } })
+      check(!tried.isError && JSON.stringify(tried.data).includes('WR-'), `the ${language} job-number rule works`, tried.text.slice(0, 300))
+      if (language === 'en') {
+        await call('publish_site', { note: 'Test repair requests' })
+        const requestPage = await (await fetch(`${base}/request`)).text()
+        check(requestPage.includes('action="/data/work_requests"') && !requestPage.includes('name="status"') && !requestPage.includes('name="assigned_to"'), 'the published repair request form hides owner-only fields')
+        const sent = await fetch(`${base}/data/work_requests`, { body: new URLSearchParams({ service: 'Repair', name: 'Repair Visitor', email: 'repair@example.test', details: 'A door needs fixing', status: 'Done', ref: 'FORGED', next: '/request' }), method: 'POST', redirect: 'manual' })
+        const jobs = (await call('list_records', { table: 'work_requests' })).data.records
+        check((sent.headers.get('location') ?? '').includes('sent=record-work_requests') && jobs.length === 1 && jobs[0].name === 'Repair Visitor' && jobs[0].status === 'New' && jobs[0].ref !== 'FORGED', 'a visitor can request repair work but cannot forge its status or job number')
+        check((await ownerPage('/data/work_requests')).includes('Repair Visitor'), 'the owner can see the repair request in the back office')
+        const anonymousList = await fetch(`${base}/api/v1/data/work_requests`)
+        const anonymousChange = await fetch(`${base}/api/v1/data/work_requests/${jobs[0].id}`, { body: JSON.stringify({ status: 'Done' }), headers: { 'Content-Type': 'application/json' }, method: 'PATCH' })
+        check(anonymousList.status >= 400 && anonymousChange.status >= 400, 'visitors cannot read or change private repair requests')
+        const scheduled = await call('save_record', { table: 'work_requests', id: jobs[0].id, values: { status: 'Scheduled', scheduled_date: '2030-05-18', scheduled_time: '09:30', assigned_to: 'Owner' } })
+        check(!scheduled.isError && scheduled.data.saved.status === 'Scheduled' && scheduled.data.saved.scheduled_time === '09:30', 'the owner can schedule and track the repair job')
+      }
+    }
   }
   check((await ownerPage('/starters')).includes(language === 'th' ? '>เว็บตั้งต้น</h1>' : '>Starters</h1>'), `the starters page follows the site's language: ${language}`)
 }
-check((await call('apply_starter', {})).data.starters.length === 6, 'Claude can list the starters')
+check((await call('apply_starter', {})).data.starters.length === 7, 'Claude can list the starters')
 await call('update_site', { language: 'en' })
 
 // One site in two languages: Thai first, English for tourists, under /en
