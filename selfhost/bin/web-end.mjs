@@ -3,6 +3,7 @@
 //   web-end serve   [--data DIR] [--port N] [--host ADDR]   start the site and the Studio
 //   web-end new NAME                                      create and open an independent site
 //   web-end site NAME                                     open that site's Dashboard again
+//   web-end launcher                                      choose and create sites in a browser
 //   web-end backup  [--data DIR] [--out FILE] [--include-key] write one move bundle (safe while running)
 //   web-end verify  FILE                                      check a bundle without restoring it
 //   web-end restore FILE [--data DIR]                         restore through a checked staging copy
@@ -49,6 +50,20 @@ async function serve(folder, port, fresh = false) {
 }
 
 async function main() {
+  if (command === 'launcher') {
+    if (!existsSync(join(root, 'dist', 'engine.mjs'))) throw new Error('Build the engine first: npm run build')
+    const { startLauncher } = await import('../host/launcher.mjs')
+    const launcher = await startLauncher({ sitesDir: process.env.WEB_END_SITES_DIR })
+    console.log(`Open web-end: ${launcher.url}`)
+    if (process.platform === 'win32' && !process.env.WEB_END_NO_BROWSER) {
+      const { spawn } = await import('node:child_process')
+      spawn('cmd.exe', ['/d', '/s', '/c', `start "" "${launcher.url}"`], { stdio: 'ignore', detached: true, windowsHide: true }).unref()
+    }
+    const stop = async () => { await launcher.close(); process.exit(0) }
+    process.on('SIGINT', stop)
+    process.on('SIGTERM', stop)
+    return
+  }
   if (command === 'new' || command === 'site') {
     if (!positional) throw new Error(`Say the site name: web-end ${command} my-shop`)
     if (!existsSync(join(root, 'dist', 'engine.mjs'))) throw new Error('Build the engine first: npm run build')

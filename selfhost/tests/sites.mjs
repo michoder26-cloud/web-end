@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createSite, sitePort } from '../host/sites.mjs'
 import { startServer } from '../host/server.mjs'
+import { startLauncher } from '../host/launcher.mjs'
 
 const sitesDir = mkdtempSync(join(tmpdir(), 'web-end-sites-'))
 let passed = 0
@@ -35,3 +36,25 @@ try {
   await Promise.all([a.close(), b.close()])
 }
 console.log(`Sites: ${passed} passed, 0 failed`)
+
+const launcher = await startLauncher({ port: 0, sitesDir, updateCheck: false })
+try {
+  const home = await (await fetch(launcher.url)).text()
+  const token = /name="token" type="hidden" value="([a-f0-9]+)"/.exec(home)?.[1]
+  check(Boolean(token) && home.includes('สร้างเว็บใหม่') && home.includes('baan-coffee'), 'the browser page shows a create button and existing sites')
+  const post = (path, name, headers = {}) => fetch(`${launcher.url}${path}`, { method: 'POST', body: new URLSearchParams({ name, token }), headers, redirect: 'manual' })
+  const foreign = await post('/new', 'evil-site', { Origin: 'https://another.test' })
+  check(foreign.status === 403, 'another website cannot create a local site')
+  const made = await post('/new', 'third-site')
+  check(made.status === 303 && made.headers.get('location')?.endsWith('/setup'), 'creating a site in the browser opens its own setup')
+  const siteUrl = made.headers.get('location').replace(/\/setup$/, '')
+  const claimed = await fetch(`${siteUrl}/setup`, { method: 'POST', redirect: 'manual' })
+  check(claimed.status === 200, 'the new site can be claimed independently')
+  const reopened = await post('/open', 'third-site')
+  check(reopened.status === 303 && reopened.headers.get('location') === `${siteUrl}/admin`, 'opening an existing site goes to its Dashboard')
+  const repeated = await post('/new', 'third-site')
+  check(repeated.status === 400 && (await repeated.text()).includes('already exists'), 'the browser cannot replace an existing site')
+} finally {
+  await launcher.close()
+}
+console.log(`Browser launcher: ${passed} passed, 0 failed`)

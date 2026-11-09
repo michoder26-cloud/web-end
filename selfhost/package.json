@@ -14,6 +14,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "start": "node bin/web-end.mjs serve",
+    "start:local": "node bin/web-end.mjs launcher",
     "new:site": "node bin/web-end.mjs new",
     "open:site": "node bin/web-end.mjs site",
     "backup": "node bin/web-end.mjs backup",

@@ -5,7 +5,7 @@ Build and run a full-stack site or simple app by talking to Claude: your own dat
 **Status: early test.** The install button and the connection to Claude have worked from start to finish once. Nobody outside the project has tried it yet.
 
 There is also an [experimental local/self-hosted mode](selfhost/README.md): Node.js + SQLite with a built-in AI Studio, provider choice, and a tested backup/restore path. It uses the same engine as the Cloudflare version.
-In that mode, `npm run new:site -- my-shop` creates a separate site with its own Dashboard and database. Repeat with another name for another independent site.
+On Windows, double-click [Open web-end.cmd](Open%20web-end.cmd) and create a site in the browser. Every site gets its own Dashboard and database.
 
 ## How it works
 
