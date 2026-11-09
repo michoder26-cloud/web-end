@@ -30,7 +30,16 @@ try {
   const privateLink = await claimed.text()
   check(claimed.status === 200 && /\/owner\/[a-z0-9-]{20,60}/.test(privateLink), 'the first site creates its own owner Dashboard')
   const other = await fetch(b.url)
-  check(other.status === 200 && (await other.text()).includes('/setup'), 'the second site still starts fresh')
+  const otherPage = await other.text()
+  check(other.status === 200 && otherPage.includes('id="first-prompt"') && otherPage.includes('action="/studio/claim"'), 'the second site still shows the fresh first-run experience')
+  check((await fetch(`${b.url}/studio/api/state`)).status === 401, 'the second site does not grant unauthenticated Studio access')
+  check((await fetch(`${b.url}/studio/claim`, { method: 'POST', headers: { Origin: 'https://evil.test' } })).status === 403, 'the second site rejects cross-origin claims')
+  const secondClaim = await fetch(`${b.url}/studio/claim`, { method: 'POST', headers: { Origin: b.url } })
+  const secondLink = await secondClaim.text()
+  const firstOwner = privateLink.match(/\/owner\/[a-z0-9-]{20,60}/)?.[0]
+  const secondOwner = secondLink.match(/\/owner\/[a-z0-9-]{20,60}/)?.[0]
+  check(secondClaim.status === 200 && secondOwner && secondOwner !== firstOwner, 'the second site can be claimed independently with a different owner link')
+  check((await fetch(`${b.url}/studio/claim`, { method: 'POST', headers: { Origin: b.url } })).status === 409, 'the second site cannot be claimed twice')
   check(a.db.file !== b.db.file, 'each running site has its own SQLite database')
 } finally {
   await Promise.all([a.close(), b.close()])
