@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // web-end on your own computer or server.
 //   web-end serve   [--data DIR] [--port N] [--host ADDR]   start the site and the Studio
+//   web-end new NAME                                      create and open an independent site
+//   web-end site NAME                                     open that site's Dashboard again
 //   web-end backup  [--data DIR] [--out FILE] [--include-key] write one move bundle (safe while running)
 //   web-end verify  FILE                                      check a bundle without restoring it
 //   web-end restore FILE [--data DIR]                         restore through a checked staging copy
@@ -27,24 +29,37 @@ const positional = args.slice(1).find((arg, index, list) => !arg.startsWith('--'
 const dataDir = option('data') ?? process.env.WEB_END_DATA ?? 'data'
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
 
-async function main() {
-  if (command === 'serve') {
-    const { startServer } = await import('../host/server.mjs')
-    const server = await startServer({ dataDir, host: option('host'), port: option('port') })
-    console.log(`web-end is running at ${server.url}`)
-    console.log(`  data folder: ${server.config.dataDir}  (database: site.sqlite, ${server.migrations.total} migrations)`)
-    console.log(`  Studio (the AI builder): ${server.config.studio ? `${server.url}/studio` : 'off'}`)
-    console.log(`  update check on GitHub: ${server.config.updateCheck ? 'on (WEB_END_UPDATE_CHECK=off turns it off)' : 'off'}`)
-    if (server.migrations.applied.length) console.log(`  database prepared: ${server.migrations.applied.length} migrations applied`)
-    const stop = async () => {
-      console.log('Stopping…')
-      await server.close()
-      process.exit(0)
-    }
-    process.on('SIGINT', stop)
-    process.on('SIGTERM', stop)
-    return
+async function serve(folder, port, fresh = false) {
+  const { startServer } = await import('../host/server.mjs')
+  const server = await startServer({ dataDir: folder, host: option('host'), port })
+  console.log(`web-end is running at ${server.url}`)
+  console.log(`  data folder: ${server.config.dataDir}  (database: site.sqlite, ${server.migrations.total} migrations)`)
+  if (fresh) console.log(`  start here: ${server.url}/setup  (then open this site's Dashboard)`)
+  else console.log(`  Dashboard: ${server.url}/admin`)
+  console.log(`  Studio (the AI builder): ${server.config.studio ? `${server.url}/studio` : 'off'}`)
+  console.log(`  update check on GitHub: ${server.config.updateCheck ? 'on (WEB_END_UPDATE_CHECK=off turns it off)' : 'off'}`)
+  if (server.migrations.applied.length) console.log(`  database prepared: ${server.migrations.applied.length} migrations applied`)
+  const stop = async () => {
+    console.log('Stopping…')
+    await server.close()
+    process.exit(0)
   }
+  process.on('SIGINT', stop)
+  process.on('SIGTERM', stop)
+}
+
+async function main() {
+  if (command === 'new' || command === 'site') {
+    if (!positional) throw new Error(`Say the site name: web-end ${command} my-shop`)
+    if (!existsSync(join(root, 'dist', 'engine.mjs'))) throw new Error('Build the engine first: npm run build')
+    const { createSite, siteData, sitePort } = await import('../host/sites.mjs')
+    const sitesDir = process.env.WEB_END_SITES_DIR
+    const chosen = command === 'new'
+      ? await createSite(positional, sitesDir)
+      : { dataDir: siteData(positional, sitesDir), port: sitePort(positional, sitesDir) }
+    return serve(chosen.dataDir, chosen.port, command === 'new')
+  }
+  if (command === 'serve') return serve(dataDir, option('port'))
   if (command === 'backup') {
     const { createBundle } = await import('../host/bundle.mjs')
     const result = await createBundle({ dataDir, includeKey: has('include-key'), out: option('out') })

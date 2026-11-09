@@ -14,6 +14,8 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "start": "node bin/web-end.mjs serve",
+    "new:site": "node bin/web-end.mjs new",
+    "open:site": "node bin/web-end.mjs site",
     "backup": "node bin/web-end.mjs backup",
     "restore": "node bin/web-end.mjs restore",
     "test": "node tests/run-all.mjs",
@@ -21,7 +23,8 @@
     "test:rewriter": "node tests/html-rewriter.mjs",
     "test:smoke": "node tests/run-smoke.mjs",
     "test:ownership": "node tests/ownership.mjs",
-    "test:builder": "node tests/builder.mjs"
+    "test:builder": "node tests/builder.mjs",
+    "test:sites": "node tests/sites.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",

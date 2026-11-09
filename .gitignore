@@ -25,3 +25,4 @@ playwright-report/
 /cloud/.smoke-state/
 /selfhost/dist/
 /selfhost/data/
+/selfhost/sites/
