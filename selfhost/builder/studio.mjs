@@ -77,6 +77,21 @@ export function createStudio({ config, engineFetch, verifyOwner }) {
       if (origin && origin !== url.origin) return json({ error: 'This request came from another site.' }, 403)
     }
 
+    if (parts[0] === 'claim' && request.method === 'POST') {
+      if (request.headers.get('origin') !== url.origin) return json({ error: 'Same-origin setup required.' }, 403)
+      const answer = await engineFetch(new Request(`${url.origin}/setup`, { method: 'POST', headers: { 'accept-language': request.headers.get('accept-language') ?? '' } }))
+      if (answer.status !== 200) return json({ error: 'This site is already set up.' }, 409)
+      const html = await answer.text()
+      const claimed = /\/owner\/([a-z0-9]{8}(?:-[a-z0-9]{8}){3})/.exec(html)?.[1]
+      if (!claimed || !(await verifyOwner(claimed))) return json({ error: 'Setup could not be completed.' }, 500)
+      const session = store.createSession(claimed)
+      const headers = new Headers(answer.headers)
+      headers.set('Set-Cookie', `${cookieName}=${session}; Path=/studio; HttpOnly; SameSite=Strict; Max-Age=43200${url.protocol === 'https:' ? '; Secure' : ''}`)
+      headers.set('Cache-Control', 'no-store')
+      headers.delete('content-length')
+      const notice = '<section class="launch"><h2>Save your access before continuing</h2><p>Save the private owner link below or create an owner account now. This page is shown only once and your Studio session expires in 12 hours. The owner link is required to sign back into Studio.</p><p><a href="/studio">Continue to Studio</a></p></section>'
+      return new Response(html.replace('<main>', '<main>' + notice), { headers, status: 200 })
+    }
     if (parts[0] === 'sign-in' && request.method === 'POST') {
       const form = await request.formData()
       const given = codeFrom(form.get('link'))
@@ -165,6 +180,7 @@ export function createStudio({ config, engineFetch, verifyOwner }) {
       const text = String(body.text ?? '').trim().slice(0, 20_000)
       if (!text) return json({ error: 'Write a message first.' }, 400)
       if ([...active.values()].some((entry) => entry.run.conversation === conversation && entry.run.status === 'running')) return json({ error: 'The Studio is still working on the last message.' }, 409)
+      try { providerFromSettings(store.settings()) } catch (error) { return json({ error: error.message }, 400) }
       // A message sent while an approval waits answers "no" to it, so the conversation stays whole.
       for (const [id, entry] of active) {
         if (entry.run.conversation !== conversation || entry.run.status !== 'waiting') continue

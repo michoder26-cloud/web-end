@@ -103,6 +103,7 @@ const api = async (path, options = {}) => {
   return response.json()
 }
 const node = (tag, className, text) => { const el = document.createElement(tag); if (className) el.className = className; if (text !== undefined) el.textContent = text; return el }
+try { $('text').value = sessionStorage.getItem('first-prompt') || ''; $('text').addEventListener('input', () => sessionStorage.setItem('first-prompt', $('text').value)) } catch {}
 let current = null
 let timer = null
 function renderMessages(messages) {
@@ -165,6 +166,7 @@ $('composer').onsubmit = async (event) => {
   const { run, error } = await api('chat', { body: JSON.stringify({ text }), method: 'POST' })
   if (error) { $('send').disabled = false; return alert(error) }
   $('text').value = ''
+  try { sessionStorage.removeItem('first-prompt') } catch {}
   $('log').append(node('div', 'msg user', text))
   current = run; renderRun(run); poll()
 }
