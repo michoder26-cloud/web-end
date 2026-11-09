@@ -1734,6 +1734,89 @@ body[data-style] .cms-content .card {
   color: #ffe7e7;
 }
 
+.cms-build-choice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.8fr);
+  gap: 28px;
+  align-items: center;
+  margin: 0 0 22px;
+  padding: clamp(22px, 4vw, 38px);
+  border: 1px solid #3c806d;
+  border-radius: 14px;
+  background: linear-gradient(120deg, #143c35, #192735 68%);
+}
+
+.cms-build-choice > div > p {
+  margin: 0 0 8px;
+  color: #a8ddce;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.cms-build-choice h2 {
+  margin: 0 0 7px;
+}
+
+.cms-build-choice span {
+  color: var(--cms-muted);
+}
+
+.cms-build-choice__actions {
+  display: grid;
+  gap: 10px;
+}
+
+.cms-build-choice__actions > .button {
+  justify-content: center;
+  border-color: var(--cms-focus);
+  background: var(--cms-focus);
+  color: #0b1720;
+  text-align: center;
+}
+
+.cms-build-choice details,
+.cms-project-checklist,
+.cms-claude-help {
+  border: 1px solid var(--cms-line);
+  border-radius: 10px;
+  background: rgb(8 15 23 / 34%);
+}
+
+.cms-build-choice summary,
+.cms-project-checklist > summary,
+.cms-claude-help > summary {
+  padding: 12px 14px;
+  cursor: pointer;
+  color: var(--cms-text);
+  font-weight: 750;
+}
+
+.cms-build-choice__details {
+  margin: 0;
+  padding: 0 14px 14px;
+}
+
+.cms-build-choice__details > p {
+  color: var(--cms-muted);
+}
+
+.cms-build-choice__details details > div {
+  padding: 0 12px 12px;
+}
+
+.cms-project-checklist,
+.cms-claude-help {
+  margin: 0 0 22px;
+}
+
+.cms-project-checklist .first-steps {
+  padding: 0 18px 18px;
+}
+
+.cms-claude-help .contact-form {
+  padding: 0 18px 18px;
+}
+
 .cms-command-center {
   margin: 0 0 42px;
   padding: clamp(18px, 3vw, 28px);
@@ -1827,6 +1910,10 @@ body[data-style] .cms-content .card {
 
   .cms-content {
     padding: 28px 20px;
+  }
+
+  .cms-build-choice {
+    grid-template-columns: 1fr;
   }
 }
 

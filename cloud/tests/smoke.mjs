@@ -47,6 +47,7 @@ const stepDone = (html, step) => html.match(new RegExp(`data-done="([01])" data-
 const firstOverview = await (await fetch(`${base}/owner/${code}`)).text()
 check(['claude', 'build', 'phone', 'publish'].every((step) => stepDone(firstOverview, step) === '0'), 'a brand-new site shows its first steps, none done yet', ['claude', 'build', 'phone', 'publish'].map((step) => stepDone(firstOverview, step)).join())
 check(firstOverview.includes(`href="/owner/${code}/starters"`) && firstOverview.includes('Add custom connector') && firstOverview.includes(`value="${base}/mcp/${code}"`), 'the overview of an empty site links to the starters and shows how to connect Claude')
+check(firstOverview.includes('cms-build-choice') && firstOverview.includes('Choose an example') && firstOverview.includes('Build with Claude') && !firstOverview.includes('<h2 id="claude">'), 'an empty dashboard leads with build choices and keeps technical setup folded away')
 const startersPage = await (await fetch(`${base}/owner/${code}/starters`)).text()
 check(startersPage.includes('>Starters</h1>') && (startersPage.match(/class="card starter contact-form"/g) ?? []).length === 5 && !startersPage.includes('name="confirm"'), 'the starters page lists every starter, with no question to answer on an empty site')
 check((await (await fetch(`${base}/owner/${code}/starters?lang=th`)).text()).includes('ร้านกาแฟหรือร้านอาหาร'), 'the starters page has the Thai starters')

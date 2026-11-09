@@ -1,4 +1,4 @@
 {
-  "version": "0.22.0",
-  "notes": "Test mode: try your own site as a customer for 2 hours. Orders, bookings, sign-ups and messages are marked Test, take no stock, send no emails, chats or webhooks, and automations only show what they would do. Remove all test data with one button. Updates now stop, changing nothing, when someone changed the site's code by hand, unless you tick the box to update anyway."
+  "version": "0.23.0",
+  "notes": "Empty Dashboards now lead with two clear choices—use an example or build with Claude—while checklist and connector details stay folded away. Test mode lets owners safely try their own site as a customer for two hours, without affecting stock, real messages or integrations. Updates also stop safely when local code was changed by hand."
 }

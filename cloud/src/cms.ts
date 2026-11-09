@@ -349,13 +349,20 @@ async function overview(env: Env, url: URL, site: SiteRow, desk: Desk) {
   const testCard = `<section class="owner-account-card" id="test-mode"><h2>${w.heading}</h2><p>${w.help}</p>${tests.active ? `<p role="status"><b>${w.active}</b></p><p><a class="button button--small" href="/" rel="noopener" target="_blank">${w.open}</a></p><form action="${escapeHtml(desk.base)}/test-mode/end" method="post"><button class="button button--small button--ghost" type="submit">${w.end}</button></form>` : `<form action="${escapeHtml(desk.base)}/test-mode" method="post"><button class="button button--small" type="submit">${w.start}</button></form>`}${testTotal ? `<p>${w.data(tests.orders, tests.records, tests.entries, tests.customers)}</p><form action="${escapeHtml(desk.base)}/test-mode/clear" class="contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${w.confirm}</label><button class="button button--small" type="submit">${w.clear}</button></form>` : ''}${url.searchParams.has('testcleared') ? `<p role="status">${w.cleared}</p>` : ''}</section>`
   const changed = changedToday ? `<p role="status">${t.changes.overviewNote(changedToday, `${escapeHtml(desk.base)}/changes`)}</p>` : ''
   const started = isStarter(url.searchParams.get('started')) ? `<p role="status">${site.live_version ? t.start.startedLive(`${escapeHtml(desk.base)}/publish`) : t.start.started}</p>` : ''
-  // A new site gets its first steps on top, until every one of them is done.
-  const firstTime = steps && !Object.values(steps).every(Boolean) ? checklist(steps, escapeHtml(desk.base), t) : ''
+  const incomplete = steps && !Object.values(steps).every(Boolean)
+  // The checklist remains available for reassurance, but a new owner starts with a concrete build choice instead.
+  const firstTime = incomplete ? `<details class="cms-project-checklist"><summary>${t.start.checklistHeading}</summary>${checklist(steps, escapeHtml(desk.base), t)}</details>` : ''
   const mcpUrl = desk.code ? `${url.origin}/mcp/${desk.code}` : ''
   const isThai = t.lang === 'th'
   const dashboard = isThai
-    ? { content: 'จัดการหน้าเว็บและเนื้อหา', people: 'ลูกค้าและคำสั่งซื้อ', operate: 'เวิร์กโฟลว์และการอนุมัติ', connect: 'เชื่อมต่อ Claude และบริการอื่น', publish: site.live_version ? 'เวอร์ชันออนไลน์กำลังใช้งาน' : 'ยังไม่มีเวอร์ชันออนไลน์', draft: 'แก้ไขหน้าเว็บ', data: 'ข้อมูล', customers: 'ลูกค้า', automation: 'ระบบอัตโนมัติ', integrations: 'การเชื่อมต่อ', release: 'เผยแพร่' }
-    : { content: 'Manage pages and content', people: 'Customers and orders', operate: 'Workflows and approvals', connect: 'Connect Claude and other services', publish: site.live_version ? 'A live version is active' : 'No live version yet', draft: 'Edit site', data: 'Data', customers: 'Customers', automation: 'Automations', integrations: 'Integrations', release: 'Publish' }
+    ? { content: 'จัดการหน้าเว็บและเนื้อหา', people: 'ลูกค้าและคำสั่งซื้อ', operate: 'เวิร์กโฟลว์และการอนุมัติ', connect: 'เชื่อมต่อ Claude และบริการอื่น', publish: site.live_version ? 'เวอร์ชันออนไลน์กำลังใช้งาน' : 'ยังไม่มีเวอร์ชันออนไลน์', draft: 'แก้ไขหน้าเว็บ', data: 'ข้อมูล', customers: 'ลูกค้า', automation: 'ระบบอัตโนมัติ', integrations: 'การเชื่อมต่อ', release: 'เผยแพร่', ready: 'เริ่มสร้างพื้นที่ของคุณ', readyHelp: 'เลือกตัวอย่างที่แก้ไขต่อได้ทันที หรือบอก Claude ว่าต้องการระบบอะไร', example: 'เลือกตัวอย่าง', claude: 'สร้างกับ Claude', claudeHelp: 'เชื่อม Claude ครั้งเดียว แล้วคุยให้มันสร้างเว็บไซต์และหลังบ้านให้คุณ', connectClaude: 'เชื่อม Claude' }
+    : { content: 'Manage pages and content', people: 'Customers and orders', operate: 'Workflows and approvals', connect: 'Connect Claude and other services', publish: site.live_version ? 'A live version is active' : 'No live version yet', draft: 'Edit site', data: 'Data', customers: 'Customers', automation: 'Automations', integrations: 'Integrations', release: 'Publish', ready: 'Start building your workspace', readyHelp: 'Choose an example you can change right away, or tell Claude what system you need.', example: 'Choose an example', claude: 'Build with Claude', claudeHelp: 'Connect Claude once, then ask it to build your website and back office.', connectClaude: 'Connect Claude' }
+  const claudeSetup = desk.code
+    ? `<details><summary>${escapeHtml(dashboard.connectClaude)}</summary><div>${claudeLinkField(mcpUrl, t)}${connectGuide(t)}</div></details>`
+    : adminClaude(steps, t)
+  const buildChoice = !steps?.build
+    ? `<section class="cms-build-choice"><div><p>${escapeHtml(dashboard.ready)}</p><h2>${escapeHtml(settings.name)}</h2><span>${escapeHtml(dashboard.readyHelp)}</span></div><div class="cms-build-choice__actions"><a class="button" href="${escapeHtml(desk.base)}/starters">${escapeHtml(dashboard.example)}</a><details><summary>${escapeHtml(dashboard.claude)}</summary><div class="contact-form cms-build-choice__details"><p>${escapeHtml(dashboard.claudeHelp)}</p>${claudeSetup}</div></details></div></section>`
+    : ''
   const commandCenter = `<section class="cms-command-center" aria-label="${escapeHtml(t.nav.overview)}"><div class="cms-command-intro"><p>${escapeHtml(dashboard.publish)}</p><h2>${escapeHtml(settings.name)}</h2></div><div class="cms-command-grid">
 <a class="cms-command-card" href="${escapeHtml(desk.base)}/pages"><small>${escapeHtml(dashboard.content)}</small><strong>${escapeHtml(dashboard.draft)} →</strong></a>
 <a class="cms-command-card" href="${escapeHtml(desk.base)}/data"><small>${escapeHtml(dashboard.content)}</small><strong>${escapeHtml(dashboard.data)} →</strong></a>
@@ -370,11 +377,9 @@ async function overview(env: Env, url: URL, site: SiteRow, desk: Desk) {
     site,
     desk,
     t.nav.overview,
-    `${started}${changed}${newer}${account}${firstTime}${commandCenter}${testCard}<h2>${t.messagesHeading}</h2>${await messageList(env, site, desk)}
+    `${started}${changed}${newer}${buildChoice}${firstTime}${commandCenter}${account}${testCard}<h2>${t.messagesHeading}</h2>${await messageList(env, site, desk)}
 ${site.live_version ? `<p>${t.seeWaiting(`${escapeHtml(desk.base)}/publish`)}</p>` : ''}
-<h2 id="claude">${t.claudeHeading}</h2>
-<p>${t.claudeHelp}</p>
-${desk.code ? (steps && !steps.claude ? `<div class="contact-form">${claudeLinkField(mcpUrl, t)}${connectGuide(t)}</div>` : `${steps?.claude ? `<p role="status"><b>${t.start.claudeConnected}</b></p>` : ''}<p><code style="overflow-wrap:anywhere">${escapeHtml(mcpUrl)}</code></p>`) : adminClaude(steps, t)}`,
+${steps?.build && !steps.claude ? `<details class="cms-claude-help"><summary>${escapeHtml(dashboard.claude)}</summary><div class="contact-form"><p>${escapeHtml(dashboard.claudeHelp)}</p>${claudeSetup}</div></details>` : ''}`,
   )
 }
 
