@@ -65,7 +65,7 @@ export async function startLauncher({ port = 8798, sitesDir = defaultSitesDir, u
       if (request.url === '/new') await createSite(name, sitesDir)
       const site = await open(name)
       const claimed = await site.db.prepare('SELECT id FROM sites LIMIT 1').first()
-      return send(303, '', { Location: `${site.url}${claimed ? '/admin' : '/setup'}` })
+      return send(303, '', { Location: `${site.url}${claimed ? '/admin' : '/'}` })
     } catch (error) {
       return send(400, page(error.message))
     }
