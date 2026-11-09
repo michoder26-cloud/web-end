@@ -16,7 +16,11 @@ const securityHeaders = (nonce) => ({
   'X-Content-Type-Options': 'nosniff',
   'X-Robots-Tag': 'noindex',
 })
-const languageOf = (request) => (/^th\b/i.test(request.headers.get('accept-language') ?? '') || /(^|,)\s*th/i.test(request.headers.get('accept-language') ?? '') ? 'th' : 'en')
+const languageOf = (request) => {
+  const chosen = new URL(request.url).searchParams.get('lang')
+  if (chosen === 'th' || chosen === 'en') return chosen
+  return /^th\b/i.test(request.headers.get('accept-language') ?? '') || /(^|,)\s*th/i.test(request.headers.get('accept-language') ?? '') ? 'th' : 'en'
+}
 const readCookie = (request, name) => (request.headers.get('cookie') ?? '').split(/;\s*/).map((part) => part.split('=')).find(([key]) => key === name)?.[1] ?? ''
 
 /** The owner link (…/owner/<code> or …/mcp/<code>) or the bare code. */
@@ -100,7 +104,7 @@ export function createStudio({ config, engineFetch, verifyOwner }) {
         return new Response(signInPage({ error: true, lang, nonce }), { headers: securityHeaders(nonce), status: 401 })
       }
       const session = store.createSession(given)
-      return new Response(null, { headers: { 'Cache-Control': 'no-store', Location: '/studio', 'Set-Cookie': `${cookieName}=${session}; Path=/studio; HttpOnly; SameSite=Strict; Max-Age=43200${url.protocol === 'https:' ? '; Secure' : ''}` }, status: 303 })
+      return new Response(null, { headers: { 'Cache-Control': 'no-store', Location: `/studio?lang=${lang}`, 'Set-Cookie': `${cookieName}=${session}; Path=/studio; HttpOnly; SameSite=Strict; Max-Age=43200${url.protocol === 'https:' ? '; Secure' : ''}` }, status: 303 })
     }
     if (!code || !(await verifyOwner(code))) {
       if (parts[0] === 'api') return json({ error: 'Sign in again.' }, 401)
@@ -119,7 +123,9 @@ export function createStudio({ config, engineFetch, verifyOwner }) {
     }
     // The back office opens from here, so the owner link stays out of the Studio page.
     if (parts[0] === 'office' && request.method === 'GET') {
-      return new Response(null, { headers: { 'Cache-Control': 'no-store', Location: `/owner/${code}`, 'Referrer-Policy': 'no-referrer' }, status: 303 })
+      const destination = parts[1] ?? ''
+      if (parts.length > 2 || !['', 'pages', 'data', 'products', 'orders', 'publish', 'system'].includes(destination)) return json({ error: 'Not found' }, 404)
+      return new Response(null, { headers: { 'Cache-Control': 'no-store', Location: `/owner/${code}${destination ? `/${destination}` : ''}`, 'Referrer-Policy': 'no-referrer' }, status: 303 })
     }
     // The working copy's preview, passed through so it can sit in the Studio's frame. Its links are
     // rewritten to stay in the frame, and the owner link is taken out of the page.
@@ -142,7 +148,9 @@ export function createStudio({ config, engineFetch, verifyOwner }) {
     if (route === 'GET state') {
       const messages = store.messages(conversation).filter((message) => message.role === 'user' || (message.role === 'assistant' && message.text)).slice(-80).map((message) => ({ role: message.role, text: message.text }))
       const last = [...active.values()].map((entry) => entry.run).find((run) => run.conversation === conversation)
-      return json({ messages, run: view(last), ...settingsView(), usage: store.usage(20) })
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      return json({ messages, run: view(last), ...settingsView(), tokensToday: store.tokensSince(today.getTime()), usage: store.usage(20) })
     }
     if (route === 'GET activity') return json({ actions: store.actions(100), usage: store.usage(100) })
     if (route === 'POST settings') {

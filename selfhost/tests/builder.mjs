@@ -58,7 +58,11 @@ const api = async (path, body, method = body === undefined ? 'GET' : 'POST') => 
 const page = await (await fetch(`${base}/studio`, { headers: { Cookie: cookie } })).text()
 check(page.includes('id="composer"') && !page.includes(code), 'the Studio page opens and never shows the owner link')
 const thai = await (await fetch(`${base}/studio`, { headers: { 'Accept-Language': 'th-TH,th;q=0.9', Cookie: cookie } })).text()
-check(thai.includes('lang="th"') && thai.includes('หลังร้าน'), 'the Studio speaks Thai to a Thai browser')
+check(thai.includes('lang="th"') && thai.includes('หลังร้าน') && thai.includes('data-tab="dashboard"') && thai.includes('id="panel-dashboard"') && thai.includes('href="/studio/office/pages"'), 'the Thai Studio opens a per-site Dashboard with management links')
+const chosenThai = await (await fetch(`${base}/studio?lang=th`, { headers: { Cookie: cookie } })).text()
+check(chosenThai.includes('lang="th"') && chosenThai.includes('จัดการเว็บของคุณ') && chosenThai.includes('>English</a>'), 'the owner can choose Thai even when the browser language is English')
+const pagesShortcut = await fetch(`${base}/studio/office/pages`, { headers: { Cookie: cookie }, redirect: 'manual' })
+check(pagesShortcut.status === 303 && pagesShortcut.headers.get('location') === `/owner/${code}/pages` && (await fetch(`${base}/studio/office/unknown`, { headers: { Cookie: cookie }, redirect: 'manual' })).status === 404, 'Dashboard shortcuts open only known back-office sections')
 const foreign = await fetch(`${base}/studio/api/settings`, { body: '{}', headers: { 'Content-Type': 'application/json', Cookie: cookie, Origin: 'https://evil.test' }, method: 'POST' })
 check(foreign.status === 403, 'changes from another site are refused')
 
@@ -105,6 +109,7 @@ check((await (await fetch(base)).text()).length > 0 && done.steps.some((step) =>
 
 const state = await api('state')
 check(state.body.messages.at(-1).text === 'Your class booking system is ready.' && state.body.messages[0].text.includes('yoga'), 'the conversation is kept')
+check(state.body.tokensToday >= 5 * 1050 && state.body.tokensToday <= state.body.settings.maxTokensPerDay, 'the Dashboard reports actual AI tokens used today for this site')
 const activity = await api('activity')
 check(activity.body.usage.length >= 5 && activity.body.usage.every((row) => row.model === 'stand-in-1' && row.input_tokens === 1000), 'every AI call is in the usage ledger', JSON.stringify(activity.body.usage[0]))
 check(activity.body.actions.some((row) => row.tool === 'save_table' && row.risk === 'change') && activity.body.actions.some((row) => row.tool === 'publish_site' && row.risk === 'risky'), 'every action is logged with its risk')

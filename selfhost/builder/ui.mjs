@@ -6,23 +6,23 @@ const words = {
     activity: 'Activity', apiKey: 'API key', apiKeyHint: 'Kept encrypted on this server. Only its last 4 characters are shown.', approval: 'Ask me before',
     approvalAll: 'every change', approvalNone: 'nothing (not recommended)', approvalRisky: 'risky actions: publishing, deleting, emailing, orders, roles, outside systems',
     approve: 'Allow', baseUrl: 'Address (optional)', baseUrlHint: 'Leave empty for the provider\'s usual address. For LM Studio, vLLM or another OpenAI-compatible server, put its …/v1 address here.',
-    budget: 'Limits', clearKey: 'Remove saved key', decline: 'Don\'t allow', empty: 'Tell the Studio what you want to build, for example: "A booking system for my yoga classes: customers sign up, book a class with limited seats, and I see the list each morning."',
+    budget: 'Limits', clearKey: 'Remove saved key', dashboard: 'Dashboard', dashboardIntro: 'Manage this site from one place. Its data and settings belong to this site.', decline: 'Don\'t allow', empty: 'Tell the Studio what you want to build, for example: "A booking system for my yoga classes: customers sign up, book a class with limited seats, and I see the list each morning."',
     intro: 'Your own builder. It runs on your computer or server, and uses the AI service you choose.', link: 'Your owner link', linkHint: 'Paste the private owner link you got when you set up the site (it ends in four groups of 8 letters and numbers).',
     live: 'Live site', maxDay: 'AI tokens per day', maxSeconds: 'Seconds per message', maxSteps: 'Steps per message', maxTokens: 'AI tokens per message', model: 'Model', modelHint: 'For example gpt-5-mini, claude-sonnet-5-5, gemini-3-flash or, with Ollama, qwen3:14b.',
-    noActivity: 'Nothing yet.', office: 'Back office', pending: 'The Studio wants to', preview: 'Preview', provider: 'AI service', save: 'Save settings', saved: 'Saved.', send: 'Send', settings: 'Settings',
+    noActivity: 'Nothing yet.', office: 'Back office', orders: 'Orders', pages: 'Pages', data: 'Data', products: 'Products', publish: 'Publish', system: 'System', manageSite: 'Manage your site', aiToday: 'AI tokens used today', aiProvider: 'AI service for this site', aiNotReady: 'Set up in Settings', aiCosts: 'AI costs, if any, are billed by the provider you chose. web-end does not charge credits.', pending: 'The Studio wants to', preview: 'Preview', provider: 'AI service', save: 'Save settings', saved: 'Saved.', send: 'Send', settings: 'Settings',
     signIn: 'Open the Studio', signInBad: 'That link is not right for this site. Check it and try again.', signOut: 'Sign out', stop: 'Stop', test: 'Test connection', testing: 'Testing…', thinking: 'Working…',
-    title: 'web-end Studio', usage: 'AI use', wrote: 'You',
+    title: 'web-end Studio', usage: 'AI use', wrote: 'You', languageSwitch: 'ไทย',
   },
   th: {
     activity: 'ประวัติการทำงาน', apiKey: 'API key', apiKeyHint: 'เก็บแบบเข้ารหัสไว้ในเซิร์ฟเวอร์นี้ จะแสดงเฉพาะ 4 ตัวท้าย', approval: 'ถามฉันก่อน',
     approvalAll: 'ทุกการเปลี่ยนแปลง', approvalNone: 'ไม่ต้องถาม (ไม่แนะนำ)', approvalRisky: 'งานเสี่ยง: เผยแพร่ ลบ ส่งอีเมล คำสั่งซื้อ สิทธิ์ผู้ใช้ และการเชื่อมระบบภายนอก',
     approve: 'อนุญาต', baseUrl: 'ที่อยู่บริการ (ไม่บังคับ)', baseUrlHint: 'เว้นว่างเพื่อใช้ที่อยู่ปกติของผู้ให้บริการ ถ้าใช้ LM Studio, vLLM หรือเซิร์ฟเวอร์แบบ OpenAI-compatible อื่น ให้ใส่ที่อยู่ที่ลงท้ายด้วย /v1',
-    budget: 'ขีดจำกัด', clearKey: 'ลบ key ที่บันทึกไว้', decline: 'ไม่อนุญาต', empty: 'บอก Studio ว่าอยากสร้างอะไร เช่น "ระบบจองคลาสโยคะ ลูกค้าสมัครสมาชิก จองคลาสที่มีที่นั่งจำกัด และฉันดูรายชื่อได้ทุกเช้า"',
+    budget: 'ขีดจำกัด', clearKey: 'ลบ key ที่บันทึกไว้', dashboard: 'Dashboard', dashboardIntro: 'จัดการเว็บนี้ได้จากที่เดียว ข้อมูลและการตั้งค่าของแต่ละเว็บแยกจากกัน', decline: 'ไม่อนุญาต', empty: 'บอก Studio ว่าอยากสร้างอะไร เช่น "ระบบจองคลาสโยคะ ลูกค้าสมัครสมาชิก จองคลาสที่มีที่นั่งจำกัด และฉันดูรายชื่อได้ทุกเช้า"',
     intro: 'เครื่องมือสร้างแอปของคุณเอง ทำงานบนเครื่องหรือเซิร์ฟเวอร์ของคุณ และใช้บริการ AI ที่คุณเลือก', link: 'ลิงก์เจ้าของเว็บ', linkHint: 'วางลิงก์ส่วนตัวของเจ้าของที่ได้ตอนตั้งค่าเว็บ (ท้ายลิงก์เป็นตัวอักษรและตัวเลข 4 ชุด ชุดละ 8 ตัว)',
     live: 'เว็บจริง', maxDay: 'จำนวน token ต่อวัน', maxSeconds: 'วินาทีต่อข้อความ', maxSteps: 'จำนวนขั้นตอนต่อข้อความ', maxTokens: 'จำนวน token ต่อข้อความ', model: 'โมเดล', modelHint: 'เช่น gpt-5-mini, claude-sonnet-5-5, gemini-3-flash หรือถ้าใช้ Ollama เช่น qwen3:14b',
-    noActivity: 'ยังไม่มี', office: 'หลังร้าน', pending: 'Studio ขออนุญาต', preview: 'ตัวอย่าง', provider: 'บริการ AI', save: 'บันทึกการตั้งค่า', saved: 'บันทึกแล้ว', send: 'ส่ง', settings: 'ตั้งค่า',
+    noActivity: 'ยังไม่มี', office: 'หลังร้าน', orders: 'คำสั่งซื้อ', pages: 'หน้าเว็บ', data: 'ข้อมูล', products: 'สินค้า', publish: 'เผยแพร่', system: 'ระบบ', manageSite: 'จัดการเว็บของคุณ', aiToday: 'AI token ที่ใช้วันนี้', aiProvider: 'บริการ AI ของเว็บนี้', aiNotReady: 'ตั้งค่าในแท็บตั้งค่า', aiCosts: 'หากมีค่าใช้ AI ผู้ให้บริการที่คุณเลือกจะเป็นผู้คิดค่าใช้จ่าย web-end ไม่เก็บเครดิต', pending: 'Studio ขออนุญาต', preview: 'ตัวอย่าง', provider: 'บริการ AI', save: 'บันทึกการตั้งค่า', saved: 'บันทึกแล้ว', send: 'ส่ง', settings: 'ตั้งค่า',
     signIn: 'เปิด Studio', signInBad: 'ลิงก์นี้ไม่ตรงกับเว็บนี้ ตรวจแล้วลองใหม่', signOut: 'ออกจากระบบ', stop: 'หยุด', test: 'ทดสอบการเชื่อมต่อ', testing: 'กำลังทดสอบ…', thinking: 'กำลังทำงาน…',
-    title: 'web-end Studio', usage: 'การใช้ AI', wrote: 'คุณ',
+    title: 'web-end Studio', usage: 'การใช้ AI', wrote: 'คุณ', languageSwitch: 'English',
   },
 }
 
@@ -34,7 +34,7 @@ header h1{font-size:18px;margin:0}header nav{display:flex;gap:14px;align-items:c
 button,.button{font:inherit;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);border-radius:8px;padding:8px 14px;cursor:pointer}
 button.quiet{background:transparent;color:var(--accent)}button:disabled{opacity:.5;cursor:default}
 main{display:grid;grid-template-columns:minmax(320px,1fr) minmax(320px,1.2fr);gap:0;height:calc(100vh - 57px)}
-@media (max-width:900px){main{grid-template-columns:1fr;height:auto}#side{min-height:70vh}}
+@media (max-width:900px){main{grid-template-columns:1fr;height:auto}#side{order:-1;min-height:70vh}#chat{min-height:70vh}}
 #chat{display:flex;flex-direction:column;border-right:1px solid var(--line);min-height:0}
 #log{flex:1;overflow:auto;padding:16px 20px;display:flex;flex-direction:column;gap:12px}
 .msg{max-width:92%;padding:10px 14px;border-radius:12px;white-space:pre-wrap;line-height:1.5;overflow-wrap:anywhere}
@@ -53,6 +53,7 @@ label small,.hint{font-weight:400;color:var(--soft);font-size:13px}input,select{
 fieldset{border:1px solid var(--line);border-radius:10px;display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
 table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
 .wrap{padding:16px 20px;display:grid;gap:18px}.signin{max-width:520px;margin:10vh auto;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:28px;display:grid;gap:16px}
+.dashboard{padding:24px;display:grid;align-content:start;gap:24px}.dashboard h2{margin:0 0 6px;font-size:27px}.dashboard p{margin:0;color:var(--soft);line-height:1.5}.dashboard-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.dashboard-link{display:flex;align-items:center;justify-content:space-between;padding:18px;border:1px solid var(--line);border-radius:12px;background:var(--card);font-weight:650;text-decoration:none}.dashboard-link:hover{border-color:var(--accent);background:#f1f8f4}.dashboard-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.dashboard-metric{padding:18px;border:1px solid var(--line);border-radius:12px;background:var(--card)}.dashboard-metric small{display:block;color:var(--soft);margin-bottom:9px}.dashboard-metric strong{font-size:20px;overflow-wrap:anywhere}.dashboard-note{font-size:13px}
 .error{color:var(--bad)}.stack{display:grid;gap:6px}.row{display:flex;gap:8px;flex-wrap:wrap}
 `
 
@@ -61,7 +62,7 @@ const escape = (text) => String(text).replace(/[&<>"']/g, (char) => ({ '"': '&qu
 export function signInPage({ error = false, lang, nonce }) {
   const w = words[lang]
   return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${w.title}</title><style nonce="${nonce}">${style}</style></head>
-<body><form class="signin" method="post" action="/studio/sign-in"><h1>${w.title}</h1><p>${escape(w.intro)}</p>
+<body><form class="signin" method="post" action="/studio/sign-in?lang=${lang}"><h1>${w.title}</h1><p><a href="/studio?lang=${lang === 'th' ? 'en' : 'th'}">${w.languageSwitch}</a></p><p>${escape(w.intro)}</p>
 ${error ? `<p class="error" role="alert">${escape(w.signInBad)}</p>` : ''}
 <label>${escape(w.link)}<input name="link" type="password" autocomplete="off" required autofocus><small>${escape(w.linkHint)}</small></label>
 <button type="submit">${escape(w.signIn)}</button></form></body></html>`
@@ -71,14 +72,15 @@ export function studioPage({ lang, nonce }) {
   const w = words[lang]
   return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${w.title}</title><style nonce="${nonce}">${style}</style></head>
 <body>
-<header><h1>${w.title}</h1><nav><a href="/studio/office" target="_blank" rel="noreferrer">${w.office}</a><a href="/" target="_blank" rel="noreferrer">${w.live}</a>
+<header><h1>${w.title}</h1><nav><a href="/studio?lang=${lang === 'th' ? 'en' : 'th'}">${w.languageSwitch}</a><a href="/studio/office" target="_blank" rel="noreferrer">${w.office}</a><a href="/" target="_blank" rel="noreferrer">${w.live}</a>
 <form method="post" action="/studio/sign-out"><button class="quiet" type="submit">${w.signOut}</button></form></nav></header>
 <main>
 <section id="chat" aria-label="Chat"><div id="log" aria-live="polite"></div>
 <form id="composer"><textarea id="text" placeholder="${escape(w.empty)}" aria-label="${escape(w.send)}"></textarea><div class="stack"><button id="send" type="submit">${w.send}</button><button id="stop" class="quiet" type="button" hidden>${w.stop}</button></div></form></section>
 <section id="side">
-<div class="tabs" role="tablist"><button role="tab" aria-selected="true" data-tab="preview">${w.preview}</button><button role="tab" aria-selected="false" data-tab="settings">${w.settings}</button><button role="tab" aria-selected="false" data-tab="activity">${w.activity}</button></div>
-<div class="panel" id="panel-preview"><iframe id="frame" title="${w.preview}" src="/studio/preview"></iframe></div>
+<div class="tabs" role="tablist"><button role="tab" aria-selected="true" data-tab="dashboard">${w.dashboard}</button><button role="tab" aria-selected="false" data-tab="preview">${w.preview}</button><button role="tab" aria-selected="false" data-tab="settings">${w.settings}</button><button role="tab" aria-selected="false" data-tab="activity">${w.activity}</button></div>
+<div class="panel" id="panel-dashboard"><div class="dashboard"><div><h2>${w.manageSite}</h2><p>${w.dashboardIntro}</p></div><div class="dashboard-grid">${[['pages', w.pages], ['data', w.data], ['products', w.products], ['orders', w.orders], ['publish', w.publish], ['system', w.system]].map(([path, label]) => `<a class="dashboard-link" href="/studio/office/${path}" target="_blank" rel="noreferrer">${label}<span aria-hidden="true">↗</span></a>`).join('')}</div><div class="dashboard-metrics"><div class="dashboard-metric"><small>${w.aiToday}</small><strong id="tokens-today">0</strong></div><div class="dashboard-metric"><small>${w.aiProvider}</small><strong id="provider-name">—</strong></div></div><p class="dashboard-note">${w.aiCosts}</p></div></div>
+<div class="panel" id="panel-preview" hidden><iframe id="frame" title="${w.preview}" src="/studio/preview"></iframe></div>
 <div class="panel" id="panel-settings" hidden><form class="form" id="settings">
 <label>${w.provider}<select name="provider" id="provider"></select></label>
 <label>${w.model}<input name="model" id="model" autocomplete="off"><small>${escape(w.modelHint)}</small></label>
@@ -142,6 +144,8 @@ async function refresh() {
   current = state.run
   renderRun(current)
   fillSettings(state)
+  $('tokens-today').textContent = Number(state.tokensToday ?? 0).toLocaleString()
+  $('provider-name').textContent = state.settings.model ? (state.kinds[state.settings.provider]?.label ?? w.provider) + ' · ' + state.settings.model : w.aiNotReady
   if (current && current.status === 'running') poll()
 }
 function poll() {
@@ -202,7 +206,7 @@ async function loadActivity() {
 }
 document.querySelectorAll('[data-tab]').forEach((tab) => tab.onclick = () => {
   document.querySelectorAll('[data-tab]').forEach((other) => other.setAttribute('aria-selected', String(other === tab)))
-  for (const name of ['preview', 'settings', 'activity']) $('panel-' + name).hidden = name !== tab.dataset.tab
+  for (const name of ['dashboard', 'preview', 'settings', 'activity']) $('panel-' + name).hidden = name !== tab.dataset.tab
   if (tab.dataset.tab === 'activity') loadActivity()
 })
 refresh()
