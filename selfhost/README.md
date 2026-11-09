@@ -2,7 +2,7 @@
 
 This is an early Node.js + SQLite host for the same engine in `../cloud`. The site, back office, API and Studio run in one process. Data lives in one local folder. No Cloudflare, GitHub or central web-end account is needed for this mode. The Studio calls only the AI provider you configure; an API provider may charge for usage. Ollama can run locally when your computer supports the model.
 
-Requires Node.js 22.13 or newer. On Windows, double-click [Open web-end.cmd](../Open%20web-end.cmd) in the project folder. It installs the local dependencies on first use, builds the app, and opens the site creator in your browser. Type a name and press **สร้างเว็บใหม่**. Each site then guides you through its own setup and Dashboard.
+Requires Node.js 22.13 or newer. On Windows, double-click [Open web-end.cmd](../Open%20web-end.cmd) in the project folder. It installs the local dependencies on first use, builds the app, and opens the site creator in your browser. Type a name and your idea, then press **สร้างเว็บใหม่**. Allow pop-ups to open the new site when you enter an idea. Each site then guides you through its own setup and Dashboard.
 
 On other systems, from this folder:
 
