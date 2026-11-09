@@ -57,6 +57,7 @@ const api = async (path, body, method = body === undefined ? 'GET' : 'POST') => 
 }
 const page = await (await fetch(`${base}/studio`, { headers: { Cookie: cookie } })).text()
 check(page.includes('id="composer"') && !page.includes(code), 'the Studio page opens and never shows the owner link')
+check(page.includes('Claude Code') && page.includes('subscriptions do not automatically') && page.includes('claude mcp add --transport http') && page.includes('Studio approvals and limits do not apply'), 'subscription guidance explains the supported external path and its limits')
 const thai = await (await fetch(`${base}/studio`, { headers: { 'Accept-Language': 'th-TH,th;q=0.9', Cookie: cookie } })).text()
 check(thai.includes('lang="th"') && thai.includes('หลังร้าน') && thai.includes('data-tab="dashboard"') && thai.includes('id="panel-dashboard"') && thai.includes('href="/studio/office/pages"'), 'the Thai Studio opens a per-site Dashboard with management links')
 const chosenThai = await (await fetch(`${base}/studio?lang=th`, { headers: { Cookie: cookie } })).text()
