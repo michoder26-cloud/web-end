@@ -861,7 +861,9 @@ check(updatesPage.includes('https://github.com/someone/my-shop/actions/workflows
 const dailyLink = new URL(decode(updatesPage.match(/href="(https:\/\/github\.com\/someone\/my-shop\/new\/main\?filename=[^"]*daily[^"]*)"/)?.[1] ?? '') || 'https://x.test')
 check(dailyLink.searchParams.get('filename') === '.github/workflows/update-web-end-daily.yml' && dailyLink.searchParams.get('value')?.includes("cron: '23 2 * * *'") && !dailyLink.searchParams.get('value')?.includes('workflow_dispatch') && dailyLink.searchParams.get('value')?.includes('concurrency: update-web-end'), 'older sites get a one-click daily updater file, with nothing to edit by hand')
 const shippedUpdater = (await import('node:fs')).readFileSync(new URL('../.github/workflows/update-web-end.yml', import.meta.url), 'utf8')
-check(shippedUpdater === prefilled.searchParams.get('value'), 'new sites get the same daily updater from the Deploy button')
+// Git may check this file out with CRLF on Windows. The updater content is the
+// same workflow, so compare normalized text rather than the checkout format.
+check(shippedUpdater.replace(/\r\n/g, '\n') === prefilled.searchParams.get('value'), 'new sites get the same daily updater from the Deploy button')
 const settingsHelp = await (await fetch(`${owner}/settings`)).text()
 check(settingsHelp.includes('value="RESEND_API_KEY"') && settingsHelp.includes('value="STRIPE_SECRET_KEY"') && settingsHelp.includes('https://dash.cloudflare.com/?to=/:account/workers-and-pages') && settingsHelp.includes('Telegram or Discord'), 'settings name each secret exactly, link to Cloudflare, and suggest free chat notices first')
 const workerHelp = await (await fetch(`${owner}/system`)).text()

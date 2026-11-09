@@ -1,0 +1,2 @@
+# GitHub Actions workflow templates must use the same line endings on every OS.
+cloud/.github/workflows/update-web-end.yml text eol=lf
