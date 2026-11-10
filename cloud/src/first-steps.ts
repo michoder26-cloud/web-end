@@ -2,8 +2,9 @@ import { newToken } from './auth'
 import { automationProblems, maxAutomationsPerSite } from './automations'
 import { office, writeItem } from './cms'
 import type { Desk } from './cms'
-import { getTable, maxTablesPerSite, ownerActor, readInput, tableSchema } from './data'
-import type { DataTable } from './data'
+import { getTable, maxTablesPerSite, ownerActor, readInput, showRecord, syncIndexes, tableSchema } from './data'
+import type { DataRow, DataTable } from './data'
+import { fireEvent } from './webhooks'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { officeText } from './office-words'
 import type { OfficeWords } from './office-words'
@@ -112,14 +113,27 @@ export async function applyStarter(env: Env, site: SiteRow, id: StarterId, langu
       const result = await env.DB.batch([
         env.DB.prepare(`INSERT INTO data_tables (site_id, name, label, fields, read_access, write_access)
           SELECT ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM data_tables WHERE site_id = ?) < ?
-          ON CONFLICT (site_id, name) DO NOTHING`).bind(site.id, table.name, table.label, JSON.stringify(table.fields), table.readAccess, table.writeAccess, site.id, maxTablesPerSite),
+          ON CONFLICT (site_id, name) DO NOTHING RETURNING id`).bind(site.id, table.name, table.label, JSON.stringify(table.fields), table.readAccess, table.writeAccess, site.id, maxTablesPerSite),
         env.DB.prepare('INSERT INTO starter_guard (token) SELECT ? WHERE changes() = 1').bind(ticket),
         ...rows.map((row) => env.DB.prepare(`INSERT INTO data_records (table_id, customer_id, data, test)
-          SELECT id, NULL, ?, ? FROM data_tables WHERE site_id = ? AND name = ? AND EXISTS (SELECT 1 FROM starter_guard WHERE token = ?)`).bind(row, env.test ? 1 : 0, site.id, table.name, ticket)),
+          SELECT id, NULL, ?, ? FROM data_tables WHERE site_id = ? AND name = ? AND EXISTS (SELECT 1 FROM starter_guard WHERE token = ?) RETURNING id, customer_id, data, created_at, updated_at`).bind(row, env.test ? 1 : 0, site.id, table.name, ticket)),
         env.DB.prepare(`UPDATE data_tables SET record_count = ? WHERE site_id = ? AND name = ? AND EXISTS (SELECT 1 FROM starter_guard WHERE token = ?)`).bind(rows.length, site.id, table.name, ticket),
         env.DB.prepare('DELETE FROM starter_guard WHERE token = ?').bind(ticket),
       ])
-      if (result[0].meta.changes === 1) tables.push(table.name)
+      if (result[0].results.length === 1) {
+        const created = { ...prototype, id: (result[0].results[0] as { id: number }).id }
+        // Only committed RETURNING rows can generate events. Keep using fireEvent
+        // so hooks and request-scoped webhook delivery behave like normal writes.
+        for (const inserted of result.slice(2, 2 + rows.length)) {
+          for (const row of inserted.results as DataRow[]) {
+            try { await fireEvent(env, site.id, 'record.created', { table: table.name, record: showRecord(created, row, ownerActor) }) }
+            catch (error) { console.error('Starter record event failed', error) }
+          }
+        }
+        const currentTable = await getTable(env, site.id, table.name)
+        if (currentTable?.id === created.id && JSON.stringify(currentTable.fields) === JSON.stringify(created.fields)) await syncIndexes(env, currentTable)
+        tables.push(table.name)
+      }
       else if (!(await getTable(env, site.id, table.name))) return { before, error: 'partial' as const }
     }
 

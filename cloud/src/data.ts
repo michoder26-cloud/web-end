@@ -143,7 +143,7 @@ export function indexedFields(fields: DataField[]) {
 const indexName = (table: Pick<DataTable, 'id'>, field: string) => `data_field_${tableKey(table)}_${field}`
 
 /** Makes the database's indexes match the table's fields. Field names were checked against namePattern, so they are safe in SQL. */
-async function syncIndexes(env: Env, table: Pick<DataTable, 'fields' | 'id'>) {
+export async function syncIndexes(env: Env, table: Pick<DataTable, 'fields' | 'id'>) {
   const want = indexedFields(table.fields)
   const { results } = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'data_records' AND name GLOB ?").bind(`data_field_${tableKey(table)}_*`).all<{ name: string }>()
   const have = new Set(results.map((row) => row.name))
