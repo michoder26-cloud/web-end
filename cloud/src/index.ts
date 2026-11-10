@@ -232,7 +232,13 @@ async function answer(request: Request, env: Env): Promise<Response> {
     if (url.pathname === '/robots.txt') {
       return new Response(`User-agent: *\nDisallow: /admin\nDisallow: /owner/\nDisallow: /staff\nDisallow: /mcp/\nDisallow: /api/\nDisallow: /data/\nDisallow: /frame/\nDisallow: /account\nDisallow: /cart\nDisallow: /checkout\nDisallow: /order/\nDisallow: /login\nDisallow: /signup\nDisallow: /reset/\nDisallow: /newsletter/\nSitemap: ${url.origin}/sitemap.xml\n`, { headers: { 'Content-Type': 'text/plain' } })
     }
-    if (url.pathname === '/sitemap.xml') return await sitemap(env, url, site)
+    // Recheck the current database state: the request's site snapshot may predate
+    // a restore or publication. A restore stays private even if publish races it.
+    const draftStarter = async () => Boolean(await env.DB.prepare(`SELECT 1 FROM sites JOIN starter_privacy ON starter_privacy.site_id = sites.id WHERE sites.id = ? AND (sites.restore_hash IS NOT NULL OR sites.live_version IS NULL OR ? IS NULL OR sites.live_version != ?)`).bind(working.id, working.live_version, working.live_version).first())
+    if (url.pathname === '/sitemap.xml') {
+      const response = await sitemap(env, url, site)
+      return await draftStarter() ? notFound() : response
+    }
 
     if (parts[0] === 'mcp' || parts[0] === 'owner') {
       // A wrong code looks the same as a page that doesn't exist.
@@ -264,7 +270,13 @@ async function answer(request: Request, env: Env): Promise<Response> {
       return await handleOffice(request, env, url, working, desk, parts.slice(1))
     }
 
-    if (parts[0] === 'api') return await handleApi(request, env, url, site, parts)
+    // Hide all visitor content, including products and APIs, until the first publish.
+    if (await draftStarter()) return notFound()
+
+    if (parts[0] === 'api') {
+      const response = await handleApi(request, env, url, site, parts)
+      return await draftStarter() ? notFound() : response
+    }
     if (url.pathname === '/stripe/webhook' && request.method === 'POST') return await stripeWebhook(request, env, site)
 
     // An extra language, such as /en/about, is the same site in its words, with every link and redirect kept in it.
@@ -272,9 +284,11 @@ async function answer(request: Request, env: Env): Promise<Response> {
       const inner = new URL(url)
       inner.pathname = `/${parts.slice(1).join('/')}`
       const response = await visit(request, env, inner, localizeSite(site, parts[0]), parts.slice(1))
+      if (await draftStarter()) return notFound()
       return await keepLanguage(response, `/${parts[0]}`, url.origin)
     }
-    return await visit(request, env, url, localizeSite(site, null), parts)
+    const response = await visit(request, env, url, localizeSite(site, null), parts)
+    return await draftStarter() ? notFound() : response
   } catch (error) {
     console.error(error)
     return html('<!doctype html><meta charset="utf-8"><title>Error</title><h1>Something went wrong</h1><p>Please try again.</p>', 500)

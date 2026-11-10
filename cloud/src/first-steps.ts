@@ -2,12 +2,13 @@ import { newToken } from './auth'
 import { automationProblems, maxAutomationsPerSite } from './automations'
 import { office, writeItem } from './cms'
 import type { Desk } from './cms'
-import { createRecord, getTable, ownerActor, saveTable, tableSchema } from './data'
+import { getTable, maxTablesPerSite, ownerActor, readInput, showRecord, tableSchema } from './data'
+import type { DataRow, DataTable } from './data'
+import { fireEvent } from './webhooks'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { officeText } from './office-words'
 import type { OfficeWords } from './office-words'
 import { defaultSiteNames, shell } from './owner'
-import { rememberPage } from './page-history'
 import { starterIds, starterLanguages, starterSites } from './starters'
 import type { StarterId, StarterLanguage } from './starters'
 import type { Env, Settings, SiteRow } from './types'
@@ -25,7 +26,8 @@ export async function siteContents(env: Env, siteId: number) {
   const row = await env.DB.prepare('SELECT (SELECT COUNT(*) FROM pages WHERE site_id = ?) AS pages, (SELECT COUNT(*) FROM items WHERE site_id = ?) AS items, (SELECT COUNT(*) FROM data_tables WHERE site_id = ?) AS tables')
     .bind(siteId, siteId, siteId)
     .first<{ items: number; pages: number; tables: number }>()
-  const contents = { items: row?.items ?? 0, pages: row?.pages ?? 0, tables: row?.tables ?? 0 }
+  if (!row) throw new Error('Could not read site contents')
+  const contents = { items: row.items, pages: row.pages, tables: row.tables }
   return { ...contents, empty: !contents.items && !contents.pages && !contents.tables }
 }
 
@@ -40,57 +42,124 @@ export async function applyStarter(env: Env, site: SiteRow, id: StarterId, langu
 
   const current = JSON.parse(site.settings) as Settings
   const next: Settings = { ...current, ...content.settings, language }
+
   // Keep a name the owner chose. Only the default name or another starter's sample name gives way.
   const sampleNames = new Set([...defaultSiteNames, ...starterIds.flatMap((other) => starterLanguages.map((lang) => starterSites[other][lang].settings.name))])
   if (current.name && !sampleNames.has(current.name)) next.name = current.name
   // The starter brings its own look, so colours chosen for another design would only clash.
   delete next.background
   delete next.text
-  // Replacing the pages is intentional, but the owner can still recover every page
-  // individually from its private history after choosing a starter.
-  if (replacePages) {
-    const { results } = await env.DB.prepare('SELECT slug FROM pages WHERE site_id = ?').bind(site.id).all<{ slug: string }>()
-    await Promise.all(results.map((page) => rememberPage(env, site.id, page.slug)))
-  }
-  await env.DB.batch([
-    ...(replacePages ? [env.DB.prepare('DELETE FROM pages WHERE site_id = ?').bind(site.id)] : []),
+  // All writes share a ticket, granted only for unchanged settings and, for an
+  // unconfirmed request, a still-empty site. The D1 batch is atomic.
+  const token = newToken()
+  const guard = 'EXISTS (SELECT 1 FROM starter_guard WHERE token = ?)'
+  const guarded = (params: unknown[]) => [...params, token]
+  const results = await env.DB.batch([
+    env.DB.prepare(`INSERT INTO starter_guard (token)
+      SELECT ? WHERE EXISTS (SELECT 1 FROM sites WHERE id = ? AND settings = ?)
+      ${replacePages ? '' : `AND NOT EXISTS (SELECT 1 FROM pages WHERE site_id = ?)
+      AND NOT EXISTS (SELECT 1 FROM items WHERE site_id = ?)
+      AND NOT EXISTS (SELECT 1 FROM data_tables WHERE site_id = ?)`}`).bind(token, site.id, site.settings, ...(!replacePages ? [site.id, site.id, site.id] : [])),
+    // Existing items, tables or pages do not mean the owner has published.
+    env.DB.prepare(`INSERT OR IGNORE INTO starter_privacy (site_id) SELECT id FROM sites WHERE id = ? AND live_version IS NULL AND ${guard}`).bind(...guarded([site.id])),
+    // Snapshot exactly the pages deleted, within the same transaction.
+    ...(replacePages ? [
+      env.DB.prepare(`INSERT INTO page_revisions (site_id, slug, title, description, published, blocks, translations)
+        SELECT site_id, slug, title, description, published, blocks, translations FROM pages WHERE site_id = ? AND ${guard}`).bind(...guarded([site.id])),
+      env.DB.prepare(`DELETE FROM page_revisions WHERE site_id = ? AND ${guard}
+        AND slug IN (SELECT slug FROM pages WHERE site_id = ?)
+        AND id NOT IN (SELECT newer.id FROM page_revisions AS newer WHERE newer.site_id = page_revisions.site_id AND newer.slug = page_revisions.slug ORDER BY newer.id DESC LIMIT 20)`).bind(site.id, token, site.id),
+      env.DB.prepare(`DELETE FROM pages WHERE site_id = ? AND ${guard}`).bind(...guarded([site.id])),
+    ] : []),
     ...content.pages.map((page) =>
-      env.DB.prepare(`INSERT INTO pages (site_id, slug, title, description, published, blocks) VALUES (?, ?, ?, ?, 1, ?)
-        ON CONFLICT (site_id, slug) DO UPDATE SET title = excluded.title, description = excluded.description, published = 1, blocks = excluded.blocks, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`).bind(site.id, page.slug, page.title, page.description, JSON.stringify(page.blocks)),
+      env.DB.prepare(`INSERT INTO pages (site_id, slug, title, description, published, blocks) SELECT ?, ?, ?, ?, 1, ? WHERE ${guard}
+        ON CONFLICT (site_id, slug) DO UPDATE SET title = excluded.title, description = excluded.description, published = 1, blocks = excluded.blocks, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`).bind(...guarded([site.id, page.slug, page.title, page.description, JSON.stringify(page.blocks)])),
     ),
-    env.DB.prepare("UPDATE sites SET settings = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?").bind(JSON.stringify(next), site.id),
+    env.DB.prepare(`UPDATE sites SET settings = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND ${guard}`).bind(...guarded([JSON.stringify(next), site.id])),
+    env.DB.prepare('DELETE FROM starter_guard WHERE token = ?').bind(token),
   ])
-
-  const tables: string[] = []
-  for (const table of content.tables) {
-    if (await getTable(env, site.id, table.name)) continue
-    const problem = await saveTable(env, site.id, tableSchema.parse(table))
-    if (problem) throw new Error(`Starter ${id}: ${problem}`)
-    tables.push(table.name)
-    const created = await getTable(env, site.id, table.name)
-    const sampleRows = content.records[table.name]
-    for (const values of typeof sampleRows === 'function' ? sampleRows() : sampleRows ?? []) if (created) await createRecord(env, site.id, created, values, ownerActor)
+  if (results[0].meta.changes !== 1) {
+    const latest = await env.DB.prepare('SELECT settings FROM sites WHERE id = ?').bind(site.id).first<{ settings: string }>()
+    return { before: await siteContents(env, site.id), error: latest?.settings !== site.settings ? 'changed' as const : 'not-empty' as const }
   }
 
-  let items = 0
-  const { results: held } = await env.DB.prepare('SELECT collection, title FROM items WHERE site_id = ?').bind(site.id).all<{ collection: string; title: string }>()
-  const have = new Set(held.map((item) => `${item.collection}\n${item.title}`))
-  for (const item of content.items) {
-    if (have.has(`${item.collection}\n${item.title}`) || held.length + items >= maxItemsPerSite) continue
-    await writeItem(env, site.id, item)
-    items++
-  }
+  try {
+    const tables: string[] = []
+    for (const definition of content.tables) {
+      if (await getTable(env, site.id, definition.name)) continue
+      const table = tableSchema.parse(definition)
+      const count = await env.DB.prepare('SELECT COUNT(*) AS total FROM data_tables WHERE site_id = ?').bind(site.id).first<{ total: number }>()
+      if ((count?.total ?? 0) >= maxTablesPerSite) {
+        if (await getTable(env, site.id, table.name)) continue
+        return { before, error: 'partial' as const }
+      }
+      for (const field of table.fields) {
+        if (field.type !== 'reference' || field.table === table.name) continue
+        const target = await getTable(env, site.id, field.table!)
+        if (!target || (field.capacityField && target.fields.find((f) => f.name === field.capacityField)?.type !== 'number')) return { before, error: 'partial' as const }
+      }
+      const sampleRows = content.records[table.name]
+      const samples = typeof sampleRows === 'function' ? sampleRows() : sampleRows ?? []
+      const prototype: DataTable = { id: 1, name: table.name, label: table.label, fields: table.fields, indexed: null, read_access: table.readAccess, write_access: table.writeAccess, record_count: 0 }
+      const rows: string[] = []
+      for (const sample of samples) {
+        const read = await readInput(env, site.id, prototype, sample, ownerActor)
+        if (!read.data) return { before, error: 'partial' as const }
+        rows.push(JSON.stringify(read.data))
+      }
+      // This one-time ticket exists only in the transaction that inserted this
+      // table. No lookup by name or reusable integer id can confer ownership.
+      const ticket = newToken()
+      const result = await env.DB.batch([
+        env.DB.prepare(`INSERT INTO data_tables (site_id, name, label, fields, read_access, write_access)
+          SELECT ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM data_tables WHERE site_id = ?) < ?
+          ON CONFLICT (site_id, name) DO NOTHING RETURNING id`).bind(site.id, table.name, table.label, JSON.stringify(table.fields), table.readAccess, table.writeAccess, site.id, maxTablesPerSite),
+        env.DB.prepare('INSERT INTO starter_guard (token) SELECT ? WHERE changes() = 1').bind(ticket),
+        ...rows.map((row) => env.DB.prepare(`INSERT INTO data_records (table_id, customer_id, data, test)
+          SELECT id, NULL, ?, ? FROM data_tables WHERE site_id = ? AND name = ? AND EXISTS (SELECT 1 FROM starter_guard WHERE token = ?) RETURNING id, customer_id, data, created_at, updated_at`).bind(row, env.test ? 1 : 0, site.id, table.name, ticket)),
+        env.DB.prepare(`UPDATE data_tables SET record_count = ? WHERE site_id = ? AND name = ? AND EXISTS (SELECT 1 FROM starter_guard WHERE token = ?)`).bind(rows.length, site.id, table.name, ticket),
+        env.DB.prepare('DELETE FROM starter_guard WHERE token = ?').bind(ticket),
+      ])
+      if (result[0].results.length === 1) {
+        const created = { ...prototype, id: (result[0].results[0] as { id: number }).id }
+        // Only committed RETURNING rows can generate events. Keep using fireEvent
+        // so hooks and request-scoped webhook delivery behave like normal writes.
+        for (const inserted of result.slice(2, 2 + rows.length)) {
+          for (const row of inserted.results as DataRow[]) {
+            try { await fireEvent(env, site.id, 'record.created', { table: table.name, record: showRecord(created, row, ownerActor) }) }
+            catch (error) { console.error('Starter record event failed', error) }
+          }
+        }
+        // Indexes are built on the first normal record write. A later lookup cannot
+        // prove this id still belongs to the table inserted by the batch.
+        tables.push(table.name)
+      }
+      else if (!(await getTable(env, site.id, table.name))) return { before, error: 'partial' as const }
+    }
 
-  const automations: string[] = []
-  const { results: rules } = await env.DB.prepare('SELECT name FROM automations WHERE site_id = ?').bind(site.id).all<{ name: string }>()
-  for (const rule of content.automations) {
-    if (rules.some((existing) => existing.name === rule.name) || rules.length + automations.length >= maxAutomationsPerSite) continue
-    // Checked like one Claude saves, so an owner's own table with the same name can't get a rule that doesn't fit it.
-    if ((await automationProblems(env, site, rule)).length) continue
-    await env.DB.prepare('INSERT INTO automations (site_id, name, rule, enabled, secret) VALUES (?, ?, ?, 1, ?)').bind(site.id, rule.name, JSON.stringify(rule), newToken()).run()
-    automations.push(rule.name)
+    let items = 0
+    const { results: held } = await env.DB.prepare('SELECT collection, title FROM items WHERE site_id = ?').bind(site.id).all<{ collection: string; title: string }>()
+    const have = new Set(held.map((item) => `${item.collection}\n${item.title}`))
+    for (const item of content.items) {
+      if (have.has(`${item.collection}\n${item.title}`) || held.length + items >= maxItemsPerSite) continue
+      await writeItem(env, site.id, item)
+      items++
+    }
+
+    const automations: string[] = []
+    const { results: rules } = await env.DB.prepare('SELECT name FROM automations WHERE site_id = ?').bind(site.id).all<{ name: string }>()
+    for (const rule of content.automations) {
+      if (rules.some((existing) => existing.name === rule.name) || rules.length + automations.length >= maxAutomationsPerSite) continue
+      // Checked like one Claude saves, so an owner's own table with the same name can't get a rule that doesn't fit it.
+      if ((await automationProblems(env, site, rule)).length) continue
+      await env.DB.prepare('INSERT INTO automations (site_id, name, rule, enabled, secret) VALUES (?, ?, ?, 1, ?)').bind(site.id, rule.name, JSON.stringify(rule), newToken()).run()
+      automations.push(rule.name)
+    }
+    return { added: { automations, items, tables }, before, pages: content.pages.map((page) => page.slug) }
+  } catch (error) {
+    console.error('Starter partially applied', error)
+    return { before, error: 'partial' as const }
   }
-  return { added: { automations, items, tables }, before, pages: content.pages.map((page) => page.slug) }
 }
 
 // The checklist
@@ -258,6 +327,6 @@ export async function handleStarters(request: Request, env: Env, url: URL, site:
   const language = form?.get('language')
   if (!isStarter(id) || !isStarterLanguage(language)) return notFound()
   const result = await applyStarter(env, site, id, language, form?.get('confirm') === 'on')
-  if (result.error) return startersPage(env, url, site, desk, officeText(site).start.notEmpty)
+  if (result.error) return startersPage(env, url, site, desk, result.error === 'partial' ? (siteStarterLanguage(JSON.parse(site.settings) as Settings) === 'th' ? 'บางส่วนถูกนำไปใช้แล้ว แต่ไม่สามารถเพิ่มตารางได้ กรุณาตรวจสอบและลองอีกครั้ง' : 'The pages and design were applied, but the starter could not be completed. Check your tables before trying again.') : result.error === 'changed' ? (siteStarterLanguage(JSON.parse(site.settings) as Settings) === 'th' ? 'การตั้งค่าเปลี่ยนไป กรุณาลองอีกครั้ง ไม่มีการเปลี่ยนแปลงใด ๆ' : 'Settings changed while applying the starter. Nothing changed; please try again.') : officeText(site).start.notEmpty)
   return see(url, `${desk.base}?started=${id}`)
 }

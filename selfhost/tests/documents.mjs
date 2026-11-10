@@ -35,7 +35,7 @@ const request = async (path, body, session = cookie, origin = base) => {
   const response = await fetch(`${base}/studio/api/${path}`, { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json', Cookie: session, Origin: origin } })
   return { status: response.status, body: await response.json() }
 }
-const tools = await connectTools((req) => server.engineFetch(req), code)
+const tools = await connectTools((req) => fetch(new Request(`${base}${new URL(req.url).pathname}`, req)), code)
 const tables = async () => JSON.parse((await tools.call('list_tables', {})).text)
 const records = async () => JSON.parse((await tools.call('list_records', { table: 'document_entries' })).text).records
 const selected = { provider: 'openai', model: 'document-stand-in', destination: `http://127.0.0.1:${mock.address().port}/v1` }
