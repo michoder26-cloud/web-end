@@ -89,7 +89,7 @@ await server.close()
 
 // O4: the bundle is checked, and damage is caught
 const { manifest } = await verifyBundle(bundleWhileRunning.file)
-check('O4', manifest.files.every((file) => /^[0-9a-f]{64}$/.test(file.sha256)) && manifest.migrations.length === 28, 'the bundle lists every file with its SHA-256 and the schema version')
+check('O4', manifest.files.every((file) => /^[0-9a-f]{64}$/.test(file.sha256)) && manifest.migrations.includes('0030_publish_interlock.sql'), 'the bundle lists every file with its SHA-256 and the schema version')
 check('O12', manifest.notIncluded.length >= 5 && manifest.notIncluded.some((entry) => /STRIPE_SECRET_KEY/.test(entry.item)) && manifest.notIncluded.some((entry) => /DNS/.test(entry.item)), 'the bundle says plainly what it does not carry')
 const damaged = join(work, 'damaged.tar.gz')
 copyFileSync(bundleWhileRunning.file, damaged)

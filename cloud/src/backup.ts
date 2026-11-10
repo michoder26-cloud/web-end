@@ -1,4 +1,4 @@
-import { newToken, sha256, startSession } from './auth'
+import { newToken, sha256 } from './auth'
 import { notFound } from './http'
 import type { Env, SiteRow } from './types'
 import { version } from './version'
@@ -76,7 +76,7 @@ const decode = (value: unknown) => (value && typeof value === 'object' && typeof
 async function backupPart(env: Env, url: URL, site: SiteRow) {
   const table = url.searchParams.get('table')
   if (table === 'site') {
-    const row = await env.DB.prepare(`SELECT ${siteColumns.join(', ')}, live_version, owner_customer_id FROM sites WHERE id = ?`).bind(site.id).first()
+    const row = await env.DB.prepare(`SELECT ${siteColumns.join(', ')}, live_version, owner_customer_id, EXISTS(SELECT 1 FROM starter_privacy WHERE site_id = sites.id) AS starter_privacy FROM sites WHERE id = ?`).bind(site.id).first()
     return Response.json({ appVersion: version, format: backupFormat, site: row, tables: backupTables }, { headers: { 'Cache-Control': 'no-store' } })
   }
   if (!isBackupTable(table)) return notFound()
@@ -115,9 +115,15 @@ async function restorePart(request: Request, env: Env, url: URL, site: SiteRow, 
   if (body.start === true) {
     if (body.format !== backupFormat) return refuse('This backup was made by a newer web-end. Update this site first, then restore it.')
     if (body.confirm !== true) return refuse('Tick the box to confirm that everything on this site is replaced.')
+    // Generate the recovery token before the atomic destructive batch.
+    const token = newToken()
+    const tokenHash = await sha256(token)
     // Children first, so nothing is left pointing at a row that is gone.
     await env.DB.batch([
-      env.DB.prepare('UPDATE sites SET live_version = NULL, owner_customer_id = NULL WHERE id = ?').bind(site.id),
+      // Restores can be interrupted or contain falsified metadata. Never expose
+      // working pages without an actual published version, even for old backups.
+      env.DB.prepare('INSERT OR IGNORE INTO starter_privacy (site_id) VALUES (?)').bind(site.id),
+      env.DB.prepare("UPDATE sites SET live_version = NULL, owner_customer_id = NULL, restore_generation = restore_generation + 1, restore_hash = ?, restore_until = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+1 hour') WHERE id = ?").bind(tokenHash, site.id),
       env.DB.prepare('DELETE FROM sessions'),
       env.DB.prepare('DELETE FROM password_resets'),
       env.DB.prepare('DELETE FROM webhook_deliveries'),
@@ -125,25 +131,30 @@ async function restorePart(request: Request, env: Env, url: URL, site: SiteRow, 
       // Approval history can never be deleted or changed, not even by a restore. It is kept, and the backup only adds what is missing.
       ...[...backupTables].reverse().filter((table) => table !== 'approval_decisions').map((table) => env.DB.prepare(`DELETE FROM ${table}`)),
     ])
-    // The owner's own sign-in is gone now too, so the rest of this restore carries a token instead. It lasts an hour.
-    const token = newToken()
-    await env.DB.prepare("UPDATE sites SET restore_hash = ?, restore_until = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+1 hour') WHERE id = ?").bind(await sha256(token), site.id).run()
+    // The owner's own sign-in is gone now too; remaining parts carry the token.
     return Response.json({ ok: true, token })
   }
 
   if (!(await restoreTokenValid(request, env))) return refuse('This restore has expired. Start it again from the System page.', 403)
+  const tokenHash = await sha256(request.headers.get('x-restore-token')!)
+  const guard = "id = ? AND restore_hash = ? AND restore_until > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"
+  const expired = () => refuse('This restore has expired. Start it again from the System page.', 403)
 
   if (body.finish === true) {
     const saved = (body.site ?? {}) as Record<string, unknown>
     if (typeof saved.settings !== 'string') return refuse('The backup has no site settings.')
     const values = siteColumns.map((name) => (saved[name] === undefined ? null : saved[name]))
     values[siteColumns.indexOf('slug')] ??= site.slug
-    await env.DB.prepare(`UPDATE sites SET ${siteColumns.map((name) => `${name} = ?`).join(', ')}, live_version = (SELECT id FROM versions WHERE id = ?), owner_customer_id = (SELECT id FROM customers WHERE id = ?), restore_hash = NULL, restore_until = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`)
-      .bind(...values, saved.live_version ?? null, saved.owner_customer_id ?? null, site.id)
-      .run()
-    // An owner who signed in with their account was signed out when the accounts were replaced. Sign the backup's owner back in.
     const ownerId = Number(saved.owner_customer_id)
-    const cookie = signedIn && Number.isSafeInteger(ownerId) && (await env.DB.prepare('SELECT 1 FROM customers WHERE id = ?').bind(ownerId).first()) ? await startSession(env, url, ownerId) : null
+    const sessionToken = newToken()
+    const sessionHash = await sha256(sessionToken)
+    const expires = new Date(Date.now() + 2592000000).toISOString()
+    const [session, updated] = await env.DB.batch([
+      env.DB.prepare(`INSERT INTO sessions (token_hash, customer_id, expires_at) SELECT ?, customers.id, ? FROM customers WHERE customers.id = ? AND ? AND EXISTS (SELECT 1 FROM sites WHERE ${guard})`).bind(sessionHash, expires, Number.isSafeInteger(ownerId) ? ownerId : 0, signedIn ? 1 : 0, site.id, tokenHash),
+      env.DB.prepare(`UPDATE sites SET ${siteColumns.map((name) => `${name} = ?`).join(', ')}, live_version = (SELECT id FROM versions WHERE id = ?), owner_customer_id = (SELECT id FROM customers WHERE id = ?), restore_hash = NULL, restore_until = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE ${guard}`).bind(...values, saved.live_version ?? null, saved.owner_customer_id ?? null, site.id, tokenHash),
+    ])
+    if (!updated.meta.changes) return expired()
+    const cookie = session.meta.changes ? `session=${sessionToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000${url.protocol === 'https:' ? '; Secure' : ''}` : null
     return Response.json({ ok: true }, cookie ? { headers: { 'Set-Cookie': cookie } } : undefined)
   }
 
@@ -155,9 +166,14 @@ async function restorePart(request: Request, env: Env, url: URL, site: SiteRow, 
   // Columns from an older backup that this version no longer has are skipped; new columns take their defaults.
   const kept = columns.map((name, index) => [name, index] as const).filter(([name]) => known.has(name))
   if (!kept.length || rows.some((row) => !Array.isArray(row) || row.length !== columns.length)) return refuse('That part of the backup is damaged.')
-  const sql = `INSERT${table === 'approval_decisions' ? ' OR IGNORE' : ''} INTO ${table} (${kept.map(([name]) => name).join(', ')}) VALUES (${kept.map(() => '?').join(', ')})`
+  const sql = `INSERT${table === 'approval_decisions' ? ' OR IGNORE' : ''} INTO ${table} (${kept.map(([name]) => name).join(', ')}) SELECT ${kept.map(() => '?').join(', ')} WHERE EXISTS (SELECT 1 FROM sites WHERE ${guard})`
   try {
-    if (rows.length) await env.DB.batch(rows.map((row) => env.DB.prepare(sql).bind(...kept.map(([, index]) => decode(row[index]) ?? null))))
+    // Include a guarded read in the same batch, including for empty chunks.
+    const results = await env.DB.batch([
+      env.DB.prepare(`SELECT 1 FROM sites WHERE ${guard}`).bind(site.id, tokenHash),
+      ...rows.map((row) => env.DB.prepare(sql).bind(...kept.map(([, index]) => decode(row[index]) ?? null), site.id, tokenHash)),
+    ])
+    if (!results[0].results.length) return expired()
   } catch (error) {
     console.error(error)
     return refuse(`Part of the backup for ${table} could not be put back. The backup may come from a different site or be damaged.`)

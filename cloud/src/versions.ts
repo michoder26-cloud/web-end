@@ -1,5 +1,4 @@
 import type { Env, PageRow, Settings, SiteRow } from './types'
-import { rememberPage } from './page-history'
 
 const keptVersions = 20
 const now = "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"
@@ -50,15 +49,21 @@ export async function unpublishedChanges(env: Env, site: SiteRow) {
 
 /** Makes the current pages and settings the live version. */
 export async function publishVersion(env: Env, site: SiteRow, note: string) {
-  const home = await env.DB.prepare('SELECT slug FROM pages WHERE site_id = ? AND slug = ? AND published = 1').bind(site.id, 'home').first()
-  if (!home) return { error: 'There is no published home page yet, so there is nothing to show visitors.' }
-  const version = await env.DB.prepare('INSERT INTO versions (site_id, note, settings) VALUES (?, ?, ?) RETURNING id').bind(site.id, note.slice(0, 200), site.settings).first<{ id: number }>()
-  await env.DB.batch([
-    env.DB.prepare('INSERT INTO version_pages (version_id, slug, title, description, published, blocks, translations) SELECT ?, slug, title, description, published, blocks, translations FROM pages WHERE site_id = ?').bind(version!.id, site.id),
-    env.DB.prepare(`UPDATE sites SET live_version = ?, updated_at = ${now} WHERE id = ?`).bind(version!.id, site.id),
-    env.DB.prepare('DELETE FROM versions WHERE site_id = ? AND id NOT IN (SELECT id FROM versions WHERE site_id = ? ORDER BY id DESC LIMIT ?)').bind(site.id, site.id, keptVersions),
+  // A unique token identifies this batch even when a restore reuses numeric IDs.
+  // The generation is captured when the request loads the site, and changes at
+  // the start of every restore, including restores that finish before this batch.
+  const token = crypto.randomUUID()
+  const [created] = await env.DB.batch([
+    env.DB.prepare(`INSERT INTO versions (site_id, note, settings, publish_token)
+      SELECT id, ?, settings, ? FROM sites WHERE id = ? AND restore_generation = ? AND restore_hash IS NULL AND settings = ?
+      AND EXISTS (SELECT 1 FROM pages WHERE site_id = sites.id AND slug = 'home' AND published = 1) RETURNING id`)
+      .bind(note.slice(0, 200), token, site.id, site.restore_generation ?? -1, site.settings),
+    env.DB.prepare('INSERT INTO version_pages (version_id, slug, title, description, published, blocks, translations) SELECT versions.id, pages.slug, pages.title, pages.description, pages.published, pages.blocks, pages.translations FROM versions JOIN pages ON pages.site_id = versions.site_id WHERE versions.publish_token = ?').bind(token),
+    env.DB.prepare(`UPDATE sites SET live_version = (SELECT id FROM versions WHERE publish_token = ?), updated_at = ${now} WHERE id = ? AND EXISTS (SELECT 1 FROM versions WHERE publish_token = ?)`).bind(token, site.id, token),
+    env.DB.prepare('DELETE FROM versions WHERE site_id = ? AND EXISTS (SELECT 1 FROM versions WHERE publish_token = ?) AND id NOT IN (SELECT id FROM versions WHERE site_id = ? ORDER BY id DESC LIMIT ?)').bind(site.id, token, site.id, keptVersions),
   ])
-  return { id: version!.id }
+  const version = created.results[0] as { id: number } | undefined
+  return version ? { id: version.id } : { error: 'The site changed or a restore is in progress. Reload and try publishing again.' }
 }
 
 /** Puts an older version back, both for visitors and in the working copy. Orders, customers and records stay as they are. */
@@ -66,16 +71,16 @@ export async function restoreVersion(env: Env, site: SiteRow, id: number) {
   const version = await env.DB.prepare('SELECT settings FROM versions WHERE id = ? AND site_id = ?').bind(id, site.id).first<{ settings: string }>()
   if (!version) return false
   const settings = { ...(JSON.parse(version.settings) as Settings), ...systemSettings(JSON.parse(site.settings) as Settings) }
-  // A site-wide restore also changes each working page. Keep those individual
-  // copies so the owner can undo just one page afterwards if needed.
-  const { results: drafts } = await env.DB.prepare('SELECT slug FROM pages WHERE site_id = ?').bind(site.id).all<{ slug: string }>()
-  await Promise.all(drafts.map((page) => rememberPage(env, site.id, page.slug)))
-  await env.DB.batch([
-    env.DB.prepare('DELETE FROM pages WHERE site_id = ?').bind(site.id),
-    env.DB.prepare('INSERT INTO pages (site_id, slug, title, description, published, blocks, translations) SELECT ?, slug, title, description, published, blocks, translations FROM version_pages WHERE version_id = ?').bind(site.id, id),
-    env.DB.prepare(`UPDATE sites SET settings = ?, live_version = ?, updated_at = ${now} WHERE id = ?`).bind(JSON.stringify(settings), id, site.id),
+  const guard = `EXISTS (SELECT 1 FROM sites WHERE id = ? AND restore_generation = ? AND restore_hash IS NULL AND settings = ?) AND EXISTS (SELECT 1 FROM versions WHERE id = ? AND site_id = ?)`
+  const args = [site.id, site.restore_generation ?? -1, site.settings, id, site.id] as const
+  const [, , , , updated] = await env.DB.batch([
+    env.DB.prepare(`INSERT INTO page_revisions (site_id, slug, title, description, published, blocks, translations) SELECT site_id, slug, title, description, published, blocks, translations FROM pages WHERE site_id = ? AND ${guard}`).bind(site.id, ...args),
+    env.DB.prepare(`DELETE FROM page_revisions WHERE site_id = ? AND ${guard} AND id NOT IN (SELECT id FROM page_revisions AS newer WHERE newer.site_id = page_revisions.site_id AND newer.slug = page_revisions.slug ORDER BY id DESC LIMIT 20)`).bind(site.id, ...args),
+    env.DB.prepare(`DELETE FROM pages WHERE site_id = ? AND ${guard}`).bind(site.id, ...args),
+    env.DB.prepare(`INSERT INTO pages (site_id, slug, title, description, published, blocks, translations) SELECT ?, slug, title, description, published, blocks, translations FROM version_pages WHERE version_id = ? AND ${guard}`).bind(site.id, id, ...args),
+    env.DB.prepare(`UPDATE sites SET settings = ?, live_version = ?, updated_at = ${now} WHERE id = ? AND ${guard}`).bind(JSON.stringify(settings), id, site.id, ...args),
   ])
-  return true
+  return updated.meta.changes > 0
 }
 
 export const listVersions = async (env: Env, siteId: number) =>
