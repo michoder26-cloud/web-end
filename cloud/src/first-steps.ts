@@ -25,7 +25,8 @@ export async function siteContents(env: Env, siteId: number) {
   const row = await env.DB.prepare('SELECT (SELECT COUNT(*) FROM pages WHERE site_id = ?) AS pages, (SELECT COUNT(*) FROM items WHERE site_id = ?) AS items, (SELECT COUNT(*) FROM data_tables WHERE site_id = ?) AS tables')
     .bind(siteId, siteId, siteId)
     .first<{ items: number; pages: number; tables: number }>()
-  const contents = { items: row?.items ?? 0, pages: row?.pages ?? 0, tables: row?.tables ?? 0 }
+  if (!row) throw new Error('Could not read site contents')
+  const contents = { items: row.items, pages: row.pages, tables: row.tables }
   return { ...contents, empty: !contents.items && !contents.pages && !contents.tables }
 }
 
@@ -53,17 +54,28 @@ export async function applyStarter(env: Env, site: SiteRow, id: StarterId, langu
     const { results } = await env.DB.prepare('SELECT slug FROM pages WHERE site_id = ?').bind(site.id).all<{ slug: string }>()
     await Promise.all(results.map((page) => rememberPage(env, site.id, page.slug)))
   }
-  await env.DB.batch([
-    // Decide from the current database state, atomically with the starter pages.
+  // D1 batch is a single transaction. An unconfirmed request obtains a ticket
+  // only if the site is still empty inside that transaction. Every write in
+  // the batch is conditional on the ticket, which is removed before commit.
+  const token = newToken()
+  const guard = replacePages ? '1' : 'EXISTS (SELECT 1 FROM starter_guard WHERE token = ?)'
+  const guarded = (params: unknown[]) => replacePages ? params : [...params, token]
+  const results = await env.DB.batch([
+    ...(!replacePages ? [env.DB.prepare(`INSERT INTO starter_guard (token)
+      SELECT ? WHERE NOT EXISTS (SELECT 1 FROM pages WHERE site_id = ?)
+      AND NOT EXISTS (SELECT 1 FROM items WHERE site_id = ?)
+      AND NOT EXISTS (SELECT 1 FROM data_tables WHERE site_id = ?)`).bind(token, site.id, site.id, site.id)] : []),
     // Existing items, tables or pages do not mean the owner has published.
-    env.DB.prepare('INSERT OR IGNORE INTO starter_privacy (site_id) SELECT id FROM sites WHERE id = ? AND live_version IS NULL').bind(site.id),
+    env.DB.prepare(`INSERT OR IGNORE INTO starter_privacy (site_id) SELECT id FROM sites WHERE id = ? AND live_version IS NULL AND ${guard}`).bind(...guarded([site.id])),
     ...(replacePages ? [env.DB.prepare('DELETE FROM pages WHERE site_id = ?').bind(site.id)] : []),
     ...content.pages.map((page) =>
-      env.DB.prepare(`INSERT INTO pages (site_id, slug, title, description, published, blocks) VALUES (?, ?, ?, ?, 1, ?)
-        ON CONFLICT (site_id, slug) DO UPDATE SET title = excluded.title, description = excluded.description, published = 1, blocks = excluded.blocks, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`).bind(site.id, page.slug, page.title, page.description, JSON.stringify(page.blocks)),
+      env.DB.prepare(`INSERT INTO pages (site_id, slug, title, description, published, blocks) SELECT ?, ?, ?, ?, 1, ? WHERE ${guard}
+        ON CONFLICT (site_id, slug) DO UPDATE SET title = excluded.title, description = excluded.description, published = 1, blocks = excluded.blocks, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`).bind(...guarded([site.id, page.slug, page.title, page.description, JSON.stringify(page.blocks)])),
     ),
-    env.DB.prepare("UPDATE sites SET settings = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?").bind(JSON.stringify(next), site.id),
+    env.DB.prepare(`UPDATE sites SET settings = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND ${guard}`).bind(...guarded([JSON.stringify(next), site.id])),
+    ...(!replacePages ? [env.DB.prepare('DELETE FROM starter_guard WHERE token = ?').bind(token)] : []),
   ])
+  if (!replacePages && results[0].meta.changes !== 1) return { before: await siteContents(env, site.id), error: 'not-empty' as const }
 
   const tables: string[] = []
   for (const table of content.tables) {
