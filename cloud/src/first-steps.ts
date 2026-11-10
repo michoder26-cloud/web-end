@@ -2,7 +2,7 @@ import { newToken } from './auth'
 import { automationProblems, maxAutomationsPerSite } from './automations'
 import { office, writeItem } from './cms'
 import type { Desk } from './cms'
-import { getTable, maxTablesPerSite, ownerActor, readInput, showRecord, syncIndexes, tableSchema } from './data'
+import { getTable, maxTablesPerSite, ownerActor, readInput, showRecord, tableSchema } from './data'
 import type { DataRow, DataTable } from './data'
 import { fireEvent } from './webhooks'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
@@ -130,8 +130,8 @@ export async function applyStarter(env: Env, site: SiteRow, id: StarterId, langu
             catch (error) { console.error('Starter record event failed', error) }
           }
         }
-        const currentTable = await getTable(env, site.id, table.name)
-        if (currentTable?.id === created.id && JSON.stringify(currentTable.fields) === JSON.stringify(created.fields)) await syncIndexes(env, currentTable)
+        // Indexes are built on the first normal record write. A later lookup cannot
+        // prove this id still belongs to the table inserted by the batch.
         tables.push(table.name)
       }
       else if (!(await getTable(env, site.id, table.name))) return { before, error: 'partial' as const }
