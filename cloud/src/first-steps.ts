@@ -54,8 +54,9 @@ export async function applyStarter(env: Env, site: SiteRow, id: StarterId, langu
     await Promise.all(results.map((page) => rememberPage(env, site.id, page.slug)))
   }
   await env.DB.batch([
-    // Commit the privacy fence in the same transaction as the first starter pages.
-    ...(before.empty ? [env.DB.prepare('INSERT OR IGNORE INTO starter_privacy (site_id) SELECT id FROM sites WHERE id = ? AND live_version IS NULL').bind(site.id)] : []),
+    // Decide from the current database state, atomically with the starter pages.
+    // Existing items, tables or pages do not mean the owner has published.
+    env.DB.prepare('INSERT OR IGNORE INTO starter_privacy (site_id) SELECT id FROM sites WHERE id = ? AND live_version IS NULL').bind(site.id),
     ...(replacePages ? [env.DB.prepare('DELETE FROM pages WHERE site_id = ?').bind(site.id)] : []),
     ...content.pages.map((page) =>
       env.DB.prepare(`INSERT INTO pages (site_id, slug, title, description, published, blocks) VALUES (?, ?, ?, ?, 1, ?)

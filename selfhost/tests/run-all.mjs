@@ -9,6 +9,7 @@ const suites = [
   ['HTMLRewriter stand-in', ['tests/html-rewriter.mjs'], {}],
   ['web-end smoke suite (all optional parts)', ['tests/run-smoke.mjs'], { AUTOMATION_TEST: '1', EMAIL_TEST: '1', GOOGLE_TEST: '1', NEWS_TEST: '1', SCHEDULE_TEST: '1', WEBHOOK_TEST: '1' }],
   ['Draft starter privacy', ['tests/draft-starter.mjs'], {}],
+  ['Nonempty starter privacy', ['tests/nonempty-starter.mjs'], {}],
   ['Restore token interleavings', ['tests/restore-race.mjs'], {}],
   ['First run', ['tests/first-run.mjs'], {}],
   ['Studio (AI builder)', ['tests/builder.mjs'], {}],
