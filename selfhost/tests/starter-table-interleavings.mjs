@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { startServer } from '../host/server.mjs'
 
-for (const kind of ['limit', 'replacement'].filter(kind => !process.env.CASE || process.env.CASE === kind)) {
+for (const kind of ['limit', 'replacement', 'mcp'].filter(kind => !process.env.CASE || process.env.CASE === kind)) {
   const dir = mkdtempSync(join(tmpdir(), 'starter-interleave-'))
   const server = await startServer({ dataDir: dir, port: 0, schedule: false })
   try {
@@ -19,7 +19,7 @@ for (const kind of ['limit', 'replacement'].filter(kind => !process.env.CASE || 
     const batch = server.db.batch.bind(server.db)
     server.db.batch = async statements => {
       const result = await batch(statements)
-      if (kind === 'replacement' && armed && statements.some(stmt => stmt.sql.startsWith('INSERT INTO data_tables'))) {
+      if (kind !== 'limit' && armed && statements.some(stmt => stmt.sql.startsWith('INSERT INTO data_tables'))) {
         armed = false; reached(); await gate
       }
       return result
@@ -40,11 +40,13 @@ for (const kind of ['limit', 'replacement'].filter(kind => !process.env.CASE || 
       }
       return stmt
     }
-    const pending = fetch(`${server.url}/owner/${code}/starters`, { method: 'POST', body: new URLSearchParams({ starter: kind === 'limit' ? 'trades' : 'classes', language: 'en', confirm: 'on' }), redirect: 'manual' })
+    const pending = kind === 'mcp'
+      ? fetch(`${server.url}/mcp/${code}`, { method: 'POST', headers: { Accept: 'application/json, text/event-stream', 'Content-Type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'apply_starter', arguments: { starter: 'classes', language: 'en', replacePages: true } } }) })
+      : fetch(`${server.url}/owner/${code}/starters`, { method: 'POST', body: new URLSearchParams({ starter: kind === 'limit' ? 'trades' : 'classes', language: 'en', confirm: 'on' }), redirect: 'manual' })
     await hit
     const name = kind === 'limit' ? 'work_requests' : 'classes'
-    const previous = kind === 'replacement' ? await prepare('SELECT id FROM data_tables WHERE site_id = 1 AND name = ?').bind(name).first() : null
-    if (kind === 'replacement') await prepare('DELETE FROM data_tables WHERE site_id = 1 AND name = ?').bind(name).run()
+    const previous = kind !== 'limit' ? await prepare('SELECT id FROM data_tables WHERE site_id = 1 AND name = ?').bind(name).first() : null
+    if (kind !== 'limit') await prepare('DELETE FROM data_tables WHERE site_id = 1 AND name = ?').bind(name).run()
     await prepare("INSERT INTO data_tables (site_id,name,label,fields,read_access,write_access) VALUES (1,?,'Owner private',?,'owner','owner')").bind(name, JSON.stringify([{ name: 'title', label: 'Title', type: 'text' }])).run()
     const owner = await prepare('SELECT id FROM data_tables WHERE site_id = 1 AND name = ?').bind(name).first()
     release()
@@ -55,8 +57,15 @@ for (const kind of ['limit', 'replacement'].filter(kind => !process.env.CASE || 
     if (kind === 'limit') assert.equal(response.status, 303, 'same-name table at limit should be skipped, not fail after pages committed')
     else {
       assert.equal(rows.n, 0, 'replacement table must not receive starter records')
-      assert.equal(response.status, 409, 'incompatible replacement must report partial application')
-      assert.match(await response.text(), /pages and design were applied/i)
+      if (kind === 'mcp') {
+        const body = await response.text()
+        assert.match(body, /pages and design were applied/i)
+        assert.doesNotMatch(body, /Nothing changed/i)
+        assert.match(body, /isError"\s*:\s*true/)
+      } else {
+        assert.equal(response.status, 409, 'incompatible replacement must report partial application')
+        assert.match(await response.text(), /pages and design were applied/i)
+      }
       assert.equal(previous.id, owner.id, 'repro exercises SQLite id reuse')
     }
   } finally { await server.close(); rmSync(dir, { recursive: true, force: true }) }
