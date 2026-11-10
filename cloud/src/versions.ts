@@ -75,7 +75,7 @@ export async function restoreVersion(env: Env, site: SiteRow, id: number) {
   const args = [site.id, site.restore_generation ?? -1, site.settings, id, site.id] as const
   const [, , , , updated] = await env.DB.batch([
     env.DB.prepare(`INSERT INTO page_revisions (site_id, slug, title, description, published, blocks, translations) SELECT site_id, slug, title, description, published, blocks, translations FROM pages WHERE site_id = ? AND ${guard}`).bind(site.id, ...args),
-    env.DB.prepare(`DELETE FROM page_revisions WHERE site_id = ? AND ${guard} AND id NOT IN (SELECT id FROM page_revisions AS newer WHERE newer.site_id = page_revisions.site_id AND newer.slug = page_revisions.slug ORDER BY id DESC LIMIT 20)`).bind(site.id, ...args),
+    env.DB.prepare(`DELETE FROM page_revisions WHERE site_id = ? AND ${guard} AND slug IN (SELECT slug FROM pages WHERE site_id = ?) AND id NOT IN (SELECT id FROM page_revisions AS newer WHERE newer.site_id = page_revisions.site_id AND newer.slug = page_revisions.slug ORDER BY id DESC LIMIT 20)`).bind(site.id, ...args, site.id),
     env.DB.prepare(`DELETE FROM pages WHERE site_id = ? AND ${guard}`).bind(site.id, ...args),
     env.DB.prepare(`INSERT INTO pages (site_id, slug, title, description, published, blocks, translations) SELECT ?, slug, title, description, published, blocks, translations FROM version_pages WHERE version_id = ? AND ${guard}`).bind(site.id, id, ...args),
     env.DB.prepare(`UPDATE sites SET settings = ?, live_version = ?, updated_at = ${now} WHERE id = ? AND ${guard}`).bind(JSON.stringify(settings), id, site.id, ...args),

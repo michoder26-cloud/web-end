@@ -13,6 +13,7 @@ const suites = [
   ['Nonempty starter privacy', ['tests/nonempty-starter.mjs'], {}],
   ['Starter concurrency', ['tests/starter-race.mjs'], {}],
   ['Starter data concurrency', ['tests/starter-data-race.mjs'], {}],
+  ['Starter table and restore history', ['tests/starter-table-history.mjs'], {}],
   ['Restore token interleavings', ['tests/restore-race.mjs'], {}],
   ['First run', ['tests/first-run.mjs'], {}],
   ['Studio (AI builder)', ['tests/builder.mjs'], {}],

@@ -84,7 +84,8 @@ export async function applyStarter(env: Env, site: SiteRow, id: StarterId, langu
   const tables: string[] = []
   for (const table of content.tables) {
     if (await getTable(env, site.id, table.name)) continue
-    const problem = await saveTable(env, site.id, tableSchema.parse(table))
+    const problem = await saveTable(env, site.id, tableSchema.parse(table), true)
+    if (problem === 'already-exists') continue
     if (problem) throw new Error(`Starter ${id}: ${problem}`)
     tables.push(table.name)
     const created = await getTable(env, site.id, table.name)

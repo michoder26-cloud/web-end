@@ -181,7 +181,7 @@ export async function listTables(env: Env, siteId: number) {
 }
 
 /** Creates a table or changes its fields. Existing records keep their values, and a removed field simply stops showing. */
-export async function saveTable(env: Env, siteId: number, table: z.infer<typeof tableSchema>) {
+export async function saveTable(env: Env, siteId: number, table: z.infer<typeof tableSchema>, createOnly = false) {
   const existing = await getTable(env, siteId, table.name)
   if (!existing) {
     const count = await env.DB.prepare('SELECT COUNT(*) AS total FROM data_tables WHERE site_id = ?').bind(siteId).first<{ total: number }>()
@@ -194,9 +194,10 @@ export async function saveTable(env: Env, siteId: number, table: z.infer<typeof 
     if (field.capacityField && (field.table === table.name ? table.fields : target!.fields).find((other) => other.name === field.capacityField)?.type !== 'number') return `The field "${field.name}" takes its capacity from "${field.capacityField}", which must be a number field of the table ${field.table}.`
   }
   const saved = await env.DB.prepare(`INSERT INTO data_tables (site_id, name, label, fields, read_access, write_access) VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT (site_id, name) DO UPDATE SET label = excluded.label, fields = excluded.fields, read_access = excluded.read_access, write_access = excluded.write_access, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') RETURNING id`)
+    ON CONFLICT (site_id, name) ${createOnly ? 'DO NOTHING' : "DO UPDATE SET label = excluded.label, fields = excluded.fields, read_access = excluded.read_access, write_access = excluded.write_access, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"} RETURNING id`)
     .bind(siteId, table.name, table.label, JSON.stringify(table.fields), table.readAccess, table.writeAccess)
     .first<{ id: number }>()
+  if (!saved && createOnly) return 'already-exists'
   // Only missing indexes are built. Building one reads every record of the table once.
   if (saved) await syncIndexes(env, { fields: table.fields as DataField[], id: saved.id })
   return null
