@@ -7,7 +7,6 @@ import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { officeText } from './office-words'
 import type { OfficeWords } from './office-words'
 import { defaultSiteNames, shell } from './owner'
-import { rememberPage } from './page-history'
 import { starterIds, starterLanguages, starterSites } from './starters'
 import type { StarterId, StarterLanguage } from './starters'
 import type { Env, Settings, SiteRow } from './types'
@@ -48,34 +47,39 @@ export async function applyStarter(env: Env, site: SiteRow, id: StarterId, langu
   // The starter brings its own look, so colours chosen for another design would only clash.
   delete next.background
   delete next.text
-  // Replacing the pages is intentional, but the owner can still recover every page
-  // individually from its private history after choosing a starter.
-  if (replacePages) {
-    const { results } = await env.DB.prepare('SELECT slug FROM pages WHERE site_id = ?').bind(site.id).all<{ slug: string }>()
-    await Promise.all(results.map((page) => rememberPage(env, site.id, page.slug)))
-  }
-  // D1 batch is a single transaction. An unconfirmed request obtains a ticket
-  // only if the site is still empty inside that transaction. Every write in
-  // the batch is conditional on the ticket, which is removed before commit.
+  // All writes share a ticket, granted only for unchanged settings and, for an
+  // unconfirmed request, a still-empty site. The D1 batch is atomic.
   const token = newToken()
-  const guard = replacePages ? '1' : 'EXISTS (SELECT 1 FROM starter_guard WHERE token = ?)'
-  const guarded = (params: unknown[]) => replacePages ? params : [...params, token]
+  const guard = 'EXISTS (SELECT 1 FROM starter_guard WHERE token = ?)'
+  const guarded = (params: unknown[]) => [...params, token]
   const results = await env.DB.batch([
-    ...(!replacePages ? [env.DB.prepare(`INSERT INTO starter_guard (token)
-      SELECT ? WHERE NOT EXISTS (SELECT 1 FROM pages WHERE site_id = ?)
+    env.DB.prepare(`INSERT INTO starter_guard (token)
+      SELECT ? WHERE EXISTS (SELECT 1 FROM sites WHERE id = ? AND settings = ?)
+      ${replacePages ? '' : `AND NOT EXISTS (SELECT 1 FROM pages WHERE site_id = ?)
       AND NOT EXISTS (SELECT 1 FROM items WHERE site_id = ?)
-      AND NOT EXISTS (SELECT 1 FROM data_tables WHERE site_id = ?)`).bind(token, site.id, site.id, site.id)] : []),
+      AND NOT EXISTS (SELECT 1 FROM data_tables WHERE site_id = ?)`}`).bind(token, site.id, site.settings, ...(!replacePages ? [site.id, site.id, site.id] : [])),
     // Existing items, tables or pages do not mean the owner has published.
     env.DB.prepare(`INSERT OR IGNORE INTO starter_privacy (site_id) SELECT id FROM sites WHERE id = ? AND live_version IS NULL AND ${guard}`).bind(...guarded([site.id])),
-    ...(replacePages ? [env.DB.prepare('DELETE FROM pages WHERE site_id = ?').bind(site.id)] : []),
+    // Snapshot exactly the pages deleted, within the same transaction.
+    ...(replacePages ? [
+      env.DB.prepare(`INSERT INTO page_revisions (site_id, slug, title, description, published, blocks, translations)
+        SELECT site_id, slug, title, description, published, blocks, translations FROM pages WHERE site_id = ? AND ${guard}`).bind(...guarded([site.id])),
+      env.DB.prepare(`DELETE FROM page_revisions WHERE site_id = ? AND ${guard}
+        AND slug IN (SELECT slug FROM pages WHERE site_id = ?)
+        AND id NOT IN (SELECT newer.id FROM page_revisions AS newer WHERE newer.site_id = page_revisions.site_id AND newer.slug = page_revisions.slug ORDER BY newer.id DESC LIMIT 20)`).bind(site.id, token, site.id),
+      env.DB.prepare(`DELETE FROM pages WHERE site_id = ? AND ${guard}`).bind(...guarded([site.id])),
+    ] : []),
     ...content.pages.map((page) =>
       env.DB.prepare(`INSERT INTO pages (site_id, slug, title, description, published, blocks) SELECT ?, ?, ?, ?, 1, ? WHERE ${guard}
         ON CONFLICT (site_id, slug) DO UPDATE SET title = excluded.title, description = excluded.description, published = 1, blocks = excluded.blocks, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`).bind(...guarded([site.id, page.slug, page.title, page.description, JSON.stringify(page.blocks)])),
     ),
     env.DB.prepare(`UPDATE sites SET settings = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND ${guard}`).bind(...guarded([JSON.stringify(next), site.id])),
-    ...(!replacePages ? [env.DB.prepare('DELETE FROM starter_guard WHERE token = ?').bind(token)] : []),
+    env.DB.prepare('DELETE FROM starter_guard WHERE token = ?').bind(token),
   ])
-  if (!replacePages && results[0].meta.changes !== 1) return { before: await siteContents(env, site.id), error: 'not-empty' as const }
+  if (results[0].meta.changes !== 1) {
+    const latest = await env.DB.prepare('SELECT settings FROM sites WHERE id = ?').bind(site.id).first<{ settings: string }>()
+    return { before: await siteContents(env, site.id), error: latest?.settings !== site.settings ? 'changed' as const : 'not-empty' as const }
+  }
 
   const tables: string[] = []
   for (const table of content.tables) {
@@ -274,6 +278,6 @@ export async function handleStarters(request: Request, env: Env, url: URL, site:
   const language = form?.get('language')
   if (!isStarter(id) || !isStarterLanguage(language)) return notFound()
   const result = await applyStarter(env, site, id, language, form?.get('confirm') === 'on')
-  if (result.error) return startersPage(env, url, site, desk, officeText(site).start.notEmpty)
+  if (result.error) return startersPage(env, url, site, desk, result.error === 'changed' ? (siteStarterLanguage(JSON.parse(site.settings) as Settings) === 'th' ? 'การตั้งค่าเปลี่ยนไป กรุณาลองอีกครั้ง ไม่มีการเปลี่ยนแปลงใด ๆ' : 'Settings changed while applying the starter. Nothing changed; please try again.') : officeText(site).start.notEmpty)
   return see(url, `${desk.base}?started=${id}`)
 }

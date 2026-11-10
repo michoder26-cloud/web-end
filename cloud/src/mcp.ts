@@ -1309,6 +1309,7 @@ export function createMcpServer(env: Env, origin: string, code: string) {
       const chosen = language ?? siteStarterLanguage(JSON.parse(site.settings) as Settings)
       if (!starter) return reply({ language: chosen, starters: starterIds.map((id) => ({ starter: id, name: starterSites[id][chosen].label, description: starterSites[id][chosen].description, includes: starterSites[id][chosen].includes })) })
       const result = await applyStarter(env, site, starter, chosen, replacePages === true)
+      if (result.error === 'changed') return refuse('Settings changed while applying the starter. Nothing changed; please retry with the current settings.')
       if (result.error) return refuse(`Nothing changed. This site already has ${result.before.pages} pages, ${result.before.items} products or items and ${result.before.tables} tables. A starter replaces every page and the design. Ask the owner first. If they agree, call apply_starter again with replacePages true. Their products, tables, records, orders, customers and messages are kept.`)
       return reply({
         applied: starter,
