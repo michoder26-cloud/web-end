@@ -15,18 +15,12 @@ try {
   const hit = new Promise(resolve => { reached = resolve })
   const gate = new Promise(resolve => { release = resolve })
   let armed = true
-  server.db.prepare = sql => {
-    const statement = originalPrepare(sql)
-    if (armed && /^INSERT INTO data_tables /i.test(sql)) {
-      const bind = statement.bind.bind(statement)
-      statement.bind = (...args) => {
-        const bound = bind(...args)
-        const first = bound.first.bind(bound)
-        bound.first = async (...params) => { if (armed) { armed = false; reached(); await gate } return first(...params) }
-        return bound
-      }
+  const originalBatch = server.db.batch.bind(server.db)
+  server.db.batch = async statements => {
+    if (armed && statements.some(statement => /^INSERT INTO data_tables /i.test(statement.sql))) {
+      armed = false; reached(); await gate
     }
-    return statement
+    return originalBatch(statements)
   }
   const pending = fetch(`${owner}/starters`, { method: 'POST', body: new URLSearchParams({ starter: 'classes', language: 'en' }), redirect: 'manual' })
   await hit

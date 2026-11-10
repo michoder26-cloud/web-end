@@ -14,6 +14,7 @@ const suites = [
   ['Starter concurrency', ['tests/starter-race.mjs'], {}],
   ['Starter data concurrency', ['tests/starter-data-race.mjs'], {}],
   ['Starter table and restore history', ['tests/starter-table-history.mjs'], {}],
+  ['Starter table interleavings', ['tests/starter-table-interleavings.mjs'], {}],
   ['Restore token interleavings', ['tests/restore-race.mjs'], {}],
   ['First run', ['tests/first-run.mjs'], {}],
   ['Studio (AI builder)', ['tests/builder.mjs'], {}],
