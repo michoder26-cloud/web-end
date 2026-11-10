@@ -3239,10 +3239,24 @@ await call('update_site', { language: 'en', officeLanguage: 'auto' })
       await Promise.all([newsTick('2030-01-01T00:20:00Z'), newsTick('2030-01-01T00:20:00Z')])
       const dayOne = campaignMail(1)
       check(dayOne.length === 4 && new Set(dayOne.map((mail) => mail.to[0])).size === 4, 'the first day sends only the daily limit, each to a different person, even with overlapping runs', JSON.stringify(dayOne.map((mail) => mail.to[0])))
-      const status = (await call('campaign_status', { id: campaignId })).data
-      check(status.sent === 4 && status.total === 7 && status.says.startsWith('4 of 7 sent, the rest go out tomorrow'), 'campaign_status says how far it got and when the rest go', status.says)
-      const officeList = await (await fetch(newsOwner)).text()
-      check(officeList.includes('4 of 7 sent, the rest go out tomorrow.'), 'the News page shows the progress')
+      // Scheduled ticks above use 2030, but the two progress views use the real UTC day.
+      // Confirmations and test emails may have used today's quota, independently of the tick.
+      // Sample around the status call so a UTC midnight rollover cannot mix two days.
+      let status, officeList, todayUsed, stable = false
+      for (let attempt = 0; attempt < 3 && !stable; attempt++) {
+        const dayBefore = new Date().toISOString().slice(0, 10)
+        const before = await (await fetch(newsOwner)).text()
+        status = (await call('campaign_status', { id: campaignId })).data
+        officeList = await (await fetch(newsOwner)).text()
+        const dayAfter = new Date().toISOString().slice(0, 10)
+        const usedBefore = before.match(/Today (\d+) of 4 news emails are used\./)?.[1]
+        todayUsed = officeList.match(/Today (\d+) of 4 news emails are used\./)?.[1]
+        stable = dayBefore === dayAfter && usedBefore !== undefined && usedBefore === todayUsed
+      }
+      const expectedRest = Number(todayUsed) <= 1 ? 'the rest go out within the next hour or so' : 'the rest go out tomorrow'
+      const expectedProgress = `4 of 7 sent, ${expectedRest}.`
+      check(stable && status.sent === 4 && status.total === 7 && status.says === expectedProgress, 'campaign_status says how far it got and when the rest go', JSON.stringify({ stable, todayUsed, says: status?.says }))
+      check(stable && officeList.includes(expectedProgress), 'the News page shows the progress', JSON.stringify({ stable, todayUsed, expectedProgress }))
       const first = dayOne[0]
       const unsubscribeLink = first.headers['List-Unsubscribe'].match(/^<(http:\/\/[^>]+\/newsletter\/unsubscribe\/\d+\/[0-9a-f]{32})>$/)?.[1]
       check(Boolean(unsubscribeLink) && first.headers['List-Unsubscribe-Post'] === 'List-Unsubscribe=One-Click' && first.html.includes(`href="${unsubscribeLink}"`) && first.text.includes(`Unsubscribe: ${unsubscribeLink}`) && first.html.includes('You get this because you agreed'), 'every news email has its own unsubscribe link and the one-click headers', JSON.stringify(first.headers))

@@ -7,6 +7,7 @@ const root = fileURLToPath(new URL('..', import.meta.url))
 const suites = [
   ['D1 conformance', ['tests/d1-conformance.mjs'], {}],
   ['HTMLRewriter stand-in', ['tests/html-rewriter.mjs'], {}],
+  ['News progress UTC boundary', ['tests/news-progress.mjs'], {}],
   ['web-end smoke suite (all optional parts)', ['tests/run-smoke.mjs'], { AUTOMATION_TEST: '1', EMAIL_TEST: '1', GOOGLE_TEST: '1', NEWS_TEST: '1', SCHEDULE_TEST: '1', WEBHOOK_TEST: '1' }],
   ['Draft starter privacy', ['tests/draft-starter.mjs'], {}],
   ['Nonempty starter privacy', ['tests/nonempty-starter.mjs'], {}],
