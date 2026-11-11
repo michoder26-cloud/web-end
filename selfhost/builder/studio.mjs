@@ -178,11 +178,17 @@ export function createStudio({ config, engineFetch, verifyOwner }) {
       if (body.provider !== settings.provider || body.model !== settings.model || body.destination !== destination) return json({ error: 'AI service settings changed. Review the destination and try again.' }, 409)
       let provider
       try { provider = providerFromSettings(settings) } catch (error) { return json({ error: error.message }, 400) }
-      const today = new Date(); today.setHours(0, 0, 0, 0)
-      if (store.tokensSince(today.getTime()) >= settings.maxTokensPerDay) return json({ error: 'Today’s AI token limit is used up.' }, 429)
+      const opened = store.beginUsage({ model: provider.model, provider: provider.kind, runId: `doc_${randomBytes(9).toString('base64url')}` }, settings)
+      if (!opened.ok) return json({ error: opened.reason }, 429)
       try {
-        const answer = await provider.chat({ maxTokens: 700, messages: [{ role: 'user', text: source }], signal: AbortSignal.timeout(30_000), system: extractionSystem, tools: [] })
-        store.recordUsage({ runId: `doc_${randomBytes(9).toString('base64url')}`, provider: provider.kind, model: provider.model, inputTokens: answer.usage?.input ?? 0, outputTokens: answer.usage?.output ?? 0, toolCalls: answer.toolCalls?.length ?? 0, outcome: 'document-extract' })
+        let answer
+        try {
+          answer = await provider.chat({ maxTokens: 700, messages: [{ role: 'user', text: source }], signal: AbortSignal.timeout(30_000), system: extractionSystem, tools: [] })
+        } catch (error) {
+          store.finishUsage(opened.requestId, { outcome: 'error', phase: error.phase ?? 'sent_unconfirmed' }, settings)
+          throw error
+        }
+        store.finishUsage(opened.requestId, { inputTokens: answer.usage?.input ?? 0, outcome: 'document-extract', outputTokens: answer.usage?.output ?? 0, toolCalls: answer.toolCalls?.length ?? 0 }, settings)
         const draft = parseModelDocument(answer)
         const now = Date.now()
         for (const [id, entry] of documentDrafts) if (entry.expires <= now) documentDrafts.delete(id)
@@ -229,7 +235,9 @@ export function createStudio({ config, engineFetch, verifyOwner }) {
       const last = [...active.values()].map((entry) => entry.run).find((run) => run.conversation === conversation)
       const today = new Date()
       today.setHours(0, 0, 0, 0)
-      return json({ messages, run: view(last), ...settingsView(), tokensToday: store.tokensSince(today.getTime()), usage: store.usage(20) })
+      const month = new Date(today)
+      month.setDate(1)
+      return json({ messages, run: view(last), ...settingsView(), spend: { month: store.spendSince(month.getTime()), today: store.spendSince(today.getTime()), trend: store.spendTrend() }, tokensToday: store.tokensSince(today.getTime()), usage: store.usage(20) })
     }
     if (route === 'GET activity') return json({ actions: store.actions(100), usage: store.usage(100) })
     if (route === 'POST settings') {
@@ -248,6 +256,21 @@ export function createStudio({ config, engineFetch, verifyOwner }) {
         if (body[name] === undefined || body[name] === '') continue
         const value = Math.round(Number(body[name]))
         if (!Number.isFinite(value) || value < low || value > high) return json({ error: `${name} must be between ${low} and ${high}.` }, 400)
+        next[name] = value
+      }
+      // Limits the owner sets for themselves. 0, or left empty, means no limit.
+      for (const [name, high, whole] of [['maxTokensPerMonth', 3_000_000_000, true], ['maxCostPerDay', 100_000, false], ['maxCostPerMonth', 1_000_000, false]]) {
+        if (body[name] === undefined) continue
+        const value = body[name] === '' ? 0 : whole ? Math.round(Number(body[name])) : Number(body[name])
+        if (!Number.isFinite(value) || value < 0 || value > high) return json({ error: `${name} must be between 0 and ${high}.` }, 400)
+        next[name] = value
+      }
+      // What the AI service charges, typed in by the owner from the service's own price page. Empty means unknown.
+      for (const name of ['inputPricePerMillion', 'outputPricePerMillion']) {
+        if (body[name] === undefined) continue
+        if (body[name] === '') { next[name] = ''; continue }
+        const value = Number(body[name])
+        if (!Number.isFinite(value) || value < 0 || value > 100_000) return json({ error: `${name} must be a price from 0 to 100000, or empty.` }, 400)
         next[name] = value
       }
       store.saveSettings(next)

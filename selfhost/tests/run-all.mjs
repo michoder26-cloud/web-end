@@ -18,6 +18,7 @@ const suites = [
   ['Starter events and indexes', ['tests/starter-effects.mjs'], {}],
   ['Restore token interleavings', ['tests/restore-race.mjs'], {}],
   ['First run', ['tests/first-run.mjs'], {}],
+  ['AI usage ledger', ['tests/usage-ledger.mjs'], {}],
   ['Studio (AI builder)', ['tests/builder.mjs'], {}],
   ['Private document review', ['tests/documents.mjs'], {}],
   ['Ownership checklist', ['tests/ownership.mjs'], {}],

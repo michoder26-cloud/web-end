@@ -9,7 +9,7 @@ const words = {
     budget: 'Limits', clearKey: 'Remove saved key', dashboard: 'Dashboard', dashboardIntro: 'Manage this site from one place. Its data and settings belong to this site.', decline: 'Don\'t allow', empty: 'Tell the Studio what you want to build, for example: "A booking system for my yoga classes: customers sign up, book a class with limited seats, and I see the list each morning."',
     intro: 'Your own builder. It runs on your computer or server, and uses the AI service you choose.', link: 'Your owner link', linkHint: 'Paste the private owner link you got when you set up the site (it ends in four groups of 8 letters and numbers).',
     documentTitle: 'Review a document', documentIntro: 'Paste text from one invoice or receipt. The AI suggests a draft; you review every field before saving it privately. Text only: PDF files and OCR are not supported.', documentDestination: 'Text goes to', documentText: 'Original document text', documentExtract: 'Extract draft', documentReview: 'Review and edit the draft', documentSave: 'Save private draft', documentSaved: 'Saved privately. Open Data → Document entries to see it.', documentReady: 'Review the original text and every field before saving.', documentKind: 'Type', documentSupplier: 'Supplier', documentNumber: 'Document number', documentDate: 'Issue date', documentAmount: 'Amount (digits and dot)', documentCurrency: 'Currency (three letters)', documentNote: 'Note', documentInvoice: 'Invoice', documentReceipt: 'Receipt', documentPrivacy: 'This text is sent to your selected AI service. It is not added to Studio chat or saved with the entry.',
-    live: 'Live site', maxDay: 'AI tokens per day', maxSeconds: 'Seconds per message', maxSteps: 'Steps per message', maxTokens: 'AI tokens per message', model: 'Model', modelHint: 'For example gpt-5-mini, claude-sonnet-5-5, gemini-3-flash or, with Ollama, qwen3:14b.',
+    live: 'Live site', maxMonth: 'AI tokens per month (0 = no limit)', maxCostDay: 'Most to spend per day, in US dollars (0 = no limit)', maxCostMonth: 'Most to spend per month, in US dollars (0 = no limit)', priceIn: 'Price of input, US dollars per million tokens', priceOut: 'Price of output, US dollars per million tokens', priceHint: 'Copy these two prices from your AI service\u2019s price page, so the Studio can show what your use costs. Leave them empty if you don\u2019t know: the Studio then counts tokens only. A model on this computer costs nothing.', spendToday: 'Today', spendMonth: 'This month', spendUnknown: 'cost unknown: add prices in Settings', spendPartly: 'at least', spendUnusual: 'The last 7 days used more than twice the 7 days before. Check AI use below.', costs: 'Your AI cost', costsHint: 'You pay your AI service directly. web-end never charges for AI or adds anything on top.', maxDay: 'AI tokens per day', maxSeconds: 'Seconds per message', maxSteps: 'Steps per message', maxTokens: 'AI tokens per message', model: 'Model', modelHint: 'For example gpt-5-mini, claude-sonnet-5-5, gemini-3-flash or, with Ollama, qwen3:14b.',
     noActivity: 'Nothing yet.', office: 'Back office', orders: 'Orders', pages: 'Pages', data: 'Data', products: 'Products', publish: 'Publish', system: 'System', manageSite: 'Manage your site', aiToday: 'AI tokens used today', aiProvider: 'AI service for this site', aiNotReady: 'Set up in Settings', aiCosts: 'AI costs, if any, are billed by the provider you chose. web-end does not charge credits.', pending: 'The Studio wants to', preview: 'Preview', provider: 'AI service', save: 'Save settings', saved: 'Saved.', send: 'Send', settings: 'Settings',
     signIn: 'Open the Studio', signInBad: 'That link is not right for this site. Check it and try again.', signOut: 'Sign out', stop: 'Stop', test: 'Test connection', testing: 'Testing…', thinking: 'Working…',
     title: 'web-end Studio', usage: 'AI use', wrote: 'You', languageSwitch: 'ไทย',
@@ -21,7 +21,7 @@ const words = {
     budget: 'ขีดจำกัด', clearKey: 'ลบ key ที่บันทึกไว้', dashboard: 'Dashboard', dashboardIntro: 'จัดการเว็บนี้ได้จากที่เดียว ข้อมูลและการตั้งค่าของแต่ละเว็บแยกจากกัน', decline: 'ไม่อนุญาต', empty: 'บอก Studio ว่าอยากสร้างอะไร เช่น "ระบบจองคลาสโยคะ ลูกค้าสมัครสมาชิก จองคลาสที่มีที่นั่งจำกัด และฉันดูรายชื่อได้ทุกเช้า"',
     intro: 'เครื่องมือสร้างแอปของคุณเอง ทำงานบนเครื่องหรือเซิร์ฟเวอร์ของคุณ และใช้บริการ AI ที่คุณเลือก', link: 'ลิงก์เจ้าของเว็บ', linkHint: 'วางลิงก์ส่วนตัวของเจ้าของที่ได้ตอนตั้งค่าเว็บ (ท้ายลิงก์เป็นตัวอักษรและตัวเลข 4 ชุด ชุดละ 8 ตัว)',
     documentTitle: 'ตรวจเอกสาร', documentIntro: 'วางข้อความจากใบแจ้งหนี้หรือใบเสร็จหนึ่งฉบับ AI จะเสนอร่างให้คุณตรวจและแก้ทุกช่องก่อนบันทึกส่วนตัว รองรับข้อความเท่านั้น ยังไม่รองรับ PDF หรือ OCR', documentDestination: 'ข้อความจะส่งไปที่', documentText: 'ข้อความต้นฉบับ', documentExtract: 'ดึงข้อมูลร่าง', documentReview: 'ตรวจและแก้ข้อมูลร่าง', documentSave: 'บันทึกร่างส่วนตัว', documentSaved: 'บันทึกส่วนตัวแล้ว เปิด ข้อมูล → Document entries เพื่อดู', documentReady: 'ตรวจข้อความต้นฉบับและข้อมูลทุกช่องก่อนบันทึก', documentKind: 'ชนิด', documentSupplier: 'ผู้ขาย', documentNumber: 'เลขที่เอกสาร', documentDate: 'วันที่ออก', documentAmount: 'ยอดเงิน (ตัวเลขและจุด)', documentCurrency: 'สกุลเงิน (สามตัวอักษร)', documentNote: 'หมายเหตุ', documentInvoice: 'ใบแจ้งหนี้', documentReceipt: 'ใบเสร็จ', documentPrivacy: 'ข้อความนี้จะส่งไปยังบริการ AI ที่คุณเลือก แต่จะไม่อยู่ในแชต Studio หรือบันทึกพร้อมรายการ',
-    live: 'เว็บจริง', maxDay: 'จำนวน token ต่อวัน', maxSeconds: 'วินาทีต่อข้อความ', maxSteps: 'จำนวนขั้นตอนต่อข้อความ', maxTokens: 'จำนวน token ต่อข้อความ', model: 'โมเดล', modelHint: 'เช่น gpt-5-mini, claude-sonnet-5-5, gemini-3-flash หรือถ้าใช้ Ollama เช่น qwen3:14b',
+    live: 'เว็บจริง', maxMonth: 'จำนวน token ต่อเดือน (0 = ไม่จำกัด)', maxCostDay: 'ค่าใช้จ่ายสูงสุดต่อวัน เป็นดอลลาร์สหรัฐ (0 = ไม่จำกัด)', maxCostMonth: 'ค่าใช้จ่ายสูงสุดต่อเดือน เป็นดอลลาร์สหรัฐ (0 = ไม่จำกัด)', priceIn: 'ราคา input เป็นดอลลาร์สหรัฐต่อหนึ่งล้าน token', priceOut: 'ราคา output เป็นดอลลาร์สหรัฐต่อหนึ่งล้าน token', priceHint: 'คัดลอกราคาสองค่านี้จากหน้าราคาของผู้ให้บริการ AI ของคุณ Studio จะได้แสดงว่าใช้ไปเป็นเงินเท่าไร ถ้าไม่ทราบให้เว้นว่าง Studio จะนับเฉพาะ token โมเดลที่รันในเครื่องนี้ไม่มีค่าใช้จ่าย', spendToday: 'วันนี้', spendMonth: 'เดือนนี้', spendUnknown: 'ไม่ทราบค่าใช้จ่าย: ใส่ราคาในหน้าตั้งค่า', spendPartly: 'อย่างน้อย', spendUnusual: '7 วันล่าสุดใช้มากกว่า 7 วันก่อนหน้าเกินสองเท่า ตรวจการใช้ AI ด้านล่าง', costs: 'ค่า AI ของคุณ', costsHint: 'คุณจ่ายผู้ให้บริการ AI โดยตรง web-end ไม่เก็บค่า AI และไม่บวกอะไรเพิ่ม', maxDay: 'จำนวน token ต่อวัน', maxSeconds: 'วินาทีต่อข้อความ', maxSteps: 'จำนวนขั้นตอนต่อข้อความ', maxTokens: 'จำนวน token ต่อข้อความ', model: 'โมเดล', modelHint: 'เช่น gpt-5-mini, claude-sonnet-5-5, gemini-3-flash หรือถ้าใช้ Ollama เช่น qwen3:14b',
     noActivity: 'ยังไม่มี', office: 'หลังร้าน', orders: 'คำสั่งซื้อ', pages: 'หน้าเว็บ', data: 'ข้อมูล', products: 'สินค้า', publish: 'เผยแพร่', system: 'ระบบ', manageSite: 'จัดการเว็บของคุณ', aiToday: 'AI token ที่ใช้วันนี้', aiProvider: 'บริการ AI ของเว็บนี้', aiNotReady: 'ตั้งค่าในแท็บตั้งค่า', aiCosts: 'หากมีค่าใช้ AI ผู้ให้บริการที่คุณเลือกจะเป็นผู้คิดค่าใช้จ่าย web-end ไม่เก็บเครดิต', pending: 'Studio ขออนุญาต', preview: 'ตัวอย่าง', provider: 'บริการ AI', save: 'บันทึกการตั้งค่า', saved: 'บันทึกแล้ว', send: 'ส่ง', settings: 'ตั้งค่า',
     signIn: 'เปิด Studio', signInBad: 'ลิงก์นี้ไม่ตรงกับเว็บนี้ ตรวจแล้วลองใหม่', signOut: 'ออกจากระบบ', stop: 'หยุด', test: 'ทดสอบการเชื่อมต่อ', testing: 'กำลังทดสอบ…', thinking: 'กำลังทำงาน…',
     title: 'web-end Studio', usage: 'การใช้ AI', wrote: 'คุณ', languageSwitch: 'English',
@@ -94,10 +94,16 @@ export function studioPage({ lang, nonce }) {
 <label>${w.maxSteps}<input type="number" name="maxStepsPerTurn" id="maxStepsPerTurn" min="1" max="200"></label>
 <label>${w.maxTokens}<input type="number" name="maxTokensPerTurn" id="maxTokensPerTurn" min="1000"></label>
 <label>${w.maxDay}<input type="number" name="maxTokensPerDay" id="maxTokensPerDay" min="1000"></label>
-<label>${w.maxSeconds}<input type="number" name="maxSecondsPerTurn" id="maxSecondsPerTurn" min="10" max="3600"></label></fieldset>
+<label>${w.maxSeconds}<input type="number" name="maxSecondsPerTurn" id="maxSecondsPerTurn" min="10" max="3600"></label>
+<label>${w.maxMonth}<input type="number" name="maxTokensPerMonth" id="maxTokensPerMonth" min="0"></label>
+<label>${w.maxCostDay}<input type="number" name="maxCostPerDay" id="maxCostPerDay" min="0" step="any"></label>
+<label>${w.maxCostMonth}<input type="number" name="maxCostPerMonth" id="maxCostPerMonth" min="0" step="any"></label></fieldset>
+<fieldset><legend>${w.costs}</legend><p class="hint">${w.priceHint}</p>
+<label>${w.priceIn}<input type="number" name="inputPricePerMillion" id="inputPricePerMillion" min="0" step="any"></label>
+<label>${w.priceOut}<input type="number" name="outputPricePerMillion" id="outputPricePerMillion" min="0" step="any"></label></fieldset>
 <div class="row"><button type="submit">${w.save}</button><button type="button" class="quiet" id="test">${w.test}</button><button type="button" class="quiet" id="clearKey">${w.clearKey}</button></div>
 <p id="settingsNote" role="status"></p></form></div>
-<div class="panel" id="panel-activity" hidden><div class="wrap"><div><h2>${w.usage}</h2><div id="usage"></div></div><div><h2>${w.activity}</h2><div id="actions"></div></div></div></div>
+<div class="panel" id="panel-activity" hidden><div class="wrap"><div><h2>${w.costs}</h2><p class="hint">${w.costsHint}</p><p id="spend"></p><p id="spend-unusual" role="status" hidden>${w.spendUnusual}</p><h2>${w.usage}</h2><div id="usage"></div></div><div><h2>${w.activity}</h2><div id="actions"></div></div></div></div>
 </section></main>
 <script nonce="${nonce}">
 const w = ${JSON.stringify(w)}
@@ -157,6 +163,7 @@ async function refresh() {
   renderRun(current)
   fillSettings(state)
   $('tokens-today').textContent = Number(state.tokensToday ?? 0).toLocaleString()
+  renderSpend(state.spend)
   $('provider-name').textContent = state.settings.model ? (state.kinds[state.settings.provider]?.label ?? w.provider) + ' · ' + state.settings.model : w.aiNotReady
   documentDestination(state)
   if (current && current.status === 'running') poll()
@@ -220,7 +227,7 @@ function fillSettings(state) {
   if (!select.options.length) for (const [id, kind] of Object.entries(state.kinds)) select.append(new Option(kind.label, id))
   const s = state.settings
   select.value = s.provider; $('model').value = s.model; $('baseUrl').value = s.baseUrl; $('approval').value = s.approval
-  for (const name of ['maxStepsPerTurn', 'maxTokensPerTurn', 'maxTokensPerDay', 'maxSecondsPerTurn']) $(name).value = s[name]
+  for (const name of ['maxStepsPerTurn', 'maxTokensPerTurn', 'maxTokensPerDay', 'maxSecondsPerTurn', 'maxTokensPerMonth', 'maxCostPerDay', 'maxCostPerMonth', 'inputPricePerMillion', 'outputPricePerMillion']) $(name).value = s[name] ?? ''
   $('keyhint').textContent = state.hints['provider:' + s.provider] ?? ''
   $('apiKey').value = ''
 }
@@ -237,10 +244,21 @@ $('test').onclick = async () => {
   const result = await api('test', { method: 'POST' })
   $('settingsNote').textContent = result.ok ? '✓ ' + result.milliseconds + ' ms · tool calling: ' + (result.toolCalling ? 'yes' : 'NO — this model may not be able to build') : '✗ ' + result.error
 }
+// What the owner's AI use cost, from the prices they entered. A total with calls of unknown cost says "at least".
+function renderSpend(spend) {
+  if (!spend) return
+  const line = (label, part) => {
+    const money = '$' + (part.costMicros / 1e6).toFixed(part.costMicros < 1e6 ? 4 : 2)
+    const cost = part.calls && part.unpriced === part.calls ? w.spendUnknown : (part.unpriced ? w.spendPartly + ' ' : '') + money
+    return label + ': ' + part.tokens.toLocaleString() + ' tokens · ' + cost
+  }
+  $('spend').textContent = line(w.spendToday, spend.today) + '  |  ' + line(w.spendMonth, spend.month)
+  $('spend-unusual').hidden = !spend.trend?.unusual
+}
 async function loadActivity() {
   const { actions, usage } = await api('activity')
   const table = (rows, columns) => { if (!rows.length) return node('p', 'hint', w.noActivity); const t = node('table'); const head = t.insertRow(); columns.forEach((c) => head.append(node('th', '', c))); rows.forEach((row) => { const r = t.insertRow(); columns.forEach((c) => r.insertCell().textContent = c === 'at' ? new Date(row[c]).toLocaleString() : row[c]) }); return t }
-  $('usage').replaceChildren(table(usage, ['at', 'provider', 'model', 'input_tokens', 'output_tokens', 'tool_calls', 'outcome']))
+  $('usage').replaceChildren(table(usage, ['at', 'provider', 'model', 'input_tokens', 'output_tokens', 'cost_micros', 'phase', 'outcome']))
   $('actions').replaceChildren(table(actions, ['at', 'tool', 'risk', 'outcome', 'result']))
 }
 document.querySelectorAll('[data-tab]').forEach((tab) => tab.onclick = () => {

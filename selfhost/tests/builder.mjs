@@ -112,6 +112,7 @@ check(state.body.messages.at(-1).text === 'Your class booking system is ready.' 
 check(state.body.tokensToday >= 5 * 1050 && state.body.tokensToday <= state.body.settings.maxTokensPerDay, 'the Dashboard reports actual AI tokens used today for this site')
 const activity = await api('activity')
 check(activity.body.usage.length >= 5 && activity.body.usage.every((row) => row.model === 'stand-in-1' && row.input_tokens === 1000), 'every AI call is in the usage ledger', JSON.stringify(activity.body.usage[0]))
+check(activity.body.usage.every((row) => row.phase === 'completed' && row.cost_micros === null) && state.body.spend.today.unpriced === state.body.spend.today.calls && state.body.spend.trend === null, 'without prices the ledger shows tokens and says the cost is unknown')
 check(activity.body.actions.some((row) => row.tool === 'save_table' && row.risk === 'change') && activity.body.actions.some((row) => row.tool === 'publish_site' && row.risk === 'risky'), 'every action is logged with its risk')
 
 // Declining
@@ -143,6 +144,22 @@ script.length = 0
 await api('settings', { baseUrl: 'http://127.0.0.1:9/v1' })
 const broken = await waitFor((await api('chat', { text: 'Hello?' })).body.run.id, (run) => run.status !== 'running')
 check(broken.status === 'failed' && /Could not reach the AI service/.test(broken.stopReason), 'an unreachable AI service stops the run and says so', broken.stopReason)
+const unreachable = (await api('activity')).body.usage.filter((row) => row.outcome === 'error')
+check(unreachable.length === 3 && unreachable.every((row) => row.phase === 'not_sent' && row.input_tokens === 0 && row.cost_micros === null), 'each try that never reached the service is in the ledger as not sent, with no tokens or cost', JSON.stringify(unreachable[0]))
+
+// The owner's own prices and spending limit
+await api('settings', { baseUrl: mockUrl, inputPricePerMillion: 2, outputPricePerMillion: 10 })
+check((await api('settings', { inputPricePerMillion: -1 })).status === 400 && (await api('settings', { maxCostPerDay: 'lots' })).status === 400, 'a price or limit that is not a sensible number is refused')
+script.push({ text: 'Priced.' })
+await waitFor((await api('chat', { text: 'Say something.' })).body.run.id)
+const pricedState = await api('state')
+check((await api('activity')).body.usage[0].cost_micros === 1000 * 2 + 50 * 10 && pricedState.body.spend.today.costMicros === 2500, 'with prices entered, a call shows what it cost', JSON.stringify(pricedState.body.spend.today))
+await api('settings', { maxCostPerDay: 0.000001 })
+const callsBefore = seen.length
+const tooDear = await waitFor((await api('chat', { text: 'One more.' })).body.run.id, (run) => run.status !== 'running')
+check(tooDear.status === 'stopped' && /spending limit/.test(tooDear.stopReason) && seen.length === callsBefore, 'a spending limit stops the next call before it is sent to the AI service', tooDear.stopReason)
+await api('settings', { inputPricePerMillion: '', maxCostPerDay: 0, outputPricePerMillion: '' })
+script.length = 0
 
 // The same work with the Anthropic format
 await api('settings', { apiKey: 'sk-ant-test-0000', baseUrl: mockUrl, model: 'claude-stand-in', provider: 'anthropic' })

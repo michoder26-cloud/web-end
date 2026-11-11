@@ -175,10 +175,15 @@ export async function runTurn({ approve, connect, provider, run, settings, signa
       if (reason) return finish('stopped', reason)
       let answer
       for (let attempt = 0; ; attempt++) {
+        // Written down before it is sent, so a call is never lost, and refused here when a limit is reached.
+        const opened = store.beginUsage({ model: provider.model, provider: provider.kind, runId: run.id }, settings)
+        if (!opened.ok) return finish('stopped', opened.reason)
         try {
           answer = await provider.chat({ messages: contextWindow(store.messages(run.conversation)), signal: AbortSignal.any([signal ?? new AbortController().signal, AbortSignal.timeout(180_000)]), system, tools: tools.tools })
+          store.finishUsage(opened.requestId, { inputTokens: answer.usage.input, outcome: answer.toolCalls.length ? 'tools' : 'reply', outputTokens: answer.usage.output, toolCalls: answer.toolCalls.length }, settings)
           break
         } catch (error) {
+          store.finishUsage(opened.requestId, { outcome: 'error', phase: error instanceof ProviderError ? error.phase : 'sent_unconfirmed' }, settings)
           // Only network trouble, rate limits and server errors are retried, twice, with growing waits.
           if (!(error instanceof ProviderError) || !error.retryable || attempt >= 2 || signal?.aborted) throw error
           step({ kind: 'retry', summary: error.message })
@@ -186,7 +191,6 @@ export async function runTurn({ approve, connect, provider, run, settings, signa
         }
       }
       budget.tokens += answer.usage.input + answer.usage.output
-      store.recordUsage({ inputTokens: answer.usage.input, model: provider.model, outcome: answer.toolCalls.length ? 'tools' : 'reply', outputTokens: answer.usage.output, provider: provider.kind, runId: run.id, toolCalls: answer.toolCalls.length })
       store.addMessage(run.conversation, { role: 'assistant', text: answer.text, toolCalls: answer.toolCalls })
       if (answer.text) step({ kind: 'say', summary: answer.text.slice(0, 280) })
       if (!answer.toolCalls.length) return finish('done', null, answer.text)

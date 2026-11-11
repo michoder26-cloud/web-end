@@ -15,8 +15,11 @@ export const providerKinds = {
 }
 
 export class ProviderError extends Error {
-  constructor(message, { retryable = false, status = 0 } = {}) {
+  // phase says how far the request got: 'not_sent' (the service was never reached, so nothing ran or was billed),
+  // 'sent_unconfirmed' (it may have run), or 'failed' (the service answered with an error).
+  constructor(message, { phase = 'failed', retryable = false, status = 0 } = {}) {
     super(message)
+    this.phase = phase
     this.retryable = retryable
     this.status = status
   }
@@ -29,8 +32,10 @@ async function post(url, headers, body, signal) {
   try {
     response = await fetch(url, { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json', ...headers }, method: 'POST', signal })
   } catch (error) {
-    if (error.name === 'AbortError' || error.name === 'TimeoutError') throw new ProviderError('The AI took too long to answer, so the Studio stopped waiting.', { retryable: true })
-    throw new ProviderError(`Could not reach the AI service at ${new URL(url).host}: ${error.cause?.code ?? error.message}`, { retryable: true })
+    if (error.name === 'AbortError' || error.name === 'TimeoutError') throw new ProviderError('The AI took too long to answer, so the Studio stopped waiting.', { phase: 'sent_unconfirmed', retryable: true })
+    // Only these mean the connection was never made. Anything else may have reached the service.
+    const neverConnected = ['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'UND_ERR_CONNECT_TIMEOUT'].includes(error.cause?.code) || error.cause?.message === 'bad port'
+    throw new ProviderError(`Could not reach the AI service at ${new URL(url).host}: ${error.cause?.code ?? error.message}`, { phase: neverConnected ? 'not_sent' : 'sent_unconfirmed', retryable: true })
   }
   const text = await response.text()
   if (!response.ok) {

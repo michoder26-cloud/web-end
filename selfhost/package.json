@@ -25,6 +25,7 @@
     "test:smoke": "node tests/run-smoke.mjs",
     "test:ownership": "node tests/ownership.mjs",
     "test:builder": "node tests/builder.mjs",
+    "test:usage": "node tests/usage-ledger.mjs",
     "test:sites": "node tests/sites.mjs"
   },
   "dependencies": {
