@@ -46,7 +46,9 @@ export async function startLauncher({ port = 8798, sitesDir = defaultSitesDir, u
     running.set(name, server)
     return server
   }
-  const page = (error = '') => `<!doctype html><html lang="th"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${css}</style><main><header><span class="mark">w</span> web-end</header><h1>สร้างเว็บของคุณ</h1><p class="lead">ตั้งชื่อเว็บ แล้วเริ่มสร้างได้เลย แต่ละเว็บมีหน้าแก้ไขและข้อมูลของตัวเอง</p>${error ? `<p class="error" role="alert">${escape(error)}</p>` : ''}<form class="create" action="/new" method="post"><input name="token" type="hidden" value="${token}"><label>ชื่อเว็บ<input name="name" required minlength="3" maxlength="56" pattern="[a-z][a-z0-9-]*[a-z0-9]" placeholder="เช่น baan-coffee" autocomplete="off"></label><label>ไอเดียของคุณ<textarea id="creator-prompt" maxlength="20000" rows="6" placeholder="อธิบายเว็บไซต์ที่อยากสร้าง"></textarea></label><p>อย่าใส่รหัสผ่านหรือข้อมูลลับ</p><button class="primary" type="submit">สร้างเว็บใหม่</button></form><p class="hint">ใช้ตัวอักษรภาษาอังกฤษตัวเล็ก ตัวเลข และขีดกลางเป็นชื่อสำหรับเก็บเว็บในเครื่องนี้</p><h2>เว็บของคุณ</h2><div class="sites">${names().length ? names().map((name) => `<div class="site"><div><strong>${escape(name)}</strong><small>Dashboard และข้อมูลแยกเฉพาะเว็บนี้</small></div><form action="/open" method="post"><input name="token" type="hidden" value="${token}"><input name="name" type="hidden" value="${escape(name)}"><button class="open" type="submit">เปิด Dashboard</button></form></div>`).join('') : '<p class="empty">ยังไม่มีเว็บ เริ่มจากตั้งชื่อเว็บด้านบน</p>'}</div></main><script>
+  const page = (error = '', language = 'th') => {
+    const translations = { 'เว็บของฉัน · web-end': 'My sites · web-end', 'สร้างเว็บของคุณ': 'Create your website', 'ตั้งชื่อเว็บ แล้วเริ่มสร้างได้เลย แต่ละเว็บมีหน้าแก้ไขและข้อมูลของตัวเอง': 'Name your site and start building. Each site has its own dashboard and data.', 'ชื่อเว็บ': 'Site name', 'เช่น baan-coffee': 'e.g. baan-coffee', 'ไอเดียของคุณ': 'Your idea', 'อธิบายเว็บไซต์ที่อยากสร้าง': 'Describe the website you want to create', 'อย่าใส่รหัสผ่านหรือข้อมูลลับ': 'Do not include passwords or secrets.', 'สร้างเว็บใหม่': 'Create a new site', 'ใช้ตัวอักษรภาษาอังกฤษตัวเล็ก ตัวเลข และขีดกลางเป็นชื่อสำหรับเก็บเว็บในเครื่องนี้': 'Use lowercase English letters, numbers, and hyphens for the name stored on this computer.', 'เว็บของคุณ': 'Your sites', 'Dashboard และข้อมูลแยกเฉพาะเว็บนี้': 'Separate dashboard and data for this site', 'เปิด Dashboard': 'Open dashboard', 'ยังไม่มีเว็บ เริ่มจากตั้งชื่อเว็บด้านบน': 'No sites yet. Start by naming your site above.' }
+    const html = `<!doctype html><html lang="th"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>${css}</style><main><header><span class="mark">w</span> web-end</header><h1>สร้างเว็บของคุณ</h1><p class="lead">ตั้งชื่อเว็บ แล้วเริ่มสร้างได้เลย แต่ละเว็บมีหน้าแก้ไขและข้อมูลของตัวเอง</p>${error ? `<p class="error" role="alert">${escape(error)}</p>` : ''}<form class="create" action="/new" method="post"><input name="token" type="hidden" value="${token}"><label>ชื่อเว็บ<input name="name" required minlength="3" maxlength="56" pattern="[a-z][a-z0-9-]*[a-z0-9]" placeholder="เช่น baan-coffee" autocomplete="off"></label><label>ไอเดียของคุณ<textarea id="creator-prompt" maxlength="20000" rows="6" placeholder="อธิบายเว็บไซต์ที่อยากสร้าง"></textarea></label><p>อย่าใส่รหัสผ่านหรือข้อมูลลับ</p><button class="primary" type="submit">สร้างเว็บใหม่</button></form><p class="hint">ใช้ตัวอักษรภาษาอังกฤษตัวเล็ก ตัวเลข และขีดกลางเป็นชื่อสำหรับเก็บเว็บในเครื่องนี้</p><h2>เว็บของคุณ</h2><div class="sites">${names().length ? names().map((name) => `<div class="site"><div><strong>${escape(name)}</strong><small>Dashboard และข้อมูลแยกเฉพาะเว็บนี้</small></div><form action="/open" method="post"><input name="token" type="hidden" value="${token}"><input name="name" type="hidden" value="${escape(name)}"><button class="open" type="submit">เปิด Dashboard</button></form></div>`).join('') : '<p class="empty">ยังไม่มีเว็บ เริ่มจากตั้งชื่อเว็บด้านบน</p>'}</div></main><script>
 const form=document.querySelector('form.create'), idea=document.getElementById('creator-prompt');
 form.addEventListener('submit', async (event) => {
   if (!idea.value) return;
@@ -69,6 +71,11 @@ form.addEventListener('submit', async (event) => {
   } catch (error) { child.close(); alert('Could not create site. Your idea is still here. ' + error.message); }
 });
 </script></html>`
+    if (language !== 'en') return html
+    let translated = html.replace('<html lang="th">', '<html lang="en">')
+    for (const [thai, english] of Object.entries(translations).sort(([a], [b]) => b.length - a.length)) translated = translated.replaceAll(thai, english)
+    return translated.replace('action="/new"', 'action="/new?lang=en"').replaceAll('action="/open"', 'action="/open?lang=en"').replace("fetch('/new',", "fetch('/new?lang=en',")
+  }
   const server = createServer(async (request, response) => {
     const host = request.headers.host
     const local = `http://${host}`
@@ -77,23 +84,25 @@ form.addEventListener('submit', async (event) => {
       response.end(body)
     }
     if (!/^((127\.0\.0\.1)|(localhost)):\d+$/.test(host ?? '')) return send(403, 'Local access only')
-    if (request.method === 'GET' && request.url === '/') return send(200, page())
-    if (request.method !== 'POST' || !['/new', '/open'].includes(request.url)) return send(404, 'Not found')
+    const url = new URL(request.url, local)
+    const language = url.searchParams.get('lang') === 'en' ? 'en' : 'th'
+    if (request.method === 'GET' && url.pathname === '/') return send(200, page('', language))
+    if (request.method !== 'POST' || !['/new', '/open'].includes(url.pathname)) return send(404, 'Not found')
     if (request.headers.origin && request.headers.origin !== local) return send(403, 'Wrong origin')
     try {
       const form = await readBody(request)
       if (form.get('token') !== token) return send(403, 'Wrong form token')
       const name = form.get('name') ?? ''
-      const transfer = request.url === '/new' && request.headers['x-creator-handoff'] === '1'
+      const transfer = url.pathname === '/new' && request.headers['x-creator-handoff'] === '1'
       if (transfer && request.headers.origin !== local) return send(403, 'Wrong origin')
       const handoff = transfer ? { origin: local, nonce: randomBytes(24).toString('hex') } : null
-      if (request.url === '/new') await createSite(name, sitesDir)
+      if (url.pathname === '/new') await createSite(name, sitesDir)
       const site = await open(name, handoff)
       const claimed = await site.db.prepare('SELECT id FROM sites LIMIT 1').first()
       if (transfer) return send(200, JSON.stringify({ url: site.url + '/', nonce: handoff.nonce }), { 'Content-Type': 'application/json; charset=utf-8' })
       return send(303, '', { Location: `${site.url}${claimed ? '/admin' : '/'}` })
     } catch (error) {
-      return send(400, page(error.message))
+      return send(400, page(error.message, language))
     }
   })
   await new Promise((done, fail) => { server.once('error', fail); server.listen(port, '127.0.0.1', done) })
