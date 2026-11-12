@@ -7,9 +7,9 @@ Build and run a full-stack site or simple app by talking to Claude: your own dat
 There is also an [experimental local/self-hosted mode](selfhost/README.md): Node.js + SQLite with a built-in AI Studio, provider choice, and a tested backup/restore path. It uses the same engine as the Cloudflare version.
 On Windows, double-click [Open web-end.cmd](Open%20web-end.cmd) and create a site in the browser. Every site gets its own Dashboard and database.
 
-![The local site creator, shown in Thai with fields for a site name and an idea](docs/images/local-site-creator.png)
+![Owner account setup form in the web-end back office](docs/images/owner-account-setup.png)
 
-*The experimental local site creator. The idea field carries your draft to Studio; configure an AI provider there before sending it.*
+*The owner account setup screen in an experimental local site. The private owner link proves ownership; keep it secret.*
 
 ## How it works
 
