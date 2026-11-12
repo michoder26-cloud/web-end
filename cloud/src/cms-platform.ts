@@ -4,6 +4,7 @@ import { approvalWords } from './approvals-office'
 import { allows, firstProblem, input, office, readField, spec } from './cms'
 import type { Desk, Notice } from './cms'
 import { accessLevels, canChange, canCreate, createRecord, deleteRecord, deleteTable, fieldTypes, getRecord, getTable, listRecords, listTables, ownerActor, readScope, recordsCsv, saveTable, tableSchema, updateRecord } from './data'
+import { findProblems } from './mcp'
 import type { Actor, DataField, DataTable } from './data'
 import { emailProblems, emailStatus, sendEmail } from './email'
 import { googleProblems, googleStatus } from './google'
@@ -358,7 +359,21 @@ async function handleConnect(request: Request, env: Env, url: URL, site: SiteRow
 async function publishPage(env: Env, site: SiteRow, desk: Desk, notice?: Notice) {
   const t = officeText(site)
   const base = escapeHtml(desk.base)
-  const [versions, waiting] = await Promise.all([listVersions(env, site.id), unpublishedChanges(env, site)])
+  const [versions, waiting, summary] = await Promise.all([listVersions(env, site.id), unpublishedChanges(env, site), releaseSummary(env, site)])
+  const r = t.release
+  const list = (items: string[]) => `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`
+  const access = [
+    r.publicPages(summary.publicPages),
+    ...(summary.hiddenPages.length ? [r.hiddenPages(summary.hiddenPages.join(', '))] : []),
+    ...(summary.openTables.length ? [r.openTables(summary.openTables.join(', '))] : []),
+    ...(summary.readableTables.length ? [r.readableTables(summary.readableTables.join(', '))] : []),
+    ...(summary.openTables.length || summary.readableTables.length ? [] : [r.noOpenTables]),
+  ]
+  // Problems come first and never block: the owner decides whether to publish now or fix them.
+  const before = `<section class="card account__record" id="before-publish"><h2>${r.heading}</h2>
+<h3>${r.problems}</h3>${summary.problems.length ? `<div role="alert"><p>${r.problemsHelp}</p>${list(summary.problems.map((problem) => t.problem(problem)))}</div>` : `<p>${r.noProblems}</p>`}
+<h3>${r.who}</h3>${list(access)}
+<h3>${r.undo}</h3><p>${r.undoHelp(`${base}/system#backup`)}</p></section>`
   const changes = waiting ? [...waiting.pages.map((slug) => t.pageChange(slug)), ...(waiting.settings ? [t.settingsChange] : [])] : []
   const state = !site.live_version
     ? `<p>${t.neverPublished}</p>`
@@ -372,7 +387,7 @@ async function publishPage(env: Env, site: SiteRow, desk: Desk, notice?: Notice)
     site,
     desk,
     t.nav.publish,
-    `${state}${allows(desk, 'pages') ? `<p><a class="button button--small button--ghost" href="${base}/preview" target="_blank" rel="noopener">${t.openPreview}</a></p>` : ''}
+    `${state}${before}${allows(desk, 'pages') ? `<p><a class="button button--small button--ghost" href="${base}/preview" target="_blank" rel="noopener">${t.openPreview}</a></p>` : ''}
 <form action="${base}/publish" class="contact-form" method="post"><label>${t.whatChanged}<input maxlength="200" name="note"></label><button class="button" type="submit">${t.publishButton}</button></form>
 <h2>${t.versions}</h2><p>${t.versionsHelp}</p>${rows || `<p>${t.noneYet}</p>`}`,
     notice,
@@ -389,6 +404,22 @@ async function handlePublish(request: Request, env: Env, url: URL, site: SiteRow
   }
   if (action === 'restore' && /^\d+$/.test(id) && form?.get('confirm') === 'on') await restoreVersion(env, site, Number(id))
   return see(url, owner)
+}
+
+/** What the owner should know before a release: what is wrong, and who can see or add what. */
+export async function releaseSummary(env: Env, site: SiteRow) {
+  const [problems, { results: pages }, tables] = await Promise.all([
+    findProblems(env, site),
+    env.DB.prepare('SELECT slug, published FROM pages WHERE site_id = ? ORDER BY slug').bind(site.id).all<{ published: number; slug: string }>(),
+    listTables(env, site.id),
+  ])
+  return {
+    hiddenPages: pages.filter((page) => !page.published).map((page) => page.slug),
+    openTables: tables.filter((table) => table.write_access === 'public').map((table) => table.label || table.name),
+    problems,
+    publicPages: pages.filter((page) => page.published).length,
+    readableTables: tables.filter((table) => table.read_access === 'public').map((table) => table.label || table.name),
+  }
 }
 
 /** One summary of the whole system. It says whether secrets are set, never what they are. */
@@ -437,7 +468,8 @@ const usageCard = (u: Awaited<ReturnType<typeof systemStatus>>['freeUsage'], t: 
   const w = t.usage
   const number = (value: number) => value.toLocaleString('en')
   const row = (label: string, used: number, limit: number, shown: string, full: string) => `<div class="usage"><dt>${label}</dt><dd>${escapeHtml(shown)}<meter max="${limit}" min="0" optimum="0" high="${limit * 0.8}" value="${Math.min(used, limit)}"></meter><small>${full}</small></dd></div>`
-  return `<article class="card account__record" id="free-usage"><h2>${w.heading}</h2><p>${w.intro}</p><dl>
+  const costs = `<article class="card account__record" id="your-costs"><h2>${w.costsHeading}</h2><p>${w.costsIntro}</p><table class="table"><thead><tr>${w.costColumns.map((name) => `<th>${name}</th>`).join('')}</tr></thead><tbody>${w.costRows.map(([what, who, cost]) => `<tr><th scope="row">${what}</th><td>${who}</td><td>${cost}</td></tr>`).join('')}</tbody></table></article>`
+  return `${costs}<article class="card account__record" id="free-usage"><h2>${w.heading}</h2><p>${w.intro}</p><dl>
 ${row(w.database, u.databaseBytes, u.databaseLimit, w.of(size(u.databaseBytes), '5 GB'), w.databaseFull)}
 ${row(w.images, u.imageBytes, u.imageLimit, w.of(size(u.imageBytes), '200 MB'), w.imagesFull)}
 ${row(w.records, u.records, u.recordsLimit, w.of(number(u.records), number(u.recordsLimit)), w.recordsFull)}

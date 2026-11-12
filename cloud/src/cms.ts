@@ -12,6 +12,7 @@ import { checklist, claudeLinkField, connectGuide, firstSteps, handleStarters, i
 import type { FirstSteps } from './first-steps'
 import { secretsHelp } from './secret-help'
 import { claudeChangesToday, handleChanges } from './changes'
+import { handleAccessCheck } from './access-check'
 import { clearTestData, endTestMode, startTestMode, testCounts } from './test-mode'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { saveImage } from './items'
@@ -99,7 +100,7 @@ export const office = (site: SiteRow, at: Desk | string, title: string, body: st
   const settings = JSON.parse(site.settings) as Settings
   const t = officeText(site)
   const base = `${escapeHtml(desk.base)}`
-  const links: [string, string][] = [['', t.nav.overview], ['/changes', t.nav.changes], ['/stats', t.nav.stats], ['/orders', t.nav.orders], ['/pages', t.nav.pages], ['/items', t.nav.products], ['/data', t.nav.data], ['/approvals', approvalWords(site).title], ['/automations', t.automations.title], ['/media', t.nav.images], ['/customers', t.nav.customers], ['/news', t.news.title], ['/publish', t.nav.publish], ['/connect', t.nav.connect], ['/move', t.nav.move], ['/wordpress', t.nav.wordpress], ['/settings', t.nav.settings], ['/system', t.nav.system], ['/updates', t.nav.updates]]
+  const links: [string, string][] = [['', t.nav.overview], ['/changes', t.nav.changes], ['/access', t.nav.access], ['/stats', t.nav.stats], ['/orders', t.nav.orders], ['/pages', t.nav.pages], ['/items', t.nav.products], ['/data', t.nav.data], ['/approvals', approvalWords(site).title], ['/automations', t.automations.title], ['/media', t.nav.images], ['/customers', t.nav.customers], ['/news', t.news.title], ['/publish', t.nav.publish], ['/connect', t.nav.connect], ['/move', t.nav.move], ['/wordpress', t.nav.wordpress], ['/settings', t.nav.settings], ['/system', t.nav.system], ['/updates', t.nav.updates]]
   // Any staff member may be an approver, so Approvals is always in their menu. The page shows only what they may see.
   const shown = desk.staff ? links.filter(([path]) => !path || path === '/approvals' || (staffMenu[path] && allows(desk, staffMenu[path]))) : links
   const copy = t.lang === 'th'
@@ -149,7 +150,7 @@ ${keepKey}<div class="cms-console">
     <p class="cms-sidebar-label">${escapeHtml(copy.dashboard)}</p>
     <nav aria-label="${escapeHtml(t.navLabel)}" class="cms-nav">
       ${group(copy.build, ['', '/pages', '/items', '/data', '/media', '/news', '/changes'])}
-      ${group(copy.run, ['/stats', '/orders', '/customers', '/approvals', '/automations', '/publish', '/settings'])}
+      ${group(copy.run, ['/stats', '/orders', '/customers', '/approvals', '/automations', '/publish', '/access', '/settings'])}
       ${more(copy.more, ['/connect', '/move', '/wordpress', '/system', '/updates'])}
     </nav>
     ${who}
@@ -884,6 +885,7 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
   }
   if (area === 'starters' && !id) return handleStarters(request, env, url, site, desk)
   if (area === 'changes') return handleChanges(request, env, url, site, desk, id, action)
+  if (area === 'access' && !id) return handleAccessCheck(request, env, url, site, desk)
   // Test mode belongs to the owner. Staff never start it or remove its data.
   if (area === 'test-mode' && post && desk.accountOwner && !desk.staff && !action) {
     if (!id) return startTestMode(env, url)

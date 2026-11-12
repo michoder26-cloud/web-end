@@ -3521,6 +3521,44 @@ if (loadCount) {
   await call('delete_item', { id: lamp })
 }
 
+// Before publishing, the owner sees what is wrong and who can see what, and can still publish.
+{
+  await call('save_page', { slug: 'release-check', title: 'Release check', description: 'A page with a list that has nothing in it, to test the release summary.', published: false, blocks: [{ type: 'hero', heading: 'Release check' }, { type: 'collection', collection: 'nothing-here-at-all' }] })
+  await call('save_table', { name: 'open_requests', label: 'Open requests', readAccess: 'owner', writeAccess: 'public', fields: [{ name: 'note', label: 'Note', type: 'text' }] })
+  const releasePage = await (await fetch(`${owner}/publish`)).text()
+  const summary = releasePage.slice(releasePage.indexOf('id="before-publish"'))
+  check(releasePage.includes('id="before-publish"') && summary.includes('Problems found') && summary.includes('role="alert"') && summary.includes('nothing-here-at-all'), 'the publish page lists the problems found before a release')
+  check(summary.includes('release-check') && summary.includes('Open requests') && summary.includes('without logging in') && summary.includes('#backup'), 'it says which pages are hidden, which tables anyone can add to, and what undo does not cover')
+  const stillPublishes = await fetch(`${owner}/publish`, { body: new URLSearchParams({ note: 'With a known problem' }), method: 'POST', redirect: 'manual' })
+  check(stillPublishes.status === 303, 'problems are a warning: the owner can still publish')
+  await call('delete_page', { slug: 'release-check' })
+  await call('delete_table', { name: 'open_requests' })
+  await call('publish_site', {})
+}
+
+// Who can see what: answered by the same access rules the site uses.
+{
+  await call('save_table', { name: 'private_notes', label: 'Private notes', readAccess: 'own', writeAccess: 'members', fields: [{ name: 'note', label: 'Note', type: 'text' }] })
+  await call('save_table', { name: 'shared_board', label: 'Shared board', readAccess: 'members', writeAccess: 'members', fields: [{ name: 'note', label: 'Note', type: 'text' }] })
+  const [ann, ben] = [await signUp('ann-access'), await signUp('ben-access')]
+  for (const [token, text] of [[ann.body.token, 'from Ann'], [ann.body.token, 'again from Ann'], [ben.body.token, 'from Ben']]) {
+    await apiJson('/data/private_notes', { body: asJson({ note: text }), method: 'POST', token })
+    await apiJson('/data/shared_board', { body: asJson({ note: text }), method: 'POST', token })
+  }
+  const people = (await call('list_customers', {})).data
+  const [aliceId, bobId] = ['ann-access@example.test', 'ben-access@example.test'].map((email) => people.find((row) => row.email === email)?.id)
+  const accessPage = await (await fetch(`${owner}/access?a=${aliceId}&b=${bobId}`)).text()
+  const rowOf = (label) => (accessPage.slice(accessPage.indexOf('id="access-compare"')).match(new RegExp(`<th scope="row">${label}</th>((?:<td[^>]*>\\d+</td>){4})`))?.[1] ?? '').match(/\d+(?=<\/td>)/g)?.map(Number)
+  check(Boolean(aliceId && bobId) && accessPage.includes('Only their own records') && accessPage.includes('A visitor who is not logged in'), 'the access page describes each table in plain words', `${aliceId} ${bobId}`)
+  check(JSON.stringify(rowOf('Private notes')) === '[2,0,1,0]', 'with own-records access, each customer reads only their own records and none of the other\'s', JSON.stringify(rowOf('Private notes')))
+  check(JSON.stringify(rowOf('Shared board')) === '[3,1,3,2]' && accessPage.includes('data-leak="1"'), 'with members access, the page shows that each customer can read the other\'s records', JSON.stringify(rowOf('Shared board')))
+  check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd/access`)).status === 404, 'a wrong link cannot open the access page')
+  await call('delete_table', { name: 'private_notes' })
+  await call('delete_table', { name: 'shared_board' })
+  const costsPage = await (await fetch(`${owner}/system`)).text()
+  check(costsPage.includes('id="your-costs"') && ['Cloudflare', 'Resend', 'Stripe', 'No plan, no credits'].every((word) => costsPage.includes(word)), 'the System page says who charges for each service, and that web-end charges nothing')
+}
+
 {
 // What changed: Claude's changes are listed with an undo, and Claude is told to stop when it goes in circles.
 const loopPage = { slug: 'loop-test', title: 'Loop 0', description: 'x', published: true, blocks: [{ type: 'hero', heading: 'Loop 0' }] }
