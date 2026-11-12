@@ -5,11 +5,11 @@ Build and run a full-stack site or simple app by talking to Claude: your own dat
 **Status: early test.** The install button and the connection to Claude have worked from start to finish once. Nobody outside the project has tried it yet.
 
 There is also an [experimental local/self-hosted mode](selfhost/README.md): Node.js + SQLite with a built-in AI Studio, provider choice, and a tested backup/restore path. It uses the same engine as the Cloudflare version.
-On Windows, double-click [Open web-end.cmd](Open%20web-end.cmd) and create a site in the browser. Every site gets its own Dashboard and database.
+On Windows, double-click [Open web-end.cmd](Open%20web-end.cmd) and create a site in the browser. Every site gets its own Dashboard and database. The creator defaults to Thai; add `?lang=en` to its local address for English. Set up an AI provider in the local Studio to use AI-assisted building; see the [local setup guide](selfhost/README.md).
 
-![Owner account setup form in the web-end back office](docs/images/owner-account-setup.png)
+![Local site creator in English, with site name and idea fields](docs/images/local-site-creator.png)
 
-*The owner account setup screen in an experimental local site. The private owner link proves ownership; keep it secret.*
+*The local site creator. Name your site and optionally describe your idea to begin.*
 
 ## How it works
 
