@@ -13,6 +13,8 @@
     "gates:test": "node scripts/gates/test-gates.mjs"
   },
   "devDependencies": {
-    "lighthouse": "12.8.2"
+    "lighthouse": "12.8.2",
+    "lottie-web": "^5.13.0",
+    "playwright": "^1.65.0"
   }
 }

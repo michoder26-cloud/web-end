@@ -9,6 +9,7 @@ const output=path.resolve(out);if(fs.existsSync(output)){console.error('Output d
 fs.mkdirSync(path.join(output,'assets'),{recursive:true});fs.copyFileSync(path.join(__dirname,'motion.js'),path.join(output,'assets','motion.js'));
 const savedAssets=new Map();
 const savedCss=new Map();
+const savedLottie=new Set();
 function assetExt(body,url){
  if(body.subarray(4,12).toString('ascii').includes('ftypavif'))return '.avif';
  if(body.subarray(0,4).toString('ascii')==='RIFF'&&body.subarray(8,12).toString('ascii')==='WEBP')return '.webp';
@@ -23,14 +24,15 @@ const shotLimit=Math.max(1,Number(process.env.SHOT_LIMIT??Infinity));
 function isInternal(u){return u.origin===root.origin&&(u.pathname===basePath||u.pathname.startsWith(basePath+'/'));}
 function slugOf(u){const p=new URL(u).pathname.slice(basePath.length).replace(/^\/+|\/+$/g,'');return p||'index';}
 async function capture(b,url,view,shots){
- const ctx=await b.newContext(VIEWS[view]);const p=await ctx.newPage();const bodies=new Map();const texts=[];
- p.on('response',async r=>{try{const t=r.request().resourceType();if(['image','font','stylesheet','media'].includes(t)&&r.ok())bodies.set(r.url(),await r.body());else if(['xhr','fetch','document'].includes(t)&&r.ok())texts.push(await r.text());}catch{}});
+ const ctx=await b.newContext(VIEWS[view]);const p=await ctx.newPage();const bodies=new Map();const texts=[];const lotties=new Map();
+ p.on('response',async r=>{try{const t=r.request().resourceType();if(['image','font','stylesheet','media'].includes(t)&&r.ok())bodies.set(r.url(),await r.body());else if(['xhr','fetch','document'].includes(t)&&r.ok()){const body=await r.text();texts.push(body);if(body.length<10_000_000&&/json/i.test(r.headers()['content-type']||'')){try{const data=JSON.parse(body);if(Array.isArray(data.layers)&&data.fr&&data.w&&data.h)lotties.set(r.url(),body);}catch{}}}}catch{}});
  await p.goto(url,{waitUntil:'load',timeout:90000});await p.waitForLoadState('networkidle',{timeout:15000}).catch(()=>{});
  await p.evaluate(async()=>{for(let y=0;y<document.body.scrollHeight;y+=400){window.scrollTo(0,y);await new Promise(r=>setTimeout(r,120));}window.scrollTo(0,0);});
  await p.waitForTimeout(2500);
  if(shots){ // viewport screenshots while scrolling
   const H=await p.evaluate(()=>document.documentElement.scrollHeight);const vh=p.viewportSize().height;let i=0;
-  for(let y=0;y<H&&i<shotLimit;y+=vh){await p.evaluate(y=>window.scrollTo(0,y),y);await p.waitForTimeout(700);await p.screenshot({path:`${shots}/${i++}.png`});}
+  for(let y=0;y<H&&i<shotLimit;y+=vh){await p.evaluate(y=>window.scrollTo(0,y),y);await p.waitForTimeout(i===0?2000:700);await p.screenshot({path:`${shots}/${i++}.png`,animations:'disabled'});
+   await p.evaluate(()=>{const seen=window.__captureVisualState ||= new Map();for(const e of document.body.querySelectorAll('*')){const b=e.getBoundingClientRect();if(b.bottom<=0||b.top>=innerHeight)continue;const s=getComputedStyle(e),opacity=Number(s.opacity);const previous=seen.get(e);if(!previous||opacity>previous.opacity)seen.set(e,{opacity,visibility:s.visibility,transform:s.transform,filter:s.filter});}});}
   await p.evaluate(()=>window.scrollTo(0,0));await p.waitForTimeout(500);}
  // map location
  let loc=null;for(const t of texts){const m=t.match(/"locations":\[\{[^\]]*?"address":"([^"]*)"[^\]]*?"latitude":(-?[\d.]+),"longitude":(-?[\d.]+)/);if(m){loc={address:m[1],lat:m[2],lng:m[3]};break;}}
@@ -42,10 +44,11 @@ async function capture(b,url,view,shots){
   const tracks={};els.forEach((e,i)=>{const v=st.map(x=>x[i]);if(v.some(x=>x!==v[0])){e.setAttribute('data-ct',i);tracks[i]=v;}});
   if(!Object.keys(tracks).length)return null;
   // period: first later sample (>2s) matching sample 0 on all tracks, else whole recording
-  let period=st.length;for(let k=10;k<st.length;k++){if(Object.keys(tracks).every(i=>tracks[i][k]===tracks[i][0])){period=k;break;}}
+  let period=0;for(let k=10;k<st.length;k++){if(Object.keys(tracks).every(i=>tracks[i][k]===tracks[i][0])){period=k;break;}}
+  if(!period)return null;
   for(const i in tracks)tracks[i]=tracks[i].slice(0,period).map(x=>x.split('|'));return {step:200,tracks};},motionMs);
  // record scroll-linked motion: transform/opacity of moving parts at each scroll step
- const motion=await p.evaluate(async()=>{const els=[...document.querySelectorAll('[data-motion-part],#SITE_HEADER,header,wow-image,[class*=parallax]')];
+ const motion=await p.evaluate(async()=>{const els=[...document.querySelectorAll('[data-motion-part],#SITE_HEADER,header,header > *,#SITE_HEADER > *,wow-image,[class*=parallax]')];
   els.forEach((e,i)=>e.setAttribute('data-cl',i));const H=document.documentElement.scrollHeight-innerHeight;const step=150;const samples={};
   for(let y=0;y<=H+step;y+=step){const yy=Math.min(y,H);window.scrollTo(0,yy);await new Promise(r=>setTimeout(r,90));
    els.forEach((e,i)=>{const s=getComputedStyle(e);(samples[i]=samples[i]||[]).push([yy,s.transform,s.opacity]);});}
@@ -64,21 +67,21 @@ async function capture(b,url,view,shots){
   // sticky background images were sized to the window by script: make them one screen tall
   document.querySelectorAll('img').forEach(i=>{if(i.style.height===innerHeight+'px'){i.style.height='100vh';}});
   // freeze what the script decided is visible
-  document.querySelectorAll('body *').forEach(e=>{const s=getComputedStyle(e);if(s.opacity!=='1')e.style.opacity=s.opacity;if(s.visibility==='hidden')e.style.visibility='hidden';});
+  document.querySelectorAll('body *').forEach(e=>{const saved=window.__captureVisualState?.get(e),s=getComputedStyle(e),opacity=saved?.opacity??s.opacity,visibility=saved?.visibility??s.visibility;if(String(opacity)!==s.opacity||s.opacity!=='1')e.style.opacity=opacity;if(visibility!==s.visibility||s.visibility==='hidden')e.style.visibility=visibility;if(saved&&saved.transform!==s.transform)e.style.transform=saved.transform;if(saved&&saved.filter!==s.filter)e.style.filter=saved.filter;});
   // map: replace Wix map frame by standard Google embed
   document.querySelectorAll('iframe[src*="googleMap"]').forEach(f=>{if(!loc){f.remove();return;}f.src='https://maps.google.com/maps?q='+encodeURIComponent(loc.lat+','+loc.lng)+'&z=14&output=embed';f.removeAttribute('sandbox');f.setAttribute('loading','lazy');if(loc.dark)f.style.filter='grayscale(1) invert(88%) contrast(.85)';});
-  document.querySelectorAll('script,noscript,link[rel=preload],link[rel=modulepreload],link[rel=prefetch],style,iframe[src*="wixapps"],#WIX_ADS,[id^=wix-],#base44-edit-badge').forEach(e=>e.remove());
+  document.querySelectorAll('script,noscript,link[rel=preload],link[rel=modulepreload],link[rel=prefetch],style,iframe[src*="wixapps"],[id^=wix-],#base44-edit-badge').forEach(e=>e.remove());
   document.querySelectorAll('*').forEach(e=>{for(const a of [...e.attributes]){if(/^on/i.test(a.name)||(['href','src','action','xlink:href'].includes(a.name)&&/^\s*javascript:/i.test(a.value)))e.removeAttribute(a.name);}});
-  return {html:document.documentElement.outerHTML,css,base:location.href,links};
+  return {html:document.documentElement.outerHTML,css,base:location.href,links,lottieIds:[...document.querySelectorAll('.wixui-lottie-embed')].filter(e=>e.id&&e.querySelector('svg')).map(e=>({id:e.id,svgClass:e.querySelector('svg').getAttribute('class')||''}))};
  },loc);
  // Google Fonts CSS contains Unicode subsets the first screen may not request.
  // Keep every referenced subset so later dialogs work without Google online.
  const fontUrls=new Set();for(const [u,body] of bodies){if(!u.startsWith('https://fonts.googleapis.com/'))continue;
   for(const m of body.toString().matchAll(/url\(["']?(https:\/\/fonts\.gstatic\.com\/[^"')]+)["']?\)/g))fontUrls.add(m[1]);}
  await Promise.allSettled([...fontUrls].slice(0,80).map(async u=>{if(bodies.has(u))return;const r=await ctx.request.get(u,{timeout:15000});if(!r.ok())return;const data=await r.body();if(data.length<=2_000_000)bodies.set(u,data);}));
- await ctx.close();snap.motion=motion;snap.timeline=timeline;return {snap,bodies};
+ await ctx.close();snap.motion=motion;snap.timeline=timeline;return {snap,bodies,lotties};
 }
-function write(snap,bodies,file){
+function write(snap,bodies,file,lotties){
  let html=snap.html,css=snap.css;
  const save=(u)=>{let abs;try{abs=new URL(u.replace(/&amp;/g,'&'),snap.base).href}catch{return null}if(savedAssets.has(abs))return savedAssets.get(abs);const body=bodies.get(abs);if(!body)return null;
   const n='assets/'+h(abs)+assetExt(body,abs);fs.writeFileSync(out+'/'+n,body);savedAssets.set(abs,n);return n;};
@@ -96,6 +99,14 @@ function write(snap,bodies,file){
  // Page links are rewritten after the crawl, once we know which pages succeeded.
  html=html.replace('</head>',`<style>${css}</style></head>`);
  if(Object.keys(snap.motion||{}).length||snap.timeline)html=html.replace('</body>',`<script>window.__M=${JSON.stringify(snap.motion||{})};window.__T=${JSON.stringify(snap.timeline)};</script><script src="/assets/motion.js"></script></body>`);
+ if(snap.lottieIds?.length&&lotties.size>=snap.lottieIds.length){
+  const entries=[...lotties.entries()];const animations=snap.lottieIds.map((item,index)=>{const [url,body]=entries[index];let asset=savedAssets.get(url);if(!asset){asset='assets/'+h(url)+'.json';fs.writeFileSync(path.join(output,asset),body);savedAssets.set(url,asset);}savedLottie.add(item.id);return {...item,path:'/'+asset};});
+  const player=require.resolve('lottie-web/build/player/lottie.min.js');
+  fs.copyFileSync(player,path.join(output,'assets','lottie-player.js'));
+  fs.copyFileSync(path.join(path.dirname(path.dirname(path.dirname(player))),'LICENSE.md'),path.join(output,'assets','lottie-player-LICENSE.md'));
+  fs.copyFileSync(path.join(__dirname,'lottie-runtime.js'),path.join(output,'assets','lottie-runtime.js'));
+  html=html.replace('</body>',`<script>window.__LOTTIE=${JSON.stringify(animations)};</script><script src="/assets/lottie-player.js" defer></script><script src="/assets/lottie-runtime.js" defer></script></body>`);
+ }
  fs.mkdirSync(path.dirname(out+'/'+file),{recursive:true});fs.writeFileSync(out+'/'+file,'<!doctype html>'+html);
 }
 const PICK=`<script>(function(){var m=Math.min(screen.width,innerWidth)<768,p=location.pathname,ph=p.indexOf('/m/')===0;
@@ -103,12 +114,12 @@ if(m&&!ph)location.replace('/m'+p);else if(!m&&ph)location.replace(p.slice(2)||'
 (async()=>{const b=await chromium.launch();const queue=[start],seen=new Set(),copied=new Set();
  while(queue.length&&seen.size<(+process.env.MAXP||15)){const u=queue.shift();const s=slugOf(u);if(seen.has(s))continue;seen.add(s);
   const dir=s==='index'?'':s+'/';const k=s.replace(/\//g,'__');fs.mkdirSync(`${out}/_shots/${k}/desktop`,{recursive:true});fs.mkdirSync(`${out}/_shots/${k}/phone`,{recursive:true});try{
-  const d=await capture(b,u,'desktop',`${out}/_shots/${k}/desktop`);write(d.snap,d.bodies,dir+'index.html');
-  const m=await capture(b,u,'phone',`${out}/_shots/${k}/phone`);write(m.snap,m.bodies,'m/'+dir+'index.html');
+  const d=await capture(b,u,'desktop',`${out}/_shots/${k}/desktop`);write(d.snap,d.bodies,dir+'index.html',d.lotties);
+  const m=await capture(b,u,'phone',`${out}/_shots/${k}/phone`);write(m.snap,m.bodies,'m/'+dir+'index.html',m.lotties);
   for(const f of [dir+'index.html','m/'+dir+'index.html']){const fp=out+'/'+f;fs.writeFileSync(fp,fs.readFileSync(fp,'utf8').replace('<head>','<head>'+PICK));}
   copied.add(s);for(const l of d.snap.links){try{const a=new URL(l);if(isInternal(a)&&!a.hash)queue.push(a.origin+a.pathname);}catch{}}
   console.log('page',s);}catch(e){console.error('FAILED',s,e.message.split('\n')[0]);fs.rmSync(`${out}/_shots/${k}`,{recursive:true,force:true});}}
  for(const s of copied){const dir=s==='index'?'':s+'/';for(const f of [dir+'index.html','m/'+dir+'index.html']){const fp=path.join(output,f);let html=fs.readFileSync(fp,'utf8');html=html.replace(/<a\b[^>]*>/gi,tag=>tag.replace(/href="([^"]+)"/, (m,u)=>{let a;try{a=new URL(u.replace(/&amp;/g,'&'),root)}catch{return m}if(!isInternal(a))return m;const target=slugOf(a.href);const suffix=a.search+a.hash;return `href="${copied.has(target)?'/'+(target==='index'?'':target+'/')+suffix:a.href}"`;}));fs.writeFileSync(fp,html);}}
  const notCopied=[...new Set([...seen,...queue.map(slugOf)])].filter(s=>!copied.has(s));
- fs.writeFileSync(path.join(output,'copy-report.json'),JSON.stringify({source:start,pages:[...copied],notCopied,assets:savedAssets.size},null,2));
+ fs.writeFileSync(path.join(output,'copy-report.json'),JSON.stringify({source:start,pages:[...copied],notCopied,assets:savedAssets.size,lottieAnimations:savedLottie.size},null,2));
  console.log('pages',copied.size,'not copied',notCopied.length,'assets',savedAssets.size);await b.close();if(!copied.size)process.exitCode=1;})().catch(e=>{console.error(e);process.exitCode=1;});

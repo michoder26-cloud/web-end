@@ -41,7 +41,9 @@ const run = (script, args, env = process.env) => new Promise((resolve, reject) =
   const visual = JSON.parse(fs.readFileSync(path.join(directory, 'visual-report.json'), 'utf8'));
   console.log(`Copied site: ${directory}`);
   console.log(`Adapters: ${adapters.join(', ') || 'none'}`);
+  console.log(`Local Lottie animations: ${JSON.parse(fs.readFileSync(path.join(directory, 'copy-report.json'), 'utf8')).lottieAnimations || 0}`);
   console.log(`Front-end status: ${audit.status}; ${audit.issueCount} loading issues; ${audit.unverifiedControlCount} controls need review.`);
   console.log(`First-viewport similarity: ${visual.meanSimilarityPercent === null ? 'not measured' : visual.meanSimilarityPercent + '%'} (desktop and phone average).`);
+  console.log(`All captured viewports: ${visual.meanScrollSimilarityPercent === null ? 'not measured' : visual.meanScrollSimilarityPercent + '%'} (desktop and phone average).`);
   console.log(`Preview: node tools/site-copier/preview.cjs "${directory}"`);
 })().catch(error => { console.error(error); process.exitCode = 1; });

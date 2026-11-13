@@ -49,6 +49,17 @@ const visibleControls = () => [...document.querySelectorAll('button,[role="butto
         const target = url + (mobile ? 'm/' : '') + (slug === 'index' ? '' : slug + '/');
         await page.goto(target, { waitUntil: 'load', timeout: 30000 });
         await page.waitForTimeout(350);
+        const expectedAnimations = await page.evaluate(() => window.__LOTTIE?.length || 0);
+        const animationFailures = [];
+        if (expectedAnimations) {
+          try {
+            await page.waitForFunction(count => window.lottie?.getRegisteredAnimations().length >= count, expectedAnimations, { timeout: 3000 });
+            const frames = await page.evaluate(() => window.lottie.getRegisteredAnimations().map(animation => animation.currentFrame));
+            await page.waitForTimeout(200);
+            const later = await page.evaluate(() => window.lottie.getRegisteredAnimations().map(animation => animation.currentFrame));
+            if (!frames.some((frame, index) => frame !== later[index])) animationFailures.push('Local animation did not advance');
+          } catch (error) { animationFailures.push(error.message.split('\n')[0]); }
+        }
         const dom = await page.evaluate(() => ({
           title: document.title,
           images: [...document.images].filter(image => image.complete && image.naturalWidth === 0).map(image => image.getAttribute('src')).slice(0, 20),
@@ -61,11 +72,30 @@ const visibleControls = () => [...document.querySelectorAll('button,[role="butto
         const uiFailures = [];
         for (const toggle of capturedToggles) {
           const button = page.locator('button[aria-expanded]').nth(toggle.index);
-          await button.click();
-          if (await button.getAttribute('aria-expanded') !== 'true') uiFailures.push(toggle.label);
-          await button.click();
+          try {
+            await button.click({ timeout: 5000 });
+            if (await button.getAttribute('aria-expanded') !== 'true') uiFailures.push(toggle.label);
+            await page.keyboard.press('Escape');
+            if (await button.getAttribute('aria-expanded') !== 'false') uiFailures.push(toggle.label + ' did not close');
+          } catch (error) { uiFailures.push(toggle.label + ': ' + error.message.split('\n')[0]); await page.keyboard.press('Escape'); }
         }
         const handledLabels = new Set(capturedToggles.map(toggle => toggle.label));
+        const capturedCarousels = ui.pages.find(entry => entry.slug === slug && entry.view === view)?.carousels || [];
+        const carouselFailures = [];
+        for (const carousel of capturedCarousels) {
+          try {
+            const target = page.locator('[id=' + JSON.stringify(carousel.targetId) + ']');
+            const next = page.locator('[id=' + JSON.stringify(carousel.nextParentId) + '] button');
+            const back = page.locator('[id=' + JSON.stringify(carousel.backParentId) + '] button');
+            const first = await target.innerText();
+            await next.click({ timeout: 5000 });
+            if (await target.innerText() === first) throw Error('Next did not change content');
+            await back.click({ timeout: 5000 });
+            if (await target.innerText() !== first) throw Error('Back did not restore content');
+            handledLabels.add(await next.getAttribute('aria-label') || await next.innerText());
+            handledLabels.add(await back.getAttribute('aria-label') || await back.innerText());
+          } catch (error) { carouselFailures.push(error.message.split('\n')[0]); }
+        }
         const unverified = [...new Set(controls.filter(control => !control.form && !handledLabels.has(control.label) && !(handledShop && (control.shop || control.cart || control.login))).map(control => control.label || '(unlabelled button)'))];
         const shopFailures = [];
         if (handledShop && slug === 'index') {
@@ -82,18 +112,18 @@ const visibleControls = () => [...document.querySelectorAll('button,[role="butto
         }
         const missingLinks = dom.links.filter(link => {
           const href = link.href || '';
-          if (!href.startsWith('/')) return false;
+          if (!href.startsWith('/') || href.startsWith('//')) return false;
           let pathname;
           try { pathname = decodeURIComponent(href.split(/[?#]/)[0]); } catch { return true; }
           const file = path.resolve(directory, '.' + pathname, pathname.endsWith('/') ? 'index.html' : '');
           return !file.startsWith(directory + path.sep) || !fs.existsSync(file);
         });
-        audited.push({ slug, view, title: dom.title, brokenImages: dom.images, missingLinks, externalRequests: [...external], localErrors, pageErrors, formsDeferred: dom.forms, verifiedToggles: capturedToggles.length - uiFailures.length, failedToggles: uiFailures, shopFailures, unverifiedButtons: unverified });
+        audited.push({ slug, view, title: dom.title, brokenImages: dom.images, missingLinks, externalRequests: [...external], localErrors, pageErrors, formsDeferred: dom.forms, verifiedAnimations: expectedAnimations - animationFailures.length, animationFailures, verifiedToggles: capturedToggles.length - uiFailures.length, failedToggles: uiFailures, verifiedCarousels: capturedCarousels.length - carouselFailures.length, carouselFailures, shopFailures, unverifiedButtons: unverified });
         await context.close();
       }
     }
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
-  const issues = audited.reduce((sum, page) => sum + (page.brokenImages?.length || 0) + (page.missingLinks?.length || 0) + (page.externalRequests?.length || 0) + (page.localErrors?.length || 0) + (page.pageErrors?.length || 0) + (page.failedToggles?.length || 0) + (page.shopFailures?.length || 0), 0);
+  const issues = audited.reduce((sum, page) => sum + (page.brokenImages?.length || 0) + (page.missingLinks?.length || 0) + (page.externalRequests?.length || 0) + (page.localErrors?.length || 0) + (page.pageErrors?.length || 0) + (page.animationFailures?.length || 0) + (page.failedToggles?.length || 0) + (page.carouselFailures?.length || 0) + (page.shopFailures?.length || 0), 0);
   const unknown = audited.reduce((sum, page) => sum + (page.unverifiedButtons?.length || 0), 0);
   const uncopiedPages = copy.notCopied?.length || 0;
   const result = { source: copy.source, copiedPages: pages.length, uncopiedPages, status: issues || uncopiedPages ? 'needs-fixes' : unknown ? 'needs-interaction-review' : 'front-end-checks-passed', issueCount: issues, unverifiedControlCount: unknown, backendDeferred: { forms: audited.reduce((sum, page) => sum + (page.formsDeferred || 0), 0), customerAccounts: copy.interactions?.customerAccounts === false, payments: copy.interactions?.payments === false }, pages: audited };

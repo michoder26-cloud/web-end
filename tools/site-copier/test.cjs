@@ -12,7 +12,7 @@ const output = path.join(scratch, 'copy');
 const server = http.createServer((req, res) => {
   if (req.url === '/style.css') { res.writeHead(200, { 'content-type': 'text/css' }).end('@import "/import.css";body{background:#eef}'); return; }
   if (req.url === '/import.css') { res.writeHead(200, { 'content-type': 'text/css' }).end('h1{color:#123}'); return; }
-  if (req.url === '/') { res.writeHead(200, { 'content-type': 'text/html' }).end('<html><head><link rel="stylesheet" href="/style.css"></head><body><h1 id="home">Home</h1><button id="menu" aria-label="Open menu" aria-expanded="false">Menu</button><a href="/about" onclick="alert(1)">About</a><a href="/missing">Missing</a><a href="javascript:alert(2)">Unsafe</a><script>document.getElementById("menu").onclick=()=>{document.getElementById("menu").setAttribute("aria-expanded","true");const box=document.createElement("div");box.innerHTML="<a class=menu-link href=/about>About menu</a>";document.body.append(box)}</script></body></html>'); return; }
+  if (req.url === '/') { res.writeHead(200, { 'content-type': 'text/html' }).end('<html><head><link rel="stylesheet" href="/style.css"></head><body><h1 id="home">Home</h1><button id="menu" aria-label="Open menu" aria-expanded="false">Menu</button><button id="faq" aria-expanded="false" aria-controls="answer">Question</button><div id="answer" style="display:none">Answer</div><a href="/about" onclick="alert(1)">About</a><a href="/missing">Missing</a><a href="javascript:alert(2)">Unsafe</a><script>document.getElementById("menu").onclick=()=>{document.getElementById("menu").setAttribute("aria-expanded","true");const box=document.createElement("div");box.innerHTML="<a class=menu-link href=/about>About menu</a>";document.body.append(box)}</script></body></html>'); return; }
   if (req.url === '/about') { res.writeHead(200, { 'content-type': 'text/html' }).end('<html><body><h1>About</h1></body></html>'); return; }
   res.writeHead(404).end();
 });
@@ -34,9 +34,9 @@ async function run() {
   assert.match(html, /<link[^>]+href="\/assets\/[^"]+\.css"/);
   const stylesheet = html.match(/<link[^>]+href="(\/assets\/[^"]+\.css)"/)?.[1];
   assert.match(fs.readFileSync(path.join(output, stylesheet.slice(1)), 'utf8'), /@import "\/assets\/[^"]+\.css"/);
-  assert.match(html, /<a href="\/about\/">About<\/a>/);
+  assert.match(html, /<a href="\/about\/"[^>]*>About<\/a>/);
   assert.ok(!html.includes('onclick=') && !html.includes('javascript:'));
-  assert.ok(html.includes(`<a href="${source}missing">Missing</a>`));
+  assert.ok(html.includes(`<a href="${source}missing"`));
   assert.deepEqual(report.pages, ['index', 'about']);
   assert.ok(report.notCopied.includes('missing'));
   assert.ok(fs.existsSync(path.join(output, 'about', 'index.html')));
@@ -55,6 +55,11 @@ async function run() {
   try {
     const page = await browser.newPage();
     await page.goto(preview.url);
+    await page.locator('#faq').click();
+    assert.equal(await page.locator('#faq').getAttribute('aria-expanded'), 'true');
+    assert.equal(await page.locator('#answer').isVisible(), true);
+    await page.locator('#faq').click();
+    assert.equal(await page.locator('#answer').isVisible(), false);
     await page.locator('#menu').click();
     assert.equal(await page.locator('#menu').getAttribute('aria-expanded'), 'true');
     await page.locator('.menu-link').click();

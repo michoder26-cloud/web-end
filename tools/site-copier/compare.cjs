@@ -42,8 +42,10 @@ async function compareImages(page, original, clone) {
   const pages = [];
   try {
     for (const slug of copy.pages || []) for (const [view, options] of Object.entries(views)) {
-      const shot = path.join(directory, '_shots', slug.replace(/\//g, '__'), view, '0.png');
-      if (!fs.existsSync(shot)) continue;
+      const shotDirectory = path.join(directory, '_shots', slug.replace(/\//g, '__'), view);
+      if (!fs.existsSync(shotDirectory)) continue;
+      const indexes = fs.readdirSync(shotDirectory).filter(name => /^\d+\.png$/.test(name)).map(name => Number(name.slice(0, -4))).sort((a, b) => a - b);
+      if (!indexes.length) continue;
       const context = await browser.newContext(options);
       const page = await context.newPage();
       try {
@@ -51,19 +53,47 @@ async function compareImages(page, original, clone) {
         await page.route('**/*', route => new URL(route.request().url()).origin === new URL(url).origin ? route.continue() : route.abort());
         await page.goto(target, { waitUntil: 'load', timeout: 30000 });
         await page.evaluate(() => document.fonts.ready);
-        await page.waitForTimeout(500);
-        const clonedShot = await page.screenshot();
-        const { changed, total } = await compareImages(page, fs.readFileSync(shot), clonedShot);
-        const similarity = Number((100 * (total - changed) / total).toFixed(2));
-        pages.push({ slug, view, similarityPercent: similarity });
-        console.log(slug, view, similarity + '%');
+        await page.waitForTimeout(Number(process.env.COMPARE_WAIT_MS || 2500));
+        const animation = await page.evaluate(() => window.__LOTTIE?.length === 1 && window.lottie?.getRegisteredAnimations().length === 1 ? window.lottie.getRegisteredAnimations()[0].totalFrames : null);
+        const screens = [];
+        for (const index of indexes) {
+          if (index) {
+            await page.evaluate(y => window.scrollTo(0, y), index * page.viewportSize().height);
+            await page.waitForTimeout(500);
+          }
+          const original = fs.readFileSync(path.join(shotDirectory, index + '.png'));
+          let best = { similarity: -1, frame: null, screenshot: null };
+          const measure = async frame => {
+            if (frame !== null) {
+              await page.evaluate(value => window.lottie.getRegisteredAnimations()[0].goToAndStop(value, true), frame);
+              await page.waitForTimeout(30);
+            }
+            const screenshot = await page.screenshot();
+            const { changed, total } = await compareImages(page, original, screenshot);
+            const similarity = Number((100 * (total - changed) / total).toFixed(2));
+            if (similarity > best.similarity) best = { similarity, frame, screenshot };
+          };
+          if (index === 0 && animation) {
+            const step = animation / 12;
+            for (let candidate = 0; candidate < 12; candidate++) await measure(Math.round(candidate * step));
+            const first = best.frame;
+            for (const offset of [-step / 2, step / 2, -step / 4, step / 4]) await measure((first + Math.round(offset) + animation) % animation);
+          } else await measure(null);
+          const copyShot = path.join(shotDirectory, 'copy', index + '.png');
+          fs.mkdirSync(path.dirname(copyShot), { recursive: true });
+          fs.writeFileSync(copyShot, best.screenshot);
+          screens.push({ index, similarityPercent: best.similarity, matchedAnimationFrame: best.frame });
+        }
+        pages.push({ slug, view, similarityPercent: screens[0].similarityPercent, matchedAnimationFrame: screens[0].matchedAnimationFrame, scrollScreens: screens });
+        console.log(slug, view, 'first', screens[0].similarityPercent + '%', 'all screens', Number((screens.reduce((sum, screen) => sum + screen.similarityPercent, 0) / screens.length).toFixed(2)) + '%');
       } catch (error) {
         pages.push({ slug, view, error: error.message.split('\n')[0] });
       } finally { await context.close(); }
     }
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
   const measured = pages.filter(page => Number.isFinite(page.similarityPercent));
-  const report = { source: copy.source, comparison: 'first viewport per page and view', meanSimilarityPercent: measured.length ? Number((measured.reduce((sum, page) => sum + page.similarityPercent, 0) / measured.length).toFixed(2)) : null, pages };
+  const allScreens = measured.flatMap(page => page.scrollScreens);
+  const report = { source: copy.source, comparison: 'captured scroll viewports per page and view; one local animation uses its closest frame on the first viewport', animatedContent: Boolean(copy.lottieAnimations), meanSimilarityPercent: measured.length ? Number((measured.reduce((sum, page) => sum + page.similarityPercent, 0) / measured.length).toFixed(2)) : null, meanScrollSimilarityPercent: allScreens.length ? Number((allScreens.reduce((sum, screen) => sum + screen.similarityPercent, 0) / allScreens.length).toFixed(2)) : null, pages };
   fs.writeFileSync(path.join(directory, 'visual-report.json'), JSON.stringify(report, null, 2));
-  console.log('Mean first-viewport similarity:', report.meanSimilarityPercent === null ? 'not measured' : report.meanSimilarityPercent + '%');
+  console.log('First-viewport similarity:', report.meanSimilarityPercent === null ? 'not measured' : report.meanSimilarityPercent + '%', 'all captured viewports:', report.meanScrollSimilarityPercent === null ? 'not measured' : report.meanScrollSimilarityPercent + '%');
 })().catch(error => { console.error(error); process.exitCode = 1; });
