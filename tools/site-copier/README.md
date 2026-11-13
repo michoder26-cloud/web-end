@@ -23,3 +23,13 @@ Not done yet: forms, bookings and the shop still only look right; they are not c
 Choose a new output directory for every run. The copier refuses to replace an existing directory. If a page fails or the `MAXP` page limit is reached, links to pages that were not copied open the original site instead of a missing local page. `MOTION_MS` and `SHOT_LIMIT` can shorten exploratory runs; the defaults record full motion and screenshots.
 
 The output includes `copy-report.json` with copied and uncopied page paths. Review this before treating the result as a complete site.
+
+For a Base44 storefront with the `#products` catalog pattern, add independent interactions after copying:
+
+```
+node tools/site-copier/copy.cjs https://example.base44.app out
+node tools/site-copier/enhance-base44-shop.cjs https://example.base44.app out
+node tools/site-copier/preview.cjs out
+```
+
+This captures product details and variants from the public page, then adds working filters and a cart stored in the visitor's browser. The original Base44 JavaScript is not included. Customer accounts, inventory authority, orders and payments still need to be connected to a web-end backend; the captured checkout button is disabled until then.

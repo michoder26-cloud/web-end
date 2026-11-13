@@ -8,6 +8,7 @@ let root;try{root=new URL(start);if(!['http:','https:'].includes(root.protocol))
 const output=path.resolve(out);if(fs.existsSync(output)){console.error('Output directory already exists; choose a new directory:',output);process.exit(1);}
 fs.mkdirSync(path.join(output,'assets'),{recursive:true});fs.copyFileSync(path.join(__dirname,'motion.js'),path.join(output,'assets','motion.js'));
 const savedAssets=new Map();
+const savedCss=new Map();
 function assetExt(body,url){
  if(body.subarray(4,12).toString('ascii').includes('ftypavif'))return '.avif';
  if(body.subarray(0,4).toString('ascii')==='RIFF'&&body.subarray(8,12).toString('ascii')==='WEBP')return '.webp';
@@ -66,18 +67,26 @@ async function capture(b,url,view,shots){
   document.querySelectorAll('body *').forEach(e=>{const s=getComputedStyle(e);if(s.opacity!=='1')e.style.opacity=s.opacity;if(s.visibility==='hidden')e.style.visibility='hidden';});
   // map: replace Wix map frame by standard Google embed
   document.querySelectorAll('iframe[src*="googleMap"]').forEach(f=>{if(!loc){f.remove();return;}f.src='https://maps.google.com/maps?q='+encodeURIComponent(loc.lat+','+loc.lng)+'&z=14&output=embed';f.removeAttribute('sandbox');f.setAttribute('loading','lazy');if(loc.dark)f.style.filter='grayscale(1) invert(88%) contrast(.85)';});
-  document.querySelectorAll('script,noscript,link[rel=preload],link[rel=modulepreload],link[rel=prefetch],style,iframe[src*="wixapps"],#WIX_ADS,[id^=wix-]').forEach(e=>e.remove());
+  document.querySelectorAll('script,noscript,link[rel=preload],link[rel=modulepreload],link[rel=prefetch],style,iframe[src*="wixapps"],#WIX_ADS,[id^=wix-],#base44-edit-badge').forEach(e=>e.remove());
+  document.querySelectorAll('*').forEach(e=>{for(const a of [...e.attributes]){if(/^on/i.test(a.name)||(['href','src','action','xlink:href'].includes(a.name)&&/^\s*javascript:/i.test(a.value)))e.removeAttribute(a.name);}});
   return {html:document.documentElement.outerHTML,css,base:location.href,links};
  },loc);
+ // Google Fonts CSS contains Unicode subsets the first screen may not request.
+ // Keep every referenced subset so later dialogs work without Google online.
+ const fontUrls=new Set();for(const [u,body] of bodies){if(!u.startsWith('https://fonts.googleapis.com/'))continue;
+  for(const m of body.toString().matchAll(/url\(["']?(https:\/\/fonts\.gstatic\.com\/[^"')]+)["']?\)/g))fontUrls.add(m[1]);}
+ await Promise.allSettled([...fontUrls].slice(0,80).map(async u=>{if(bodies.has(u))return;const r=await ctx.request.get(u,{timeout:15000});if(!r.ok())return;const data=await r.body();if(data.length<=2_000_000)bodies.set(u,data);}));
  await ctx.close();snap.motion=motion;snap.timeline=timeline;return {snap,bodies};
 }
 function write(snap,bodies,file){
  let html=snap.html,css=snap.css;
  const save=(u)=>{let abs;try{abs=new URL(u.replace(/&amp;/g,'&'),snap.base).href}catch{return null}if(savedAssets.has(abs))return savedAssets.get(abs);const body=bodies.get(abs);if(!body)return null;
   const n='assets/'+h(abs)+assetExt(body,abs);fs.writeFileSync(out+'/'+n,body);savedAssets.set(abs,n);return n;};
- const saveCss=(u)=>{let abs;try{abs=new URL(u.replace(/&amp;/g,'&'),snap.base).href}catch{return null}const body=bodies.get(abs);if(!body)return null;
-  const t=body.toString().replace(/url\(["']?([^"')]+)["']?\)/g,(m,v)=>{if(v.startsWith('data:'))return m;let a;try{a=new URL(v,abs).href}catch{return m}const n=save(a);return n?`url("${n.replace('assets/','')}")`:m;});
-  const n='assets/'+h(abs)+'.css';fs.writeFileSync(out+'/'+n,t);return n;};
+ const saveCss=(u)=>{let abs;try{abs=new URL(u.replace(/&amp;/g,'&'),snap.base).href}catch{return null}if(savedCss.has(abs))return savedCss.get(abs);const body=bodies.get(abs);if(!body)return null;
+  const n='assets/'+h(abs)+'.css';savedCss.set(abs,n);
+  let t=body.toString().replace(/@import\s+["']([^"']+)["']\s*;/g,(m,v)=>{let a;try{a=new URL(v,abs).href}catch{return m}const child=saveCss(a);return child?`@import "/${child}";`:m;});
+  t=t.replace(/url\(["']?([^"')]+)["']?\)/g,(m,v)=>{if(v.startsWith('data:'))return m;let a;try{a=new URL(v,abs).href}catch{return m}const asset=save(a);return asset?`url("/${asset}")`:m;});
+  fs.writeFileSync(out+'/'+n,t);return n;};
  css=css.replace(/url\(["']?([^"')]+)["']?\)/g,(m,u)=>{if(u.startsWith('data:'))return m;const n=save(u);return n?`url("/${n}")`:m;});
  html=html.replace(/<link\b[^>]*>/g,tag=>{if(!/rel="stylesheet"/.test(tag))return tag;return tag.replace(/href="([^"]+)"/,(m,u)=>{const n=saveCss(u);return n?`href="/${n}"`:m;});});
  html=html.replace(/(src|poster)="([^"]+)"/g,(m,a,u)=>{const n=save(u);return n?`${a}="/${n}"`:m;});

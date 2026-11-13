@@ -8,8 +8,9 @@ const { spawn } = require('child_process');
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'web-end-copier-test-'));
 const output = path.join(scratch, 'copy');
 const server = http.createServer((req, res) => {
-  if (req.url === '/style.css') { res.writeHead(200, { 'content-type': 'text/css' }).end('body{background:#eef}'); return; }
-  if (req.url === '/') { res.writeHead(200, { 'content-type': 'text/html' }).end('<html><head><link rel="stylesheet" href="/style.css"></head><body><h1>Home</h1><a href="/about">About</a><a href="/missing">Missing</a></body></html>'); return; }
+  if (req.url === '/style.css') { res.writeHead(200, { 'content-type': 'text/css' }).end('@import "/import.css";body{background:#eef}'); return; }
+  if (req.url === '/import.css') { res.writeHead(200, { 'content-type': 'text/css' }).end('h1{color:#123}'); return; }
+  if (req.url === '/') { res.writeHead(200, { 'content-type': 'text/html' }).end('<html><head><link rel="stylesheet" href="/style.css"></head><body><h1>Home</h1><a href="/about" onclick="alert(1)">About</a><a href="/missing">Missing</a><a href="javascript:alert(2)">Unsafe</a></body></html>'); return; }
   if (req.url === '/about') { res.writeHead(200, { 'content-type': 'text/html' }).end('<html><body><h1>About</h1></body></html>'); return; }
   res.writeHead(404).end();
 });
@@ -29,7 +30,10 @@ async function run() {
   const html = fs.readFileSync(path.join(output, 'index.html'), 'utf8');
   const report = JSON.parse(fs.readFileSync(path.join(output, 'copy-report.json'), 'utf8'));
   assert.match(html, /<link[^>]+href="\/assets\/[^"]+\.css"/);
+  const stylesheet = html.match(/<link[^>]+href="(\/assets\/[^"]+\.css)"/)?.[1];
+  assert.match(fs.readFileSync(path.join(output, stylesheet.slice(1)), 'utf8'), /@import "\/assets\/[^"]+\.css"/);
   assert.match(html, /<a href="\/about\/">About<\/a>/);
+  assert.ok(!html.includes('onclick=') && !html.includes('javascript:'));
   assert.ok(html.includes(`<a href="${source}missing">Missing</a>`));
   assert.deepEqual(report.pages, ['index', 'about']);
   assert.ok(report.notCopied.includes('missing'));
