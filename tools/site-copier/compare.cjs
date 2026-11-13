@@ -1,18 +1,69 @@
-const {chromium,devices}=require('playwright');const http=require('http');const fs=require('fs');const path=require('path');
-const dir=process.argv[2];const VIEWS={desktop:{viewport:{width:1366,height:900}},phone:{...devices['iPhone 13']}};
-const srv=http.createServer((q,r)=>{let f=path.join(dir,decodeURIComponent(q.url.split('?')[0]));if(q.url.split('?')[0].endsWith('/'))f=path.join(f,'index.html');fs.readFile(f,(e,d)=>{if(e){r.writeHead(404);r.end();}else{if(f.endsWith('.css'))r.setHeader('content-type','text/css');if(f.endsWith('.avif'))r.setHeader('content-type','image/avif');r.end(d);}});}).listen(8812);
-const diff=async(p,a,c)=>p.evaluate(async([a,c])=>{const ld=s=>new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src='data:image/png;base64,'+s;});
- const A0=await ld(a),C0=await ld(c);const w=Math.min(A0.width,C0.width),h=Math.min(A0.height,C0.height);
- const g=im=>{const cv=document.createElement('canvas');cv.width=w;cv.height=h;const x=cv.getContext('2d');x.drawImage(im,0,0);return x.getImageData(0,0,w,h).data};
- const A=g(A0),C=g(C0);let d=0;for(let i=0;i<A.length;i+=4)if(Math.abs(A[i]-C[i])+Math.abs(A[i+1]-C[i+1])+Math.abs(A[i+2]-C[i+2])>48)d++;return [d,w*h];},[a,c]);
-(async()=>{const b=await chromium.launch();const tool=await b.newPage();
- for(const page of fs.readdirSync(dir+'/_shots')){for(const view of ['desktop','phone']){if(!fs.existsSync(`${dir}/_shots/${page}/${view}`))continue;
-  const ctx=await b.newContext(VIEWS[view]);const p=await ctx.newPage();let ext=0;
-  await p.route('**/*',rt=>{const u=rt.request().url();if(u.startsWith('http://localhost:8812')||/google.com|gstatic.com|googleapis.com|unpkg.com|cartocdn.com/.test(u))return rt.continue();ext++;return rt.abort();});
-  await p.goto('http://localhost:8812/'+(view==='phone'?'m/':'')+(page==='index'?'':page.replace(/__/g,'/')+'/'),{waitUntil:'load'});await p.waitForTimeout(1000);
-  const odir=`${dir}/_shots/${page}/${view}`;const n=fs.readdirSync(odir).filter(f=>/^\d+\.png$/.test(f)).length;let D=0,T=0;fs.mkdirSync(odir+'/copy',{recursive:true});
-  const vh=p.viewportSize().height;
-  for(let i=0;i<n;i++){await p.evaluate(y=>window.scrollTo(0,y),i*vh);await p.waitForTimeout(500);const cp=`${odir}/copy/${i}.png`;await p.screenshot({path:cp});
-   const [d,t]=await diff(tool,fs.readFileSync(`${odir}/${i}.png`).toString('base64'),fs.readFileSync(cp).toString('base64'));D+=d;T+=t;}
-  console.log(page.padEnd(16),view.padEnd(8),'same',(100-100*D/T).toFixed(2)+'%','screens',n,'blocked',ext);await ctx.close();}}
- await b.close();srv.close();})();
+// Compare the first viewport of each copied page with the source screenshot.
+// This is a visual signal, not a guarantee that every interaction is copied.
+const { chromium, devices } = require('playwright');
+const fs = require('fs');
+const path = require('path');
+const { createPreviewServer } = require('./server.cjs');
+
+const directory = path.resolve(process.argv[2] || 'site');
+const copy = JSON.parse(fs.readFileSync(path.join(directory, 'copy-report.json'), 'utf8'));
+const views = { desktop: { viewport: { width: 1366, height: 900 } }, phone: devices['iPhone 13'] };
+
+async function compareImages(page, original, clone) {
+  return page.evaluate(async ([a, b]) => {
+    const image = data => new Promise((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = reject;
+      element.src = 'data:image/png;base64,' + data;
+    });
+    const [first, second] = await Promise.all([image(a), image(b)]);
+    const width = Math.min(first.width, second.width);
+    const height = Math.min(first.height, second.height);
+    const pixels = input => {
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      const context = canvas.getContext('2d');
+      context.drawImage(input, 0, 0);
+      return context.getImageData(0, 0, width, height).data;
+    };
+    const left = pixels(first), right = pixels(second);
+    let changed = 0;
+    for (let i = 0; i < left.length; i += 4) {
+      if (Math.abs(left[i] - right[i]) + Math.abs(left[i + 1] - right[i + 1]) + Math.abs(left[i + 2] - right[i + 2]) > 48) changed++;
+    }
+    return { changed, total: width * height };
+  }, [original.toString('base64'), clone.toString('base64')]);
+}
+
+(async () => {
+  const { server, url } = await createPreviewServer(directory);
+  const browser = await chromium.launch();
+  const pages = [];
+  try {
+    for (const slug of copy.pages || []) for (const [view, options] of Object.entries(views)) {
+      const shot = path.join(directory, '_shots', slug.replace(/\//g, '__'), view, '0.png');
+      if (!fs.existsSync(shot)) continue;
+      const context = await browser.newContext(options);
+      const page = await context.newPage();
+      try {
+        const target = url + (view === 'phone' ? 'm/' : '') + (slug === 'index' ? '' : slug + '/');
+        await page.route('**/*', route => new URL(route.request().url()).origin === new URL(url).origin ? route.continue() : route.abort());
+        await page.goto(target, { waitUntil: 'load', timeout: 30000 });
+        await page.evaluate(() => document.fonts.ready);
+        await page.waitForTimeout(500);
+        const clonedShot = await page.screenshot();
+        const { changed, total } = await compareImages(page, fs.readFileSync(shot), clonedShot);
+        const similarity = Number((100 * (total - changed) / total).toFixed(2));
+        pages.push({ slug, view, similarityPercent: similarity });
+        console.log(slug, view, similarity + '%');
+      } catch (error) {
+        pages.push({ slug, view, error: error.message.split('\n')[0] });
+      } finally { await context.close(); }
+    }
+  } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
+  const measured = pages.filter(page => Number.isFinite(page.similarityPercent));
+  const report = { source: copy.source, comparison: 'first viewport per page and view', meanSimilarityPercent: measured.length ? Number((measured.reduce((sum, page) => sum + page.similarityPercent, 0) / measured.length).toFixed(2)) : null, pages };
+  fs.writeFileSync(path.join(directory, 'visual-report.json'), JSON.stringify(report, null, 2));
+  console.log('Mean first-viewport similarity:', report.meanSimilarityPercent === null ? 'not measured' : report.meanSimilarityPercent + '%');
+})().catch(error => { console.error(error); process.exitCode = 1; });

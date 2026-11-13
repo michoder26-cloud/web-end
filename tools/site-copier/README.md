@@ -7,13 +7,22 @@ It opens each page in a real browser (Playwright, Chromium), keeps the page as t
 - copies a desktop and a phone version (`/m/`), and picks one by screen size;
 - records scroll effects (moving backgrounds, a header that hides) and time effects (slideshows), and plays them back with a small script (`motion.js`);
 - replaces the Wix map with a Google map in the same light or dark look;
-- follows the site's own links, up to 15 pages (`MAXP=n` to change).
+- follows the site's own links, up to 15 pages with `copy.cjs` (`MAXP=n` to change).
 
 Only copy a site you own.
 
+The one-command workflow needs no AI:
+
+```
+node tools/site-copier/run.cjs https://example.com new-copy
+node tools/site-copier/preview.cjs new-copy
+```
+
+`--quick` makes a shorter exploratory capture. The workflow follows up to 50 pages by default (`MAXP=n` changes the limit), applies supported front-end adapters, captures safe expanding menus, and writes `front-end-audit.json` and `visual-report.json`. The audit lists uncopied pages, missing assets, outside requests, broken local links and buttons whose behavior has not been verified. The visual report measures similarity of the first viewport on desktop and phone. A clean audit means the checked front-end paths worked; it does not promise that every possible interaction on every website was reproduced.
+
 ```
 node tools/site-copier/copy.cjs https://example.wixsite.com/shop out
-node tools/site-copier/compare.cjs out   # % of pixels that match, per page and size
+node tools/site-copier/compare.cjs out   # first-viewport pixel similarity, per page and size
 node tools/site-copier/preview.cjs out   # open http://127.0.0.1:8812/
 node tools/site-copier/test.cjs          # local two-page smoke test
 ```
