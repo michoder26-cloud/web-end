@@ -1,6 +1,6 @@
 const {chromium,devices}=require('playwright');const http=require('http');const fs=require('fs');const path=require('path');
 const dir=process.argv[2];const VIEWS={desktop:{viewport:{width:1366,height:900}},phone:{...devices['iPhone 13']}};
-const srv=http.createServer((q,r)=>{let f=path.join(dir,decodeURIComponent(q.url.split('?')[0]));if(f.endsWith('/'))f+='index.html';fs.readFile(f,(e,d)=>{if(e){r.writeHead(404);r.end();}else{if(f.endsWith('.css'))r.setHeader('content-type','text/css');r.end(d);}});}).listen(8812);
+const srv=http.createServer((q,r)=>{let f=path.join(dir,decodeURIComponent(q.url.split('?')[0]));if(q.url.split('?')[0].endsWith('/'))f=path.join(f,'index.html');fs.readFile(f,(e,d)=>{if(e){r.writeHead(404);r.end();}else{if(f.endsWith('.css'))r.setHeader('content-type','text/css');if(f.endsWith('.avif'))r.setHeader('content-type','image/avif');r.end(d);}});}).listen(8812);
 const diff=async(p,a,c)=>p.evaluate(async([a,c])=>{const ld=s=>new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src='data:image/png;base64,'+s;});
  const A0=await ld(a),C0=await ld(c);const w=Math.min(A0.width,C0.width),h=Math.min(A0.height,C0.height);
  const g=im=>{const cv=document.createElement('canvas');cv.width=w;cv.height=h;const x=cv.getContext('2d');x.drawImage(im,0,0);return x.getImageData(0,0,w,h).data};

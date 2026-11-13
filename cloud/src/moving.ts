@@ -66,7 +66,23 @@ export async function scanWebsite(env: Env, start: URL) {
     }
     if (total) break
   }
-  return { groups, total }
+  if (total) return { groups, total, discovery: 'sitemap' as const }
+
+  // Free Wix addresses may expose every menu/product/post link but no sitemap.
+  const home = await readWebPage(start)
+  if ('error' in home) return { groups, total, discovery: 'none' as const }
+  const base = start.pathname.replace(/\/$/, '')
+  const found = new Set<string>([start.origin + (base || '/')])
+  for (const link of home.links) {
+    const url = new URL(link.href)
+    if (url.origin !== start.origin || (url.pathname !== base && !url.pathname.startsWith(base + '/'))) continue
+    found.add(url.origin + url.pathname)
+  }
+  const paths = [...found].slice(0, maxListed)
+  groups.pages = paths.filter((url) => !/\/(?:product-page|post)\//.test(new URL(url).pathname))
+  groups.products = paths.filter((url) => /\/product-page\//.test(new URL(url).pathname))
+  groups.posts = paths.filter((url) => /\/post\//.test(new URL(url).pathname))
+  return { groups, total: paths.length, discovery: 'home_page_links' as const }
 }
 
 const usefulData = new Set(['BreadcrumbList', 'LocalBusiness', 'Offer', 'Organization', 'Product', 'Service', 'Store'])

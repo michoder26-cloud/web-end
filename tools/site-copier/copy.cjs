@@ -3,9 +3,24 @@ const {chromium,devices}=require('playwright');const fs=require('fs');const path
 const start=process.argv[2], out=process.argv[3]||'site';
 const VIEWS={desktop:{viewport:{width:1366,height:900}},phone:{...devices['iPhone 13']}};
 const h=s=>crypto.createHash('md5').update(s).digest('hex').slice(0,12);
-fs.rmSync(out,{recursive:true,force:true});fs.mkdirSync(out+'/assets',{recursive:true});fs.copyFileSync(__dirname+'/motion.js',out+'/assets/motion.js');
+if(!start){console.error('Usage: node copy.cjs <site URL> <new output directory>');process.exit(1);}
+let root;try{root=new URL(start);if(!['http:','https:'].includes(root.protocol))throw Error('unsupported protocol');}catch{console.error('The site URL must start with http:// or https://');process.exit(1);}
+const output=path.resolve(out);if(fs.existsSync(output)){console.error('Output directory already exists; choose a new directory:',output);process.exit(1);}
+fs.mkdirSync(path.join(output,'assets'),{recursive:true});fs.copyFileSync(path.join(__dirname,'motion.js'),path.join(output,'assets','motion.js'));
 const savedAssets=new Map();
-function slugOf(u){const p=new URL(u).pathname.replace(new URL(start).pathname,'').replace(/^\/+|\/+$/g,'');return p||'index';}
+function assetExt(body,url){
+ if(body.subarray(4,12).toString('ascii').includes('ftypavif'))return '.avif';
+ if(body.subarray(0,4).toString('ascii')==='RIFF'&&body.subarray(8,12).toString('ascii')==='WEBP')return '.webp';
+ if(body.subarray(0,4).toString('hex')==='89504e47')return '.png';
+ if(body.subarray(0,3).toString('hex')==='ffd8ff')return '.jpg';
+ if(body.subarray(0,3).toString('ascii')==='GIF')return '.gif';
+ return (path.extname(new URL(url).pathname).match(/^\.\w{1,5}/)||['.bin'])[0];
+}
+const basePath=root.pathname.replace(/\/$/,'');
+const motionMs=Math.max(0,Number(process.env.MOTION_MS??16000));
+const shotLimit=Math.max(1,Number(process.env.SHOT_LIMIT??Infinity));
+function isInternal(u){return u.origin===root.origin&&(u.pathname===basePath||u.pathname.startsWith(basePath+'/'));}
+function slugOf(u){const p=new URL(u).pathname.slice(basePath.length).replace(/^\/+|\/+$/g,'');return p||'index';}
 async function capture(b,url,view,shots){
  const ctx=await b.newContext(VIEWS[view]);const p=await ctx.newPage();const bodies=new Map();const texts=[];
  p.on('response',async r=>{try{const t=r.request().resourceType();if(['image','font','stylesheet','media'].includes(t)&&r.ok())bodies.set(r.url(),await r.body());else if(['xhr','fetch','document'].includes(t)&&r.ok())texts.push(await r.text());}catch{}});
@@ -14,20 +29,20 @@ async function capture(b,url,view,shots){
  await p.waitForTimeout(2500);
  if(shots){ // viewport screenshots while scrolling
   const H=await p.evaluate(()=>document.documentElement.scrollHeight);const vh=p.viewportSize().height;let i=0;
-  for(let y=0;y<H;y+=vh){await p.evaluate(y=>window.scrollTo(0,y),y);await p.waitForTimeout(700);await p.screenshot({path:`${shots}/${i++}.png`});}
+  for(let y=0;y<H&&i<shotLimit;y+=vh){await p.evaluate(y=>window.scrollTo(0,y),y);await p.waitForTimeout(700);await p.screenshot({path:`${shots}/${i++}.png`});}
   await p.evaluate(()=>window.scrollTo(0,0));await p.waitForTimeout(500);}
  // map location
  let loc=null;for(const t of texts){const m=t.match(/"locations":\[\{[^\]]*?"address":"([^"]*)"[^\]]*?"latitude":(-?[\d.]+),"longitude":(-?[\d.]+)/);if(m){loc={address:m[1],lat:m[2],lng:m[3]};break;}}
  if(!loc)for(const t of texts){const m=t.match(/"businessLocationCoordinates":\{"latitude":(-?[\d.]+),"longitude":(-?[\d.]+)/);if(m){loc={lat:m[1],lng:m[2]};break;}}
  // record time-based motion (slideshows, crossfades) at the top of the page
- const timeline=await p.evaluate(async()=>{const els=[...document.querySelectorAll('[id^=comp-],[data-motion-part]')];const st=[];
+ const timeline=await p.evaluate(async motionMs=>{const els=[...document.querySelectorAll('[id^=comp-],[data-motion-part]')];const st=[];
   const snap=()=>els.map(e=>{const s=getComputedStyle(e);return s.opacity+'|'+s.transform;});
-  for(let t=0;t<=16000;t+=200){st.push(snap());await new Promise(r=>setTimeout(r,200));}
+  for(let t=0;t<=motionMs;t+=200){st.push(snap());await new Promise(r=>setTimeout(r,200));}
   const tracks={};els.forEach((e,i)=>{const v=st.map(x=>x[i]);if(v.some(x=>x!==v[0])){e.setAttribute('data-ct',i);tracks[i]=v;}});
   if(!Object.keys(tracks).length)return null;
   // period: first later sample (>2s) matching sample 0 on all tracks, else whole recording
   let period=st.length;for(let k=10;k<st.length;k++){if(Object.keys(tracks).every(i=>tracks[i][k]===tracks[i][0])){period=k;break;}}
-  for(const i in tracks)tracks[i]=tracks[i].slice(0,period).map(x=>x.split('|'));return {step:200,tracks};});
+  for(const i in tracks)tracks[i]=tracks[i].slice(0,period).map(x=>x.split('|'));return {step:200,tracks};},motionMs);
  // record scroll-linked motion: transform/opacity of moving parts at each scroll step
  const motion=await p.evaluate(async()=>{const els=[...document.querySelectorAll('[data-motion-part],#SITE_HEADER,header,wow-image,[class*=parallax]')];
   els.forEach((e,i)=>e.setAttribute('data-cl',i));const H=document.documentElement.scrollHeight-innerHeight;const step=150;const samples={};
@@ -44,6 +59,7 @@ async function capture(b,url,view,shots){
   let css='';for(const s of document.styleSheets){if(s.href)continue;try{for(const r of s.cssRules)css+=r.cssText+'\n';}catch{}}
   const links=[...document.querySelectorAll('a[href]')].map(a=>a.href);
   document.querySelectorAll('img').forEach(i=>{if(i.currentSrc)i.setAttribute('src',i.currentSrc);i.removeAttribute('srcset');i.removeAttribute('loading');});
+  document.querySelectorAll('picture source').forEach(e=>e.remove());
   // sticky background images were sized to the window by script: make them one screen tall
   document.querySelectorAll('img').forEach(i=>{if(i.style.height===innerHeight+'px'){i.style.height='100vh';}});
   // freeze what the script decided is visible
@@ -58,7 +74,7 @@ async function capture(b,url,view,shots){
 function write(snap,bodies,file){
  let html=snap.html,css=snap.css;
  const save=(u)=>{let abs;try{abs=new URL(u.replace(/&amp;/g,'&'),snap.base).href}catch{return null}if(savedAssets.has(abs))return savedAssets.get(abs);const body=bodies.get(abs);if(!body)return null;
-  const ext=(path.extname(new URL(abs).pathname).match(/^\.\w{1,5}/)||['.bin'])[0];const n='assets/'+h(abs)+ext;fs.writeFileSync(out+'/'+n,body);savedAssets.set(abs,n);return n;};
+  const n='assets/'+h(abs)+assetExt(body,abs);fs.writeFileSync(out+'/'+n,body);savedAssets.set(abs,n);return n;};
  const saveCss=(u)=>{let abs;try{abs=new URL(u.replace(/&amp;/g,'&'),snap.base).href}catch{return null}const body=bodies.get(abs);if(!body)return null;
   const t=body.toString().replace(/url\(["']?([^"')]+)["']?\)/g,(m,v)=>{if(v.startsWith('data:'))return m;let a;try{a=new URL(v,abs).href}catch{return m}const n=save(a);return n?`url("${n.replace('assets/','')}")`:m;});
   const n='assets/'+h(abs)+'.css';fs.writeFileSync(out+'/'+n,t);return n;};
@@ -68,20 +84,22 @@ function write(snap,bodies,file){
  html=html.replace(/url\(&quot;([^&]+)&quot;\)/g,(m,u)=>{const n=save(u);return n?`url(&quot;/${n}&quot;)`:m;});
  html=html.replace(/xlink:href="(https?:[^"]+)"/g,(m,u)=>{const n=save(u);return n?`xlink:href="/${n}"`:m;});
  // internal links -> local pages
- const root=new URL(start);html=html.replace(/href="([^"]+)"/g,(m,u)=>{let a;try{a=new URL(u.replace(/&amp;/g,'&'),snap.base)}catch{return m}
-  if(a.host===root.host&&a.pathname.startsWith(root.pathname)){const s=slugOf(a.href);return `href="/${s==='index'?'':s+'/'}"`;}return m;});
+ // Page links are rewritten after the crawl, once we know which pages succeeded.
  html=html.replace('</head>',`<style>${css}</style></head>`);
  if(Object.keys(snap.motion||{}).length||snap.timeline)html=html.replace('</body>',`<script>window.__M=${JSON.stringify(snap.motion||{})};window.__T=${JSON.stringify(snap.timeline)};</script><script src="/assets/motion.js"></script></body>`);
  fs.mkdirSync(path.dirname(out+'/'+file),{recursive:true});fs.writeFileSync(out+'/'+file,'<!doctype html>'+html);
 }
-const PICK=`<script>(function(){var m=Math.min(screen.width,screen.height)<768,p=location.pathname,ph=p.indexOf('/m/')===0;
+const PICK=`<script>(function(){var m=Math.min(screen.width,innerWidth)<768,p=location.pathname,ph=p.indexOf('/m/')===0;
 if(m&&!ph)location.replace('/m'+p);else if(!m&&ph)location.replace(p.slice(2)||'/');})();</script>`;
-(async()=>{const b=await chromium.launch();const queue=[start],seen=new Set();const root=new URL(start);
+(async()=>{const b=await chromium.launch();const queue=[start],seen=new Set(),copied=new Set();
  while(queue.length&&seen.size<(+process.env.MAXP||15)){const u=queue.shift();const s=slugOf(u);if(seen.has(s))continue;seen.add(s);
   const dir=s==='index'?'':s+'/';const k=s.replace(/\//g,'__');fs.mkdirSync(`${out}/_shots/${k}/desktop`,{recursive:true});fs.mkdirSync(`${out}/_shots/${k}/phone`,{recursive:true});try{
   const d=await capture(b,u,'desktop',`${out}/_shots/${k}/desktop`);write(d.snap,d.bodies,dir+'index.html');
   const m=await capture(b,u,'phone',`${out}/_shots/${k}/phone`);write(m.snap,m.bodies,'m/'+dir+'index.html');
   for(const f of [dir+'index.html','m/'+dir+'index.html']){const fp=out+'/'+f;fs.writeFileSync(fp,fs.readFileSync(fp,'utf8').replace('<head>','<head>'+PICK));}
-  for(const l of d.snap.links){try{const a=new URL(l);if(a.host===root.host&&a.pathname.startsWith(root.pathname)&&!a.hash)queue.push(a.origin+a.pathname);}catch{}}
-  console.log('page',s);}catch(e){console.log('FAILED',s,e.message.split('\n')[0]);fs.rmSync(`${out}/_shots/${k}`,{recursive:true,force:true});}}
- console.log('assets',savedAssets.size);await b.close();})();
+  copied.add(s);for(const l of d.snap.links){try{const a=new URL(l);if(isInternal(a)&&!a.hash)queue.push(a.origin+a.pathname);}catch{}}
+  console.log('page',s);}catch(e){console.error('FAILED',s,e.message.split('\n')[0]);fs.rmSync(`${out}/_shots/${k}`,{recursive:true,force:true});}}
+ for(const s of copied){const dir=s==='index'?'':s+'/';for(const f of [dir+'index.html','m/'+dir+'index.html']){const fp=path.join(output,f);let html=fs.readFileSync(fp,'utf8');html=html.replace(/<a\b[^>]*>/gi,tag=>tag.replace(/href="([^"]+)"/, (m,u)=>{let a;try{a=new URL(u.replace(/&amp;/g,'&'),root)}catch{return m}if(!isInternal(a))return m;const target=slugOf(a.href);const suffix=a.search+a.hash;return `href="${copied.has(target)?'/'+(target==='index'?'':target+'/')+suffix:a.href}"`;}));fs.writeFileSync(fp,html);}}
+ const notCopied=[...new Set([...seen,...queue.map(slugOf)])].filter(s=>!copied.has(s));
+ fs.writeFileSync(path.join(output,'copy-report.json'),JSON.stringify({source:start,pages:[...copied],notCopied,assets:savedAssets.size},null,2));
+ console.log('pages',copied.size,'not copied',notCopied.length,'assets',savedAssets.size);await b.close();if(!copied.size)process.exitCode=1;})().catch(e=>{console.error(e);process.exitCode=1;});
