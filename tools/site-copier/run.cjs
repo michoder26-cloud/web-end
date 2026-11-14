@@ -36,6 +36,7 @@ const run = (script, args, env = process.env) => new Promise((resolve, reject) =
   try { await run('capture-ui.cjs', [directory], env); }
   catch (error) { console.error('UI capture:', error.message); }
   await run('audit.cjs', [directory]);
+  await run('add-backend.cjs', [directory]);
   await run('compare.cjs', [directory]);
   const audit = JSON.parse(fs.readFileSync(path.join(directory, 'front-end-audit.json'), 'utf8'));
   const visual = JSON.parse(fs.readFileSync(path.join(directory, 'visual-report.json'), 'utf8'));
@@ -45,5 +46,6 @@ const run = (script, args, env = process.env) => new Promise((resolve, reject) =
   console.log(`Front-end status: ${audit.status}; ${audit.issueCount} loading issues; ${audit.unverifiedControlCount} controls need review.`);
   console.log(`First-viewport similarity: ${visual.meanSimilarityPercent === null ? 'not measured' : visual.meanSimilarityPercent + '%'} (desktop and phone average).`);
   console.log(`All captured viewports: ${visual.meanScrollSimilarityPercent === null ? 'not measured' : visual.meanScrollSimilarityPercent + '%'} (desktop and phone average).`);
+  console.log(`With back office: cd "${directory}" && node server.cjs   (then open /admin/)`);
   console.log(`Preview: node tools/site-copier/preview.cjs "${directory}"`);
 })().catch(error => { console.error(error); process.exitCode = 1; });

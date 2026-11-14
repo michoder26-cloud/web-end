@@ -29,7 +29,20 @@ node tools/site-copier/preview.cjs out   # open http://127.0.0.1:8812/
 node tools/site-copier/test.cjs          # local two-page smoke test
 ```
 
-Not done yet: forms, bookings and the shop still only look right; they are not connected to the web-end back office, and the text and images can't be edited there yet.
+## Back office
+
+`run.cjs` finishes by adding a back office to the copy (`add-backend.cjs`, also usable on its own). The copy then runs as a small website with no extra packages:
+
+```
+cd new-copy && node server.cjs      # website on :8080, back office on /admin/
+```
+
+- **Messages:** the site's own forms send to the back office. The owner reads, marks, deletes and downloads them as CSV. There is a hidden trap field for bots, a per-visitor rate limit, and cross-site posts are refused.
+- **Edit pages:** the owner opens a page, clicks any text to change it and clicks a picture to replace it. The same change goes to the desktop and phone versions. Changes are written into the page files, so the site stays plain HTML.
+- **Owner password:** a first password is printed at start and saved in `data/first-password.txt`, and the owner changes it in Settings. Passwords are stored with scrypt, and the sign-in cookie is HttpOnly and SameSite=Strict.
+- All owner data is in `data/` and `uploads/`, so copying those two folders makes a backup.
+
+Not done yet: bookings and the shop's checkout are not connected to the back office. Forms that only work inside the original platform's app, such as members areas or Wix Bookings calendars, still need their own replacement. Adding new sections or pages is done by copying again or by hand.
 
 Choose a new output directory for every run. The copier refuses to replace an existing directory. If a page fails or the `MAXP` page limit is reached, links to pages that were not copied open the original site instead of a missing local page. `MOTION_MS` and `SHOT_LIMIT` can shorten exploratory runs; the defaults record full motion and screenshots.
 
