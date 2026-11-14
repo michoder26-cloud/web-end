@@ -205,7 +205,7 @@ export default {
     if (method === 'GET' && path === '/auth/google') return beginGoogle(request, env);
     if (method === 'GET' && path === '/auth/google/callback') return finishGoogle(request, env);
     if (method === 'POST' && path === '/logout') return logout(request, env);
-    if (method === 'GET' && path === '/') return html('<h1>คัดลอกเว็บ แล้วทำต่อในแบบของคุณ</h1><p>สร้างสำเนาหน้าเว็บเพื่อปรับแก้ใน Dashboard ส่วนตัว ก่อนเผยแพร่หรือย้ายไป Cloudflare ของคุณ</p><p><a class="button" href="/auth/google">เริ่มด้วย Google</a></p><p class="muted">รุ่นทดลอง: คัดลอกหน้าเว็บสูงสุด 10 หน้า ฟอร์มและ backend ของเว็บต้นฉบับยังไม่รวม</p>');
+    if (method === 'GET' && path === '/') return html(`<h1>คัดลอกเว็บ แล้วทำต่อในแบบของคุณ</h1><p>สร้างสำเนาหน้าเว็บเพื่อปรับแก้ใน Dashboard ส่วนตัว ก่อนเผยแพร่</p><p>${env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.GITHUB_DISPATCH_TOKEN ? '<a class="button" href="/auth/google">เริ่มด้วย Google</a>' : '<span class="muted">กำลังเตรียมระบบสมัครทดลอง</span>'}</p><p class="muted">รุ่นทดลอง: คัดลอกหน้าเว็บสูงสุด 10 หน้า ฟอร์มและ backend ของเว็บต้นฉบับยังไม่รวม</p>`);
     const user = await currentUser(request, env);
     if (!user) return go('/');
     if (method === 'GET' && path === '/dashboard') return dashboard(env, user);
