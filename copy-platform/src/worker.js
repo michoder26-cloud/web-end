@@ -58,21 +58,29 @@ async function projectPage(env, user, id) {
   return html(`<p><a href="/dashboard">← Dashboard</a></p><h1>${escapeHtml(row.title)}</h1><section class="card"><p><b>สถานะ:</b> ${escapeHtml(row.status)}</p><p><b>ต้นฉบับ:</b> <a href="${escapeHtml(row.source_url)}" rel="noreferrer">${escapeHtml(row.source_url)}</a></p>${row.error ? `<p role="alert">${escapeHtml(row.error)}</p>` : ''}${row.status === 'ready' ? `<p><a class="button" href="/projects/${id}/preview">ดูพรีวิวส่วนตัว</a> <a class="button" href="/projects/${id}/edit">แก้ข้อความและรูป</a></p><p>${report?.status === 'front-end-checks-passed' ? 'ส่วนที่ตรวจแล้วทำงาน' : 'มีส่วนที่ต้องตรวจเอง'} · ${Number(report?.issueCount || 0)} ปัญหาการโหลด · ${Number(report?.unverifiedControlCount || 0)} ปุ่มที่ยังไม่ยืนยัน</p>${report?.notCopied?.length ? `<p role="alert">หน้าที่คัดลอกไม่ครบ: ${report.notCopied.map(escapeHtml).join(', ')}</p>` : ''}<p class="muted">ฟอร์ม บัญชีลูกค้า การชำระเงิน และ backend ของเว็บต้นฉบับยังไม่ถูกคัดลอก</p><form method="post" action="/projects/${id}/publish"><button>${row.public ? 'เผยแพร่แล้ว' : 'เผยแพร่เว็บ'}</button></form>${row.public ? `<p><a href="https://${env.PUBLISHED_HOST}/p/${id}/">เปิดเว็บสาธารณะ</a></p>` : ''}` : '<p>รอผลสักครู่ แล้วโหลดหน้านี้ใหม่</p>'}</section>`);
 }
 
-async function editPage(env, row) {
-  const file = await env.FILES.get(`${row.id}/index.html`, 'text');
+async function editPage(env, row, page = 'index.html') {
+  if (!safeFilePath(page) || !page.endsWith('.html')) return forbidden();
+  const pages = (await env.DB.prepare("SELECT path FROM project_files WHERE project_id = ? AND path LIKE '%.html' ORDER BY path LIMIT 20").bind(row.id).all()).results.map(item => item.path);
+  if (!pages.includes(page)) return forbidden();
+  const file = await env.FILES.get(`${row.id}/${page}`, 'text');
   if (!file) return forbidden();
   const source = file;
   const edits = new Map((await env.DB.prepare('SELECT key, value FROM project_edits WHERE project_id = ?').bind(row.id).all()).results.map(item => [item.key, item.value]));
-  const textFields = [...source.matchAll(/<[^>]+data-we-text="([^"]+)"[^>]*>([^<>]{2,300})<\//g)].slice(0, 80).map(([, key, value]) => `<form class="card" method="post" action="/projects/${row.id}/edit"><label>ข้อความ <input name="value" value="${escapeHtml(edits.get(key) || value)}" maxlength="500" required></label><input type="hidden" name="key" value="${escapeHtml(key)}"><input type="hidden" name="kind" value="text"><button>บันทึก</button></form>`).join('');
-  const imageFields = [...source.matchAll(/<img[^>]+data-we-image="([^"]+)"[^>]*>/g)].slice(0, 40).map(([, key]) => `<form class="card" method="post" action="/projects/${row.id}/edit" enctype="multipart/form-data"><label>เปลี่ยนรูป <input type="file" name="image" accept="image/png,image/jpeg,image/webp" required></label><input type="hidden" name="key" value="${escapeHtml(key)}"><input type="hidden" name="kind" value="image"><button>อัปโหลดรูป</button></form>`).join('');
-  return html(`<p><a href="/projects/${row.id}">← โปรเจกต์</a></p><h1>แก้หน้าเว็บ</h1><p class="muted">ข้อความและรูปที่แก้จะแสดงในพรีวิวทันที กดเผยแพร่เมื่อพร้อม</p>${textFields}${imageFields}`);
+  const textFields = [...source.matchAll(/<[^>]+data-we-text="([^"]+)"[^>]*>([^<>]{2,300})<\//g)].slice(0, 80).map(([, key, value]) => `<form class="card" method="post" action="/projects/${row.id}/edit"><label>ข้อความ <input name="value" value="${escapeHtml(edits.get(key) || value)}" maxlength="500" required></label><input type="hidden" name="page" value="${escapeHtml(page)}"><input type="hidden" name="key" value="${escapeHtml(key)}"><input type="hidden" name="kind" value="text"><button>บันทึก</button></form>`).join('');
+  const imageFields = [...source.matchAll(/<img[^>]+data-we-image="([^"]+)"[^>]*>/g)].slice(0, 40).map(([, key]) => `<form class="card" method="post" action="/projects/${row.id}/edit" enctype="multipart/form-data"><label>เปลี่ยนรูป <input type="file" name="image" accept="image/png,image/jpeg,image/webp" required></label><input type="hidden" name="page" value="${escapeHtml(page)}"><input type="hidden" name="key" value="${escapeHtml(key)}"><input type="hidden" name="kind" value="image"><button>อัปโหลดรูป</button></form>`).join('');
+  const choices = pages.map(name => `<a class="button" style="margin:4px" href="?page=${encodeURIComponent(name)}">${escapeHtml(name === 'index.html' ? 'หน้าแรก' : name.replace(/\/index\.html$/, '') + (name.startsWith('m/') ? ' (มือถือ)' : ''))}</a>`).join('');
+  return html(`<p><a href="/projects/${row.id}">← โปรเจกต์</a></p><h1>แก้หน้าเว็บ</h1><p class="muted">เลือกหน้า แล้วแก้ข้อความและรูป พรีวิวจะอัปเดตทันที</p><nav>${choices}</nav><h2>${escapeHtml(page)}</h2>${textFields}${imageFields}`);
 }
 
 async function saveEdit(request, env, row) {
   const form = await request.formData();
   const key = String(form.get('key') || ''), kind = String(form.get('kind') || '');
+  const pagePath = String(form.get('page') || 'index.html');
   if (!/^[ti][0-9a-f]{12}-\d+$/.test(key) || !['text', 'image'].includes(kind) || key[0] !== kind[0]) return new Response('Invalid field', { status: 400 });
-  const page = await env.FILES.get(`${row.id}/index.html`, 'text');
+  if (!safeFilePath(pagePath) || !pagePath.endsWith('.html')) return new Response('Invalid page', { status: 400 });
+  const known = await env.DB.prepare('SELECT 1 AS present FROM project_files WHERE project_id = ? AND path = ?').bind(row.id, pagePath).first();
+  if (!known) return forbidden();
+  const page = await env.FILES.get(`${row.id}/${pagePath}`, 'text');
   if (!page || !page.includes(`data-we-${kind}="${key}"`)) return forbidden();
   let value;
   if (kind === 'text') {
@@ -91,7 +99,7 @@ async function saveEdit(request, env, row) {
   }
   await env.DB.prepare('INSERT INTO project_edits (project_id, key, kind, value) VALUES (?, ?, ?, ?) ON CONFLICT(project_id,key) DO UPDATE SET value = excluded.value').bind(row.id, key, kind, value).run();
   await env.DB.prepare('UPDATE projects SET updated_at = ?, last_active_at = ? WHERE id = ?').bind(Date.now(), Date.now(), row.id).run();
-  return go(`/projects/${row.id}/edit`);
+  return go(`/projects/${row.id}/edit?page=${encodeURIComponent(pagePath)}`);
 }
 
 async function claim(request, env, id) {
@@ -194,7 +202,7 @@ export default {
       if (method === 'GET' && !action) return projectPage(env, user, id);
       const row = await project(env, id, user.id);
       if (!row || row.status !== 'ready') return forbidden();
-      if (method === 'GET' && action === 'edit') return editPage(env, row);
+      if (method === 'GET' && action === 'edit') return editPage(env, row, url.searchParams.get('page') || 'index.html');
       if (method === 'POST' && action === 'edit') return saveEdit(request, env, row);
       if (method === 'GET' && action === 'preview') {
         const value = token();
