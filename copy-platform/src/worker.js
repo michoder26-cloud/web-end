@@ -13,13 +13,19 @@ const csrf = request => request.method === 'GET' || (request.headers.get('Sec-Fe
 async function project(env, id, userId) {
   return env.DB.prepare('SELECT * FROM projects WHERE id = ? AND owner_id = ?').bind(id, userId).first();
 }
+async function expireStale(env) {
+  const now = Date.now();
+  await env.DB.prepare("UPDATE projects SET status = 'failed', error = 'Copy timed out', updated_at = ? WHERE (status = 'queued' AND created_at < ?) OR (status = 'running' AND updated_at < ?)").bind(now, now - 75 * 60000, now - 20 * 60000).run();
+}
 async function dashboard(env, user) {
+  await expireStale(env);
   const rows = (await env.DB.prepare('SELECT id, title, source_url, status, public, error, created_at FROM projects WHERE owner_id = ? ORDER BY created_at DESC LIMIT 100').bind(user.id).all()).results;
   const items = rows.map(row => `<li><a href="/projects/${row.id}">${escapeHtml(row.title)}</a> <span class="muted">${escapeHtml(row.status)} · ${new Date(row.created_at).toLocaleDateString('th-TH')}</span></li>`).join('');
   return html(`<h1>เว็บไซต์ของคุณ</h1><p class="muted">สวัสดี ${escapeHtml(user.name)} · แต่ละเว็บเป็นส่วนตัวจนกว่าคุณจะเผยแพร่</p><section class="card"><h2>คัดลอกเว็บ</h2><p>ใส่ URL ของเว็บสาธารณะ เครื่องมือจะคัดลอกหน้าเว็บและตรวจผลให้ คุณแก้ไขก่อนเผยแพร่ได้</p><form method="post" action="/projects"><input name="url" type="url" placeholder="https://example.com" required><button>เริ่มคัดลอก</button></form><p class="muted">สูงสุด ${DAILY_JOBS} เว็บต่อวัน บัญชีละหนึ่งงานในคิว และ ${MAX_PAGES} หน้าต่อเว็บ · ฟอร์มและ backend ของเว็บเดิมไม่ถูกคัดลอก</p></section><section class="card"><h2>โปรเจกต์</h2>${items ? `<ul>${items}</ul>` : '<p>ยังไม่มีเว็บที่คัดลอก</p>'}</section><form method="post" action="/logout"><button>ออกจากระบบ</button></form>`);
 }
 async function createProject(request, env, user) {
   if (!env.GITHUB_DISPATCH_TOKEN || !env.GITHUB_REPOSITORY) return new Response('Copy runner is not configured', { status: 503 });
+  await expireStale(env);
   const form = await request.formData();
   const source = sourceUrl(String(form.get('url') || ''));
   if (!source) return html('<h1>URL ใช้ไม่ได้</h1><p>ใช้ลิงก์ HTTPS ของเว็บสาธารณะเท่านั้น</p><a href="/dashboard">กลับไป Dashboard</a>');
@@ -52,6 +58,7 @@ async function createProject(request, env, user) {
   return go(`/projects/${id}`);
 }
 async function projectPage(env, user, id) {
+  await expireStale(env);
   const row = await project(env, id, user.id);
   if (!row) return forbidden();
   const report = row.report_json ? JSON.parse(row.report_json) : null;

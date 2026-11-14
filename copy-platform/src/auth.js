@@ -23,7 +23,7 @@ export async function beginGoogle(request, env) {
 }
 
 let keys;
-async function verifyIdToken(token, env, nonce) {
+export async function verifyIdToken(token, env, nonce) {
   const parts = token.split('.');
   if (parts.length !== 3 || token.length > 8192) return null;
   let header, claims;

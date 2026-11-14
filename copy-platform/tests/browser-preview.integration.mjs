@@ -27,14 +27,16 @@ const browser = await chromium.launch();
 try {
   for (const width of [1280, 390]) {
     const context = await browser.newContext({ viewport: { width, height: 840 }, screen: { width, height: 840 } });
-    const page = await context.newPage(), errors = [];
+    const page = await context.newPage(), errors = [], missing = [];
     page.on('pageerror', error => errors.push(error.message));
+    page.on('response', response => { if (response.status() >= 400 && response.url().startsWith(`http://127.0.0.1:${server.address().port}`)) missing.push(`${response.status()} ${response.url()}`); });
     const response = await page.goto(`http://127.0.0.1:${server.address().port}${prefix}/`);
     await page.waitForTimeout(1500);
     assert.equal(response.status(), 200);
     assert.ok((await page.title()).length > 0);
     assert.equal(new URL(page.url()).pathname.startsWith(prefix + (width < 768 ? '/m/' : '/')), true);
     assert.deepEqual(errors, []);
+    assert.deepEqual(missing, []);
     console.log(`Preview ${width}px: ${new URL(page.url()).pathname}, ${await page.title()}`);
     await context.close();
   }
