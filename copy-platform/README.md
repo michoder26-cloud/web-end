@@ -12,6 +12,10 @@ This is a separate Cloudflare Worker for `copy.tktfdesign.com`. It does not repl
 
 Cloudflare R2 could not be enabled on this account without its subscription checkout. Workers KV is used to keep this beta on the Free plan, with a 500 MiB admission cap. These caps are conservative because KV Free has 1,000 writes per day. This is a small beta, not unrestricted hosting.
 
+## Move to web-end
+
+A ready project has a **Download for web-end (.zip)** button. The ZIP holds every copied file with the owner's saved text and picture edits written in, plus `README-web-end.txt`. `web-end import-copy site.zip --site NAME --replace` (in `selfhost/`) loads it into a local web-end site. There the copied pages keep their look, and their forms send to Messages. The owner edits words and pictures in the back office and publishes, with versions, page history, customers and products available. The ZIP is built in the Worker without compression, within the 50 MiB project limit.
+
 ## Configuration required before a public launch
 
 1. Create a Google OAuth web client. The authorized redirect URI must be `https://copy.tktfdesign.com/auth/google/callback`. Store its client ID and secret as Worker secrets `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
@@ -25,6 +29,7 @@ Never commit OAuth or runner secrets. `wrangler d1 migrations apply DB --remote`
 ## Remaining launch gates
 
 - The real Google OAuth callback and GitHub Actions dispatch need credentials and a two-account test. They have not been exercised against the production services.
+- Moving a project into web-end works through the ZIP download and the local importer. A direct transfer into the owner's own Cloudflare web-end install is not implemented.
 - Cloudflare account connection and direct transfer are not implemented. A public UI must not advertise this as available until a public Cloudflare OAuth client and transfer flow exist.
 - The 90-day email and deletion path needs a verified Resend account and a live delivery test. Without it the Worker keeps content and stops accepting new jobs at the storage cap.
 - Public DNS and Worker routes have not been changed yet.

@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { importCopy } from '../host/import-copy.mjs'
 import { startServer } from '../host/server.mjs'
+import { applyEdits, zip } from '../../copy-platform/src/package.js'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
 
 let passed = 0
 const check = (ok, message) => {
@@ -78,6 +80,25 @@ try {
   check(after.includes(replaced.url) && !after.includes('/copied/assets/a.png'), 'after publishing, the new picture shows')
   check((await (await fetch(`${server.url}${owner}/page/home`)).text()).includes('/page/home/restore/'), 'earlier versions of the page can be restored')
   check((await fetch(`${server.url}/owner/not-the-owner-link-at-all-1234/page/home/visual`)).status === 404, 'strangers cannot open the editor')
+
+  // The download from the copy service: the same files in a ZIP, with the owner's edits written in.
+  const list = (folder, prefix = '') => readdirSync(folder).flatMap((name) => statSync(join(folder, name)).isDirectory() ? list(join(folder, name), `${prefix}${name}/`) : [`${prefix}${name}`])
+  const entries = list(copy).filter((name) => name !== 'copy-report.json').map((name) => {
+    let data = readFileSync(join(copy, name))
+    if (name === 'index.html') data = Buffer.from(applyEdits(data.toString().replace('<span class="x">', '<span class="x" data-we-text="t1">'), new Map([['t1', { kind: 'text', value: 'From the copy service' }]])))
+    return { name, data: new Uint8Array(data) }
+  })
+  const download = join(copy, '..', `download-${Date.now()}.zip`)
+  writeFileSync(download, Buffer.from(await zip(entries).arrayBuffer()))
+  const fromZip = importCopy({ copyDir: download, dataDir, replace: true })
+  check(fromZip.pages.length === 2 && fromZip.forms === 2, 'the ZIP download from the copy service loads directly')
+  await fetch(`${server.url}${owner}/publish`, { method: 'POST', body: new URLSearchParams({ note: 'zip' }), redirect: 'manual' })
+  check((await (await fetch(server.url)).text()).includes('>From the copy service</span>'), 'edits made on the copy service come along')
+  const evil = join(copy, '..', `evil-${Date.now()}.zip`)
+  writeFileSync(evil, Buffer.from(await zip([{ name: '../escape.txt', data: new Uint8Array([1]) }]).arrayBuffer()))
+  refused = false
+  try { importCopy({ copyDir: evil, dataDir, replace: true }) } catch { refused = true }
+  check(refused, 'a ZIP with a file outside its folder is refused')
 } finally {
   await server.close()
 }

@@ -8,7 +8,7 @@
 //   web-end verify  FILE                                      check a bundle without restoring it
 //   web-end restore FILE [--data DIR]                         restore through a checked staging copy
 //   web-end licenses [--out FILE]                             list every bundled package and its license
-//   web-end import-copy DIR [--data DIR | --site NAME] [--replace]  load a site made by tools/site-copier
+//   web-end import-copy DIR|FILE.zip [--data DIR | --site NAME] [--replace]  load a copied site (folder or copy-service download)
 //   web-end doctor  [--data DIR]                              say what this installation depends on
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'

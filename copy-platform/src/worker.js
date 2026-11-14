@@ -1,6 +1,7 @@
 import { beginGoogle, currentUser, finishGoogle, hash, logout } from './auth.js';
 import { DAILY_JOBS, MAX_FILE_BYTES, MAX_JOB_BYTES, MAX_PAGES, contentType, escapeHtml, safeFilePath, sourceUrl } from './core.js';
 import { runRetention } from './retention.js';
+import { applyEdits, readme, zip } from './package.js';
 const DAY = 86400000;
 
 const headers = { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' };
@@ -69,7 +70,7 @@ async function projectPage(env, user, id) {
   const row = await project(env, id, user.id);
   if (!row) return forbidden();
   const report = row.report_json ? JSON.parse(row.report_json) : null;
-  return html(`<p><a href="/dashboard">← Dashboard</a></p><h1>${escapeHtml(row.title)}</h1><section class="card"><p><b>สถานะ:</b> ${escapeHtml(row.status)}</p><p><b>ต้นฉบับ:</b> <a href="${escapeHtml(row.source_url)}" rel="noreferrer">${escapeHtml(row.source_url)}</a></p>${row.error ? `<p role="alert">${escapeHtml(row.error)}</p>` : ''}${row.status === 'ready' ? `<p><a class="button" href="/projects/${id}/preview">ดูพรีวิวส่วนตัว</a> <a class="button" href="/projects/${id}/edit">แก้ข้อความและรูป</a></p><p>${report?.status === 'front-end-checks-passed' ? 'ส่วนที่ตรวจแล้วทำงาน' : 'มีส่วนที่ต้องตรวจเอง'} · ${Number(report?.issueCount || 0)} ปัญหาการโหลด · ${Number(report?.unverifiedControlCount || 0)} ปุ่มที่ยังไม่ยืนยัน</p>${report?.notCopied?.length ? `<p role="alert">หน้าที่คัดลอกไม่ครบ: ${report.notCopied.map(escapeHtml).join(', ')}</p>` : ''}<p class="muted">ฟอร์ม บัญชีลูกค้า การชำระเงิน และ backend ของเว็บต้นฉบับยังไม่ถูกคัดลอก</p><form method="post" action="/projects/${id}/publish"><button>${row.public ? 'เผยแพร่แล้ว' : 'เผยแพร่เว็บ'}</button></form>${row.public ? `<p><a href="https://${env.PUBLISHED_HOST}/p/${id}/">เปิดเว็บสาธารณะ</a></p>` : ''}` : '<p>รอผลสักครู่ แล้วโหลดหน้านี้ใหม่</p>'}</section>`);
+  return html(`<p><a href="/dashboard">← Dashboard</a></p><h1>${escapeHtml(row.title)}</h1><section class="card"><p><b>สถานะ:</b> ${escapeHtml(row.status)}</p><p><b>ต้นฉบับ:</b> <a href="${escapeHtml(row.source_url)}" rel="noreferrer">${escapeHtml(row.source_url)}</a></p>${row.error ? `<p role="alert">${escapeHtml(row.error)}</p>` : ''}${row.status === 'ready' ? `<p><a class="button" href="/projects/${id}/preview">ดูพรีวิวส่วนตัว</a> <a class="button" href="/projects/${id}/edit">แก้ข้อความและรูป</a></p><section class="card"><h2>ย้ายไปเป็นเว็บของคุณเอง ฟรี</h2><p>ดาวน์โหลดเว็บนี้พร้อมการแก้ไขของคุณ แล้วนำเข้า web-end บนเครื่องของคุณ ได้หลังบ้านเต็มรูปแบบ: ฟอร์มส่งข้อความเข้าหลังบ้าน แก้ข้อความและรูปได้เอง เผยแพร่ ลูกค้า และสินค้า ไม่มีค่ารายเดือน</p><p><a class="button" href="/projects/${id}/download">ดาวน์โหลดสำหรับ web-end (.zip)</a></p><p class="muted">วิธีนำเข้าอยู่ในไฟล์ README-web-end.txt ในไฟล์ zip</p></section><p><p>${report?.status === 'front-end-checks-passed' ? 'ส่วนที่ตรวจแล้วทำงาน' : 'มีส่วนที่ต้องตรวจเอง'} · ${Number(report?.issueCount || 0)} ปัญหาการโหลด · ${Number(report?.unverifiedControlCount || 0)} ปุ่มที่ยังไม่ยืนยัน</p>${report?.notCopied?.length ? `<p role="alert">หน้าที่คัดลอกไม่ครบ: ${report.notCopied.map(escapeHtml).join(', ')}</p>` : ''}<p class="muted">ฟอร์ม บัญชีลูกค้า การชำระเงิน และ backend ของเว็บต้นฉบับยังไม่ถูกคัดลอก</p><form method="post" action="/projects/${id}/publish"><button>${row.public ? 'เผยแพร่แล้ว' : 'เผยแพร่เว็บ'}</button></form>${row.public ? `<p><a href="https://${env.PUBLISHED_HOST}/p/${id}/">เปิดเว็บสาธารณะ</a></p>` : ''}` : '<p>รอผลสักครู่ แล้วโหลดหน้านี้ใหม่</p>'}</section>`);
 }
 
 async function editPage(env, row, page = 'index.html') {
@@ -114,6 +115,20 @@ async function saveEdit(request, env, row) {
   await env.DB.prepare('INSERT INTO project_edits (project_id, key, kind, value) VALUES (?, ?, ?, ?) ON CONFLICT(project_id,key) DO UPDATE SET value = excluded.value').bind(row.id, key, kind, value).run();
   await env.DB.prepare('UPDATE projects SET updated_at = ?, last_active_at = ?, warned_at = NULL WHERE id = ?').bind(Date.now(), Date.now(), row.id).run();
   return go(`/projects/${row.id}/edit?page=${encodeURIComponent(pagePath)}`);
+}
+
+export async function download(env, row) {
+  const files = (await env.DB.prepare('SELECT path FROM project_files WHERE project_id = ? ORDER BY path').bind(row.id).all()).results.map(item => item.path);
+  const edits = new Map((await env.DB.prepare('SELECT key, kind, value FROM project_edits WHERE project_id = ?').bind(row.id).all()).results.map(item => [item.key, item]));
+  const encoder = new TextEncoder(), entries = [];
+  for (const path of files) {
+    const body = await env.FILES.get(`${row.id}/${path}`, 'arrayBuffer');
+    if (!body) continue;
+    entries.push({ name: path, data: path.endsWith('.html') ? encoder.encode(applyEdits(new TextDecoder().decode(body), edits)) : new Uint8Array(body) });
+  }
+  entries.push({ name: 'README-web-end.txt', data: encoder.encode(readme(row.source_url)) });
+  const name = (row.title || 'site').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'site';
+  return new Response(zip(entries), { headers: { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${name}-web-end.zip"`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 }
 
 async function claim(request, env, id) {
@@ -210,7 +225,7 @@ export default {
     if (!user) return go('/');
     if (method === 'GET' && path === '/dashboard') return dashboard(env, user);
     if (method === 'POST' && path === '/projects') return createProject(request, env, user);
-    const detail = /^\/projects\/([0-9a-f-]{36})(?:\/(preview|publish|edit))?$/.exec(path);
+    const detail = /^\/projects\/([0-9a-f-]{36})(?:\/(preview|publish|edit|download))?$/.exec(path);
     if (detail) {
       const [, id, action] = detail;
       if (method === 'GET' && !action) return projectPage(env, user, id);
@@ -218,6 +233,7 @@ export default {
       if (!row || row.status !== 'ready') return forbidden();
       if (method === 'GET' && action === 'edit') { await touchProject(env, id, user.id); return editPage(env, row, url.searchParams.get('page') || 'index.html'); }
       if (method === 'POST' && action === 'edit') return saveEdit(request, env, row);
+      if (method === 'GET' && action === 'download') { await touchProject(env, id, user.id); return download(env, row); }
       if (method === 'GET' && action === 'preview') {
         await touchProject(env, id, user.id);
         const value = token();

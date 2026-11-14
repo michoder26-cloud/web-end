@@ -3,7 +3,10 @@
 // pictures, and Publish, versions and page history work as for any page.
 //   web-end import-copy COPY_DIR [--data DIR | --site NAME] [--replace]
 import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname } from 'node:path'
+import { inflateRawSync } from 'node:zlib'
 import { extname, join, relative, resolve, sep } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
@@ -142,7 +145,44 @@ function pagesIn(dir) {
   return found
 }
 
+/** Unpacks a ZIP, such as the download from the copy service, into a new private folder. */
+export function unzipCopy(file) {
+  const data = readFileSync(file)
+  let end = data.length - 22
+  while (end >= 0 && data.readUInt32LE(end) !== 0x06054b50) end--
+  if (end < 0) throw new Error('This file is not a ZIP.')
+  const count = data.readUInt16LE(end + 10)
+  let at = data.readUInt32LE(end + 16)
+  if (count > 5000) throw new Error('The ZIP has too many files.')
+  const folder = mkdtempSync(join(tmpdir(), 'web-end-import-'))
+  let total = 0
+  for (let n = 0; n < count; n++) {
+    if (data.readUInt32LE(at) !== 0x02014b50) throw new Error('The ZIP is damaged.')
+    const method = data.readUInt16LE(at + 10), packed = data.readUInt32LE(at + 20), size = data.readUInt32LE(at + 24)
+    const nameLength = data.readUInt16LE(at + 28), extra = data.readUInt16LE(at + 30), comment = data.readUInt16LE(at + 32), offset = data.readUInt32LE(at + 42)
+    const name = data.subarray(at + 46, at + 46 + nameLength).toString('utf8')
+    at += 46 + nameLength + extra + comment
+    if (name.endsWith('/')) continue
+    const parts = name.split('/')
+    if (name.startsWith('/') || name.includes('\\') || parts.some((part) => !part || part === '.' || part === '..')) throw new Error(`The ZIP has an unsafe file name: ${name}`)
+    total += size
+    if (size > maxAssetBytes * 2 || total > 500 * 1024 * 1024) throw new Error('The ZIP is too large.')
+    const start = offset + 30 + data.readUInt16LE(offset + 26) + data.readUInt16LE(offset + 28)
+    const raw = data.subarray(start, start + packed)
+    const body = method === 0 ? raw : method === 8 ? inflateRawSync(raw, { maxOutputLength: size }) : null
+    if (!body || body.length !== size) throw new Error(`The ZIP uses a packing this importer cannot read: ${name}`)
+    const target = join(folder, ...parts)
+    mkdirSync(dirname(target), { recursive: true })
+    writeFileSync(target, body)
+  }
+  return folder
+}
+
 export function importCopy({ copyDir, dataDir, replace = false }) {
+  if (/\.zip$/i.test(copyDir) && existsSync(copyDir) && statSync(copyDir).isFile()) {
+    const folder = unzipCopy(copyDir)
+    try { return importCopy({ copyDir: folder, dataDir, replace }) } finally { rmSync(folder, { recursive: true, force: true }) }
+  }
   const dir = resolve(copyDir)
   if (!existsSync(join(dir, 'index.html'))) throw new Error(`No copied site in ${dir}. Make one with: node tools/site-copier/run.cjs <URL> <folder>`)
   const file = join(resolve(dataDir), 'site.sqlite')
