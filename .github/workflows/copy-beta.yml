@@ -1,0 +1,30 @@
+name: Copy public website for web-end beta
+on:
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: Opaque project ID from copy.tktfdesign.com
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: copy-beta-global
+  cancel-in-progress: false
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx playwright install --with-deps chromium
+      - run: node copy-platform/runner.mjs "$PROJECT_ID"
+        env:
+          PROJECT_ID: ${{ inputs.project_id }}
+          COPY_API_BASE: https://copy.tktfdesign.com
+          COPY_RUNNER_SECRET: ${{ secrets.COPY_RUNNER_SECRET }}

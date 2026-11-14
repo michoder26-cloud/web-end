@@ -1,5 +1,7 @@
 // Replays UI-only menu transitions captured from aria-expanded controls.
 (async () => {
+  const projectPrefix = new URL(document.URL).pathname.match(/^\/p\/[0-9a-f-]{36}/)?.[0] || '';
+  const localFragment = fragment => projectPrefix ? fragment.replace(/(["'(])\/(?!\/|p\/)/g, `$1${projectPrefix}/`) : fragment;
   const data = await fetch('/assets/ui-data.json').then(response => response.json()).catch(() => null);
   if (!data?.pages) return;
   const mobile = location.pathname.startsWith('/m/');
@@ -39,7 +41,7 @@
       const host = toggle.into === 'header' ? button.closest('header') : toggle.into === 'nav' ? button.closest('nav') : document.querySelector(toggle.into);
       if (!host) return;
       const template = document.createElement('template');
-      template.innerHTML = toggle.fragment;
+      template.innerHTML = localFragment(toggle.fragment);
       panel = template.content.firstElementChild;
       if (!panel) return;
       host.append(panel);
@@ -55,7 +57,7 @@
     if (!target || !next || !back || carousel.states.length < 2) continue;
     let index = 0;
     const render = () => {
-      target.innerHTML = carousel.states[index].html;
+      target.innerHTML = localFragment(carousel.states[index].html);
       for (const [button, disabled] of [[back, index === 0], [next, index === carousel.states.length - 1]]) {
         button.disabled = disabled;
         button.classList.toggle('disabled', disabled);
