@@ -6,6 +6,7 @@ const path = require('path');
 const crypto = require('crypto');
 const dns = require('dns').promises;
 const net = require('net');
+const { guardContext } = require('./public-network.cjs');
 
 const directory = path.resolve(process.argv[2] || 'site');
 const reportFile = path.join(directory, 'copy-report.json');
@@ -115,6 +116,7 @@ async function captureCarousels(page, context) {
     for (const slug of [...copied].slice(0, Number(process.env.UI_MAX_PAGES || copied.size))) for (const view of ['desktop', 'phone']) {
       if (!fs.existsSync(localFor(slug, view))) continue;
       const context = await browser.newContext(view === 'phone' ? devices['iPhone 13'] : { viewport: { width: 1366, height: 900 } });
+      await guardContext(context);
       const page = await context.newPage();
       const source = sourceFor(slug);
       try {

@@ -1,5 +1,6 @@
 // Cloner v2: pages from menu, desktop + phone, map, sticky backgrounds.
 const {chromium,devices}=require('playwright');const fs=require('fs');const path=require('path');const crypto=require('crypto');
+const {guardContext,publicUrl}=require('./public-network.cjs');
 const start=process.argv[2], out=process.argv[3]||'site';
 const VIEWS={desktop:{viewport:{width:1366,height:900}},phone:{...devices['iPhone 13']}};
 const h=s=>crypto.createHash('md5').update(s).digest('hex').slice(0,12);
@@ -24,7 +25,7 @@ const shotLimit=Math.max(1,Number(process.env.SHOT_LIMIT??Infinity));
 function isInternal(u){return u.origin===root.origin&&(u.pathname===basePath||u.pathname.startsWith(basePath+'/'));}
 function slugOf(u){const p=new URL(u).pathname.slice(basePath.length).replace(/^\/+|\/+$/g,'');return p||'index';}
 async function capture(b,url,view,shots){
- const ctx=await b.newContext(VIEWS[view]);const p=await ctx.newPage();const bodies=new Map();const texts=[];const lotties=new Map();
+ const ctx=await b.newContext({...VIEWS[view],serviceWorkers:'block'});await guardContext(ctx);const p=await ctx.newPage();const bodies=new Map();const texts=[];const lotties=new Map();
  p.on('response',async r=>{try{const t=r.request().resourceType();if(['image','font','stylesheet','media'].includes(t)&&r.ok())bodies.set(r.url(),await r.body());else if(['xhr','fetch','document'].includes(t)&&r.ok()){const body=await r.text();texts.push(body);if(body.length<10_000_000&&/json/i.test(r.headers()['content-type']||'')){try{const data=JSON.parse(body);if(Array.isArray(data.layers)&&data.fr&&data.w&&data.h)lotties.set(r.url(),body);}catch{}}}}catch{}});
  await p.goto(url,{waitUntil:'load',timeout:90000});await p.waitForLoadState('networkidle',{timeout:15000}).catch(()=>{});
  await p.evaluate(async()=>{for(let y=0;y<document.body.scrollHeight;y+=400){window.scrollTo(0,y);await new Promise(r=>setTimeout(r,120));}window.scrollTo(0,0);});
@@ -78,7 +79,7 @@ async function capture(b,url,view,shots){
  // Keep every referenced subset so later dialogs work without Google online.
  const fontUrls=new Set();for(const [u,body] of bodies){if(!u.startsWith('https://fonts.googleapis.com/'))continue;
   for(const m of body.toString().matchAll(/url\(["']?(https:\/\/fonts\.gstatic\.com\/[^"')]+)["']?\)/g))fontUrls.add(m[1]);}
- await Promise.allSettled([...fontUrls].slice(0,80).map(async u=>{if(bodies.has(u))return;const r=await ctx.request.get(u,{timeout:15000});if(!r.ok())return;const data=await r.body();if(data.length<=2_000_000)bodies.set(u,data);}));
+ await Promise.allSettled([...fontUrls].slice(0,80).map(async u=>{if(bodies.has(u)||process.env.COPY_PUBLIC_BETA==='1'&&!await publicUrl(u))return;const r=await ctx.request.get(u,{timeout:15000,maxRedirects:0});if(!r.ok())return;const data=await r.body();if(data.length<=2_000_000)bodies.set(u,data);}));
  await ctx.close();snap.motion=motion;snap.timeline=timeline;return {snap,bodies,lotties};
 }
 function write(snap,bodies,file,lotties){
@@ -98,14 +99,14 @@ function write(snap,bodies,file,lotties){
  // internal links -> local pages
  // Page links are rewritten after the crawl, once we know which pages succeeded.
  html=html.replace('</head>',`<style>${css}</style></head>`);
- if(Object.keys(snap.motion||{}).length||snap.timeline)html=html.replace('</body>',`<script>window.__M=${JSON.stringify(snap.motion||{})};window.__T=${JSON.stringify(snap.timeline)};</script><script src="/assets/motion.js"></script></body>`);
+ if(Object.keys(snap.motion||{}).length||snap.timeline)html=html.replace('</body>',`<script>window.__M=${JSON.stringify(snap.motion||{}).replace(/</g,'\\u003c')};window.__T=${JSON.stringify(snap.timeline).replace(/</g,'\\u003c')};</script><script src="/assets/motion.js"></script></body>`);
  if(snap.lottieIds?.length&&lotties.size>=snap.lottieIds.length){
   const entries=[...lotties.entries()];const animations=snap.lottieIds.map((item,index)=>{const [url,body]=entries[index];let asset=savedAssets.get(url);if(!asset){asset='assets/'+h(url)+'.json';fs.writeFileSync(path.join(output,asset),body);savedAssets.set(url,asset);}savedLottie.add(item.id);return {...item,path:'/'+asset};});
   const player=require.resolve('lottie-web/build/player/lottie.min.js');
   fs.copyFileSync(player,path.join(output,'assets','lottie-player.js'));
   fs.copyFileSync(path.join(path.dirname(path.dirname(path.dirname(player))),'LICENSE.md'),path.join(output,'assets','lottie-player-LICENSE.md'));
   fs.copyFileSync(path.join(__dirname,'lottie-runtime.js'),path.join(output,'assets','lottie-runtime.js'));
-  html=html.replace('</body>',`<script>window.__LOTTIE=${JSON.stringify(animations)};</script><script src="/assets/lottie-player.js" defer></script><script src="/assets/lottie-runtime.js" defer></script></body>`);
+  html=html.replace('</body>',`<script>window.__LOTTIE=${JSON.stringify(animations).replace(/</g,'\\u003c')};</script><script src="/assets/lottie-player.js" defer></script><script src="/assets/lottie-runtime.js" defer></script></body>`);
  }
  fs.mkdirSync(path.dirname(out+'/'+file),{recursive:true});fs.writeFileSync(out+'/'+file,'<!doctype html>'+html);
 }
