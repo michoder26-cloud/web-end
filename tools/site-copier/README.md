@@ -31,18 +31,23 @@ node tools/site-copier/test.cjs          # local two-page smoke test
 
 ## Back office
 
-`run.cjs` finishes by adding a back office to the copy (`add-backend.cjs`, also usable on its own). The copy then runs as a small website with no extra packages:
+A copy runs on the normal web-end back office. Load it into a local web-end site, after the site's setup page is done:
 
 ```
-cd new-copy && node server.cjs      # website on :8080, back office on /admin/
+cd selfhost && npm ci && npm run build
+node bin/web-end.mjs new my-shop                  # create the site, finish its setup page, then stop it
+node bin/web-end.mjs import-copy ../new-copy --site my-shop --replace
+node bin/web-end.mjs site my-shop                 # open the Dashboard, check Pages, press Publish
 ```
 
-- **Messages:** the site's own forms send to the back office. The owner reads, marks, deletes and downloads them as CSV. There is a hidden trap field for bots, a per-visitor rate limit, and cross-site posts are refused.
-- **Edit pages:** the owner opens a page, clicks any text to change it and clicks a picture to replace it. The same change goes to the desktop and phone versions. Changes are written into the page files, so the site stays plain HTML.
-- **Owner password:** a first password is printed at start and saved in `data/first-password.txt`, and the owner changes it in Settings. Passwords are stored with scrypt, and the sign-in cookie is HttpOnly and SameSite=Strict.
-- All owner data is in `data/` and `uploads/`, so copying those two folders makes a backup.
+Each copied page becomes an ordinary web-end page that holds one `copied` block: the page as it looked, for desktop and phone. The files go under `/copied/`. Inline scripts become files, so the pages run with `script-src 'self'`. This means:
 
-Not done yet: bookings and the shop's checkout are not connected to the back office. Forms that only work inside the original platform's app, such as members areas or Wix Bookings calendars, still need their own replacement. Adding new sections or pages is done by copying again or by hand.
+- **Forms** send to Messages in the back office. Field names come from the old form. Email alerts, automations and newsletter sign-up work as for any web-end form.
+- **Edit words and pictures:** in the back office, open the page and choose *Edit words and pictures*. Click any words to change them, or click a picture to replace it. The same change goes to the phone version, and a new picture also appears in Images.
+- **Publish, versions and page history** work as usual. Changes stay private until the owner publishes, and earlier versions of a page can be restored.
+- Claude's `get_page` lists a copied page's words and forms instead of its whole HTML.
+
+Not done yet: bookings and the shop checkout of a copied page are not connected to web-end orders yet, and the Cloudflare install has no import command yet. The importer is for the computer version.
 
 Choose a new output directory for every run. The copier refuses to replace an existing directory. If a page fails or the `MAXP` page limit is reached, links to pages that were not copied open the original site instead of a missing local page. `MOTION_MS` and `SHOT_LIMIT` can shorten exploratory runs; the defaults record full motion and screenshots.
 

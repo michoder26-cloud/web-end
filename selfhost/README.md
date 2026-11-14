@@ -33,6 +33,8 @@ node bin/web-end.mjs restore ./site-backup.tar.gz --data ./restored-data
 node bin/web-end.mjs doctor --data ./restored-data
 ```
 
+To move a site from Wix, Base44 or another platform with the same look, copy it with `tools/site-copier` and load it with `node bin/web-end.mjs import-copy <copied folder> --site <name> --replace`. Its forms send to Messages, and the owner edits its words and pictures in the back office. See [tools/site-copier/README.md](../tools/site-copier/README.md).
+
 The backup contains the site and Studio databases, including customer password hashes, but omits environment secrets and the Studio master key by default. Keep the master key separately or use `backup --include-key` and secure that file accordingly. Restore stops when the target server is running, checks the archive, stages a complete copy, and preserves replaced data. Recheck your domain, email, payment and OAuth configuration after moving.
 
 Run `npm test` to exercise the SQLite host, full site suite, Studio and backup/restore ownership checks. This mode is an early test; the Cloudflare deployment remains the simpler path for a public site today.

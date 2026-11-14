@@ -8,6 +8,7 @@ import { itemInLanguage, itemLanguageLinks, languageTabs, pageInLanguage, settin
 import { handlePlatform } from './cms-platform'
 import { zoneOf } from './clock'
 import { canSendEmail } from './email'
+import { copiedBlock, editCopied, replaceCopiedImage, saveCopiedText } from './copied'
 import { checklist, claudeLinkField, connectGuide, firstSteps, handleStarters, isStarter, ownerAccountForm } from './first-steps'
 import type { FirstSteps } from './first-steps'
 import { secretsHelp } from './secret-help'
@@ -275,6 +276,42 @@ ${history}
 ${slug === 'home' ? '' : `<form action="${escapeHtml(desk.base)}/page/${escapeHtml(slug)}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmDeletePage}</label><button class="button button--small" type="submit">${t.deletePage}</button></form>`}`,
     notice,
   )
+}
+
+/** A page copied from another platform: its name and visibility here, its words and pictures in the visual editor. */
+async function copiedEditor(env: Env, site: SiteRow, desk: Desk, slug: string, page: { description: string; published: boolean; title: string }, block: Block & { forms?: unknown[] }, notice?: { error?: string; saved?: string }) {
+  const t = officeText(site)
+  const base = escapeHtml(desk.base)
+  const revisions = await pageRevisions(env, site.id, slug)
+  const history = revisions.length
+    ? `<details class="cms-history"><summary>${t.pageHistory}</summary><p>${t.pageHistoryHelp}</p>${revisions.map((revision) => `<form action="${base}/page/${escapeHtml(slug)}/restore/${revision.id}" method="post"><span>${escapeHtml(revision.title)} · ${escapeHtml(revision.created_at.slice(0, 16).replace('T', ' '))} UTC</span><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmRestorePageVersion}</label> <button class="button button--small" type="submit">${t.restorePageVersion}</button></form>`).join('')}</details>`
+    : ''
+  return office(
+    site,
+    desk,
+    t.editPage(page.title),
+    `<p>${t.copiedPageIntro}</p><p><a class="button" href="${base}/page/${escapeHtml(slug)}/visual">${t.copiedEdit}</a></p><p>${escapeHtml(t.copiedForms(block.forms?.length ?? 0))}</p>
+<form action="${base}/page/${escapeHtml(slug)}" class="contact-form cms-form" method="post">
+<label>${t.pageTitle}<input maxlength="120" name="title" required value="${escapeHtml(page.title)}"></label>
+<label>${t.pageDescription}<textarea maxlength="300" name="description" required rows="2">${escapeHtml(page.description)}</textarea></label>
+<label class="check"><input name="published" type="checkbox"${page.published ? ' checked' : ''}> ${t.showPage}</label>
+<button class="button cms-save" type="submit">${t.savePage}</button></form>
+${history}
+${slug === 'home' ? '' : `<form action="${base}/page/${escapeHtml(slug)}/delete" class="cms-danger contact-form" method="post"><label class="check"><input name="confirm" required type="checkbox"> ${t.confirmDeletePage}</label><button class="button button--small" type="submit">${t.deletePage}</button></form>`}`,
+    notice,
+  )
+}
+
+async function saveCopiedSettings(request: Request, env: Env, url: URL, site: SiteRow, desk: Desk, slug: string, block: Block) {
+  const form = await request.formData()
+  const title = String(form.get('title') ?? '').trim().slice(0, 120)
+  const description = String(form.get('description') ?? '').trim().slice(0, 300)
+  if (!title || !description) return see(url, `${desk.base}/page/${slug}`)
+  await rememberPage(env, site.id, slug)
+  await env.DB.prepare("UPDATE pages SET title = ?, description = ?, published = ?, blocks = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE site_id = ? AND slug = ?")
+    .bind(title, description, form.get('published') === 'on' ? 1 : 0, JSON.stringify([block]), site.id, slug)
+    .run()
+  return see(url, `${desk.base}/page/${slug}?saved=1`)
 }
 
 async function savePageFromForm(request: Request, env: Env, url: URL, site: SiteRow, desk: Desk, slug: string) {
@@ -802,6 +839,25 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
       const form = await request.formData()
       if (form.get('confirm') === 'on') await env.DB.prepare('DELETE FROM pages WHERE site_id = ? AND slug = ?').bind(site.id, id).run()
       return see(url, `${owner}/pages`)
+    }
+    const copied = copiedBlock(JSON.parse(page.blocks) as Block[])
+    if (copied) {
+      if (action === 'visual' && !post) return editCopied(request, copied, id, desk.base, t.lang)
+      if (action === 'visual-text' && post) {
+        const body = await request.json().catch((): null => null) as { edits?: unknown } | null
+        return (await saveCopiedText(env, site, id, body?.edits)) ? Response.json({ ok: true }) : Response.json({ error: 'nothing' }, { status: 400 })
+      }
+      if (action === 'visual-image' && post) {
+        const form = await request.formData().catch((): null => null)
+        const file = form?.get('file')
+        const from = form?.get('from')
+        if (!(file instanceof File) || typeof from !== 'string') return Response.json({ error: t.chooseImage }, { status: 400 })
+        const result = await replaceCopiedImage(env, site, from, file)
+        return result.error ? Response.json({ error: t.problem(result.error) }, { status: 400 }) : Response.json(result)
+      }
+      if (action) return notFound()
+      if (post) return saveCopiedSettings(request, env, url, site, desk, id, copied)
+      return copiedEditor(env, site, desk, id, { description: page.description, published: Boolean(page.published), title: page.title }, copied, saved)
     }
     if (action) return notFound()
     if (post) return savePageFromForm(request, env, url, site, desk, id)

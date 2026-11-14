@@ -16,6 +16,7 @@ import { endTestMode, testModeLanguage, withTestBanner } from './test-mode'
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { loadItems, showImage } from './items'
 import { alternates, extraLanguages, keepLanguage, languageName, localizePage, localizeSite, mainLanguage, siteLanguages } from './languages'
+import { copiedBlock, copiedForm, showCopied, showCopiedAsset } from './copied'
 import { createMcpServer } from './mcp'
 import { addSubscriber, handleNewsLink, runNews } from './news'
 import { followRedirect } from './moving'
@@ -59,6 +60,8 @@ async function showPage(request: Request, env: Env, url: URL, site: SiteRow, slu
     if (slug !== 'home') return notFound()
     return html(buildingPage())
   }
+  const copied = copiedBlock(JSON.parse(found.blocks) as Block[])
+  if (copied) return showCopied(request, copied, slug)
   const language = viewingIn(site)
   const page = localizePage({ ...found, blocks: JSON.parse(found.blocks) as Block[] }, language)
   const blocks = page.blocks
@@ -84,7 +87,7 @@ async function showPage(request: Request, env: Env, url: URL, site: SiteRow, slu
 }
 
 /** Shows the owner, or staff who edit pages, the unpublished copy of a page, with its menu links staying inside the preview. In an extra language, it marks what isn't translated yet. */
-async function showPreview(env: Env, url: URL, working: SiteRow, desk: Desk, parts: string[]) {
+async function showPreview(request: Request, env: Env, url: URL, working: SiteRow, desk: Desk, parts: string[]) {
   const settings = JSON.parse(working.settings) as Settings
   const language = extraLanguages(settings).includes(parts[0]) ? parts[0] : null
   const slug = (language ? parts[1] : parts[0]) ?? 'home'
@@ -92,6 +95,12 @@ async function showPreview(env: Env, url: URL, working: SiteRow, desk: Desk, par
   const found = await findWorkingPage(env, site, slug)
   const t = officeText(working)
   if (!found) return html(shell(t.previewTitle, `<h1>${t.previewMissing}</h1><p><a href="${escapeHtml(desk.base)}/pages">${t.seeYourPages}</a></p>`, false, t.lang), 404, privateHeaders)
+  const copied = copiedBlock(JSON.parse(found.blocks) as Block[])
+  if (copied) {
+    const shown = showCopied(request, copied, slug, `<p role="status" style="position:sticky;top:0;z-index:2147483647;margin:0;padding:8px 16px;background:#fff7ed;color:#7c2d12;font:14px/1.4 system-ui,sans-serif">${t.previewBanner(`${escapeHtml(desk.base)}/publish`)}</p>`)
+    for (const [key, value] of Object.entries(privateHeaders)) if (key !== 'Content-Security-Policy') shown.headers.set(key, value)
+    return shown
+  }
   const page = localizePage({ ...found, blocks: JSON.parse(found.blocks) as Block[] }, language)
   const blocks = page.blocks
   const [items, records, { results }] = await Promise.all([
@@ -126,7 +135,7 @@ async function receiveForm(request: Request, env: Env, url: URL, site: SiteRow, 
   const language = viewingIn(site)
   // In another language the choices and messages are in its words, so the answers are checked against those.
   const blocks = found ? localizePage({ ...found, blocks: JSON.parse(found.blocks) as Block[] }, language).blocks : []
-  const block = blocks.find((item) => item.type === 'form' && item.name === formName)
+  const block = blocks.find((item) => item.type === 'form' && item.name === formName) ?? copiedForm(blocks, formName)
   if (!block) return notFound()
 
   const path = `/${pageSlug === 'home' ? '' : pageSlug}`
@@ -252,13 +261,13 @@ async function answer(request: Request, env: Env): Promise<Response> {
       // Ticks "Check on your phone" on the owner's checklist.
       await notePhone(request, env)
       const desk = ownerDesk(parts[1])
-      if (parts[2] === 'preview' && parts.length <= 5 && request.method === 'GET') return await showPreview(env, url, working, desk, parts.slice(3))
+      if (parts[2] === 'preview' && parts.length <= 5 && request.method === 'GET') return await showPreview(request, env, url, working, desk, parts.slice(3))
       return await handleOffice(request, env, url, working, desk, parts.slice(2))
     }
 
     if (parts[0] === 'admin') {
       const customer = await getCustomer(request, env, working.id)
-      if (parts[1] === 'preview' && customer?.id === working.owner_customer_id && parts.length <= 5 && request.method === 'GET') return await showPreview(env, url, working, adminDesk(), parts.slice(2))
+      if (parts[1] === 'preview' && customer?.id === working.owner_customer_id && parts.length <= 5 && request.method === 'GET') return await showPreview(request, env, url, working, adminDesk(), parts.slice(2))
       return await handleAdmin(request, env, url, working, parts.slice(1))
     }
 
@@ -266,7 +275,7 @@ async function answer(request: Request, env: Env): Promise<Response> {
     if (parts[0] === 'staff') {
       const desk = await staffEntry(request, env, url, working)
       if (desk instanceof Response) return desk
-      if (parts[1] === 'preview' && parts.length <= 4 && request.method === 'GET' && allows(desk, 'pages')) return await showPreview(env, url, working, desk, parts.slice(2))
+      if (parts[1] === 'preview' && parts.length <= 4 && request.method === 'GET' && allows(desk, 'pages')) return await showPreview(request, env, url, working, desk, parts.slice(2))
       return await handleOffice(request, env, url, working, desk, parts.slice(1))
     }
 
@@ -312,6 +321,7 @@ async function visit(request: Request, env: Env, url: URL, site: SiteRow, parts:
   }
   if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', { status: 405 })
   if (parts[0] === 'media' && parts.length === 2 && /^\d+(\.(gif|jpe?g|png|webp))?$/.test(parts[1])) return (await showImage(env, site.id, parts[1].split('.')[0])) ?? notFound()
+  if (parts[0] === 'copied' && parts.length >= 2 && parts.length <= 8 && parts.every((part) => /^[\w.-]+$/.test(part) && part !== '..')) return (await showCopiedAsset(env, site.id, parts.slice(1).join('/'))) ?? notFound()
   if (parts[0] === 'frame' && parts.length === 3 && /^\d+$/.test(parts[2])) return await showFrame(env, site, parts[1], parts[2])
   if (parts.length > 1) return notFound()
   return await showPage(request, env, url, site, parts[0] ?? 'home')

@@ -66,6 +66,8 @@ export function entryFields(pages: { blocks: string; slug: string }[]) {
   for (const page of pages) {
     for (const block of JSON.parse(page.blocks) as Block[]) {
       if (block.type === 'form') labels.set(`${page.slug}/${block.name}`, block.fields)
+      // A page copied from another platform keeps its forms inside its one block.
+      if (block.type === 'copied') for (const form of (block.forms ?? []) as { fields: FormField[]; name: string }[]) labels.set(`${page.slug}/${form.name}`, form.fields)
     }
   }
   return labels

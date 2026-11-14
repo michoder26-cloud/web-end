@@ -8,6 +8,7 @@
 //   web-end verify  FILE                                      check a bundle without restoring it
 //   web-end restore FILE [--data DIR]                         restore through a checked staging copy
 //   web-end licenses [--out FILE]                             list every bundled package and its license
+//   web-end import-copy DIR [--data DIR | --site NAME] [--replace]  load a site made by tools/site-copier
 //   web-end doctor  [--data DIR]                              say what this installation depends on
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -25,7 +26,7 @@ const option = (name) => {
   return index > -1 ? args[index + 1] : undefined
 }
 const has = (name) => args.includes(`--${name}`)
-const valueOptions = ['--data', '--out', '--port', '--host']
+const valueOptions = ['--data', '--out', '--port', '--host', '--site']
 const positional = args.slice(1).find((arg, index, list) => !arg.startsWith('--') && !(index > 0 && valueOptions.includes(list[index - 1])))
 const dataDir = option('data') ?? process.env.WEB_END_DATA ?? 'data'
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
@@ -86,6 +87,20 @@ async function main() {
     return serve(chosen.dataDir, chosen.port, command === 'new')
   }
   if (command === 'serve') return serve(dataDir, option('port'))
+  if (command === 'import-copy') {
+    if (!positional) throw new Error('Say which copied folder to load: web-end import-copy ./my-copy --site my-shop')
+    const { importCopy } = await import('../host/import-copy.mjs')
+    let target = dataDir
+    if (option('site')) target = (await import('../host/sites.mjs')).siteData(option('site'), process.env.WEB_END_SITES_DIR)
+    const result = importCopy({ copyDir: positional, dataDir: target, replace: has('replace') })
+    console.log(`Loaded ${result.pages.length} pages, ${result.forms} forms and ${result.assets} files (${(result.assetBytes / 1048576).toFixed(1)} MB).`)
+    for (const page of result.pages) console.log(`  /${page.slug === 'home' ? '' : page.slug}  ${page.title}`)
+    if (result.skipped.length) console.log(`Not loaded (a site has at most 40 pages): ${result.skipped.join(', ')}`)
+    if (result.tooLarge.length) console.log(`Files over 20 MB left out: ${result.tooLarge.join(', ')}`)
+    if (result.missingAssets.length) console.log(`Pages refer to ${result.missingAssets.length} files that are not in the copy.`)
+    console.log('Next: open the back office, check the pages under Pages, then press Publish.')
+    return
+  }
   if (command === 'backup') {
     const { createBundle } = await import('../host/bundle.mjs')
     const result = await createBundle({ dataDir, includeKey: has('include-key'), out: option('out') })

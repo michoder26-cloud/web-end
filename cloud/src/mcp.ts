@@ -1,3 +1,4 @@
+import { copiedBlock } from './copied'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 
@@ -438,6 +439,11 @@ export function createMcpServer(env: Env, origin: string, code: string) {
         if (!extraLanguages(settings).includes(language)) return refuse(`"${language}" is not one of the site's extra languages. Add it with update_site languages first.`)
         const shown = localizePage({ ...page, blocks: JSON.parse(page.blocks) as Block[] }, language)
         return reply({ slug, language, mainLanguage: mainLanguage(settings), title: shown.title, description: shown.description, blocks: shown.blocks, untranslated: shown.missing, published: Boolean(page.published), url: `${origin}/${language}${slug === 'home' ? '/' : `/${slug}`}`, note: 'Untranslated texts show the main language. To translate, send these blocks back to save_translation with the same blocks in the same order, changing only the words.' })
+      }
+      const copied = copiedBlock(JSON.parse(page.blocks) as Block[])
+      if (copied) {
+        const words = [...copied.desktop.matchAll(/data-we="(t[a-f0-9]{10}-\d+)">([^<]*)</g)].slice(0, 400).map(([, key, text]) => ({ key, text: text.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'") }))
+        return reply({ ...plain, copied: true, published: Boolean(page.published), url: pageUrl(slug), forms: copied.forms ?? [], words, note: 'This page was copied from another platform and is kept exactly as it looked. Its words are listed by key. The owner changes words and pictures in the back office page editor. Replacing it with save_page would drop the copied design, so ask the owner first.' })
       }
       const languages = Object.keys(readJson<PageTranslation>(translations))
       return reply({ ...plain, blocks: JSON.parse(page.blocks), published: Boolean(page.published), url: pageUrl(slug), ...(languages.length ? { translatedInto: languages } : {}) })

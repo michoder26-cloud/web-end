@@ -23,6 +23,7 @@ const suites = [
   ['Private document review', ['tests/documents.mjs'], {}],
   ['Ownership checklist', ['tests/ownership.mjs'], {}],
   ['Independent sites', ['tests/sites.mjs'], {}],
+  ['Copied site import', ['tests/import-copy.mjs'], {}],
 ]
 let bad = 0
 for (const [name, args, env] of suites) {
