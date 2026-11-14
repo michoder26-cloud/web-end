@@ -4,7 +4,7 @@ import { runRetention } from './retention.js';
 const DAY = 86400000;
 
 const headers = { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' };
-const html = body => new Response(`<!doctype html><html lang="th"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>web-end Copy</title><style>body{margin:0;background:#f4f5f7;color:#17191c;font:16px system-ui,sans-serif}header{background:#16181d;color:white;padding:18px 5vw;display:flex;justify-content:space-between}header a{color:white}main{max-width:980px;margin:40px auto;padding:0 20px}.card{background:white;border:1px solid #dfe3e8;border-radius:18px;padding:24px;margin:18px 0;box-shadow:0 8px 30px #16203a0c}h1{font-size:clamp(30px,5vw,54px);line-height:1.06}input{font:inherit;padding:15px;border:1px solid #b8c0c9;border-radius:10px;width:min(100%,590px);box-sizing:border-box}button,.button{font:inherit;display:inline-block;background:#2359e8;color:white;border:0;border-radius:10px;padding:15px 22px;text-decoration:none;cursor:pointer}button:hover,.button:hover{background:#1748c7}.muted{color:#5f6673}li{margin:12px 0}a{color:#2359e8}</style><header><strong>web-end / Copy</strong><a href="/dashboard">Dashboard</a></header><main>${body}</main></html>`, { headers });
+const html = (body, status = 200) => new Response(`<!doctype html><html lang="th"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>web-end Copy</title><style>body{margin:0;background:#f4f5f7;color:#17191c;font:16px system-ui,sans-serif}header{background:#16181d;color:white;padding:18px 5vw;display:flex;justify-content:space-between}header a{color:white}main{max-width:980px;margin:40px auto;padding:0 20px}.card{background:white;border:1px solid #dfe3e8;border-radius:18px;padding:24px;margin:18px 0;box-shadow:0 8px 30px #16203a0c}h1{font-size:clamp(30px,5vw,54px);line-height:1.06}input{font:inherit;padding:15px;border:1px solid #b8c0c9;border-radius:10px;width:min(100%,590px);box-sizing:border-box}button,.button{font:inherit;display:inline-block;background:#2359e8;color:white;border:0;border-radius:10px;padding:15px 22px;text-decoration:none;cursor:pointer}button:hover,.button:hover{background:#1748c7}.muted{color:#5f6673}li{margin:12px 0}a{color:#2359e8}</style><header><strong>web-end / Copy</strong><a href="/dashboard">Dashboard</a></header><main>${body}</main></html>`, { status, headers });
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 const go = path => new Response(null, { status: 303, headers: { Location: path, 'Cache-Control': 'no-store' } });
 const forbidden = () => new Response('Not found', { status: 404 });
@@ -27,7 +27,7 @@ async function dashboard(env, user) {
   await expireStale(env);
   const rows = (await env.DB.prepare('SELECT id, title, source_url, status, public, error, created_at, warned_at FROM projects WHERE owner_id = ? AND deletion_started_at IS NULL ORDER BY created_at DESC LIMIT 100').bind(user.id).all()).results;
   const items = rows.map(row => `<li><a href="/projects/${row.id}">${escapeHtml(row.title)}</a> <span class="muted">${escapeHtml(row.status)} · ${new Date(row.created_at).toLocaleDateString('th-TH')}${row.warned_at ? ' · จะลบใน 14 วันหากไม่เปิดโปรเจกต์' : ''}</span></li>`).join('');
-  return html(`<h1>เว็บไซต์ของคุณ</h1><p class="muted">สวัสดี ${escapeHtml(user.name)} · แต่ละเว็บเป็นส่วนตัวจนกว่าคุณจะเผยแพร่</p><section class="card"><h2>คัดลอกเว็บ</h2><p>ใส่ URL ของเว็บสาธารณะ เครื่องมือจะคัดลอกหน้าเว็บและตรวจผลให้ คุณแก้ไขก่อนเผยแพร่ได้</p><form method="post" action="/projects"><input name="url" type="url" placeholder="https://example.com" required><button>เริ่มคัดลอก</button></form><p class="muted">สูงสุด ${DAILY_JOBS} เว็บต่อวัน บัญชีละหนึ่งงานในคิว และ ${MAX_PAGES} หน้าต่อเว็บ · ฟอร์มและ backend ของเว็บเดิมไม่ถูกคัดลอก</p></section><section class="card"><h2>โปรเจกต์</h2>${items ? `<ul>${items}</ul>` : '<p>ยังไม่มีเว็บที่คัดลอก</p>'}</section><form method="post" action="/logout"><button>ออกจากระบบ</button></form>`);
+  return html(`<h1>เว็บไซต์ของคุณ</h1><p class="muted">สวัสดี ${escapeHtml(user.name)} · แต่ละเว็บเป็นส่วนตัวจนกว่าคุณจะเผยแพร่</p><section class="card"><h2>คัดลอกเว็บ</h2><p>ใส่ URL ของเว็บสาธารณะ เครื่องมือจะคัดลอกหน้าเว็บและตรวจผลให้ คุณแก้ไขก่อนเผยแพร่ได้</p><form method="post" action="/projects"><input name="url" type="url" placeholder="https://example.com" required><p><label><input name="rights" type="checkbox" value="yes" required style="width:auto"> ฉันเป็นเจ้าของเว็บนี้ หรือได้รับอนุญาตจากเจ้าของให้คัดลอก</label></p><button>เริ่มคัดลอก</button></form><p class="muted">สูงสุด ${DAILY_JOBS} เว็บต่อวัน บัญชีละหนึ่งงานในคิว และ ${MAX_PAGES} หน้าต่อเว็บ · ฟอร์มและ backend ของเว็บเดิมไม่ถูกคัดลอก</p></section><section class="card"><h2>โปรเจกต์</h2>${items ? `<ul>${items}</ul>` : '<p>ยังไม่มีเว็บที่คัดลอก</p>'}</section><form method="post" action="/logout"><button>ออกจากระบบ</button></form>`);
 }
 async function createProject(request, env, user) {
   if (!env.GITHUB_DISPATCH_TOKEN || !env.GITHUB_REPOSITORY) return new Response('Copy runner is not configured', { status: 503 });
@@ -35,6 +35,8 @@ async function createProject(request, env, user) {
   const form = await request.formData();
   const source = sourceUrl(String(form.get('url') || ''));
   if (!source) return html('<h1>URL ใช้ไม่ได้</h1><p>ใช้ลิงก์ HTTPS ของเว็บสาธารณะเท่านั้น</p><a href="/dashboard">กลับไป Dashboard</a>');
+  // Copying someone else's site would be impersonation, so the owner states their right to it first.
+  if (form.get('rights') !== 'yes') return html('<h1>ยังไม่ได้ยืนยันสิทธิ์</h1><p>คัดลอกได้เฉพาะเว็บของคุณเอง หรือเว็บที่เจ้าของอนุญาตแล้วเท่านั้น</p><a href="/dashboard">กลับไป Dashboard</a>', 400);
   const now = Date.now(), today = new Date().toISOString().slice(0, 10);
   const active = await env.DB.prepare("SELECT count(*) AS n FROM projects WHERE status IN ('queued','running')").first();
   if (active.n >= 20) return new Response('The copy queue is full; try later', { status: 503 });
@@ -48,7 +50,7 @@ async function createProject(request, env, user) {
     return new Response('Today’s copy limit is reached', { status: 429 });
   }
   const id = crypto.randomUUID();
-  try { await env.DB.prepare("INSERT INTO projects (id, owner_id, source_url, title, status, created_at, updated_at, last_active_at) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?)").bind(id, user.id, source, new URL(source).hostname, now, now, now).run(); }
+  try { await env.DB.prepare("INSERT INTO projects (id, owner_id, source_url, title, status, created_at, updated_at, last_active_at, rights_confirmed_at) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?)").bind(id, user.id, source, new URL(source).hostname, now, now, now, now).run(); }
   catch {
     await env.DB.batch([env.DB.prepare('UPDATE daily_usage SET count = count - 1 WHERE user_id = ? AND day = ?').bind(user.id, today), env.DB.prepare('UPDATE global_daily_usage SET count = count - 1 WHERE day = ?').bind(today)]);
     return new Response('One copy is already running for this account', { status: 409 });
@@ -69,7 +71,7 @@ async function projectPage(env, user, id) {
   const row = await project(env, id, user.id);
   if (!row) return forbidden();
   const report = row.report_json ? JSON.parse(row.report_json) : null;
-  return html(`<p><a href="/dashboard">← Dashboard</a></p><h1>${escapeHtml(row.title)}</h1><section class="card"><p><b>สถานะ:</b> ${escapeHtml(row.status)}</p><p><b>ต้นฉบับ:</b> <a href="${escapeHtml(row.source_url)}" rel="noreferrer">${escapeHtml(row.source_url)}</a></p>${row.error ? `<p role="alert">${escapeHtml(row.error)}</p>` : ''}${row.status === 'ready' ? `<p><a class="button" href="/projects/${id}/preview">ดูพรีวิวส่วนตัว</a> <a class="button" href="/projects/${id}/edit">แก้ข้อความและรูป</a></p><p>${report?.status === 'front-end-checks-passed' ? 'ส่วนที่ตรวจแล้วทำงาน' : 'มีส่วนที่ต้องตรวจเอง'} · ${Number(report?.issueCount || 0)} ปัญหาการโหลด · ${Number(report?.unverifiedControlCount || 0)} ปุ่มที่ยังไม่ยืนยัน</p>${report?.notCopied?.length ? `<p role="alert">หน้าที่คัดลอกไม่ครบ: ${report.notCopied.map(escapeHtml).join(', ')}</p>` : ''}<p class="muted">ฟอร์ม บัญชีลูกค้า การชำระเงิน และ backend ของเว็บต้นฉบับยังไม่ถูกคัดลอก</p><form method="post" action="/projects/${id}/publish"><button>${row.public ? 'เผยแพร่แล้ว' : 'เผยแพร่เว็บ'}</button></form>${row.public ? `<p><a href="https://${env.PUBLISHED_HOST}/p/${id}/">เปิดเว็บสาธารณะ</a></p>` : ''}` : '<p>รอผลสักครู่ แล้วโหลดหน้านี้ใหม่</p>'}</section>`);
+  return html(`<p><a href="/dashboard">← Dashboard</a></p><h1>${escapeHtml(row.title)}</h1><section class="card"><p><b>สถานะ:</b> ${escapeHtml(row.status)}</p><p><b>ต้นฉบับ:</b> <a href="${escapeHtml(row.source_url)}" rel="noreferrer">${escapeHtml(row.source_url)}</a></p>${row.error ? `<p role="alert">${escapeHtml(row.error)}</p>` : ''}${row.status === 'ready' ? `<p><a class="button" href="/projects/${id}/preview">ดูพรีวิวส่วนตัว</a> <a class="button" href="/projects/${id}/edit">แก้ข้อความและรูป</a></p><p>${report?.status === 'front-end-checks-passed' ? 'ส่วนที่ตรวจแล้วทำงาน' : 'มีส่วนที่ต้องตรวจเอง'} · ${Number(report?.issueCount || 0)} ปัญหาการโหลด · ${Number(report?.unverifiedControlCount || 0)} ปุ่มที่ยังไม่ยืนยัน</p>${report?.notCopied?.length ? `<p role="alert">หน้าที่คัดลอกไม่ครบ: ${report.notCopied.map(escapeHtml).join(', ')}</p>` : ''}<p class="muted">ฟอร์ม บัญชีลูกค้า การชำระเงิน และ backend ของเว็บต้นฉบับยังไม่ถูกคัดลอก</p>${row.public ? `<p>เผยแพร่แล้ว: <a href="https://${escapeHtml(env.PUBLISHED_HOST)}/p/${id}/">เปิดเว็บสาธารณะ</a></p><form method="post" action="/projects/${id}/unpublish"><button>เลิกเผยแพร่</button></form>` : env.PUBLISHED_HOST ? `<form method="post" action="/projects/${id}/publish"><p><label><input name="rights" type="checkbox" value="yes" required style="width:auto"> ฉันมีสิทธิ์เผยแพร่ข้อความ รูป และแบรนด์ทั้งหมดในเว็บนี้</label></p><button>เผยแพร่เว็บ</button></form>` : '<p class="muted">ยังเผยแพร่ไม่ได้ เพราะยังไม่ได้ตั้งค่าที่อยู่เว็บสาธารณะ</p>'}` : '<p>รอผลสักครู่ แล้วโหลดหน้านี้ใหม่</p>'}</section>`);
 }
 
 async function editPage(env, row, page = 'index.html') {
@@ -210,7 +212,7 @@ export default {
     if (!user) return go('/');
     if (method === 'GET' && path === '/dashboard') return dashboard(env, user);
     if (method === 'POST' && path === '/projects') return createProject(request, env, user);
-    const detail = /^\/projects\/([0-9a-f-]{36})(?:\/(preview|publish|edit))?$/.exec(path);
+    const detail = /^\/projects\/([0-9a-f-]{36})(?:\/(preview|publish|unpublish|edit))?$/.exec(path);
     if (detail) {
       const [, id, action] = detail;
       if (method === 'GET' && !action) return projectPage(env, user, id);
@@ -219,13 +221,23 @@ export default {
       if (method === 'GET' && action === 'edit') { await touchProject(env, id, user.id); return editPage(env, row, url.searchParams.get('page') || 'index.html'); }
       if (method === 'POST' && action === 'edit') return saveEdit(request, env, row);
       if (method === 'GET' && action === 'preview') {
+        if (!env.PREVIEW_HOST) return new Response('Preview is not configured', { status: 503 });
         await touchProject(env, id, user.id);
         const value = token();
         await env.DB.prepare('INSERT INTO preview_sessions (token_hash, user_id, project_id, expires_at) VALUES (?, ?, ?, ?)').bind(await hash(value), user.id, id, Date.now() + 3600000).run();
         return go(`https://${env.PREVIEW_HOST}/ticket/${value}`);
       }
       if (method === 'POST' && action === 'publish') {
-        await env.DB.prepare('UPDATE projects SET public = 1, updated_at = ?, last_active_at = ?, warned_at = NULL WHERE id = ? AND owner_id = ?').bind(Date.now(), Date.now(), id, user.id).run();
+        if (!env.PUBLISHED_HOST) return new Response('Publishing is not configured', { status: 503 });
+        const form = await request.formData();
+        if (form.get('rights') !== 'yes') return html(`<h1>ยังไม่ได้ยืนยันสิทธิ์</h1><p>เผยแพร่ได้เมื่อคุณมีสิทธิ์ในข้อความ รูป และแบรนด์ทั้งหมดในเว็บนี้</p><a href="/projects/${id}">กลับไปที่โปรเจกต์</a>`, 400);
+        const now = Date.now();
+        await env.DB.prepare('UPDATE projects SET public = 1, publish_confirmed_at = ?, updated_at = ?, last_active_at = ?, warned_at = NULL WHERE id = ? AND owner_id = ?').bind(now, now, now, id, user.id).run();
+        return go(`/projects/${id}`);
+      }
+      if (method === 'POST' && action === 'unpublish') {
+        const now = Date.now();
+        await env.DB.prepare('UPDATE projects SET public = 0, updated_at = ?, last_active_at = ?, warned_at = NULL WHERE id = ? AND owner_id = ?').bind(now, now, id, user.id).run();
         return go(`/projects/${id}`);
       }
     }

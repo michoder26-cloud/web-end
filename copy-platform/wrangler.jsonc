@@ -5,6 +5,8 @@
   "compatibility_date": "2026-11-14",
   "observability": { "enabled": true, "traces": { "enabled": true } },
   "triggers": { "crons": ["0 8 * * *"] },
+  // Kept here, not in the dashboard, because each deploy replaces variables that aren't in this file.
+  "vars": { "APP_HOST": "copy.tktfdesign.com", "PREVIEW_HOST": "preview.tktfdesign.com", "PUBLISHED_HOST": "sites.tktfdesign.com" },
   "d1_databases": [{ "binding": "DB", "database_name": "web-end-copy-beta", "database_id": "879df04c-64c2-48b5-be15-30731b653c4d", "migrations_dir": "migrations" }],
   "kv_namespaces": [{ "binding": "FILES", "id": "8c335b19bdb549a99e77b86ee7563950" }]
 }

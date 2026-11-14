@@ -26,5 +26,5 @@ jobs:
       - run: node copy-platform/runner.mjs "$PROJECT_ID"
         env:
           PROJECT_ID: ${{ inputs.project_id }}
-          COPY_API_BASE: https://copy.tktfdesign.com
+          COPY_API_BASE: ${{ vars.COPY_API_BASE }}
           COPY_RUNNER_SECRET: ${{ secrets.COPY_RUNNER_SECRET }}
