@@ -81,10 +81,13 @@ async function saveEdit(request, env, row) {
   } else {
     const file = form.get('image');
     if (!(file instanceof File) || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 1024 * 1024 || file.size === 0) return new Response('Use PNG, JPEG or WebP up to 1 MB', { status: 400 });
+    const imageCount = await env.DB.prepare("SELECT count(*) AS n FROM project_files WHERE project_id = ? AND path LIKE 'assets/owner-%'").bind(row.id).first();
+    if (imageCount.n >= 10 || row.bytes + file.size > MAX_JOB_BYTES) return new Response('Project image or storage limit reached', { status: 413 });
     const extension = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }[file.type];
     value = `assets/owner-${crypto.randomUUID()}.${extension}`;
     await env.FILES.put(`${row.id}/${value}`, await file.arrayBuffer());
     await env.DB.prepare('INSERT INTO project_files (project_id, path, content_type, bytes) VALUES (?, ?, ?, ?)').bind(row.id, value, file.type, file.size).run();
+    await env.DB.prepare('UPDATE projects SET bytes = bytes + ? WHERE id = ?').bind(file.size, row.id).run();
   }
   await env.DB.prepare('INSERT INTO project_edits (project_id, key, kind, value) VALUES (?, ?, ?, ?) ON CONFLICT(project_id,key) DO UPDATE SET value = excluded.value').bind(row.id, key, kind, value).run();
   await env.DB.prepare('UPDATE projects SET updated_at = ?, last_active_at = ? WHERE id = ?').bind(Date.now(), Date.now(), row.id).run();
@@ -158,7 +161,7 @@ export default {
     if (!path.startsWith('/internal/') && !csrf(request)) return new Response('Cross-site request refused', { status: 403 });
     if (url.hostname === env.PREVIEW_HOST) {
       if (method === 'GET' && path.startsWith('/ticket/')) {
-        const value = path.slice(8), row = /^[0-9a-f]{64}$/.test(value) ? await env.DB.prepare('SELECT project_id FROM preview_sessions WHERE token_hash = ? AND expires_at > ?').bind(await hash(value), Date.now()).first() : null;
+        const value = path.slice(8), row = /^[0-9a-f]{64}$/.test(value) ? await env.DB.prepare('SELECT preview_sessions.project_id FROM preview_sessions JOIN projects ON projects.id = preview_sessions.project_id AND projects.owner_id = preview_sessions.user_id WHERE token_hash = ? AND expires_at > ?').bind(await hash(value), Date.now()).first() : null;
         if (!row) return forbidden();
         const response = go(`/p/${row.project_id}/`);
         response.headers.append('Set-Cookie', `we_preview=${value}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=3600`);
@@ -167,7 +170,7 @@ export default {
       const match = /^\/p\/([0-9a-f-]{36})\/(.*)$/.exec(path);
       if (!match || method !== 'GET') return forbidden();
       const value = request.headers.get('cookie')?.match(/(?:^|;\s*)we_preview=([0-9a-f]{64})/)?.[1] || '';
-      const ticket = value ? await env.DB.prepare('SELECT 1 AS valid FROM preview_sessions WHERE token_hash = ? AND project_id = ? AND expires_at > ?').bind(await hash(value), match[1], Date.now()).first() : null;
+      const ticket = value ? await env.DB.prepare('SELECT 1 AS valid FROM preview_sessions JOIN projects ON projects.id = preview_sessions.project_id AND projects.owner_id = preview_sessions.user_id WHERE token_hash = ? AND preview_sessions.project_id = ? AND expires_at > ?').bind(await hash(value), match[1], Date.now()).first() : null;
       return ticket ? serveFile(env, match[1], match[2], false) : forbidden();
     }
     if (url.hostname === env.PUBLISHED_HOST) {
