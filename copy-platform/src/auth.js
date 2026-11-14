@@ -64,6 +64,7 @@ export async function finishGoogle(request, env) {
     await env.DB.prepare('INSERT INTO users (id, google_sub, email, name) VALUES (?, ?, ?, ?) ON CONFLICT(google_sub) DO NOTHING').bind(id, claims.sub, claims.email, claims.name).run();
     user = await env.DB.prepare('SELECT id FROM users WHERE google_sub = ?').bind(claims.sub).first();
   }
+  await env.DB.prepare('UPDATE users SET email = ?, name = ? WHERE id = ?').bind(claims.email, claims.name, user.id).run();
   const token = random();
   await env.DB.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)').bind(await hash(token), user.id, Date.now() + 7 * 86400000).run();
   const result = redirect('/dashboard', sessionCookie(token, 7 * 86400));
