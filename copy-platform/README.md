@@ -17,7 +17,8 @@ Cloudflare R2 could not be enabled on this account without its subscription chec
 1. Create a Google OAuth web client. The authorized redirect URI must be `https://copy.tktfdesign.com/auth/google/callback`. Store its client ID and secret as Worker secrets `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 2. Add Worker secrets `RUNNER_SECRET`, `GITHUB_DISPATCH_TOKEN`, and `GITHUB_REPOSITORY=michoder26-cloud/web-end`. The dispatch token needs only permission to dispatch this repository's Actions workflow. Add the same runner secret to the GitHub Actions secret `COPY_RUNNER_SECRET`.
 3. Set `PREVIEW_HOST=preview.tktfdesign.com` and `PUBLISHED_HOST=sites.tktfdesign.com` as Worker secrets or environment variables. Map only the three new subdomains to this Worker. Keep `tktfdesign.com` and its current Pages deployment unchanged.
-4. Merge `.github/workflows/copy-beta.yml` into the default branch before dispatching jobs. Run the two-account acceptance test on the real subdomains before opening registration.
+4. Create a free Resend account and verify a sender domain. Store a send-only API key as `RESEND_API_KEY` and the verified sender as `EMAIL_FROM`. The daily retention job emails owners at 76 days of inactivity and deletes content at 90 days, after at least 14 days of notice. **Deletion is disabled when either setting is missing or an email fails.** The beta limits notification sends to 30 per day, below Resend Free's current 100/day cap.
+5. Merge `.github/workflows/copy-beta.yml` into the default branch before dispatching jobs. Run the two-account acceptance test on the real subdomains before opening registration.
 
 Never commit OAuth or runner secrets. `wrangler d1 migrations apply DB --remote` must be run before deploying code that uses new tables.
 
@@ -25,7 +26,7 @@ Never commit OAuth or runner secrets. `wrangler d1 migrations apply DB --remote`
 
 - The real Google OAuth callback and GitHub Actions dispatch need credentials and a two-account test. They have not been exercised against the production services.
 - Cloudflare account connection and direct transfer are not implemented. A public UI must not advertise this as available until a public Cloudflare OAuth client and transfer flow exist.
-- Automatic 90-day deletion and advance email notice are not implemented. Cloudflare Email Sending to arbitrary users requires Workers Paid; a free notification provider or user-visible grace policy must be chosen before deletion is enabled.
+- The 90-day email and deletion path needs a verified Resend account and a live delivery test. Without it the Worker keeps content and stops accepting new jobs at the storage cap.
 - Public DNS and Worker routes have not been changed yet.
 
 ## Local checks

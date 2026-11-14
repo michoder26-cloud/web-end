@@ -1,5 +1,7 @@
 import { beginGoogle, currentUser, finishGoogle, hash, logout } from './auth.js';
 import { DAILY_JOBS, MAX_FILE_BYTES, MAX_JOB_BYTES, MAX_PAGES, contentType, escapeHtml, safeFilePath, sourceUrl } from './core.js';
+import { runRetention } from './retention.js';
+const DAY = 86400000;
 
 const headers = { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' };
 const html = body => new Response(`<!doctype html><html lang="th"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>web-end Copy</title><style>body{margin:0;background:#f4f5f7;color:#17191c;font:16px system-ui,sans-serif}header{background:#16181d;color:white;padding:18px 5vw;display:flex;justify-content:space-between}header a{color:white}main{max-width:980px;margin:40px auto;padding:0 20px}.card{background:white;border:1px solid #dfe3e8;border-radius:18px;padding:24px;margin:18px 0;box-shadow:0 8px 30px #16203a0c}h1{font-size:clamp(30px,5vw,54px);line-height:1.06}input{font:inherit;padding:15px;border:1px solid #b8c0c9;border-radius:10px;width:min(100%,590px);box-sizing:border-box}button,.button{font:inherit;display:inline-block;background:#2359e8;color:white;border:0;border-radius:10px;padding:15px 22px;text-decoration:none;cursor:pointer}button:hover,.button:hover{background:#1748c7}.muted{color:#5f6673}li{margin:12px 0}a{color:#2359e8}</style><header><strong>web-end / Copy</strong><a href="/dashboard">Dashboard</a></header><main>${body}</main></html>`, { headers });
@@ -11,7 +13,11 @@ const sameOrigin = request => request.headers.get('Origin') === new URL(request.
 const csrf = request => request.method === 'GET' || (request.headers.get('Sec-Fetch-Site') !== 'cross-site' && sameOrigin(request));
 
 async function project(env, id, userId) {
-  return env.DB.prepare('SELECT * FROM projects WHERE id = ? AND owner_id = ?').bind(id, userId).first();
+  return env.DB.prepare('SELECT * FROM projects WHERE id = ? AND owner_id = ? AND deletion_started_at IS NULL').bind(id, userId).first();
+}
+async function touchProject(env, id, userId) {
+  const now = Date.now();
+  await env.DB.prepare('UPDATE projects SET last_active_at = ?, warned_at = NULL WHERE id = ? AND owner_id = ? AND deletion_started_at IS NULL AND last_active_at < ?').bind(now, id, userId, now - DAY).run();
 }
 async function expireStale(env) {
   const now = Date.now();
@@ -19,8 +25,8 @@ async function expireStale(env) {
 }
 async function dashboard(env, user) {
   await expireStale(env);
-  const rows = (await env.DB.prepare('SELECT id, title, source_url, status, public, error, created_at FROM projects WHERE owner_id = ? ORDER BY created_at DESC LIMIT 100').bind(user.id).all()).results;
-  const items = rows.map(row => `<li><a href="/projects/${row.id}">${escapeHtml(row.title)}</a> <span class="muted">${escapeHtml(row.status)} · ${new Date(row.created_at).toLocaleDateString('th-TH')}</span></li>`).join('');
+  const rows = (await env.DB.prepare('SELECT id, title, source_url, status, public, error, created_at, warned_at FROM projects WHERE owner_id = ? AND deletion_started_at IS NULL ORDER BY created_at DESC LIMIT 100').bind(user.id).all()).results;
+  const items = rows.map(row => `<li><a href="/projects/${row.id}">${escapeHtml(row.title)}</a> <span class="muted">${escapeHtml(row.status)} · ${new Date(row.created_at).toLocaleDateString('th-TH')}${row.warned_at ? ' · จะลบใน 14 วันหากไม่เปิดโปรเจกต์' : ''}</span></li>`).join('');
   return html(`<h1>เว็บไซต์ของคุณ</h1><p class="muted">สวัสดี ${escapeHtml(user.name)} · แต่ละเว็บเป็นส่วนตัวจนกว่าคุณจะเผยแพร่</p><section class="card"><h2>คัดลอกเว็บ</h2><p>ใส่ URL ของเว็บสาธารณะ เครื่องมือจะคัดลอกหน้าเว็บและตรวจผลให้ คุณแก้ไขก่อนเผยแพร่ได้</p><form method="post" action="/projects"><input name="url" type="url" placeholder="https://example.com" required><button>เริ่มคัดลอก</button></form><p class="muted">สูงสุด ${DAILY_JOBS} เว็บต่อวัน บัญชีละหนึ่งงานในคิว และ ${MAX_PAGES} หน้าต่อเว็บ · ฟอร์มและ backend ของเว็บเดิมไม่ถูกคัดลอก</p></section><section class="card"><h2>โปรเจกต์</h2>${items ? `<ul>${items}</ul>` : '<p>ยังไม่มีเว็บที่คัดลอก</p>'}</section><form method="post" action="/logout"><button>ออกจากระบบ</button></form>`);
 }
 async function createProject(request, env, user) {
@@ -59,6 +65,7 @@ async function createProject(request, env, user) {
 }
 async function projectPage(env, user, id) {
   await expireStale(env);
+  await touchProject(env, id, user.id);
   const row = await project(env, id, user.id);
   if (!row) return forbidden();
   const report = row.report_json ? JSON.parse(row.report_json) : null;
@@ -105,7 +112,7 @@ async function saveEdit(request, env, row) {
     await env.DB.prepare('UPDATE projects SET bytes = bytes + ? WHERE id = ?').bind(file.size, row.id).run();
   }
   await env.DB.prepare('INSERT INTO project_edits (project_id, key, kind, value) VALUES (?, ?, ?, ?) ON CONFLICT(project_id,key) DO UPDATE SET value = excluded.value').bind(row.id, key, kind, value).run();
-  await env.DB.prepare('UPDATE projects SET updated_at = ?, last_active_at = ? WHERE id = ?').bind(Date.now(), Date.now(), row.id).run();
+  await env.DB.prepare('UPDATE projects SET updated_at = ?, last_active_at = ?, warned_at = NULL WHERE id = ?').bind(Date.now(), Date.now(), row.id).run();
   return go(`/projects/${row.id}/edit?page=${encodeURIComponent(pagePath)}`);
 }
 
@@ -153,7 +160,7 @@ async function finish(request, env, id) {
 async function serveFile(env, id, name, published) {
   const path = safeFilePath(!name || name.endsWith('/') ? `${name}index.html` : name);
   if (!path) return forbidden();
-  const row = await env.DB.prepare('SELECT status, public FROM projects WHERE id = ?').bind(id).first();
+  const row = await env.DB.prepare('SELECT status, public FROM projects WHERE id = ? AND deletion_started_at IS NULL').bind(id).first();
   if (!row || row.status !== 'ready' || (published && !row.public)) return forbidden();
   const file = await env.FILES.get(`${id}/${path}`, 'arrayBuffer');
   if (!file) return forbidden();
@@ -209,18 +216,20 @@ export default {
       if (method === 'GET' && !action) return projectPage(env, user, id);
       const row = await project(env, id, user.id);
       if (!row || row.status !== 'ready') return forbidden();
-      if (method === 'GET' && action === 'edit') return editPage(env, row, url.searchParams.get('page') || 'index.html');
+      if (method === 'GET' && action === 'edit') { await touchProject(env, id, user.id); return editPage(env, row, url.searchParams.get('page') || 'index.html'); }
       if (method === 'POST' && action === 'edit') return saveEdit(request, env, row);
       if (method === 'GET' && action === 'preview') {
+        await touchProject(env, id, user.id);
         const value = token();
         await env.DB.prepare('INSERT INTO preview_sessions (token_hash, user_id, project_id, expires_at) VALUES (?, ?, ?, ?)').bind(await hash(value), user.id, id, Date.now() + 3600000).run();
         return go(`https://${env.PREVIEW_HOST}/ticket/${value}`);
       }
       if (method === 'POST' && action === 'publish') {
-        await env.DB.prepare('UPDATE projects SET public = 1, updated_at = ?, last_active_at = ? WHERE id = ? AND owner_id = ?').bind(Date.now(), Date.now(), id, user.id).run();
+        await env.DB.prepare('UPDATE projects SET public = 1, updated_at = ?, last_active_at = ?, warned_at = NULL WHERE id = ? AND owner_id = ?').bind(Date.now(), Date.now(), id, user.id).run();
         return go(`/projects/${id}`);
       }
     }
     return forbidden();
-  }
+  },
+  async scheduled(_event, env) { await runRetention(env); }
 };
