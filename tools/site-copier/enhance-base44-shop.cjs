@@ -38,6 +38,7 @@ function safeDialog(element, image) {
 
 (async () => {
   const browser = await chromium.launch();
+  const { guardContext } = require('./public-network.cjs');
   try {
     const localContext = await browser.newContext({ javaScriptEnabled: false });
     const local = await localContext.newPage();
@@ -46,7 +47,9 @@ function safeDialog(element, image) {
       cards.map(card => ({ title: card.querySelector('h3')?.textContent?.trim() || '', image: card.querySelector('img')?.getAttribute('src') || '' })));
     await localContext.close();
 
-    const page = await browser.newPage({ viewport: { width: 1366, height: 900 } });
+    const sourceContext = await browser.newContext({ viewport: { width: 1366, height: 900 }, serviceWorkers: 'block' });
+    await guardContext(sourceContext);
+    const page = await sourceContext.newPage();
     await page.goto(url.href, { waitUntil: 'load', timeout: 90000 });
     await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
     const cards = page.locator('#products button:has(h3)');
