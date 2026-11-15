@@ -9,6 +9,10 @@ It is a Cloudflare Pages project (`tktfdesign`) with Pages Functions and a D1 da
 - `/privacy/`: what is stored.
 - `/research/`: the Thai research report from `docs/research-report-th.md`.
 
+![Sign-in page: Log in with Google beside an illustration](../docs/images/tktfdesign-login.png)
+
+![Apps dashboard](../docs/images/tktfdesign-apps.png)
+
 ## Build, test and deploy
 
 From this folder:
