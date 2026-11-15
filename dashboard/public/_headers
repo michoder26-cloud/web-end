@@ -1,0 +1,5 @@
+# Keep Pages preview hosts out of search results.
+https://tktfdesign.pages.dev/*
+  X-Robots-Tag: noindex
+https://:preview.tktfdesign.pages.dev/*
+  X-Robots-Tag: noindex
