@@ -11,11 +11,25 @@ On Windows, double-click [Open web-end.cmd](Open%20web-end.cmd) and create a sit
 
 *The local site creator. Name your site and optionally describe your idea to begin.*
 
+## Your apps in one place: tktfdesign.com
+
+Sign in with Google at **[tktfdesign.com](https://tktfdesign.com)** to keep all your web-end apps in one list. **Create app** walks you through installing web-end on your own Cloudflare account, then adds the new app to your list. From each app's **···** menu you can open the app, open its back office, connect Claude, or check that it's online.
+
+Your apps still run on your own Cloudflare account. The dashboard only remembers each app's name and address, and you can delete your account and that list at any time. Its code is in [`dashboard/`](dashboard).
+
+![Apps dashboard on tktfdesign.com, showing one online app with its menu button](docs/images/tktfdesign-apps.png)
+
+*The Apps dashboard, with the project's test shop.*
+
+![The Create app window: step 1 installs web-end on Cloudflare, step 2 adds the app's address](docs/images/tktfdesign-create-app.png)
+
+*Create app: install on your own Cloudflare account, then add the address.*
+
 ## How it works
 
 You need three free accounts: [Cloudflare](https://dash.cloudflare.com/sign-up), [GitHub](https://github.com/signup) and [Claude](https://claude.ai).
 
-1. **Install.** Click this button and follow Cloudflare's steps. It puts your own copy of web-end in your GitHub account and your website on your own Cloudflare account. It took about 3 minutes in our test.
+1. **Install.** Click this button and follow Cloudflare's steps, or sign in at [tktfdesign.com](https://tktfdesign.com) and press **Create app**. It puts your own copy of web-end in your GitHub account and your website on your own Cloudflare account. It took about 3 minutes in our test.
 
    [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/michoder26-cloud/web-end/tree/main/cloud)
 
