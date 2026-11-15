@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Apps · web-end</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2040%2040%22%3E%3Ccircle%20cx%3D%2220%22%20cy%3D%2220%22%20r%3D%2220%22%20fill%3D%22%23ff6a00%22%2F%3E%3Cpath%20d%3D%22M9%2021h22a11%2011%200%200%201-22%200z%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E" />
+    <script type="module" src="/src/account.js"></script>
+  </head>
+  <body class="apps-page">
+    <header class="topbar">
+      <a class="logo" href="/account/" aria-label="web-end apps"><svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="20" fill="#ff6a00"/><path d="M9 21h22a11 11 0 0 1-22 0z" fill="#fff"/></svg><span>web-end</span></a>
+      <div class="me">
+        <button type="button" class="avatar" aria-haspopup="menu" aria-expanded="false" data-action="me" aria-label="Your account"></button>
+        <div class="menu me-menu" role="menu" hidden>
+          <p class="me-name"></p>
+          <p class="me-email"></p>
+          <a role="menuitem" href="/research/">Research report</a>
+          <a role="menuitem" href="https://github.com/michoder26-cloud/web-end">web-end on GitHub</a>
+          <a role="menuitem" href="/privacy/">Privacy notice</a>
+          <button type="button" role="menuitem" data-action="logout">Log out</button>
+          <button type="button" role="menuitem" class="danger" data-action="delete-account">Delete my account</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="wrap" hidden>
+      <div class="head">
+        <div>
+          <h1>Apps</h1>
+          <p class="lead">Create, organise and manage all your apps in your workspace.</p>
+        </div>
+        <button type="button" class="btn light" data-action="create"><span aria-hidden="true">+</span> Create app</button>
+      </div>
+
+      <div class="toolbar">
+        <label class="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input type="search" placeholder="Search apps" aria-label="Search apps"></label>
+        <div class="tools">
+          <label class="select"><span class="visually-hidden">Status</span><select data-filter="status"><option value="all">All statuses</option><option value="live">Online</option><option value="down">Not reachable</option></select></label>
+          <label class="select"><span class="visually-hidden">Sort</span><select data-filter="sort"><option value="updated">Last updated</option><option value="created">Recently added</option><option value="name">Name</option></select></label>
+          <div class="views" role="group" aria-label="View">
+            <button type="button" class="view on" data-view="grid" aria-pressed="true" aria-label="Grid view"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg></button>
+            <button type="button" class="view" data-view="list" aria-pressed="false" aria-label="List view"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="5" cy="6" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="5" cy="18" r="1"/></svg></button>
+          </div>
+        </div>
+      </div>
+
+      <p class="status" role="status" aria-live="polite" hidden></p>
+      <div class="apps grid"></div>
+      <div class="empty" hidden>
+        <h2>No apps yet</h2>
+        <p>Create your first web-end app. It runs on your own free Cloudflare account, and you own the code and the data.</p>
+        <button type="button" class="btn light" data-action="create"><span aria-hidden="true">+</span> Create app</button>
+      </div>
+      <p class="nothing" hidden>No apps match your search.</p>
+    </main>
+
+    <dialog class="create-dialog" aria-labelledby="create-title">
+      <form method="dialog" class="sheet" novalidate>
+        <div class="sheet-head">
+          <h2 id="create-title">Create app</h2>
+          <button type="button" class="close" data-action="close" aria-label="Close">×</button>
+        </div>
+        <ol class="steps">
+          <li>
+            <h3>Install web-end on your Cloudflare account</h3>
+            <p>Opens in a new tab. Cloudflare copies web-end to your GitHub and puts your app online. It takes about 3 minutes, and needs free Cloudflare and GitHub accounts.</p>
+            <a class="btn light" href="https://deploy.workers.cloudflare.com/?url=https://github.com/michoder26-cloud/web-end/tree/main/cloud" target="_blank" rel="noopener">Install on Cloudflare</a>
+          </li>
+          <li>
+            <h3>Add its address here</h3>
+            <p>When Cloudflare finishes, copy the address that ends in <code>.workers.dev</code>, or your own domain.</p>
+            <label class="field"><span>App address</span><input name="url" type="text" inputmode="url" autocomplete="url" spellcheck="false" placeholder="https://my-app.your-name.workers.dev" required></label>
+            <label class="field"><span>Name <em>(optional)</em></span><input name="name" type="text" maxlength="80" placeholder="Uses the site's title if left empty"></label>
+          </li>
+        </ol>
+        <p class="sheet-status" role="status" aria-live="polite" hidden></p>
+        <div class="sheet-actions">
+          <button type="button" class="btn ghost" data-action="close">Cancel</button>
+          <button type="submit" class="btn light" data-action="save">Add app</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>

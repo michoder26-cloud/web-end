@@ -1,0 +1,13 @@
+# Cloudflare Pages project for tktfdesign.com.
+# Google sign-in needs two secrets, set once with:
+#   npx wrangler pages secret put GOOGLE_CLIENT_ID --project-name tktfdesign
+#   npx wrangler pages secret put GOOGLE_CLIENT_SECRET --project-name tktfdesign
+name = "tktfdesign"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-10-30"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "tktfdesign-accounts"
+database_id = "b6d8a4c4-085a-46a6-a862-afae00b2757d"
+migrations_dir = "migrations"

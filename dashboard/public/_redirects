@@ -1,0 +1,44 @@
+# Cloudflare Pages redirects. Pages already serves /page.html at /page.
+
+/start-project       https://www.etsy.com/listing/4604368566/custom-website-design-for-small-business  301
+/start-project.html  https://www.etsy.com/listing/4604368566/custom-website-design-for-small-business  301
+/email-updates.html  /  301
+/email-updates       /  301
+/thanks.html         /  301
+/thanks              /  301
+
+# The German landing page became the German homepage
+
+# Homepage and language URLs
+/en/ / 301
+/en/index.html / 301
+/custom-website-design https://tktf.at/custom-website-design 301
+/custom-website-design.html https://tktf.at/custom-website-design 301
+/packages https://tktf.at/packages 301
+/packages.html https://tktf.at/packages 301
+/portfolio https://tktf.at/portfolio 301
+/portfolio.html https://tktf.at/portfolio 301
+/projekt-tktfdesign https://tktf.at/projekt-tktfdesign 301
+/projekt-tktfdesign.html https://tktf.at/projekt-tktfdesign 301
+/shopify-store-design https://tktf.at/shopify-store-design 301
+/shopify-store-design.html https://tktf.at/shopify-store-design 301
+/website-kosten https://tktf.at/website-kosten 301
+/website-kosten.html https://tktf.at/website-kosten 301
+/website-planning-guide https://tktf.at/website-planning-guide 301
+/website-planning-guide.html https://tktf.at/website-planning-guide 301
+/website-redesign https://tktf.at/website-redesign 301
+/website-redesign.html https://tktf.at/website-redesign 301
+/wix-website-design https://tktf.at/wix-website-design 301
+/wix-website-design.html https://tktf.at/wix-website-design 301
+/wordpress-website-design https://tktf.at/wordpress-website-design 301
+/wordpress-website-design.html https://tktf.at/wordpress-website-design 301
+/webdesign-wien https://tktf.at/ 301
+/webdesign-wien.html https://tktf.at/ 301
+
+# The old English studio pages were replaced by web-end on 2026-11-14
+/en / 301
+/impressum / 301
+/impressum.html / 301
+/datenschutz / 301
+/datenschutz.html / 301
+/en/* / 301

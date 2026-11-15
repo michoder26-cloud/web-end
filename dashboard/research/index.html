@@ -1,0 +1,2491 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>รายงานวิจัย: แพลตฟอร์มสร้างเว็บแอปด้วย AI แบบ Open Source ที่ผู้ใช้เป็นเจ้าของ</title>
+    <meta name="description" content="Product, business and architecture research for an open-source, self-hosted alternative to AI app builders." />
+    <script type="module" src="/src/report.js"></script>
+  </head>
+  <body class="report">
+    <header class="report-bar">
+      <a class="logo" href="/" aria-label="web-end home"><svg class="mark mark-small" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="20" fill="var(--brand)"/><path d="M9 21h22a11 11 0 0 1-22 0z" fill="#fff"/></svg><span class="wordmark">web-end</span></a>
+      <nav><a href="/login">Log in</a><a href="/register">Sign up</a><a href="/research/research-report-th.md" download>ดาวน์โหลด Markdown</a></nav>
+    </header>
+    <div class="report-layout">
+      <nav class="toc" aria-label="สารบัญ"><p>สารบัญ</p><ol><li><a href="#วิธีอ่านรายงานนี้">วิธีอ่านรายงานนี้</a></li><li><a href="#1-executive-summary">1. Executive summary</a></li><li><a href="#2-base44-product-teardown">2. Base44 product teardown</a></li><li><a href="#3-business-model-และ-sales-funnel-ของ-base44">3. Business model และ sales funnel ของ Base44</a></li><li><a href="#4-คู่แข่งและทางเลือก-open-source">4. คู่แข่งและทางเลือก Open Source</a></li><li><a href="#5-user-pain-points-พร้อมหลักฐาน">5. User pain points พร้อมหลักฐาน</a></li><li><a href="#6-gap-analysis-ของ-web-end-ตรวจตามความเป็นจริง">6. Gap analysis ของ web-end (ตรวจตามความเป็นจริง)</a></li><li><a href="#7-proposed-architecture">7. Proposed architecture</a></li><li><a href="#8-ownership-acceptance-checklist">8. Ownership acceptance checklist</a></li><li><a href="#9-open-source-licensing-และโมเดลรายได้">9. Open Source licensing และโมเดลรายได้</a></li><li><a href="#10-mvp-และ-roadmap">10. MVP และ roadmap</a></li><li><a href="#11-ความเสี่ยงและข้อสมมติที่ยังไม่พิสูจน์">11. ความเสี่ยงและข้อสมมติที่ยังไม่พิสูจน์</a></li><li><a href="#12-source-register">12. Source register</a></li><li><a href="#คำตอบสุดท้าย">คำตอบสุดท้าย</a></li></ol></nav>
+      <article class="doc"><h1 id="รายงานวิจัยและออกแบบผลิตภัณฑ์-แพลตฟอร์มสร้างเว็บแอปด้วย-ai-แบบ-open-source-ที่ผู้ใช้เป็นเจ้าของจริง"><a class="anchor" href="#รายงานวิจัยและออกแบบผลิตภัณฑ์-แพลตฟอร์มสร้างเว็บแอปด้วย-ai-แบบ-open-source-ที่ผู้ใช้เป็นเจ้าของจริง" aria-hidden="true">#</a>รายงานวิจัยและออกแบบผลิตภัณฑ์: แพลตฟอร์มสร้างเว็บแอปด้วย AI แบบ Open Source ที่ผู้ใช้เป็นเจ้าของจริง</h1>
+<p><strong>คู่เทียบหลัก:</strong> Base44 (base44.com) · <strong>โครงการตั้งต้น:</strong> web-end (github.com/michoder26-cloud/web-end) · <strong>วันที่ตรวจข้อมูลทั้งหมด:</strong> 8 พฤศจิกายน 2026 (เว้นแต่ระบุไว้)</p>
+<p>ทีมผู้จัดทำ (บทบาท): Product Strategist, Competitive Intelligence Researcher, Open Source Business Strategist, Software Architect, UX Researcher, Senior Full-stack Engineer</p>
+<hr>
+<h2 id="วิธีอ่านรายงานนี้"><a class="anchor" href="#วิธีอ่านรายงานนี้" aria-hidden="true">#</a>วิธีอ่านรายงานนี้</h2>
+<h3 id="ป้ายระดับหลักฐาน"><a class="anchor" href="#ป้ายระดับหลักฐาน" aria-hidden="true">#</a>ป้ายระดับหลักฐาน</h3>
+<p>ทุกข้อสรุปสำคัญมีป้ายกำกับ และอ้างแหล่งด้วยรหัส <code>S01</code>–<code>S60</code> ซึ่งดู URL และวันที่ตรวจได้ใน<a href="#12-source-register">ส่วนที่ 12</a></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ป้าย</th>
+<th>ความหมาย</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>[ทางการ]</strong></td>
+<td>ยืนยันจากเอกสาร หน้าเว็บ ราคา หรือข้อกำหนดทางการของผู้ให้บริการ</td>
+</tr>
+<tr>
+<td><strong>[โค้ด]</strong></td>
+<td>ตรวจพบจากซอร์สโค้ด SDK หรือ repository สาธารณะ (ระบุไฟล์/commit)</td>
+</tr>
+<tr>
+<td><strong>[ทดลอง]</strong></td>
+<td>สังเกตจากการเปิดใช้งานจริงในเบราว์เซอร์ (ในรายงานนี้: เฉพาะหน้า <code>/login</code> และ <code>/register</code> ของ Base44 ในสถานะยังไม่ล็อกอิน)</td>
+</tr>
+<tr>
+<td><strong>[ผู้ใช้]</strong></td>
+<td>ความคิดเห็นหรือรายงานของผู้ใช้/บุคคลที่สาม (นักวิจัยความปลอดภัย สื่อ ชุมชน)</td>
+</tr>
+<tr>
+<td><strong>[อนุมาน]</strong></td>
+<td>ข้ออนุมานของผู้วิเคราะห์ ไม่ใช่ข้อเท็จจริงที่ยืนยันแล้ว</td>
+</tr>
+<tr>
+<td><strong>[ไม่พอ]</strong></td>
+<td>ยังไม่มีหลักฐานเพียงพอจากแหล่งที่เข้าถึงได้</td>
+</tr>
+</tbody></table></div>
+<h3 id="ขอบเขตและข้อจำกัดของการวิจัย-สำคัญ-อ่านก่อน"><a class="anchor" href="#ขอบเขตและข้อจำกัดของการวิจัย-สำคัญ-อ่านก่อน" aria-hidden="true">#</a>ขอบเขตและข้อจำกัดของการวิจัย (สำคัญ อ่านก่อน)</h3>
+<ol>
+<li><strong>เราไม่ได้สมัครและสร้างแอปบน Base44 จริง</strong> สิ่งที่ &quot;ทดลอง&quot; ได้คือหน้า login/register แบบยังไม่ล็อกอิน (ถ่ายภาพและอ่านโครงสร้างหน้าเว็บด้วยเบราว์เซอร์ส่วนตัว) ข้อสรุปเรื่องคุณภาพการสร้างแอป ความเร็ว และการใช้เครดิตจริง จึงมาจากเอกสารทางการและรายงานบุคคลที่สาม ไม่ใช่การทดลองของเรา</li>
+<li><strong>Reddit และ Trustpilot ตอบ HTTP 403</strong> กับเครื่องมือของเรา จึงยังไม่ได้เก็บรีวิวจำนวนมากอย่างเป็นระบบ สัญญาณผู้ใช้มาจาก Hacker News, GitHub Discussions/Issues ของ Base44 และงานวิจัยความปลอดภัยที่เผยแพร่ ห้ามอ่านส่วนที่ 5 เป็นการวัดความถี่ของปัญหา</li>
+<li><strong>ราคารายเดือน (ไม่รายปี) ของ Base44 แผน Builder/Pro/Elite และตัวเลขราคาของ Lovable</strong> ไม่ปรากฏในข้อความ HTML ที่ดึงได้ (หน้าเว็บเรนเดอร์ด้วย JavaScript) ตัวเลขที่ใช้จึงระบุที่มาและวิธีคำนวณกำกับ</li>
+<li>web-end ตรวจที่ commit <code>8feec01</code> (8 พ.ย. 2026) อ่านโค้ดจริง แต่ <strong>ไม่ได้ติดตั้งและรันชุดทดสอบ</strong> ในรอบนี้</li>
+<li>แนวทาง REA (github.com/morluto/rea) ถูกนำมาใช้ในส่วน &quot;วิธีทำงาน&quot;: แยกสิ่งที่สังเกตได้ออกจากข้ออนุมาน แนบหลักฐานและข้อจำกัดกับทุกข้อสรุป และใช้เครื่องมือวิเคราะห์ JavaScript ของเว็บที่ทำงานอยู่ (ผ่าน Craft Anything ซึ่งเป็นเครื่องมือประเภทเดียวกัน) กับหน้า login ของ Base44 เท่านั้น ไม่ได้ทำ reverse engineering ส่วนที่ต้องล็อกอิน และไม่ได้นำโค้ดของ Base44 มาใช้</li>
+</ol>
+<hr>
+<h2 id="1-executive-summary"><a class="anchor" href="#1-executive-summary" aria-hidden="true">#</a>1. Executive summary</h2>
+<h3 id="ข้อสรุป-8-ข้อ"><a class="anchor" href="#ข้อสรุป-8-ข้อ" aria-hidden="true">#</a>ข้อสรุป 8 ข้อ</h3>
+<ol>
+<li><strong>Base44 ไม่ได้ขาย &quot;AI เขียนโค้ด&quot; เป็นหลัก แต่ขาย &quot;backend ที่รันจริงพร้อมใช้ + การดูแลระบบ + บริการเสริมคิดตามการใช้งาน&quot;</strong> โดย AI builder เป็นทางเข้า ตัวแอปทุกตัวพึ่ง backend ของ Base44 (ฐานข้อมูล NoSQL, auth, backend functions บน Deno, integrations, hosting) <strong>[ทางการ S12, S13]</strong> และค่าใช้จ่ายขณะแอปทำงาน (อีเมล อัปโหลดไฟล์ LLM workflow) หักจาก integration credits ของแผน <strong>[ทางการ S08]</strong></li>
+<li><strong>การล็อกอินอยู่ที่ backend ไม่ใช่ที่ frontend</strong> โค้ด frontend ส่งออกได้ (React + Vite, GitHub 2-way sync ตั้งแต่แผน Builder, API export zip ยังเป็น beta) <strong>[ทางการ S10, S11, S14]</strong> แต่โค้ดเรียก <code>@base44/sdk</code> ซึ่งตั้งค่าเริ่มต้นไปที่ <code>https://base44.app</code> <strong>[โค้ด S41]</strong> ตัวเซิร์ฟเวอร์ backend ไม่ได้เปิดเป็น open source (organization <code>base44</code> บน GitHub มีแค่ CLI, SDK, skills, ตัวอย่าง) <strong>[โค้ด S40]</strong> และการ dev ในเครื่องยังส่งต่อ OAuth, integrations และ custom integrations ไปที่ Base44 ส่วน automations ไม่รันในเครื่อง <strong>[ทางการ S15]</strong> ดังนั้น &quot;export ได้&quot; ไม่เท่ากับ &quot;ย้ายไปรันที่อื่นได้&quot;</li>
+<li><strong>ข้อมูลเป็นของผู้ใช้ตามสัญญา แต่การปกป้องข้อมูลขึ้นกับแผน:</strong> backup อัตโนมัติมีเฉพาะแผน Elite (7 วัน) และ Enterprise (28 วัน) <strong>[ทางการ S16]</strong>; ข้อมูลใน workspace ที่ไม่ใช่ Enterprise &quot;อาจถูกใช้ฝึกโมเดล AI&quot; โดยไม่มีตัวเลือกปิด <strong>[ทางการ S23]</strong>; เมื่อสิ้นสุดสัญญา บริษัท &quot;ไม่รับประกันการเข้าถึงข้อมูลต่อ&quot; <strong>[ทางการ S20]</strong></li>
+<li><strong>ตลาดนี้ใหญ่และเติบโตเร็วจริง:</strong> Base44 ถูก Wix ซื้อด้วยเงินสด 80 ล้านดอลลาร์ (มิ.ย. 2025) ขณะมีผู้ใช้ราว 250,000 ราย <strong>[ผู้ใช้/สื่อ S30]</strong> และรายงานว่าเกิน ARR 150 ล้านดอลลาร์ในเดือน พ.ค. 2026 <strong>[ผู้ใช้/สื่อ S31]</strong> ตัวเลขเหล่านี้มาจากสื่อที่อ้างคำบริษัท ไม่ใช่งบการเงินที่ตรวจสอบได้</li>
+<li><strong>web-end เป็นจุดตั้งต้นที่ดี แต่เป็นคนละกระบวนทัศน์กับ Base44:</strong> มันคือ &quot;เอนจินเว็บไซต์/แอปแบบประกาศค่า (declarative) ที่รันบน Cloudflare Workers + D1 ของผู้ใช้เอง&quot; โดยให้ Claude ของผู้ใช้สั่งงานผ่าน MCP (มี 60+ tools) <strong>[โค้ด S50, S51]</strong> ไม่ใช่ตัวสร้างโค้ดอิสระ จุดแข็งคือความปลอดภัยและการเป็นเจ้าของ (backup/restore ไฟล์เดียว, undo, test mode, staff roles, PromptPay, ภาษาไทย) จุดอ่อนคือผูกกับ Cloudflare เพียงรายเดียว ไม่มี builder UI ของตัวเอง ใช้ได้กับ AI ที่รองรับ MCP connector เท่านั้น ทดสอบครบวงจรจริงเพียงครั้งเดียว <strong>[โค้ด S50]</strong> และชุดทดสอบไม่ได้รันใน CI <strong>[โค้ด S52]</strong></li>
+<li><strong>ข้อเสนอของเรา:</strong> อย่าสร้าง &quot;Base44 เวอร์ชันฟรี&quot; ที่ให้ AI เขียนโค้ดอะไรก็ได้ ให้สร้าง <strong>&quot;runtime ที่ผู้ใช้เป็นเจ้าของและพกพาได้&quot;</strong> (spec ของแอป + ข้อมูล + auth + automations ในรูปแบบมาตรฐาน) แล้วให้ AI ใดก็ได้แก้ผ่านชุดเครื่องมือที่ตรวจสอบได้ (changeset → validate → preview → approve → deploy → rollback ทั้งโค้ดและข้อมูล) <strong>[อนุมาน]</strong></li>
+<li><strong>กลุ่มเริ่มต้นที่แนะนำ:</strong> ธุรกิจขนาดเล็กในไทย/อาเซียนที่ต้องการระบบหลังบ้านจริง (จอง ขาย อนุมัติ สมาชิก) โดยมี &quot;ผู้ช่วยเทคนิค&quot; (ฟรีแลนซ์/เอเจนซีเล็ก/ไอทีในบริษัท) เป็นคนติดตั้งและเป็นผู้จ่ายเงินหลัก เหตุผลคือ web-end มีฟีเจอร์เฉพาะตลาดนี้แล้ว (ไทย, PromptPay, PDPA-style consent) และคู่แข่งรายใหญ่ทั้งหมดคิดเงินเป็นดอลลาร์ตามเครดิต <strong>[อนุมาน — ต้องทดสอบด้วยการสัมภาษณ์ ดูส่วนที่ 10]</strong></li>
+<li><strong>ข้อได้เปรียบที่มากกว่าคำว่า &quot;ฟรี&quot;:</strong> ความเป็นเจ้าของที่ <strong>พิสูจน์ได้ด้วยการทดสอบ</strong> (ส่วนที่ 8), ข้อมูลไม่ถูกนำไปฝึกโมเดล, ต้นทุนคาดเดาได้เพราะจ่ายผู้ให้บริการโดยตรง, rollback ที่พาข้อมูลกลับตามได้, และความปลอดภัยแบบ &quot;AI แก้ได้เฉพาะในกรอบ&quot; สิ่งที่ต้องยอมแพ้ช่วงแรก: ความกว้างของสิ่งที่สร้างได้ ความสวยของงานออกแบบอัตโนมัติ แอปมือถือ จำนวน integrations และความสะดวกแบบ &quot;ไม่ต้องตั้งค่าอะไรเลย&quot;</li>
+</ol>
+<h3 id="คำตอบสั้นสำหรับผู้บริหาร"><a class="anchor" href="#คำตอบสั้นสำหรับผู้บริหาร" aria-hidden="true">#</a>คำตอบสั้นสำหรับผู้บริหาร</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>คำถาม</th>
+<th>คำตอบ</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>สร้างอะไรก่อน</td>
+<td>&quot;Owned App Runtime&quot; แยกจาก Cloudflare (Docker หนึ่งคำสั่ง + SQLite) ที่รับ app spec ของ web-end, มีชุดทดสอบ export→restore→run-elsewhere อัตโนมัติ และ MCP server ที่ AI ใดก็ต่อได้</td>
+</tr>
+<tr>
+<td>ทำไมเลือกเราแทน Base44</td>
+<td>ปิด builder แล้วแอปยังทำงาน, ย้ายเซิร์ฟเวอร์ได้ด้วยไฟล์เดียว, ไม่มีค่าเครดิตตอนแอปรัน, ข้อมูลไม่ถูกฝึกโมเดล</td>
+</tr>
+<tr>
+<td>ต้องพิสูจน์อะไรก่อนลงทุนเพิ่ม</td>
+<td>(1) ผู้ใช้ที่ไม่ใช่นักพัฒนาติดตั้งสำเร็จได้จริง (2) AI ผ่าน acceptance tests ในงานจริงของกลุ่มเป้าหมาย (3) มีคนยอมจ่ายค่า managed hosting/ติดตั้ง</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="2-base44-product-teardown"><a class="anchor" href="#2-base44-product-teardown" aria-hidden="true">#</a>2. Base44 product teardown</h2>
+<h3 id="21-ภาพรวมผลิตภัณฑ์จากเอกสารทางการ"><a class="anchor" href="#21-ภาพรวมผลิตภัณฑ์จากเอกสารทางการ" aria-hidden="true">#</a>2.1 ภาพรวมผลิตภัณฑ์จากเอกสารทางการ</h3>
+<ul>
+<li><strong>ส่วนประกอบหลัก [ทางการ S03, S12, S13]:</strong> AI chat (โหมด Build/Discuss), app editor (preview, Edit mode, canvas, Dashboard, version history, branches, publish), backend service (entities แบบ NoSQL ที่ &quot;MongoDB compatible&quot;, auth, backend functions บน Deno, connectors/integrations, actors สำหรับ realtime), hosting แบบ SPA, CLI และ JavaScript SDK</li>
+<li><strong>โครงสร้างแอปที่ได้ [ทางการ S14]:</strong> &quot;standard React apps built with Vite&quot; มี <code>src/pages</code>, <code>components</code>, <code>entities/</code> (JSON schema), <code>functions/</code> (TypeScript) และ <code>package.json</code> ที่รวม <code>@base44/sdk</code></li>
+<li><strong>โมเดล AI [ทางการ S05]:</strong> โหมด Auto เป็นค่าเริ่มต้น เลือกโมเดลเองได้ตั้งแต่แผน Builder มีโมเดลของตัวเองชื่อ Base 1 (เปิดตัว มิ.ย. 2026 ฝึกจาก &quot;tens of millions of real user interactions&quot; <strong>[ผู้ใช้/สื่อ S31]</strong>) และโมเดลจาก Anthropic, OpenAI, Google ไม่มีตัวเลือกใช้ API key ของผู้ใช้สำหรับ AI ที่สร้างแอป <strong>[ไม่พอ — ไม่พบในเอกสารที่ตรวจ]</strong></li>
+<li><strong>สิ่งที่สังเกตจากหน้า login/register [ทดลอง]:</strong> เป็น SPA ที่ bundle ด้วย Vite (209 สคริปต์), ล็อกอินด้วย Google/Apple/GitHub หรืออีเมล (login แบบ &quot;Continue with email&quot; ไม่ถามรหัสผ่านในหน้าแรก), หน้าสมัครมี Cloudflare Turnstile และแบนเนอร์คุกกี้ Accept/Reject/Manage พบโมดูลชื่อ <code>FiverrChatContext</code> ในโค้ดฝั่งหน้า login ซึ่ง <strong>[อนุมาน]</strong> น่าจะเกี่ยวกับบริการ &quot;Hire a Partner&quot; (ยังไม่ยืนยัน)</li>
+</ul>
+<h3 id="22-เส้นทางผู้ใช้-customer-journey-ทีละขั้น"><a class="anchor" href="#22-เส้นทางผู้ใช้-customer-journey-ทีละขั้น" aria-hidden="true">#</a>2.2 เส้นทางผู้ใช้ (customer journey) ทีละขั้น</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ขั้น</th>
+<th>ผู้ใช้ต้องการ</th>
+<th>Base44 ลดความยุ่งยากตรงไหน</th>
+<th>จุดเห็นคุณค่า / เหตุให้กลับมา</th>
+<th>ข้อจำกัด / จุดติดขัด</th>
+<th>เหตุให้อัปเกรด / ย้ายออกยาก</th>
+<th>เราควร</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>รู้จักสินค้า</td>
+<td>รู้ว่าทำได้จริงไหม</td>
+<td>ข้อความ &quot;The whole stack. No setup slowdown&quot; และตัวอย่างแอป/เทมเพลต <strong>[ทางการ S01]</strong> โฆษณาวิดีโอปริมาณมาก <strong>[ผู้ใช้ S35]</strong></td>
+<td>เห็นตัวอย่างใกล้ธุรกิจตัวเอง</td>
+<td>ผู้ใช้บางส่วนรำคาญโฆษณา <strong>[ผู้ใช้ S35]</strong></td>
+<td>–</td>
+<td><strong>ปรับปรุง:</strong> ขายด้วยการสาธิต &quot;ย้ายออกได้จริง&quot; และกรณีศึกษาที่วัดผล ไม่ใช่โฆษณาจำนวนมาก</td>
+</tr>
+<tr>
+<td>ทดลองใช้</td>
+<td>ลองฟรีโดยไม่ต้องตั้งค่า</td>
+<td>ล็อกอินด้วยบัญชีโซเชียล 1 คลิก <strong>[ทดลอง]</strong> แผนฟรีมี 25 message credits/เดือน (สูงสุด 5/วัน) และสร้างได้ 5 แอป <strong>[ทางการ S02, S08]</strong></td>
+<td>ได้แอปแรกในเบราว์เซอร์ทันที</td>
+<td>เครดิตรายวันจำกัดทำให้ลองต่อเนื่องไม่ได้ <strong>[ทางการ S08]</strong></td>
+<td>เครดิตหมดกลางงาน</td>
+<td><strong>ทำเหมือน (ในโหมด managed):</strong> มี demo ที่ไม่ต้องติดตั้ง แต่ทำให้โหมด local ติดตั้งได้ในคำสั่งเดียว</td>
+</tr>
+<tr>
+<td>สร้างแอปแรก</td>
+<td>บอกความต้องการแล้วได้แอปที่ใช้ได้</td>
+<td>Plan mode, เริ่มจาก URL/Figma, แนบไฟล์ <strong>[ทางการ S04]</strong> AI ตรวจผลและแก้ error อัตโนมัติเบื้องหลัง <strong>[ทางการ S05]</strong></td>
+<td>เห็นหน้าจอ + ฐานข้อมูล + login ทำงานพร้อมกัน</td>
+<td>คุณภาพจริงไม่ได้ทดสอบ <strong>[ไม่พอ]</strong></td>
+<td>–</td>
+<td><strong>ทำเหมือนและเพิ่ม:</strong> แผนงานต้องมี acceptance checks ที่ผู้ใช้อ่านเข้าใจก่อนสร้าง</td>
+</tr>
+<tr>
+<td>แก้ไข</td>
+<td>แก้จุดเดียวโดยไม่พังส่วนอื่น</td>
+<td>Discuss mode (~0.3 เครดิต/ข้อความ), Edit mode แก้ด้วยมือไม่เสียเครดิต, ล็อกไฟล์ที่ห้าม AI แตะ, กฎประจำแอป <strong>[ทางการ S05]</strong></td>
+<td>แก้เร็ว</td>
+<td>ใช้เครดิตไม่แน่นอน คำนวณหลังทำเสร็จ <strong>[ทางการ S08]</strong></td>
+<td>ซื้อเครดิตเพิ่ม/อัปเกรด</td>
+<td><strong>ปรับปรุง:</strong> แสดงขอบเขตการเปลี่ยนแปลง (diff ของ schema/สิทธิ์/หน้า) และทดสอบ regression ก่อน apply</td>
+</tr>
+<tr>
+<td>เผยแพร่</td>
+<td>ออนไลน์ด้วยโดเมนตัวเอง</td>
+<td>Publish 1 คลิก, HTTPS อัตโนมัติ, ต่อโดเมนตั้งแต่แผน Starter, โดเมนฟรี 1 ปีในแผนรายปี <strong>[ทางการ S02, S12]</strong></td>
+<td>แอปมี URL จริง</td>
+<td>hosting รองรับเฉพาะ SPA ไม่รองรับ SSR <strong>[ทางการ S12]</strong> แอป private ใช้ได้เฉพาะแผนจ่ายเงิน <strong>[ทางการ S21]</strong></td>
+<td>ต้องจ่ายเพื่อใช้โดเมน/แอปส่วนตัว</td>
+<td><strong>ทำเหมือน:</strong> publish 1 คลิกบนเซิร์ฟเวอร์ของผู้ใช้ โดเมนและ private app ฟรี</td>
+</tr>
+<tr>
+<td>มีผู้ใช้จริง</td>
+<td>ระบบสมาชิกและสิทธิ์ถูกต้อง</td>
+<td>auth หลายแบบ, RLS/FLS, roles, SSO (Enterprise) <strong>[ทางการ S17, S18]</strong></td>
+<td>ไม่ต้องเขียน auth เอง</td>
+<td>ช่องโหว่ auth bypass ปี 2025 (แก้ใน 24 ชม.) <strong>[ผู้ใช้ S32]</strong> ฟังก์ชันที่ใช้ service role ข้าม RLS ทั้งหมด <strong>[ทางการ S17]</strong></td>
+<td>–</td>
+<td><strong>ปรับปรุง:</strong> สิทธิ์เป็นค่าเริ่มต้นแบบปฏิเสธ และมีชุดทดสอบสิทธิ์อัตโนมัติก่อน deploy</td>
+</tr>
+<tr>
+<td>จ่ายเงิน</td>
+<td>จ่ายตามคุณค่า</td>
+<td>แผน Starter–Elite, ส่วนลดรายปี 20%, ใช้เครดิตร่วมทีม <strong>[ทางการ S02]</strong></td>
+<td>ได้เครดิตและฟีเจอร์เพิ่ม</td>
+<td>ค่าใช้จ่ายขณะแอปทำงานผูกกับเครดิต <strong>[ทางการ S08]</strong></td>
+<td>GitHub sync, เลือกโมเดล, workflows, sandbox ให้ agent ภายนอก ต้อง Builder+ <strong>[ทางการ S10, S05, S19, S22]</strong></td>
+<td><strong>ไม่ทำตาม:</strong> ไม่คิดเงินกับฟีเจอร์ความเป็นเจ้าของ</td>
+</tr>
+<tr>
+<td>ขยายระบบ</td>
+<td>ทีม หลายแอป ระบบอัตโนมัติ</td>
+<td>branches, comments, workflows, in-app agents, superagents <strong>[ทางการ S06, S19, S03]</strong></td>
+<td>ทำงานเป็นทีมได้</td>
+<td>branches ใช้ข้อมูลจริงร่วมกัน (test data ตั้งแต่ Builder) <strong>[ทางการ S06]</strong> audit log ระดับ workspace เฉพาะ Enterprise <strong>[ทางการ S24]</strong></td>
+<td>Elite/Enterprise สำหรับ backup และ governance</td>
+<td><strong>ปรับปรุง:</strong> ทุก branch/preview ได้ฐานข้อมูลสำเนาแยก</td>
+</tr>
+<tr>
+<td>ย้ายออก</td>
+<td>เอาแอปและข้อมูลไปรันที่อื่น</td>
+<td>GitHub sync, export zip (beta), export ตาราง <strong>[ทางการ S10, S11, S25]</strong></td>
+<td>–</td>
+<td>backend ไม่เปิด, SDK ชี้ base44.app, entities ไม่อยู่ใน repo เมื่อใช้ 2-way sync, รหัสผ่านผู้ใช้และ workflows ไม่มีวิธีย้ายในเอกสาร <strong>[ทางการ S14, S15 + โค้ด S41]</strong></td>
+<td>ต้องเขียน backend ใหม่</td>
+<td><strong>ทำต่างอย่างชัดเจน:</strong> การย้ายออกเป็นฟีเจอร์หลักที่มีชุดทดสอบ</td>
+</tr>
+</tbody></table></div>
+<h3 id="23-ตรวจรายฟีเจอร์-มีฟีเจอร์-แยกจาก-ใช้งานจริงได้ดีแค่ไหน"><a class="anchor" href="#23-ตรวจรายฟีเจอร์-มีฟีเจอร์-แยกจาก-ใช้งานจริงได้ดีแค่ไหน" aria-hidden="true">#</a>2.3 ตรวจรายฟีเจอร์: &quot;มีฟีเจอร์&quot; แยกจาก &quot;ใช้งานจริงได้ดีแค่ไหน&quot;</h3>
+<p>คอลัมน์ &quot;ใช้งานจริง&quot; ส่วนใหญ่เป็น <strong>[ไม่พอ]</strong> เพราะเราไม่ได้ทดลองในบัญชีจริง ที่มีข้อมูลคือข้อจำกัดที่เอกสารระบุเอง</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ประเด็น</th>
+<th>มีฟีเจอร์ (หลักฐาน)</th>
+<th>ใช้งานจริง / ข้อจำกัดที่ทราบ</th>
+<th>เราควร</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Prompt-to-app และ requirements</td>
+<td>Build/Discuss/Plan mode, เริ่มจาก URL/Figma <strong>[ทางการ S04, S05]</strong></td>
+<td>คุณภาพ: <strong>[ไม่พอ]</strong></td>
+<td>ทำ requirement เป็น &quot;app plan&quot; ที่มี acceptance checks (web-end มี <code>app_plans</code> แล้ว)</td>
+</tr>
+<tr>
+<td>สร้าง/แก้ UI</td>
+<td>Edit mode, canvas, design system, components <strong>[ทางการ S03]</strong></td>
+<td>undo 50 ขั้นต่อ session <strong>[ทางการ S05]</strong></td>
+<td>เลื่อนไปทีหลัง ใช้ blocks + theme ก่อน</td>
+</tr>
+<tr>
+<td>การจัดการ context ของ AI</td>
+<td>ล็อกไฟล์, กฎประจำแอป, เลือกโมเดล (Builder+) <strong>[ทางการ S05]</strong></td>
+<td>ไม่มี BYOK สำหรับ builder <strong>[ไม่พอ]</strong></td>
+<td>BYOK + local model เป็นค่าเริ่มต้น</td>
+</tr>
+<tr>
+<td>Preview และ deployment</td>
+<td>preview, publish, branches <strong>[ทางการ S03, S06]</strong></td>
+<td>SPA เท่านั้น <strong>[ทางการ S12]</strong></td>
+<td>preview แยกข้อมูล + deploy บนเครื่องผู้ใช้</td>
+</tr>
+<tr>
+<td>Database และ schema migration</td>
+<td>NoSQL &quot;MongoDB compatible&quot;, &quot;Schemas are not enforced... without running migrations&quot; <strong>[ทางการ S12]</strong></td>
+<td>ไม่มีขั้นตอน review migration ข้อมูลเก่าที่รูปแบบไม่ตรงอาจค้างอยู่ <strong>[อนุมาน]</strong></td>
+<td>ใช้ SQL (SQLite/Postgres) + migration ที่ตรวจได้และย้อนได้</td>
+</tr>
+<tr>
+<td>Authentication</td>
+<td>email/password, Google, Microsoft, Facebook, Apple, SSO <strong>[ทางการ S12]</strong></td>
+<td>ช่องโหว่ 2025 แก้แล้ว <strong>[ผู้ใช้ S32]</strong></td>
+<td>ทำ email/password + Google ก่อน, OIDC ทั่วไปทีหลัง</td>
+</tr>
+<tr>
+<td>Authorization</td>
+<td>RLS/FLS; service role ข้ามกฎทั้งหมด <strong>[ทางการ S17]</strong></td>
+<td>การอ่านที่ถูกปฏิเสธคืนผลว่าง (ปลอดภัยแต่ debug ยาก) <strong>[ทางการ S17]</strong></td>
+<td>กฎสิทธิ์ + ตัวทดสอบ &quot;ใครเห็นอะไร&quot; อัตโนมัติ</td>
+</tr>
+<tr>
+<td>Backend functions</td>
+<td>Deno, timeout 5 นาที, npm/jsr <strong>[ทางการ S26]</strong></td>
+<td>เรียกใช้มีค่า integration credit เล็กน้อย <strong>[ทางการ S08]</strong></td>
+<td>sandbox ไม่มี network เป็นค่าเริ่มต้น</td>
+</tr>
+<tr>
+<td>File storage</td>
+<td>UploadFile ~1 เครดิต/ไฟล์ <strong>[ทางการ S08]</strong></td>
+<td>–</td>
+<td>เก็บไฟล์ในดิสก์/S3-compatible ของผู้ใช้</td>
+</tr>
+<tr>
+<td>Integrations และ OAuth</td>
+<td>built-in, connectors (OAuth), custom (OpenAPI), MCP ของแอป <strong>[ทางการ S27, S12]</strong></td>
+<td>ความเสถียร <strong>[ไม่พอ]</strong></td>
+<td>เริ่มที่ webhook ขาออก/ขาเข้า + อีเมล + Stripe/PromptPay</td>
+</tr>
+<tr>
+<td>Automations / scheduled jobs</td>
+<td>Workflows (Builder+), รอบถี่สุด 5 นาที, เห็นผลทีละขั้น <strong>[ทางการ S19]</strong></td>
+<td>~1 เครดิต/10 ขั้น <strong>[ทางการ S08]</strong> ไม่รันในเครื่อง <strong>[ทางการ S15]</strong></td>
+<td>automations ใน runtime เอง มี retry/idempotency/แจ้งเตือนเมื่อล้มเหลว</td>
+</tr>
+<tr>
+<td>Secrets</td>
+<td>API set/list/delete secret, เข้ารหัส <strong>[ทางการ S28, S22]</strong></td>
+<td>–</td>
+<td>secret store แยก AI เห็นแค่ชื่อ</td>
+</tr>
+<tr>
+<td>Logs/debug/monitoring</td>
+<td>Logs Explorer (runtime/setup, errors only) <strong>[ทางการ S24]</strong></td>
+<td>audit log workspace เฉพาะ Enterprise <strong>[ทางการ S24]</strong></td>
+<td>logs + run history ฟรีทุกระดับ</td>
+</tr>
+<tr>
+<td>Version history และ rollback</td>
+<td>Version history ของโค้ด; หลังต่อ GitHub ย้อนไปก่อนต่อไม่ได้ <strong>[ทางการ S10]</strong></td>
+<td>rollback โค้ดไม่พาข้อมูลกลับ (backup แยก) <strong>[ทางการ S16]</strong></td>
+<td>changeset เดียวครอบโค้ด+schema+ข้อมูลที่ได้รับผลกระทบ</td>
+</tr>
+<tr>
+<td>Backup และ restore</td>
+<td>อัตโนมัติ, restore ทีละตาราง/ทั้งหมด, undo restore <strong>[ทางการ S16]</strong></td>
+<td>เฉพาะ Elite (7 วัน) / Enterprise (28 วัน) <strong>[ทางการ S16]</strong></td>
+<td>backup ทุกระดับ + ทดสอบ restore อัตโนมัติ</td>
+</tr>
+<tr>
+<td>Collaboration</td>
+<td>หลายคนแก้, comments, branches <strong>[ทางการ S03, S06]</strong></td>
+<td>–</td>
+<td>เลื่อนไปทีหลัง (ทีมเริ่มต้นมัก 1–3 คน)</td>
+</tr>
+<tr>
+<td>Custom domain</td>
+<td>ตั้งแต่ Starter <strong>[ทางการ S02, S29]</strong></td>
+<td>–</td>
+<td>ฟรี (ผู้ใช้จ่ายค่าโดเมนเอง)</td>
+</tr>
+<tr>
+<td>Code export</td>
+<td>GitHub 2-way sync (Builder+), export zip API (beta) <strong>[ทางการ S10, S11]</strong></td>
+<td>entities ไม่อยู่ใน repo ใน 2-way sync; sync หยุดชั่วคราวไม่ได้; conflict ต้องให้ AI แก้ (ใช้เครดิต) <strong>[ทางการ S10, S14]</strong></td>
+<td>export ทั้งแอปเป็นรูปแบบเปิด + รันได้โดยไม่ต้องมีเรา</td>
+</tr>
+<tr>
+<td>Data export</td>
+<td>ปุ่ม Export ต่อตาราง, ดาวน์โหลด backup เป็น CSV <strong>[ทางการ S25, S16]</strong></td>
+<td>ไม่พบการ export ผู้ใช้พร้อม hash รหัสผ่าน <strong>[ไม่พอ]</strong></td>
+<td>export ทั้งระบบรวมบัญชีผู้ใช้ที่ล็อกอินต่อได้ (web-end ทำได้แล้ว)</td>
+</tr>
+<tr>
+<td>ย้ายแอปออกนอกแพลตฟอร์ม</td>
+<td>SDK MIT, ตั้ง serverUrl ได้ <strong>[โค้ด S41]</strong></td>
+<td>ไม่มีเซิร์ฟเวอร์ open source ให้ชี้ไป; dev ในเครื่องส่งต่อ OAuth/integrations ไปที่ Base44 <strong>[ทางการ S15]</strong></td>
+<td><strong>[อนุมาน]</strong> โอกาส: &quot;Base44-compatible import&quot; ที่อ่าน export zip + CSV แล้วสร้าง app spec ของเรา (ต้องตรวจข้อกฎหมายและข้อกำหนด API ก่อน)</td>
+</tr>
+</tbody></table></div>
+<h3 id="24-ข้อสังเกตเชิงกลยุทธ์จาก-teardown"><a class="anchor" href="#24-ข้อสังเกตเชิงกลยุทธ์จาก-teardown" aria-hidden="true">#</a>2.4 ข้อสังเกตเชิงกลยุทธ์จาก teardown</h3>
+<ul>
+<li>Base44 <strong>ดูดผู้ใช้เข้า</strong> ด้วยเครื่องมือ migrate จาก Lovable, Bolt.new, Salesforce, HubSpot, Shopify, WordPress <strong>[ทางการ S09]</strong> แต่ไม่มีเอกสารสำหรับ &quot;ย้ายออกไปรันที่อื่น&quot; ซึ่งเป็นความไม่สมมาตรที่ตั้งใจหรือไม่ก็ตาม <strong>[อนุมาน]</strong></li>
+<li>ฟีเจอร์ที่ลด &quot;ความกลัวพัง&quot; (backup, test data, sandbox, เลือกโมเดล, workflows, GitHub) ถูกวางไว้เป็นเหตุผลให้อัปเกรด <strong>[ทางการ S02, S16, S06]</strong> สำหรับเรา ฟีเจอร์กลุ่มนี้ควรเป็นของฟรีใน core เพราะคือคำมั่นเรื่องความเป็นเจ้าของ</li>
+<li>การเปิดตัว backend-as-a-service แยก (มี.ค. 2026, beta, ใช้ integration credits) <strong>[ทางการ S12, S13]</strong> และ &quot;Base Code&quot; สำหรับ repo เดิมบน GitHub <strong>[ทางการ S22]</strong> แสดงว่า Base44 กำลังขยายไปหานักพัฒนาที่ใช้ coding agent ของตัวเอง (Claude Code, Cursor, Codex) <strong>[ทางการ S22]</strong> นี่คือพื้นที่เดียวกับที่ web-end ใช้ (Claude ผ่าน MCP) ความแตกต่างของเราต้องอยู่ที่ &quot;backend เป็นของคุณ&quot; ไม่ใช่ &quot;ใช้ agent ของคุณ&quot;</li>
+</ul>
+<hr>
+<h2 id="3-business-model-และ-sales-funnel-ของ-base44"><a class="anchor" href="#3-business-model-และ-sales-funnel-ของ-base44" aria-hidden="true">#</a>3. Business model และ sales funnel ของ Base44</h2>
+<h3 id="31-กลุ่มลูกค้า"><a class="anchor" href="#31-กลุ่มลูกค้า" aria-hidden="true">#</a>3.1 กลุ่มลูกค้า</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>คำถาม</th>
+<th>สิ่งที่พบ</th>
+<th>ระดับหลักฐาน</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ใครเป็นผู้ใช้</td>
+<td>ผู้ไม่เขียนโค้ดที่อยากได้ &quot;productivity tool, back-office system, customer portal, or a complete enterprise product&quot; รวมถึงเว็บไซต์ เกม และ AI agent</td>
+<td><strong>[ทางการ S01, S02, S07]</strong></td>
+</tr>
+<tr>
+<td>ใครเป็นผู้จ่าย</td>
+<td>เจ้าของ workspace เท่านั้นที่ซื้อ/เปลี่ยน/ยกเลิกแผนได้ เครดิตใช้ร่วมทั้ง workspace</td>
+<td><strong>[ทางการ S08b]</strong></td>
+</tr>
+<tr>
+<td>ใช้ทำอะไร</td>
+<td>หน้าราคาเขียนว่า &quot;Most app creators land on Starter... Elite is for people running their main product or business on Base44&quot;</td>
+<td><strong>[ทางการ S02]</strong></td>
+</tr>
+<tr>
+<td>prototype / internal tool / แอปลูกค้าจริง</td>
+<td>มีทั้งสามแบบ: กรณี Wiz พบแอปองค์กรสำหรับ &quot;internal chatbots, knowledge bases, PII &amp; HR operations&quot; <strong>[ผู้ใช้ S32]</strong> และกรณีร้านค้าที่เปิดให้สาธารณะแก้ไขได้ <strong>[ผู้ใช้ S37]</strong> สัดส่วนแต่ละแบบ <strong>[ไม่พอ]</strong></td>
+<td>ผสม</td>
+</tr>
+<tr>
+<td>องค์กรใหญ่</td>
+<td>&quot;Enterprise companies still are a minority... but they represent a growing share of platform revenue&quot;</td>
+<td><strong>[ผู้ใช้/สื่อ S31]</strong></td>
+</tr>
+<tr>
+<td>กลุ่มที่ได้คุณค่าสูงสุด</td>
+<td><strong>[อนุมาน]</strong> คนทำงานสายปฏิบัติการ/เจ้าของธุรกิจที่ต้องการเครื่องมือภายในเร็ว และผู้ประกอบการที่ทดสอบไอเดีย เพราะคุณค่าหลักคือ &quot;ไม่ต้องตั้งค่า backend&quot; และยอมรับการผูกกับแพลตฟอร์มได้</td>
+<td>อนุมาน</td>
+</tr>
+</tbody></table></div>
+<h3 id="32-ข้อเสนอขาย-value-proposition"><a class="anchor" href="#32-ข้อเสนอขาย-value-proposition" aria-hidden="true">#</a>3.2 ข้อเสนอขาย (value proposition)</h3>
+<ul>
+<li>ข้อความหลัก: &quot;Every builder needs a base&quot;, &quot;The whole stack. No setup slowdown.&quot;, &quot;Ship something real... without touching a server, wiring up a payment provider, or configuring a database. It&#39;s all already there.&quot; <strong>[ทางการ S01]</strong></li>
+<li>สัญญาว่าช่วยอะไร: backend + storage ในตัว, integrations คลิกเดียว, โดเมน, analytics, &quot;Get paid directly through Base44&quot;, &quot;Enterprise-grade security&quot; <strong>[ทางการ S01]</strong></li>
+<li>ลดความกังวลก่อนลอง: แผนฟรีมี &quot;All of Base44&#39;s core features&quot;, ยกเลิกได้ทุกเมื่อ &quot;Your apps stay live, your data stays in your workspace&quot;, FAQ เรื่องความเป็นเจ้าของ &quot;Nothing is locked to the platform&quot; <strong>[ทางการ S02]</strong> (ข้อความสุดท้ายนี้ขัดกับข้อจำกัดทางเทคนิคในส่วนที่ 2.3 ที่เอกสารของ Base44 เองระบุ <strong>[อนุมาน]</strong>)</li>
+<li>Social proof: แกลเลอรีเทมเพลตชุมชน, Launchpad, กรณีศึกษา, โปรแกรม Startups (ไลเซนส์รายปีฟรี), โปรแกรม affiliate <strong>[ทางการ S02, S07]</strong></li>
+<li>ต่างจากการจ้างนักพัฒนา: ข้อความ &quot;No code, no integrations, ready to ship on day one&quot; <strong>[ทางการ S02]</strong> และ &quot;Hire a Partner&quot; สำหรับงานที่ AI ทำไม่ได้ <strong>[ทางการ S07]</strong></li>
+</ul>
+<h3 id="33-ราคาและรายได้"><a class="anchor" href="#33-ราคาและรายได้" aria-hidden="true">#</a>3.3 ราคาและรายได้</h3>
+<p><strong>แพ็กเกจปัจจุบัน (หน้าราคา ตรวจ 8 พ.ย. 2026; ราคาที่แสดงเป็นแบบชำระรายปี) [ทางการ S02]</strong></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>แผน</th>
+<th>ราคา/เดือน (จ่ายรายปี)</th>
+<th>ราคา/เดือน (จ่ายรายเดือน)</th>
+<th>Message credits/เดือน</th>
+<th>Integration credits/เดือน</th>
+<th>จุดเด่นที่ใช้ขาย</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Free</td>
+<td>$0</td>
+<td>$0</td>
+<td>25 (สูงสุด 5/วัน เฉพาะ workspace ส่วนตัว)</td>
+<td>100</td>
+<td>สูงสุด 5 แอป, auth, ฐานข้อมูล, analytics</td>
+</tr>
+<tr>
+<td>Starter</td>
+<td>$16</td>
+<td>$20 <strong>[ทางการ]</strong></td>
+<td>100</td>
+<td>2,000</td>
+<td>ไม่จำกัดจำนวนแอป, แก้โค้ดในแอป, ต่อโดเมน, โดเมนฟรี 1 ปี</td>
+</tr>
+<tr>
+<td>Builder</td>
+<td>$40</td>
+<td>~$50 <strong>[อนุมาน]</strong></td>
+<td>250</td>
+<td>10,000</td>
+<td>+ เลือกโมเดล AI, GitHub integration</td>
+</tr>
+<tr>
+<td>Pro</td>
+<td>$80</td>
+<td>~$100 <strong>[อนุมาน]</strong></td>
+<td>500</td>
+<td>20,000</td>
+<td>+ beta features ก่อนใคร</td>
+</tr>
+<tr>
+<td>Elite</td>
+<td>$160</td>
+<td>~$200 <strong>[อนุมาน]</strong></td>
+<td>1,200</td>
+<td>50,000</td>
+<td>+ premium support, backup 7 วัน <strong>[ทางการ S16]</strong></td>
+</tr>
+<tr>
+<td>Enterprise</td>
+<td>ติดต่อฝ่ายขาย</td>
+<td>–</td>
+<td>กำหนดเอง</td>
+<td>กำหนดเอง</td>
+<td>SSO, architect เฉพาะ, ไม่ใช้ข้อมูลฝึกโมเดล <strong>[ทางการ S23]</strong>, backup 28 วัน</td>
+</tr>
+</tbody></table></div>
+<p>ราคารายเดือนของ Builder/Pro/Elite คำนวณจากข้อความทางการว่าส่วนลดรายปีคือ 20% ของ &quot;monthly price multiplied by twelve&quot; (ราคารายปี ÷ 0.8) ยังไม่ได้เห็นตัวเลขบนหน้าเว็บโดยตรง (บันทึกเป็น unknown)</p>
+<p><strong>หน่วยคิดเงินและกติกาเครดิต [ทางการ S08]</strong></p>
+<ul>
+<li>Message credits ใช้ตอนสร้าง/แก้แอปด้วย AI ประมาณ ~0.5 (แก้เล็ก) ถึง ~3–4 (แก้ทั้งแอป) ต่อข้อความ คำนวณ <strong>หลัง</strong> ทำเสร็จ</li>
+<li>Integration credits ใช้ <strong>ตอนแอปทำงาน</strong>: อีเมล ~1 (โดเมนตัวเอง ~2), อัปโหลดไฟล์ ~1, สร้างภาพ ~1, วิดีโอ ~5/วินาที, LLM แบบ Auto ~1/ครั้ง, in-app agent เริ่ม ~3/ข้อความ, workflow ~1 ต่อ 10 ขั้น, เรียก backend function มีค่าเล็กน้อย; เรียกบริการภายนอกด้วย API key ของผู้ใช้เองไม่เสีย integration credit</li>
+<li>&quot;There is no way to preview an integration credit cost before running an action&quot;</li>
+<li>เครดิตรีเซ็ตรายเดือนและ <strong>หมดอายุ</strong> ถ้าไม่ใช้; เมื่อหมด &quot;actions that use credits pause until your next reset&quot;</li>
+<li>ข้อกำหนดบริการเปิดช่องให้ &quot;restrict or suspend certain features&quot; เมื่อเกินโควตา <strong>[ทางการ S20]</strong></li>
+<li>ยกเลิกแผน: ใช้ได้ถึงสิ้นรอบบิล <strong>[ทางการ S08b]</strong> (แอปบนแผนฟรีมีขีดจำกัด 5 แอป ผลต่อแอปที่เกิน <strong>[ไม่พอ]</strong>)</li>
+</ul>
+<p><strong>ฟีเจอร์ที่ใช้เป็นเหตุผลให้อัปเกรด [ทางการ S02, S05, S06, S10, S16, S19, S21, S22]:</strong> ต่อโดเมน (Starter), แอปแบบ private (จ่ายเงิน), เลือกโมเดล AI / GitHub 2-way sync / workflows / test data / ให้ agent ภายนอกเข้า sandbox (Builder+), backup (Elite), SSO และไม่ฝึกโมเดลด้วยข้อมูล (Enterprise)</p>
+<p><strong>ความสัมพันธ์รายได้กับต้นทุน</strong></p>
+<ul>
+<li>ก่อนขาย บริษัทรายงานกำไร 189,000 ดอลลาร์ในเดือน พ.ค. 2025 &quot;even after covering high LLM token costs&quot; และเลือก Claude ผ่าน AWS ด้วยเหตุผลราคา/ประสิทธิภาพ <strong>[ผู้ใช้/สื่อ S30]</strong></li>
+<li>ปี 2026 เปิดตัวโมเดล Base 1 เพื่อ &quot;direct control over compute and inference spend, expected to result in a structurally stronger margin profile&quot; และ ARR เกิน 100 → 150 ล้านดอลลาร์ใน 2 เดือน <strong>[ผู้ใช้/สื่อ S31]</strong></li>
+<li><strong>[อนุมาน]</strong> โครงสร้างเครดิตทำให้ต้นทุน AI ที่ผันผวนถูกส่งต่อเป็นความไม่แน่นอนของผู้ใช้ (คิดหลังทำ ไม่ preview ได้) ขณะที่รายได้รายเดือนคงที่ ส่วนต่างกำไรจึงขึ้นกับประสิทธิภาพการใช้โมเดลของ Base44 เอง ซึ่งอธิบายแรงจูงใจในการสร้างโมเดลเอง</li>
+</ul>
+<h3 id="34-การหาลูกค้าและรักษาลูกค้า"><a class="anchor" href="#34-การหาลูกค้าและรักษาลูกค้า" aria-hidden="true">#</a>3.4 การหาลูกค้าและรักษาลูกค้า</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>กลไก</th>
+<th>หลักฐาน</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Build in public / word of mouth ช่วงแรก</td>
+<td>ผู้ก่อตั้งเล่าเส้นทางบน LinkedIn/X ถึง 10,000 ผู้ใช้ใน 3 สัปดาห์ <strong>[ผู้ใช้/สื่อ S30]</strong></td>
+</tr>
+<tr>
+<td>โฆษณาวิดีโอปริมาณมาก</td>
+<td>ผู้ใช้ HN บ่นเห็นโฆษณา YouTube ซ้ำ ๆ <strong>[ผู้ใช้ S35]</strong> (สัญญาณเชิงคุณภาพ ไม่ใช่ข้อมูลงบโฆษณา)</td>
+</tr>
+<tr>
+<td>SEO/content</td>
+<td>หน้า &quot;AI App Builder&quot;, &quot;Website Builder&quot;, Use Cases, Blog, Higher Ed <strong>[ทางการ S01, S02]</strong></td>
+</tr>
+<tr>
+<td>Templates / community</td>
+<td>แกลเลอรีเทมเพลต ชุมชน Discord/Reddit <strong>[ทางการ S02, S07]</strong></td>
+</tr>
+<tr>
+<td>Partner / affiliate / startups</td>
+<td>Hire a Partner, Affiliate Program, Base44 for Startups <strong>[ทางการ S02, S07]</strong></td>
+</tr>
+<tr>
+<td>โปรโมชันราคา</td>
+<td>&quot;Cyber Monday Sale 30% Off&quot; บนหน้าราคา <strong>[ทางการ S02]</strong></td>
+</tr>
+<tr>
+<td>Switching-in</td>
+<td>เครื่องมือ migrate จาก Lovable/Bolt และ SaaS <strong>[ทางการ S09]</strong></td>
+</tr>
+<tr>
+<td>Distribution ของบริษัทแม่</td>
+<td>Wix ซื้อกิจการ, เอกสารมีการซื้อโดเมนผ่าน Wix และ Wix Payments <strong>[ทางการ S07, ผู้ใช้/สื่อ S30]</strong></td>
+</tr>
+<tr>
+<td>Product-led growth จากแอปแรกไปจ่ายเงิน</td>
+<td><strong>[อนุมาน]</strong> เพดานเครดิตรายวันของแผนฟรี → เจอเพดานกลางงาน → Starter สำหรับโดเมน → Builder เมื่อจำเป็นต้องใช้ GitHub/workflows/เลือกโมเดล</td>
+</tr>
+</tbody></table></div>
+<p><strong>Switching costs ที่ทำให้ย้ายออกยาก [อนุมาน จากหลักฐานส่วนที่ 2]:</strong> backend และฐานข้อมูลเป็นบริการปิด, ผู้ใช้ปลายทาง (บัญชี+รหัสผ่าน) อยู่ในระบบ Base44, workflows และ in-app agents เป็นของแพลตฟอร์ม, ค่าบริการ runtime รวมอยู่ในเครดิต, โดเมนที่ซื้อผ่านแพลตฟอร์ม, และความคุ้นเคยกับ editor</p>
+<p><strong>ไม่ทราบ:</strong> conversion rate, CAC, LTV, churn, สัดส่วนรายได้จากแต่ละแผน <strong>[ไม่พอ]</strong> วิธีวัดแทน (สำหรับผลิตภัณฑ์ของเรา ไม่ใช่การเดาตัวเลขของ Base44):</p>
+<ol>
+<li>Funnel เชิงเหตุการณ์ (ไม่ใช้คุกกี้ติดตาม): เยี่ยมเว็บ → ติดตั้งสำเร็จ (นับจาก opt-in ping หรือแบบสอบถามหลังติดตั้ง) → แอปแรกผ่าน acceptance → ใช้งานต่อเนื่อง 4 สัปดาห์</li>
+<li>สำหรับ managed mode: trial → paid ต่อ cohort รายเดือน, รายได้ต่อบัญชี, churn รายเดือน</li>
+<li>CAC แยกตามช่องทาง (เนื้อหา, ชุมชน, พาร์ทเนอร์) ด้วยลิงก์ที่มีรหัสแคมเปญ</li>
+</ol>
+<h3 id="35-สรุป-base44-ขายอะไรจริง-ๆ-นอกเหนือจากการสร้างโค้ดด้วย-ai"><a class="anchor" href="#35-สรุป-base44-ขายอะไรจริง-ๆ-นอกเหนือจากการสร้างโค้ดด้วย-ai" aria-hidden="true">#</a>3.5 สรุป: &quot;Base44 ขายอะไรจริง ๆ นอกเหนือจากการสร้างโค้ดด้วย AI&quot;</h3>
+<blockquote>
+<p><strong>Base44 ขาย &quot;การไม่ต้องเป็นเจ้าของปัญหาโครงสร้างพื้นฐาน&quot;</strong> คือ backend ที่รันจริง, hosting, auth, integrations ที่ต่อแล้ว และคนดูแลระบบ โดยคิดเงินเป็นเครดิตทั้งตอนสร้างและตอนแอปทำงาน AI ที่เขียนโค้ดเป็นประตูเข้าและเป็นเหตุผลให้ใช้เครดิต แต่สิ่งที่ทำให้ลูกค้าอยู่ต่อคือแอปที่ทำงานอยู่บน backend ของ Base44 <strong>[อนุมาน จากหลักฐาน S02, S08, S12, S15]</strong></p>
+</blockquote>
+<p>ผลต่อเรา: ถ้าเราแจก &quot;AI สร้างโค้ด&quot; ฟรีแต่ปล่อยให้ผู้ใช้ไปหา backend/hosting/การดูแลเอง เราแข่งผิดจุด ความยากจริงคือทำให้การ &quot;เป็นเจ้าของโครงสร้างพื้นฐาน&quot; ง่ายพอ ๆ กับการไม่ต้องเป็นเจ้าของ</p>
+<hr>
+<h2 id="4-คู่แข่งและทางเลือก-open-source"><a class="anchor" href="#4-คู่แข่งและทางเลือก-open-source" aria-hidden="true">#</a>4. คู่แข่งและทางเลือก Open Source</h2>
+<h3 id="41-จัดกลุ่ม-ตรวจสถานะและ-license-จาก-github-api-และไฟล์-license-วันที่-8-พย-2026-โค้ด-s55"><a class="anchor" href="#41-จัดกลุ่ม-ตรวจสถานะและ-license-จาก-github-api-และไฟล์-license-วันที่-8-พย-2026-โค้ด-s55" aria-hidden="true">#</a>4.1 จัดกลุ่ม (ตรวจสถานะและ license จาก GitHub API และไฟล์ LICENSE วันที่ 8 พ.ย. 2026) [โค้ด S55]</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ราย</th>
+<th>กลุ่ม</th>
+<th>License / สถานะ</th>
+<th>หมายเหตุ</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Base44</td>
+<td>คู่แข่งโดยตรง</td>
+<td>Proprietary (SDK/CLI เป็น MIT)</td>
+<td>คู่เทียบหลัก</td>
+</tr>
+<tr>
+<td>Lovable</td>
+<td>คู่แข่งโดยตรง</td>
+<td>Proprietary</td>
+<td>เครดิตรวม build + hosting (Cloud) + AI ในแอป; เครดิตรายเดือนหมดอายุใน 2 เดือน <strong>[ทางการ S45]</strong></td>
+</tr>
+<tr>
+<td>Bolt.new</td>
+<td>คู่แข่งโดยตรง</td>
+<td>Proprietary (repo เก่า <code>stackblitz/bolt.new</code> MIT ไม่อัปเดตตั้งแต่ ธ.ค. 2024)</td>
+<td>คิดเป็น tokens; ฟรี 1M tokens/เดือน; แผนเริ่ม $25 <strong>[ทางการ S46]</strong></td>
+</tr>
+<tr>
+<td>Replit</td>
+<td>คู่แข่งบางส่วน (IDE + agent + hosting)</td>
+<td>Proprietary</td>
+<td>Core $20 ($18 รายปี), Pro $100 <strong>[ทางการ S47]</strong></td>
+</tr>
+<tr>
+<td>v0 (Vercel)</td>
+<td>คู่แข่งบางส่วน (UI/frontend เด่น)</td>
+<td>Proprietary</td>
+<td>คิดเครดิตตามโมเดล ต่อผู้ใช้ <strong>[ทางการ S48]</strong></td>
+</tr>
+<tr>
+<td>Dyad</td>
+<td>คู่แข่งโดยตรงฝั่ง open source (desktop, local)</td>
+<td>Apache-2.0 ยกเว้น <code>src/pro/</code> (license แยก) — source-available บางส่วน</td>
+<td>BYOK, Ollama/LM Studio, ต่อ Supabase/Neon <strong>[ทางการ S49]</strong></td>
+</tr>
+<tr>
+<td>bolt.diy</td>
+<td>คู่แข่งบางส่วน (open source, any LLM)</td>
+<td>MIT, active</td>
+<td>เน้นสร้างโค้ด ไม่มี backend ของตัวเอง</td>
+</tr>
+<tr>
+<td>OpenHands</td>
+<td>ทดแทน (coding agent ทั่วไป)</td>
+<td>MIT</td>
+<td>สำหรับนักพัฒนา</td>
+</tr>
+<tr>
+<td>Convex Chef</td>
+<td>คู่แข่งบางส่วน</td>
+<td>Chef: Apache-2.0; convex-backend: FSL-1.1-Apache-2.0 (source-available, เป็น Apache หลัง 2 ปี)</td>
+<td>backend ผูก Convex</td>
+</tr>
+<tr>
+<td>open-lovable (Firecrawl)</td>
+<td>ทดแทน/ไอเดีย</td>
+<td>MIT</td>
+<td>เน้น clone เว็บเป็น React</td>
+</tr>
+<tr>
+<td>Supabase</td>
+<td>ส่วนประกอบ (Postgres, auth, storage)</td>
+<td>Apache-2.0</td>
+<td>self-host ได้แต่มีหลาย service</td>
+</tr>
+<tr>
+<td>Appwrite</td>
+<td>ส่วนประกอบ</td>
+<td>BSD-3-Clause</td>
+<td></td>
+</tr>
+<tr>
+<td>PocketBase</td>
+<td>ส่วนประกอบ</td>
+<td>MIT แต่ <strong>repo ถูก archive</strong> ณ วันที่ตรวจ</td>
+<td>ไม่ควรเป็น dependency หลักใหม่</td>
+</tr>
+<tr>
+<td>Nhost</td>
+<td>ส่วนประกอบ</td>
+<td>MIT</td>
+<td>GraphQL/Hasura</td>
+</tr>
+<tr>
+<td>Directus</td>
+<td>ส่วนประกอบ</td>
+<td>Monospace Sustainable Core License (source-available ไม่ใช่ OSI)</td>
+<td></td>
+</tr>
+<tr>
+<td>n8n</td>
+<td>ทดแทนฝั่ง automation</td>
+<td>Sustainable Use License + ไฟล์ <code>.ee.</code> ต้องมี license องค์กร (fair-code ไม่ใช่ OSI)</td>
+<td></td>
+</tr>
+<tr>
+<td>Activepieces</td>
+<td>ส่วนประกอบ automation</td>
+<td>MIT ยกเว้นโฟลเดอร์ <code>ee</code></td>
+<td></td>
+</tr>
+<tr>
+<td>ToolJet</td>
+<td>ทดแทน (internal tools)</td>
+<td>AGPL-3.0</td>
+<td></td>
+</tr>
+<tr>
+<td>Appsmith</td>
+<td>ทดแทน (internal tools)</td>
+<td>Apache-2.0</td>
+<td></td>
+</tr>
+<tr>
+<td>Budibase</td>
+<td>ทดแทน (internal tools)</td>
+<td>&quot;GPLv3 overall&quot; ตามไฟล์ license</td>
+<td>แอปที่สร้างไม่ติด GPL ตามคำประกาศ</td>
+</tr>
+<tr>
+<td>NocoBase</td>
+<td>ทดแทน</td>
+<td>NocoBase License Agreement (ข้อตกลงของบริษัท ต้องอ่านก่อนใช้เชิงพาณิชย์)</td>
+<td></td>
+</tr>
+<tr>
+<td>Coolify</td>
+<td>ส่วนประกอบ (self-hosted PaaS)</td>
+<td>Apache-2.0</td>
+<td>ใช้ deploy แอปของผู้ใช้ได้</td>
+</tr>
+<tr>
+<td>E2B / gVisor</td>
+<td>ส่วนประกอบ (sandbox)</td>
+<td>Apache-2.0</td>
+<td></td>
+</tr>
+<tr>
+<td>Ollama</td>
+<td>ส่วนประกอบ (local models)</td>
+<td>MIT</td>
+<td></td>
+</tr>
+<tr>
+<td>LiteLLM</td>
+<td>ส่วนประกอบ (AI gateway)</td>
+<td>MIT ยกเว้น <code>enterprise/</code></td>
+<td></td>
+</tr>
+<tr>
+<td>Infisical</td>
+<td>ส่วนประกอบ (secrets)</td>
+<td>MIT ยกเว้น <code>ee/</code></td>
+<td></td>
+</tr>
+</tbody></table></div>
+<p><strong>ข้อสังเกต:</strong> จำนวนดาว GitHub ไม่ได้ใช้ในการตัดสินคุณภาพ ใช้เพียงบอกว่ามีคนรู้จัก โครงการที่ &quot;Open Source&quot; ในชื่อหลายรายจริง ๆ เป็น open-core หรือ source-available (n8n, Directus, NocoBase, Dyad Pro, Convex backend) ต้องแยกให้ชัดก่อนนำมาเป็นส่วนประกอบ</p>
+<h3 id="42-เปรียบเทียบด้วย-rubric-ที่เปิดเผย"><a class="anchor" href="#42-เปรียบเทียบด้วย-rubric-ที่เปิดเผย" aria-hidden="true">#</a>4.2 เปรียบเทียบด้วย rubric ที่เปิดเผย</h3>
+<p><strong>Rubric (0–3) ต่อมิติ:</strong> 0 = ไม่มี/ไม่รองรับตามเอกสาร · 1 = มีแบบจำกัดหรือต้องจ่าย/ต้องตั้งค่ามาก · 2 = มีครบสำหรับงานทั่วไป · 3 = เป็นจุดแข็งหลักที่เอกสารยืนยันชัด · <strong>?</strong> = ไม่มีหลักฐานพอ
+<strong>ความเชื่อมั่น:</strong> สูง = จากเอกสารทางการ/โค้ดโดยตรง, กลาง = จากหน้าการตลาดหรือบางส่วน, ต่ำ = อนุมาน
+<strong>ไม่รวมคะแนนเป็นผลรวม</strong> เพราะน้ำหนักแต่ละมิติต่างกันตามกลุ่มลูกค้า</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>มิติ</th>
+<th>Base44</th>
+<th>Lovable</th>
+<th>Bolt.new</th>
+<th>Dyad</th>
+<th>web-end (ปัจจุบัน)</th>
+<th>ความเชื่อมั่น</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>กลุ่มเป้าหมาย</td>
+<td>ผู้ไม่เขียนโค้ด → องค์กร</td>
+<td>ผู้ไม่เขียนโค้ด/ทีม</td>
+<td>ผู้ไม่เขียนโค้ด/นักพัฒนา</td>
+<td>power users</td>
+<td>เจ้าของธุรกิจเล็ก (ไทย/อังกฤษ)</td>
+<td>กลาง</td>
+</tr>
+<tr>
+<td>ความง่ายในการเริ่มต้น</td>
+<td>3 (เบราว์เซอร์, social login)</td>
+<td>3</td>
+<td>3</td>
+<td>1 (ติดตั้ง desktop + key)</td>
+<td>1 (ต้องมี Cloudflare, GitHub, Claude)</td>
+<td>สูง</td>
+</tr>
+<tr>
+<td>ความครบของ backend</td>
+<td>3 (DB, auth, functions, workflows)</td>
+<td>2 (Cloud) <strong>?</strong> รายละเอียด</td>
+<td><strong>?</strong></td>
+<td>1 (ต่อ Supabase/Neon)</td>
+<td>2 (ตาราง, auth, automations, shop)</td>
+<td>กลาง</td>
+</tr>
+<tr>
+<td>การควบคุมโค้ดและข้อมูล</td>
+<td>1 (โค้ด frontend ได้ backend ไม่ได้)</td>
+<td><strong>?</strong></td>
+<td><strong>?</strong></td>
+<td>3 (โค้ดในเครื่อง)</td>
+<td>3 (repo + DB ใน account ผู้ใช้)</td>
+<td>สูง (Base44, web-end), ต่ำ (อื่น)</td>
+</tr>
+<tr>
+<td>Self-hosting</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>2 (app รันในเครื่อง, backend ที่เลือก)</td>
+<td>2 (Cloudflare ของผู้ใช้เท่านั้น)</td>
+<td>สูง</td>
+</tr>
+<tr>
+<td>Local AI และ BYOK</td>
+<td>0 (ไม่พบ BYOK สำหรับ builder)</td>
+<td>0 <strong>?</strong></td>
+<td>0 <strong>?</strong></td>
+<td>3</td>
+<td>1 (ใช้ Claude ผ่าน MCP; client อื่นที่รองรับ MCP ยังไม่ทดสอบ)</td>
+<td>กลาง</td>
+</tr>
+<tr>
+<td>ค่าใช้จ่าย (ความคาดเดาได้)</td>
+<td>1 (เครดิตคิดหลังทำ)</td>
+<td>1 (เครดิตรวม hosting)</td>
+<td>2 (tokens + rollover)</td>
+<td>3 (จ่าย provider ตรง)</td>
+<td>3 (แผนฟรีของผู้ให้บริการ หยุดเมื่อถึงขีด ไม่เก็บเงิน)</td>
+<td>สูง</td>
+</tr>
+<tr>
+<td>ความพร้อม production</td>
+<td>2 (มีลูกค้าจริงจำนวนมาก, เคยมีช่องโหว่)</td>
+<td><strong>?</strong></td>
+<td><strong>?</strong></td>
+<td><strong>?</strong></td>
+<td>1 (early test, ทดสอบครบวงจร 1 ครั้ง)</td>
+<td>กลาง</td>
+</tr>
+<tr>
+<td>ความง่ายในการย้ายออก</td>
+<td>1</td>
+<td><strong>?</strong></td>
+<td><strong>?</strong></td>
+<td>3</td>
+<td>2 (backup ไฟล์เดียว, ส่งออก WordPress; แต่ runtime ผูก Cloudflare)</td>
+<td>สูง (Base44, web-end)</td>
+</tr>
+<tr>
+<td>ความยากในการดูแลเอง (3 = ง่าย)</td>
+<td>3 (ไม่ต้องดูแล)</td>
+<td>3</td>
+<td>3</td>
+<td>2</td>
+<td>2 (อัปเดตอัตโนมัติผ่าน GitHub Actions)</td>
+<td>กลาง</td>
+</tr>
+</tbody></table></div>
+<p><strong>ข้อสรุปจากตาราง [อนุมาน]:</strong> ไม่มีรายใดที่ได้ทั้ง &quot;เริ่มง่ายระดับ 3&quot; และ &quot;self-hosting/ย้ายออกระดับ 3&quot; พร้อมกัน นั่นคือช่องว่างที่เราต้องเติม และเป็นงานที่ยากที่สุดด้วย</p>
+<hr>
+<h2 id="5-user-pain-points-พร้อมหลักฐาน"><a class="anchor" href="#5-user-pain-points-พร้อมหลักฐาน" aria-hidden="true">#</a>5. User pain points พร้อมหลักฐาน</h2>
+<p><strong>คำเตือน:</strong> แหล่งรีวิวหลัก (Reddit, Trustpilot) เข้าไม่ได้ในรอบนี้ ตารางนี้จึง <strong>ไม่ได้วัดความถี่</strong> แยกชัดว่าแถวไหนมีหลักฐานจริง แถวไหนเป็นแค่สมมติฐาน</p>
+<h3 id="51-ตารางปัญหา"><a class="anchor" href="#51-ตารางปัญหา" aria-hidden="true">#</a>5.1 ตารางปัญหา</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>ปัญหา</th>
+<th>แหล่งหลักฐาน</th>
+<th>กลุ่มผู้ใช้</th>
+<th>ผลกระทบ</th>
+<th>Workaround ปัจจุบัน</th>
+<th>โอกาสของเรา</th>
+<th>วิธีทดสอบความต้องการ</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>P1</td>
+<td>Export ได้แต่รันต่อไม่ได้ / backend ผูกกับบริการเดิม</td>
+<td><strong>[ทางการ S12, S14, S15] + [โค้ด S41]</strong>: SDK ชี้ base44.app, entities ไม่อยู่ใน repo, OAuth/integrations ส่งต่อไป Base44, automations ไม่รันในเครื่อง</td>
+<td>ผู้ใช้ที่แอปโต/ลูกค้าองค์กร</td>
+<td>ย้ายผู้ให้บริการไม่ได้โดยไม่เขียน backend ใหม่</td>
+<td>เขียน backend ใหม่, ใช้ต่อ</td>
+<td><strong>หลัก:</strong> runtime เปิด + ชุดทดสอบ &quot;รันที่อื่นได้&quot;</td>
+<td>สัมภาษณ์ 15 รายที่เคยพยายามย้ายออกจากแพลตฟอร์ม AI builder; landing page &quot;ย้ายแอปออกจาก AI builder&quot; วัดการลงชื่อ</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>ค่าใช้จ่ายคาดเดายาก</td>
+<td><strong>[ทางการ S08]</strong> คิดเครดิตหลังทำ, preview ไม่ได้, เครดิตหมดอายุ; Lovable เครดิตหมดอายุ <strong>[ทางการ S45]</strong>; Ask HN ถามว่าใครยอมจ่าย <strong>[ผู้ใช้ S33]</strong> (ไม่มีคำตอบ)</td>
+<td>ผู้จ่ายเงินรายย่อย</td>
+<td>งบไม่แน่นอน, หยุดกลางงาน</td>
+<td>ซื้อแผนสูงกว่าที่ต้องใช้</td>
+<td>BYOK + ประมาณค่า AI ก่อนรัน + ไม่มีค่าตอน runtime</td>
+<td>ทดสอบหน้า pricing calculator และถามว่า &quot;อะไรทำให้ตัดสินใจยกเลิก&quot;</td>
+</tr>
+<tr>
+<td>P3</td>
+<td>Rollback โค้ดแล้วข้อมูลไม่กลับตาม</td>
+<td><strong>[ทางการ S16]</strong> backup ครอบเฉพาะข้อมูล โค้ดใช้ version history แยก; <strong>[ทางการ S06]</strong> branch ใช้ข้อมูลจริงร่วมกัน</td>
+<td>ทุกคนที่มีข้อมูลจริง</td>
+<td>แก้ schema ผิดแล้วข้อมูลเสียหาย</td>
+<td>backup (Elite+), test data (Builder+)</td>
+<td>changeset ที่มี snapshot ข้อมูลก่อน migrate + restore คู่กัน</td>
+<td>การทดลองแบบ task-based: ให้ผู้ใช้ย้อนการเปลี่ยนแปลงที่ทำข้อมูลพัง วัดความสำเร็จ</td>
+</tr>
+<tr>
+<td>P4</td>
+<td>ปัญหา permissions / ข้อมูลรั่วข้ามผู้ใช้</td>
+<td><strong>[ผู้ใช้ S32]</strong> Wiz: auth bypass แอป private (แก้ &lt;24 ชม.); **[ผู้ใช้ S36]** อ้างงาน RedAccess พบแอป vibe-coded เปิดเผยข้อมูล &gt;5,000 แอปข้ามหลายแพลตฟอร์ม (แหล่งรอง ยังไม่ได้อ่านต้นฉบับ); <strong>[ผู้ใช้ S37]</strong> ร้านค้าที่เปิดให้คนทั่วไปแก้ได้; <strong>[ผู้ใช้ S38]</strong> RLS ปิดบน Supabase ในแอปจากหลาย builder; <strong>[โค้ด S42]</strong> issue CLI: local dev เชื่อ JWT ที่ไม่ verify เป็น service role</td>
+<td>แอปที่มีข้อมูลส่วนบุคคล</td>
+<td>ข้อมูลรั่ว, ความเสียหายทางกฎหมาย</td>
+<td>security scan (Base44 มีเชื่อม Wiz/Tenzai <strong>[ทางการ S07]</strong>)</td>
+<td>สิทธิ์ปฏิเสธเป็นค่าเริ่มต้น + ทดสอบ &quot;ใครเห็นอะไร&quot; ทุก deploy</td>
+<td>นับว่าแอปทดลองกี่ % ผ่านชุดทดสอบสิทธิ์โดยไม่ต้องแก้; สัมภาษณ์ผู้ดูแลข้อมูลลูกค้า</td>
+</tr>
+<tr>
+<td>P5</td>
+<td>แอปดูดีแต่ใช้จริงไม่ได้ (รวม SEO)</td>
+<td><strong>[ผู้ใช้ S34]</strong> ผู้ศึกษา 220 เว็บพบเนื้อหาที่บอทไม่เห็นเฉลี่ย 82.1% สำหรับ Base44 (SPA); <strong>[ทางการ S12]</strong> hosting เป็น SPA เท่านั้น</td>
+<td>เว็บไซต์ธุรกิจ</td>
+<td>ค้นหาไม่เจอ</td>
+<td>prerender เอง</td>
+<td>เรนเดอร์ฝั่งเซิร์ฟเวอร์เป็นค่าเริ่มต้น (web-end ทำแล้ว)</td>
+<td>วัด % เนื้อหาที่บอทเห็นในแอปทดลอง</td>
+</tr>
+<tr>
+<td>P6</td>
+<td>AI แก้จุดหนึ่งแล้วอีกจุดพัง</td>
+<td><strong>[ไม่พอ]</strong> สำหรับ Base44 โดยตรง; Base44 ระบุว่ามีการตรวจและแก้ error อัตโนมัติ <strong>[ทางการ S05]</strong> ซึ่งบอกว่าเป็นปัญหาที่ต้องจัดการ <strong>[อนุมาน]</strong></td>
+<td>ทุกคน</td>
+<td>เสียเวลาและเครดิต</td>
+<td>ล็อกไฟล์, Discuss mode</td>
+<td>regression tests จาก acceptance checks ก่อน apply</td>
+<td>benchmark ภายในของเรา (ส่วนที่ 10) และเก็บรีวิวเมื่อเข้าถึงได้</td>
+</tr>
+<tr>
+<td>P7</td>
+<td>เสียเครดิตจากการแก้ข้อผิดพลาดซ้ำ</td>
+<td><strong>[ทางการ S10]</strong> แก้ merge conflict ด้วย AI ใช้เครดิต; ความถี่ <strong>[ไม่พอ]</strong></td>
+<td>ผู้ใช้ไม่เขียนโค้ด</td>
+<td>เสียเงิน</td>
+<td>–</td>
+<td>ตรวจจับการแก้วนซ้ำแล้วหยุด (web-end มีแล้ว ตาม README)</td>
+<td>วัดจำนวนรอบเฉลี่ยต่อ task ใน benchmark</td>
+</tr>
+<tr>
+<td>P8</td>
+<td>Debug ยาก</td>
+<td><strong>[ทางการ S24]</strong> มี Logs explorer; audit log workspace เฉพาะ Enterprise; การอ่านที่ถูกปฏิเสธคืนค่าว่าง <strong>[ทางการ S17]</strong></td>
+<td>ผู้ใช้กลาง</td>
+<td>หาสาเหตุไม่เจอ</td>
+<td>ถาม AI</td>
+<td>อธิบาย error เป็นภาษาคน + &quot;ทำไมฉันไม่เห็นข้อมูลนี้&quot;</td>
+<td>ทดสอบ task: หาสาเหตุ bug ที่ฝังไว้</td>
+</tr>
+<tr>
+<td>P9</td>
+<td>งานอัตโนมัติล้มเหลวแล้วไม่รู้</td>
+<td><strong>[ไม่พอ]</strong>; Base44 มีหน้า run history <strong>[ทางการ S19]</strong></td>
+<td>ร้าน/ทีมปฏิบัติการ</td>
+<td>ลูกค้าไม่ได้อีเมลยืนยัน</td>
+<td>ตรวจเอง</td>
+<td>แจ้งเตือนเมื่อล้มเหลว + dead-letter + retry</td>
+<td>ถามผู้ใช้ automation ว่ารู้ได้อย่างไรเมื่อพัง</td>
+</tr>
+<tr>
+<td>P10</td>
+<td>การเชื่อมบริการภายนอกไม่เสถียร</td>
+<td><strong>[ไม่พอ]</strong></td>
+<td>–</td>
+<td>–</td>
+<td>–</td>
+<td>เริ่ม integrations น้อยแต่ทดสอบได้</td>
+<td>เก็บ log ความล้มเหลวจากผู้ใช้นำร่อง</td>
+</tr>
+<tr>
+<td>P11</td>
+<td>ดูแล self-hosted ยุ่งยาก</td>
+<td><strong>[โค้ด S50]</strong> web-end README ระบุ: GitHub หยุด scheduled workflow หลัง 60 วันไม่มีการเปลี่ยน, ขีดจำกัด free plan, ต้องตั้งค่า Resend/Google เอง</td>
+<td>ผู้ไม่เขียนโค้ดที่ self-host</td>
+<td>อัปเดตไม่ได้, ระบบหยุด</td>
+<td>อ่านคู่มือ</td>
+<td>installer + updater + หน้า &quot;สุขภาพระบบ&quot; (web-end มีบางส่วน)</td>
+<td>วัดเวลาติดตั้งสำเร็จและอัตราติดตั้งไม่สำเร็จในผู้ทดลอง 10 คน</td>
+</tr>
+<tr>
+<td>P12</td>
+<td>ข้อมูลถูกนำไปฝึก AI</td>
+<td><strong>[ทางการ S23]</strong> ข้อมูลแผนไม่ใช่ Enterprise อาจถูกใช้ฝึก ไม่มี opt-out; <strong>[ผู้ใช้/สื่อ S31]</strong> Base 1 ฝึกจากการใช้งานจริงบนแพลตฟอร์ม</td>
+<td>ธุรกิจที่มีข้อมูลลับ/ข้อมูลลูกค้า</td>
+<td>ความเสี่ยง PDPA/สัญญา</td>
+<td>Enterprise</td>
+<td>&quot;ข้อมูลอยู่ในเครื่องคุณ ไม่มีอะไรส่งให้เรา&quot; ตรวจสอบได้</td>
+<td>ทดสอบข้อความนี้ในหน้า landing กับกลุ่มธุรกิจที่มีข้อมูลลูกค้า</td>
+</tr>
+</tbody></table></div>
+<h3 id="52-แยก-ผู้ใช้ร้องขอจริง-ออกจาก-ไอเดียของเรา"><a class="anchor" href="#52-แยก-ผู้ใช้ร้องขอจริง-ออกจาก-ไอเดียของเรา" aria-hidden="true">#</a>5.2 แยก &quot;ผู้ใช้ร้องขอจริง&quot; ออกจาก &quot;ไอเดียของเรา&quot;</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ประเภท</th>
+<th>รายการ</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>มีหลักฐานจากผู้ใช้/บุคคลที่สาม (ยังไม่วัดความถี่)</strong></td>
+<td>P4 ความปลอดภัย/สิทธิ์ (S32, S36, S37, S38), P5 SEO ของ SPA (S34), ความรำคาญจากโฆษณา (S35), คำขอ &quot;multiple environments (dev/staging/prod)&quot; และ &quot;durable deployment receipts&quot; ใน Base44 Discussions <strong>[ผู้ใช้ S39]</strong></td>
+</tr>
+<tr>
+<td><strong>เป็นข้อเท็จจริงจากเอกสาร แต่ยังไม่รู้ว่าผู้ใช้เจ็บจริงแค่ไหน</strong></td>
+<td>P1, P2, P3, P12</td>
+</tr>
+<tr>
+<td><strong>ไอเดียที่เราคิดว่าน่าจะมีคนต้องการ (ต้องพิสูจน์)</strong></td>
+<td>P6, P7, P8, P9, P10, P11, ความต้องการ local model, ความต้องการ self-host ของผู้ไม่เขียนโค้ด</td>
+</tr>
+</tbody></table></div>
+<p><strong>[อนุมาน ที่ต้องระวัง]:</strong> ความต้องการ &quot;self-host&quot; ในกลุ่มผู้ไม่เขียนโค้ดอาจต่ำกว่าที่เราหวัง คนกลุ่มนี้อยาก &quot;ไม่ต้องดูแล&quot; มากกว่า &quot;เป็นเจ้าของ&quot; ซึ่งเป็นเหตุผลที่แผนแนะนำให้มี &quot;ผู้ช่วยเทคนิค&quot; (เอเจนซี/ฟรีแลนซ์) เป็นช่องทางหลัก และมี managed mode ที่ย้ายออกได้</p>
+<hr>
+<h2 id="6-gap-analysis-ของ-web-end-ตรวจตามความเป็นจริง"><a class="anchor" href="#6-gap-analysis-ของ-web-end-ตรวจตามความเป็นจริง" aria-hidden="true">#</a>6. Gap analysis ของ web-end (ตรวจตามความเป็นจริง)</h2>
+<h3 id="61-สิ่งที่ตรวจ"><a class="anchor" href="#61-สิ่งที่ตรวจ" aria-hidden="true">#</a>6.1 สิ่งที่ตรวจ</h3>
+<ul>
+<li>Repository: <code>michoder26-cloud/web-end</code> ที่ commit <code>8feec013b5322829dac3e4fc75436fb784da682b</code> (8 พ.ย. 2026), 77 commits ระหว่าง 1–8 พ.ย. 2026, รุ่นที่ประกาศ <code>cloud/latest.json</code> = 0.22.0 <strong>[โค้ด S50–S53]</strong></li>
+<li>อ่าน: <code>README.md</code>, <code>cloud/package.json</code>, <code>cloud/wrangler.jsonc</code>, <code>cloud/src/{index,mcp,auth,backup,updates}.ts</code>, รายชื่อ migrations 0001–0028, <code>cloud/tests/</code>, <code>.claude/</code>, <code>scripts/gates/</code>, <code>docs/stack-proof.md</code></li>
+<li><strong>ไม่ได้ทำ:</strong> ติดตั้งและรัน <code>npm test</code> ของจริง, deploy ขึ้น Cloudflare, ทดสอบกับ Claude ข้อสรุปเรื่อง &quot;ทำงานได้&quot; จึงอิงโค้ดและชุดทดสอบที่มีอยู่ ไม่ใช่การรันของเรา</li>
+</ul>
+<h3 id="62-สถาปัตยกรรมปัจจุบัน-สรุปจากโค้ด"><a class="anchor" href="#62-สถาปัตยกรรมปัจจุบัน-สรุปจากโค้ด" aria-hidden="true">#</a>6.2 สถาปัตยกรรมปัจจุบัน (สรุปจากโค้ด)</h3>
+<pre class="mermaid">flowchart LR
+  Owner[เจ้าของร้าน] -- คุยด้วยภาษาคน --&gt; Claude[Claude ของผู้ใช้&lt;br/&gt;custom connector]
+  Claude -- "MCP: 60+ tools ผ่าน URL ที่มีรหัสลับ" --&gt; Worker[Cloudflare Worker&lt;br/&gt;cloud/src/index.ts]
+  Visitor[ลูกค้า/ผู้เยี่ยมชม] -- HTML ที่เรนเดอร์ฝั่งเซิร์ฟเวอร์ --&gt; Worker
+  Worker &lt;--&gt; D1[(D1 SQLite&lt;br/&gt;ของผู้ใช้)]
+  Worker -- cron ทุก 15 นาที --&gt; Auto[automations / schedules]
+  Worker -. อีเมล .-&gt; Resend[Resend ของผู้ใช้]
+  Worker -. บัตร .-&gt; Stripe[Stripe ของผู้ใช้]
+  GitHub[repo ของผู้ใช้] -- Deploy button / Actions updater --&gt; Worker</pre>
+<ul>
+<li>เป็น <strong>single-tenant</strong>: 1 ฐานข้อมูลต่อ 1 เว็บไซต์ (<code>backup.ts</code>: &quot;One database holds one site&quot;) <strong>[โค้ด]</strong></li>
+<li>AI ไม่อยู่ในระบบ: ระบบเปิด MCP server ให้ Claude ของผู้ใช้เรียก tools เช่น <code>save_page</code>, <code>save_table</code>, <code>save_record</code>, <code>save_automation</code>, <code>test_automation</code>, <code>publish_site</code>, <code>restore_version</code>, <code>save_app_plan</code>, <code>check_app_plan</code>, <code>check_site</code> <strong>[โค้ด cloud/src/mcp.ts]</strong></li>
+<li>แอปเป็น <strong>ข้อมูลแบบประกาศค่า</strong> (pages/blocks, tables, rules, automations) ที่ runtime ตีความ ไม่ใช่โค้ดที่ AI เขียนใหม่ทุกครั้ง โค้ดอิสระทำได้ผ่าน block <code>html</code> ที่รันใน iframe แบบ <code>sandbox=&quot;allow-scripts allow-forms&quot;</code> พร้อม CSP <strong>[โค้ด mcp.ts:154, render.ts:457, index.ts:37]</strong></li>
+<li>template/ (Payload CMS + Next.js) เป็นแนวทางเก่าที่ README ระบุว่าไม่แนะนำ และต้องใช้ Payload รุ่นที่ยังไม่ออก <strong>[โค้ด S50, S53]</strong></li>
+</ul>
+<h3 id="63-ตารางความสามารถ"><a class="anchor" href="#63-ตารางความสามารถ" aria-hidden="true">#</a>6.3 ตารางความสามารถ</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ด้าน</th>
+<th>สถานะ</th>
+<th>หลักฐาน (ไฟล์)</th>
+<th>หมายเหตุ</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Deployment (Cloudflare)</td>
+<td><strong>ใช้งานได้แล้วและตรวจหลักฐานพบ</strong> (ผู้พัฒนาระบุว่าทดสอบครบวงจร 1 ครั้ง)</td>
+<td><code>cloud/wrangler.jsonc</code>, <code>scripts/install-cloudflare.mjs</code>, README</td>
+<td>ผูก Cloudflare รายเดียว ขัดกับวิสัยทัศน์ &quot;ไม่ผูกผู้ให้บริการรายเดียว&quot;</td>
+</tr>
+<tr>
+<td>Local mode / Docker / VPS</td>
+<td><strong>ยังไม่มี</strong></td>
+<td><code>npm run dev</code> ใช้ <code>wrangler dev --local</code> สำหรับพัฒนาเท่านั้น</td>
+<td>ช่องว่างใหญ่ที่สุด</td>
+</tr>
+<tr>
+<td>Data model</td>
+<td><strong>ใช้งานได้แล้ว</strong></td>
+<td>migrations 0001–0028, <code>data.ts</code>, <code>items.ts</code></td>
+<td>ตารางผู้ใช้สูงสุด 50 × 50,000 แถว (README)</td>
+</tr>
+<tr>
+<td>Auth (ลูกค้า, staff, owner)</td>
+<td><strong>ใช้งานได้แล้ว</strong> มีจุดต้องปรับ</td>
+<td><code>auth.ts</code> (PBKDF2 100,000 รอบ เพราะ Workers จำกัด), <code>google.ts</code>, <code>staff.ts</code></td>
+<td>ต่ำกว่าคำแนะนำ 600,000 รอบ (README ยอมรับเอง)</td>
+</tr>
+<tr>
+<td>Permissions</td>
+<td><strong>ใช้งานได้แล้ว</strong></td>
+<td>กฎอ่าน/เพิ่มต่อตาราง, staff-only fields, staff areas</td>
+<td>ยังไม่ละเอียดระดับแถว/ตารางสำหรับ staff (README)</td>
+</tr>
+<tr>
+<td>Owner/MCP access</td>
+<td><strong>มีบางส่วน</strong> (ต้องปรับ)</td>
+<td><code>index.ts:236–243</code> ตรวจ secret ใน path <code>/mcp/&lt;secret&gt;</code> และ <code>/owner/&lt;secret&gt;</code></td>
+<td>secret ใน URL เสี่ยงหลุดผ่าน log/ประวัติเบราว์เซอร์; <code>wrangler.jsonc</code> เปิด logs <code>head_sampling_rate: 1</code> <strong>[อนุมาน: ต้องตรวจว่า log เก็บ path หรือไม่]</strong></td>
+</tr>
+<tr>
+<td>AI / MCP integration</td>
+<td><strong>ใช้งานได้แล้ว</strong> กับ Claude; client อื่น <strong>ระบุไว้แต่ยังไม่ยืนยัน</strong></td>
+<td><code>mcp.ts</code> (<code>@modelcontextprotocol/sdk</code>)</td>
+<td>ไม่มี BYOK/local model ในตัว เพราะไม่มี orchestrator ของตัวเอง</td>
+</tr>
+<tr>
+<td>Builder UI ของตัวเอง</td>
+<td><strong>ยังไม่มี</strong> (มี back office แก้ข้อมูล/หน้า)</td>
+<td><code>owner.ts</code>, <code>cms*.ts</code></td>
+<td>ผู้ใช้ต้องมีบัญชี Claude</td>
+</tr>
+<tr>
+<td>Automation engine</td>
+<td><strong>ใช้งานได้แล้ว</strong></td>
+<td><code>automations.ts</code> (1,184 บรรทัด), cron <code>*/15</code>, จำกัด 100 ครั้ง/ชม./กฎ, หยุดเมื่อวนเกิน 3 รอบ</td>
+<td>ไม่มีโค้ดใน step (ปลอดภัยแต่จำกัด), รอบถี่สุด ~15 นาที</td>
+</tr>
+<tr>
+<td>Webhooks / outbox</td>
+<td><strong>ใช้งานได้แล้ว</strong></td>
+<td>migration <code>0019_webhook_outbox.sql</code>, <code>webhooks.ts</code></td>
+<td></td>
+</tr>
+<tr>
+<td>Idempotency คำสั่งซื้อ</td>
+<td><strong>ใช้งานได้แล้ว</strong></td>
+<td><code>0018_order_idempotency.sql</code></td>
+<td></td>
+</tr>
+<tr>
+<td>Export/import</td>
+<td><strong>ใช้งานได้แล้ว</strong></td>
+<td><code>backup.ts</code> (<code>backupFormat = 1</code>, 33 ตาราง, ลูกค้าล็อกอินต่อได้), <code>wordpress.ts</code>, CSV ต่อตาราง</td>
+<td>รูปแบบเป็นของ web-end เอง ยังไม่มีสเปกเอกสาร</td>
+</tr>
+<tr>
+<td>Versioning</td>
+<td><strong>ใช้งานได้แล้ว</strong></td>
+<td><code>versions.ts</code>, <code>page-history.ts</code> (20 รุ่น), <code>changes.ts</code> (บันทึกและ undo การเปลี่ยนของ Claude)</td>
+<td>ข้อมูลเปลี่ยนทันที ไม่อยู่ใน version</td>
+</tr>
+<tr>
+<td>Test mode</td>
+<td><strong>ใช้งานได้แล้ว</strong></td>
+<td><code>test-mode.ts</code>, migration 0028</td>
+<td>ดีกว่า Base44 (ฟรี)</td>
+</tr>
+<tr>
+<td>Secrets</td>
+<td><strong>มีบางส่วน</strong></td>
+<td>ใช้ Cloudflare secrets (<code>RESEND_API_KEY</code>, <code>STRIPE_*</code>, <code>GOOGLE_*</code>), <code>secret-help.ts</code>, <code>scripts/gates/secrets.mjs</code> + pre-push hook</td>
+<td>ไม่มี secret store ข้ามแพลตฟอร์ม</td>
+</tr>
+<tr>
+<td>Testing</td>
+<td><strong>มีบางส่วน</strong></td>
+<td><code>cloud/tests/smoke.mjs</code> (3,502 บรรทัด, ~1,100 จุดตรวจ), <code>update.mjs</code>, <code>notify.mjs</code></td>
+<td>ต้องรันเครื่อง local กับ D1 ว่าง; <strong>ไม่มี CI workflow ที่รันชุดทดสอบ</strong> ใน repo</td>
+</tr>
+<tr>
+<td>Agent team / gates</td>
+<td><strong>มีบางส่วน แต่ชี้ไปที่ template เก่า</strong></td>
+<td><code>.claude/hooks/guard.mjs</code> กำหนดเส้นทาง <code>src/collections/</code>, <code>payload.config.ts</code>; <code>scripts/gates/run.mjs</code> ค่าเริ่มต้น <code>template</code></td>
+<td>ไม่ครอบ <code>cloud/</code> ซึ่งเป็นผลิตภัณฑ์จริง</td>
+</tr>
+<tr>
+<td>Updates</td>
+<td><strong>ใช้งานได้แล้ว</strong></td>
+<td><code>updates.ts</code>, GitHub Actions รายวัน, หยุดเมื่อมีการแก้โค้ดด้วยมือ</td>
+<td>GitHub หยุด scheduled workflow หลัง 60 วันไม่มีการเปลี่ยน (README); ดึง <code>latest.json</code> จาก GitHub (ไม่ใช่ telemetry แต่เป็นการเชื่อมต่อขาออก)</td>
+</tr>
+<tr>
+<td>Observability</td>
+<td><strong>มีบางส่วน</strong></td>
+<td>Cloudflare observability ใน <code>wrangler.jsonc</code>, หน้า System, สถิติไม่ใช้คุกกี้</td>
+<td></td>
+</tr>
+<tr>
+<td>License</td>
+<td><strong>MIT</strong></td>
+<td><code>LICENSE</code></td>
+<td>dependencies runtime: <code>@modelcontextprotocol/sdk</code> (MIT), <code>zod</code> (MIT); ฟอนต์ OFL; dev: wrangler, typescript, lighthouse <strong>[ไม่พอ: ยังไม่ได้รันตัวตรวจ license อัตโนมัติ]</strong></td>
+</tr>
+<tr>
+<td>ติดตั้ง/อัปเดตเอง</td>
+<td><strong>ใช้งานได้แล้ว</strong> (บน Cloudflare)</td>
+<td>Deploy button, installer</td>
+<td>ต้องมี 3 บัญชี (Cloudflare, GitHub, Claude)</td>
+</tr>
+<tr>
+<td>Shop, PromptPay, Stripe, news, approvals, ภาษาไทย/อังกฤษ</td>
+<td><strong>ใช้งานได้แล้ว / บางส่วนยังไม่ทดสอบกับบริการจริง</strong></td>
+<td>README ระบุ Stripe, Resend, Google &quot;ทดสอบกับ stand-in เท่านั้น&quot;</td>
+<td></td>
+</tr>
+<tr>
+<td>Multi-tenant, แอปมือถือ, real-time collaboration</td>
+<td><strong>ไม่ควรทำในระยะแรก</strong></td>
+<td>–</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<h3 id="64-ข้อเสนอต่อแต่ละส่วน"><a class="anchor" href="#64-ข้อเสนอต่อแต่ละส่วน" aria-hidden="true">#</a>6.4 ข้อเสนอต่อแต่ละส่วน</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>การตัดสินใจ</th>
+<th>ส่วน</th>
+<th>เหตุผล</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>เก็บไว้</strong></td>
+<td>data model + rules, automations (เมนูขั้นตอนคงที่), backup/restore ไฟล์เดียว, changes+undo, test mode, app plans, staff roles, ภาษาไทย/PromptPay, MCP tool design</td>
+<td>เป็นจุดต่างที่พิสูจน์ได้และตรงกับ pain P1, P3, P4</td>
+</tr>
+<tr>
+<td><strong>ปรับปรุง</strong></td>
+<td>การยืนยันตัวตนของ MCP/owner (ย้าย secret ออกจาก URL → OAuth ของ MCP หรือ bearer token ใน header + redact log), เพิ่ม CI รัน smoke tests, เอกสารสเปก backup format, PBKDF2 → Argon2id/scrypt เมื่อรันนอก Workers</td>
+<td>ลดความเสี่ยงความปลอดภัยและเพิ่มความน่าเชื่อถือ</td>
+</tr>
+<tr>
+<td><strong>แยกเป็นโมดูล</strong></td>
+<td>แยก <code>cloud/src</code> เป็น (1) core engine ไม่ผูกแพลตฟอร์ม (2) storage adapter: D1 / SQLite / Postgres (3) platform adapter: Workers / Node (4) MCP tools (5) back office UI</td>
+<td>เงื่อนไขจำเป็นของ self-host บน VPS/เครื่องตัวเอง</td>
+</tr>
+<tr>
+<td><strong>เปลี่ยนแนวทาง</strong></td>
+<td>จาก &quot;ต้องใช้ Claude&quot; → &quot;ใช้ AI ใดก็ได้ผ่าน MCP + มี builder chat ในตัวที่ใช้ provider adapter (OpenAI-compatible, Anthropic, Google, Ollama)&quot;</td>
+<td>BYOK และ local model เป็นข้อกำหนดของวิสัยทัศน์</td>
+</tr>
+<tr>
+<td><strong>รื้อใหม่ / เลิกใช้</strong></td>
+<td><code>template/</code> (Payload) และ <code>.claude/</code> hooks/gates ที่ชี้ไป template</td>
+<td>เป็นหนี้ทางเทคนิคที่ทำให้ผู้มาใหม่สับสน; ย้าย gates มาครอบ <code>cloud/</code></td>
+</tr>
+</tbody></table></div>
+<p><strong>ไม่แนะนำให้เขียนใหม่ทั้งหมด</strong> เหตุผลด้านต้นทุน: <code>cloud/src</code> มีโค้ดราว 1.2 MB (~16,000 บรรทัด) และชุดทดสอบ ~3,500 บรรทัดที่ครอบฟีเจอร์ธุรกิจจริง (คำสั่งซื้อ, กันจองเกิน, สิทธิ์) การแยก adapter ใช้เวลาประมาณ 3–5 สัปดาห์สำหรับ 2 คน <strong>[อนุมาน — ประเมินจากขนาดโค้ด ยังไม่ได้ทำ spike]</strong> ขณะที่เขียนใหม่ต้องสร้างความถูกต้องทางธุรกิจเหล่านี้ใหม่ทั้งหมด ความเสี่ยงหลักของการไม่เขียนใหม่: โค้ดถูกเขียนรอบ API ของ Workers/D1 (เช่น <code>env.DB.prepare</code>) ซึ่งต้องห่อด้วย interface ทุกจุด</p>
+<hr>
+<h2 id="7-proposed-architecture"><a class="anchor" href="#7-proposed-architecture" aria-hidden="true">#</a>7. Proposed architecture</h2>
+<h3 id="71-หลักการออกแบบ"><a class="anchor" href="#71-หลักการออกแบบ" aria-hidden="true">#</a>7.1 หลักการออกแบบ</h3>
+<ol>
+<li><strong>แยก builder ออกจาก runtime อย่างเด็ดขาด</strong> builder (UI + AI orchestrator + MCP) เป็นเครื่องมือแก้ไข runtime คือแอปที่ผู้ใช้ปลายทางใช้ ปิด builder แล้ว runtime ต้องทำงานต่อ</li>
+<li><strong>แอป = สเปกที่ตรวจสอบได้ + โค้ดเสริมที่ถูกกักไว้</strong> สเปก (ข้อมูล สิทธิ์ หน้า automations integrations) เป็นไฟล์ข้อความเวอร์ชันได้ โค้ดเสริมรันใน sandbox ที่มีขอบเขต</li>
+<li><strong>ทุกการเปลี่ยนแปลงเป็น changeset</strong> ที่มี diff, ผลการตรวจ, แผน migration, snapshot ข้อมูลก่อนใช้ และ rollback ได้</li>
+<li><strong>ไม่มีบริการกลางที่จำเป็น</strong> การอัปเดตและ telemetry เป็น opt-in และปิดได้</li>
+<li><strong>เลือกเทคโนโลยีที่ทีมเล็กดูแลได้</strong> (TypeScript ทั้งระบบ เพราะ web-end เป็น TypeScript อยู่แล้ว) ไม่เลือก Kubernetes หรือ microservices</li>
+</ol>
+<h3 id="72-ภาพรวม"><a class="anchor" href="#72-ภาพรวม" aria-hidden="true">#</a>7.2 ภาพรวม</h3>
+<pre class="mermaid">flowchart TB
+  subgraph Builder["Builder (ปิดได้โดยแอปไม่หยุด)"]
+    UI[Builder UI&lt;br/&gt;chat + preview + diff]
+    Orch[AI Orchestrator&lt;br/&gt;plan → changeset]
+    Prov[Provider adapters&lt;br/&gt;OpenAI-compatible / Anthropic / Google / Ollama]
+    MCPS[MCP server&lt;br/&gt;ให้ Claude, Cursor, Codex ฯลฯ ต่อได้]
+    Val[Validator&lt;br/&gt;schema, สิทธิ์, migration, acceptance tests]
+    UI --&gt; Orch --&gt; Prov
+    MCPS --&gt; Val
+    Orch --&gt; Val
+  end
+  subgraph Workspace["Project workspace (git repo ของผู้ใช้)"]
+    Spec[app spec&lt;br/&gt;data / rules / pages / automations]
+    Code[custom functions]
+    Mig[migrations + changesets]
+  end
+  subgraph Runtime["Runtime (สิ่งที่ผู้ใช้ปลายทางใช้)"]
+    HTTP[HTTP server&lt;br/&gt;SSR pages + API]
+    Auth[Auth + permissions]
+    Jobs[Job queue + scheduler&lt;br/&gt;retry / idempotency / dead-letter]
+    SB[Sandbox สำหรับ custom functions&lt;br/&gt;ไม่มี network เป็นค่าเริ่มต้น]
+    Sec[Secret store&lt;br/&gt;เข้ารหัสด้วย master key]
+    Obs[Logs + run history + health]
+    DB[(SQLite หรือ Postgres)]
+    Files[(ไฟล์: ดิสก์หรือ S3-compatible)]
+  end
+  Val -- changeset ที่ผ่านตรวจและได้รับอนุมัติ --&gt; Workspace
+  Workspace -- deploy --&gt; Runtime
+  Backup[Backup/Restore&lt;br/&gt;ไฟล์เดียว + manifest SHA-256] --- Runtime</pre>
+<h3 id="73-ส่วนประกอบและ-trade-off"><a class="anchor" href="#73-ส่วนประกอบและ-trade-off" aria-hidden="true">#</a>7.3 ส่วนประกอบและ trade-off</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ส่วน</th>
+<th>ข้อเสนอ</th>
+<th>ทางเลือก</th>
+<th>Trade-off / ภาระดูแล</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Builder UI</td>
+<td>เว็บแอปเดียวกับ back office: แชท, แผนงาน, diff ที่อ่านง่าย (ไม่ใช่ diff โค้ด), preview</td>
+<td>ใช้แค่ MCP + AI client ภายนอก (แบบ web-end ปัจจุบัน)</td>
+<td>UI ของตัวเองเพิ่มงานมาก แต่จำเป็นสำหรับ BYOK/local model และผู้ไม่มีบัญชี Claude ทำ MCP ก่อน UI ทีหลังได้</td>
+</tr>
+<tr>
+<td>AI orchestration</td>
+<td>วงจร plan → tool calls → changeset; AI แก้ผ่าน tools ที่มี schema เท่านั้น (ไม่เขียนไฟล์ระบบตรง)</td>
+<td>ให้ AI เขียนโค้ดอิสระทั้งแอป (แบบ Base44/Lovable)</td>
+<td>แบบ tools ปลอดภัยและตรวจง่าย แต่สร้างได้แคบกว่า ชดเชยด้วย custom functions ใน sandbox</td>
+</tr>
+<tr>
+<td>Provider adapters</td>
+<td>adapter บาง ๆ 3 แบบ: OpenAI-compatible (ครอบ OpenAI, OpenRouter, Ollama, LM Studio, vLLM), Anthropic, Google</td>
+<td>ใช้ LiteLLM (MIT ยกเว้น enterprise) เป็น proxy</td>
+<td>proxy เพิ่ม process ต้องดูแล adapter เองโค้ดน้อยกว่า</td>
+</tr>
+<tr>
+<td>Local models</td>
+<td>รองรับผ่าน Ollama/LM Studio; แสดงคำเตือนเมื่อโมเดลไม่ผ่าน benchmark ภายในของเรา</td>
+<td>–</td>
+<td>คุณภาพโมเดลเล็กใน tool calling ไม่แน่นอน <strong>[ไม่พอ]</strong> ต้องมี benchmark ก่อนประกาศว่ารองรับ</td>
+</tr>
+<tr>
+<td>Project workspace</td>
+<td>git repo ของผู้ใช้ (ในเครื่อง หรือ GitHub/Gitea/GitLab) เก็บ spec, functions, migrations</td>
+<td>เก็บใน DB อย่างเดียว</td>
+<td>git ทำให้ fork/ตรวจย้อนหลังได้ แต่ผู้ไม่เขียนโค้ดไม่ควรต้องเห็น git</td>
+</tr>
+<tr>
+<td>Sandbox</td>
+<td>custom functions รันใน process แยกด้วย Deno permissions (<code>--allow-net=&lt;allowlist&gt;</code>, ไม่มี fs) + จำกัดเวลา/หน่วยความจำ; ทางเลือกเพิ่มความปลอดภัย: gVisor หรือ Firecracker สำหรับ managed mode</td>
+<td>Workers isolates (บน Cloudflare), E2B (cloud)</td>
+<td>Deno permissions ง่ายแต่ไม่ใช่ขอบเขตความปลอดภัยระดับ VM; สำหรับ managed หลายผู้เช่าต้องใช้ gVisor/microVM</td>
+</tr>
+<tr>
+<td>Preview</td>
+<td>runtime ชุดที่สองชี้ฐานข้อมูลสำเนา (SQLite copy / Postgres branch)</td>
+<td>ใช้ข้อมูลจริงร่วมกัน (แบบ branch ของ Base44)</td>
+<td>สำเนาข้อมูลใช้ดิสก์มากขึ้น ต้องมีเพดานขนาด</td>
+</tr>
+<tr>
+<td>Database</td>
+<td><strong>SQLite (โหมดเริ่มต้น)</strong> สำหรับ local/VPS เล็ก; <strong>Postgres</strong> ทางเลือกสำหรับงานใหญ่; D1 adapter เพื่อรักษาผู้ใช้ web-end เดิม</td>
+<td>Postgres อย่างเดียว</td>
+<td>SQLite ติดตั้งง่าย backup คือไฟล์เดียว แต่เขียนพร้อมกันได้จำกัด; ต้องทดสอบ migration บน 2–3 engine</td>
+</tr>
+<tr>
+<td>Migrations</td>
+<td>สร้างจาก diff ของ spec → SQL ที่อ่านได้ + แผน down; การลบคอลัมน์/ตารางต้องอนุมัติแยกและมี snapshot</td>
+<td>schema-less แบบ Base44</td>
+<td>ตรวจได้แต่ AI ต้องผ่านขั้นตอนเพิ่ม</td>
+</tr>
+<tr>
+<td>Auth/permissions</td>
+<td>ใช้ของ web-end (session cookie, roles, กฎต่อตาราง) + เพิ่ม row-level condition; password hash Argon2id เมื่อรันบน Node</td>
+<td>ใช้ Supabase/Appwrite เป็น backend</td>
+<td>ของเราเองควบคุมได้และไม่มี dependency service แยก แต่ต้องรับผิดชอบความปลอดภัยเอง → ต้องมี security review ภายนอก</td>
+</tr>
+<tr>
+<td>Storage</td>
+<td>ดิสก์ในเครื่อง หรือ S3-compatible (MinIO, R2, S3)</td>
+<td>เก็บใน DB (แบบ web-end 1 MB/รูป)</td>
+<td>S3 เพิ่มการตั้งค่า; ค่าเริ่มต้นใช้ดิสก์</td>
+</tr>
+<tr>
+<td>Background jobs</td>
+<td>ตารางคิวใน DB เดียวกัน: idempotency key, retry แบบ exponential backoff สูงสุด N ครั้ง, dead-letter, แจ้งเตือนเจ้าของเมื่อล้มเหลว, จำกัดอัตราต่อกฎ</td>
+<td>Redis/BullMQ</td>
+<td>ไม่เพิ่ม service แต่ throughput จำกัด เหมาะกับธุรกิจเล็ก</td>
+</tr>
+<tr>
+<td>Integrations</td>
+<td>webhooks ขาเข้า/ขาออก (ลงลายเซ็น), อีเมล (SMTP ทั่วไป + Resend), Stripe, PromptPay, OAuth client generic</td>
+<td>ตลาด integrations ขนาดใหญ่</td>
+<td>เริ่มน้อยแต่ทดสอบได้ทุกตัว</td>
+</tr>
+<tr>
+<td>Secrets</td>
+<td>เก็บเข้ารหัส (AES-GCM) ด้วย master key จาก env/ไฟล์; AI และ spec เห็นเฉพาะ <strong>ชื่อ</strong> secret; runtime ใส่ค่าตอนเรียก</td>
+<td>Infisical/Vault</td>
+<td>ง่าย แต่ต้องมีวิธี rotate master key</td>
+</tr>
+<tr>
+<td>Deployment</td>
+<td>(1) Local: ไฟล์รันเดียว/Docker บนเครื่อง (2) Self-hosted: Docker Compose บน VPS + Caddy สำหรับ HTTPS (3) Cloudflare adapter (4) Managed</td>
+<td>Kubernetes</td>
+<td>Docker Compose ดูแลง่ายสำหรับทีมเล็ก</td>
+</tr>
+<tr>
+<td>Observability</td>
+<td>log แบบมีโครงสร้าง (redact secret/token), run history ต่อ job/automation, หน้า health, OpenTelemetry exporter เป็นทางเลือก</td>
+<td>SaaS monitoring</td>
+<td>เก็บในเครื่อง ไม่ส่งออกโดยค่าเริ่มต้น</td>
+</tr>
+<tr>
+<td>Backup/restore</td>
+<td>ไฟล์ archive เดียว: DB dump + ไฟล์ + spec + manifest (เวอร์ชันรูปแบบ, SHA-256 ทุกไฟล์); ตั้งเวลาไปยังดิสก์/S3 ของผู้ใช้; <strong>restore drill</strong> อัตโนมัติไปยัง instance ชั่วคราวแล้วรัน acceptance tests</td>
+<td>snapshot ของผู้ให้บริการ</td>
+<td>drill ใช้ทรัพยากร ทำรายสัปดาห์</td>
+</tr>
+<tr>
+<td>Updates และ migrations ของแพลตฟอร์ม</td>
+<td>release มีลายเซ็น, backup อัตโนมัติก่อนอัปเดต, migration แบบ forward-only + ทดสอบบนสำเนา, rollback ด้วยการคืน backup</td>
+<td>auto-update เงียบ</td>
+<td>ปลอดภัยกว่าแต่ช้ากว่า</td>
+</tr>
+</tbody></table></div>
+<h3 id="74-แยก-builder-ออกจาก-runtime-คำตอบต่อคำถามสำคัญ"><a class="anchor" href="#74-แยก-builder-ออกจาก-runtime-คำตอบต่อคำถามสำคัญ" aria-hidden="true">#</a>7.4 แยก builder ออกจาก runtime: คำตอบต่อคำถามสำคัญ</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>คำถาม</th>
+<th>คำตอบที่ออกแบบ</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ปิด builder แล้วแอปที่เผยแพร่ยังทำงานไหม</td>
+<td><strong>ทำงานต่อ</strong> runtime ไม่ต้องคุยกับ builder หรือเซิร์ฟเวอร์ของเรา</td>
+</tr>
+<tr>
+<td>Export แล้วต้องพึ่งบริการใดต่อ</td>
+<td>เฉพาะที่ผู้ใช้เลือก: เซิร์ฟเวอร์/โฮสติ้ง, โดเมน, ผู้ส่งอีเมล, ผู้รับชำระเงิน, AI provider (ถ้าแอปใช้ AI) ไม่มี license server</td>
+</tr>
+<tr>
+<td>แอปเรียก AI ตอน runtime หรือเฉพาะตอนสร้าง</td>
+<td><strong>ค่าเริ่มต้น: เฉพาะตอนสร้าง</strong> ถ้าแอปมีฟีเจอร์ AI (เช่นสรุปข้อความ) ต้องประกาศใน spec, ใช้ key ของผู้ใช้, มีเพดานค่าใช้จ่ายต่อวัน, และแอปทำงานต่อได้เมื่อ AI ล่ม</td>
+</tr>
+<tr>
+<td>ย้าย AI provider อย่างไร</td>
+<td>เปลี่ยนค่าใน Settings (provider + model + key) ไม่มีผลต่อแอปที่รันอยู่; spec ไม่ผูกกับโมเดล; benchmark บอกว่าโมเดลใหม่ผ่านกี่ %</td>
+</tr>
+</tbody></table></div>
+<h3 id="75-lifecycle"><a class="anchor" href="#75-lifecycle" aria-hidden="true">#</a>7.5 Lifecycle</h3>
+<pre class="mermaid">flowchart LR
+  P[Prompt] --&gt; PL[Plan&lt;br/&gt;เป้าหมาย + acceptance checks&lt;br/&gt;ผู้ใช้อนุมัติ]
+  PL --&gt; G[Generate&lt;br/&gt;changeset ผ่าน tools]
+  G --&gt; V[Validate&lt;br/&gt;schema, สิทธิ์, migration dry-run,&lt;br/&gt;tests, งบเวลา/ค่าใช้จ่าย]
+  V -- ไม่ผ่าน --&gt; G
+  V --&gt; PR[Preview&lt;br/&gt;ข้อมูลสำเนา]
+  PR --&gt; R[Review&lt;br/&gt;diff ภาษาคน + ผลทดสอบ]
+  R -- อนุมัติ --&gt; D[Deploy&lt;br/&gt;snapshot ก่อน, migrate, publish]
+  D --&gt; O[Observe&lt;br/&gt;logs, run history, health]
+  O --&gt; M[Modify]
+  M --&gt; P
+  D -. ปัญหา .-&gt; RB[Rollback&lt;br/&gt;คืนโค้ด + schema + ข้อมูลจาก snapshot]
+  RB --&gt; O</pre>
+<p><strong>กติกาความปลอดภัยใน lifecycle</strong></p>
+<ul>
+<li><strong>Isolation:</strong> custom functions ไม่เห็นไฟล์ระบบ ไม่เห็น secret อื่นนอกจากที่ประกาศ ไม่มี network เว้นแต่ allowlist โดเมนที่ผู้ใช้อนุมัติ</li>
+<li><strong>Egress control:</strong> allowlist ต่อ function/integration บันทึกทุกการเรียกออก</li>
+<li><strong>Resource limits:</strong> เวลา (เช่น 30 วินาที), หน่วยความจำ, จำนวนการเรียกต่อชั่วโมง, ขนาดไฟล์</li>
+<li><strong>Migrations ที่ตรวจได้:</strong> SQL ที่สร้างแสดงให้ดูก่อนเสมอ การลบข้อมูลต้องยืนยันสองชั้น</li>
+<li><strong>Retry/idempotency:</strong> ทุก job มี idempotency key; side effect ภายนอก (อีเมล/webhook) ผ่าน outbox เพื่อไม่ส่งซ้ำ</li>
+<li><strong>ขอบเขตของ AI:</strong> AI เรียกได้เฉพาะ tools ของโปรเจกต์ ไม่มี shell, ไม่เห็นค่า secret, ไม่แก้ไฟล์แพลตฟอร์ม; การกระทำเสี่ยง (ลบตาราง, publish, ส่งอีเมลจำนวนมาก, เปลี่ยนสิทธิ์ให้กว้างขึ้น) ต้องให้คนยืนยัน; ตรวจจับการแก้วนซ้ำแล้วหยุด (มีใน web-end แล้ว)</li>
+</ul>
+<hr>
+<h2 id="8-ownership-acceptance-checklist"><a class="anchor" href="#8-ownership-acceptance-checklist" aria-hidden="true">#</a>8. Ownership acceptance checklist</h2>
+<p>แต่ละข้อมีวิธีทดสอบที่รันซ้ำได้ เป้าหมายคือให้ทุกข้อเป็น <strong>ชุดทดสอบอัตโนมัติใน CI</strong> ภายใน 90 วัน และเผยแพร่ผลทุก release</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>เกณฑ์</th>
+<th>วิธีทดสอบ</th>
+<th>ผ่านเมื่อ</th>
+<th>อัตโนมัติได้</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>O1</td>
+<td>ติดตั้งใหม่ได้โดยไม่มีบัญชีกลาง</td>
+<td>ติดตั้งบน VM ใหม่ที่ <strong>บล็อก DNS ของโดเมนเราทั้งหมด</strong> ทำตามคู่มือ</td>
+<td>ติดตั้งและสร้างแอปตัวอย่างสำเร็จ ไม่มีขั้นตอนสมัครบัญชีกับเรา</td>
+<td>ได้</td>
+</tr>
+<tr>
+<td>O2</td>
+<td>ใช้งานต่อได้เมื่อบริษัทผู้พัฒนาหยุดให้บริการ</td>
+<td>รัน runtime + builder ใน network ที่ไม่มีอินเทอร์เน็ต (ยกเว้น AI provider ที่ผู้ใช้เลือก/local model) 7 วัน</td>
+<td>แอปเสิร์ฟ, automations รัน, backup ทำงาน, ไม่มี error จากการเชื่อมต่อเรา</td>
+<td>ได้</td>
+</tr>
+<tr>
+<td>O3</td>
+<td>ส่งออก source code, schema, data และไฟล์</td>
+<td>export → ตรวจ manifest ว่ามีทุกตาราง ทุกไฟล์ และ SHA-256 ตรง</td>
+<td>100% ของตาราง/ไฟล์อยู่ใน archive; schema อ่านได้เป็น SQL</td>
+<td>ได้</td>
+</tr>
+<tr>
+<td>O4</td>
+<td>ผู้ใช้ปลายทางล็อกอินต่อได้หลังย้าย</td>
+<td>สร้างผู้ใช้ 3 คน → export → restore ที่เครื่องใหม่ → ล็อกอินด้วยรหัสเดิม</td>
+<td>ล็อกอินได้ทั้ง 3 คน, sessions เก่าถูกยกเลิก</td>
+<td>ได้</td>
+</tr>
+<tr>
+<td>O5</td>
+<td>ย้ายเซิร์ฟเวอร์และ restore ได้</td>
+<td>backup จากเครื่อง A → restore เครื่อง B (คนละ OS/คนละ DB engine ถ้ารองรับ) → รัน acceptance tests ของแอป</td>
+<td>tests ผ่านเท่ากับก่อนย้าย</td>
+<td>ได้</td>
+</tr>
+<tr>
+<td>O6</td>
+<td>มีขั้นตอนย้าย auth และ integrations ที่ชัดเจน</td>
+<td>ทำตามคู่มือย้าย OAuth redirect, webhooks, อีเมล กับโดเมนใหม่</td>
+<td>ทุก integration ในรายการตรวจ &quot;ใช้งานได้&quot; ในหน้า health</td>
+<td>บางส่วน (ต้องมีบัญชีทดสอบ)</td>
+</tr>
+<tr>
+<td>O7</td>
+<td>เปลี่ยน AI provider ได้</td>
+<td>สลับ provider (เช่น OpenAI-compatible → Anthropic → Ollama) แล้วรัน benchmark งานแก้ไขมาตรฐาน 20 งาน</td>
+<td>แอปที่รันอยู่ไม่เปลี่ยน; benchmark รายงานผลต่อ provider</td>
+<td>ได้</td>
+</tr>
+<tr>
+<td>O8</td>
+<td>ปิด telemetry ได้ และค่าเริ่มต้นเป็นปิด</td>
+<td>ดักจับ network ขาออกระหว่างใช้งาน 1 ชั่วโมง</td>
+<td>ไม่มีการเชื่อมต่อออกที่ไม่ได้อยู่ในรายการที่ผู้ใช้เปิด</td>
+<td>ได้</td>
+</tr>
+<tr>
+<td>O9</td>
+<td>ไม่มี license server ที่จำเป็นต่อ core runtime</td>
+<td>ค้นโค้ดหาการตรวจ license + ทดสอบ O2</td>
+<td>ไม่พบ; ฟีเจอร์ core ทำงานครบเมื่อไม่มีอินเทอร์เน็ต</td>
+<td>ได้</td>
+</tr>
+<tr>
+<td>O10</td>
+<td>ฟอร์กและแก้ไขได้ตาม license</td>
+<td>build จากซอร์สด้วยคำสั่งในเอกสาร บนเครื่องสะอาด; ตรวจ license ของ dependencies ทั้งหมด</td>
+<td>build สำเร็จ; dependencies เข้ากันได้กับ license ของโครงการ (ไม่มี source-available ใน core)</td>
+<td>ได้</td>
+</tr>
+<tr>
+<td>O11</td>
+<td>เอกสารระบุสิ่งที่ export ไม่ครอบคลุม</td>
+<td>ตรวจว่ามีหน้า &quot;What export does not include&quot; ที่ตรงกับผลของ O3–O6</td>
+<td>มีและอัปเดตทุก release (เช่น: ประวัติ log เก่ากว่า X วัน, บัญชีภายนอก, DNS)</td>
+<td>ตรวจด้วยคน</td>
+</tr>
+<tr>
+<td>O12</td>
+<td>Rollback พาข้อมูลกลับตาม</td>
+<td>ทำ changeset ที่เพิ่มคอลัมน์และแปลงข้อมูล → rollback</td>
+<td>schema และข้อมูลกลับเหมือน snapshot (เทียบ checksum)</td>
+<td>ได้</td>
+</tr>
+<tr>
+<td>O13</td>
+<td>แอปที่สร้างไม่มีโค้ดหรือ asset ที่ติด license จำกัด</td>
+<td>สแกน output ของแอปตัวอย่าง</td>
+<td>โค้ด template ของแอปเป็น license อนุญาต (เช่น MIT/0BSD) ผู้ใช้เลือก license ของตัวเองได้</td>
+<td>ได้</td>
+</tr>
+<tr>
+<td>O14</td>
+<td>ข้อมูลผู้ใช้ไม่ถูกใช้ฝึกโมเดลโดยเรา</td>
+<td>ตรวจนโยบาย + O8</td>
+<td>ไม่มีช่องทางส่งข้อมูลมาเรา; managed mode มีข้อสัญญาเป็นลายลักษณ์อักษร</td>
+<td>นโยบาย + ได้</td>
+</tr>
+</tbody></table></div>
+<p><strong>วิธีใช้ checklist ในการขาย:</strong> เผยแพร่ผล O1–O14 ของแต่ละ release เป็นหน้าเว็บสาธารณะ (&quot;ownership report&quot;) แทนการเขียนว่า &quot;คุณเป็นเจ้าของข้อมูล&quot; เฉย ๆ</p>
+<hr>
+<h2 id="9-open-source-licensing-และโมเดลรายได้"><a class="anchor" href="#9-open-source-licensing-และโมเดลรายได้" aria-hidden="true">#</a>9. Open Source licensing และโมเดลรายได้</h2>
+<h3 id="91-open-source-ตามนิยามมาตรฐาน-vs-source-available"><a class="anchor" href="#91-open-source-ตามนิยามมาตรฐาน-vs-source-available" aria-hidden="true">#</a>9.1 Open Source ตามนิยามมาตรฐาน vs source-available</h3>
+<ul>
+<li><strong>Open Source</strong> ในรายงานนี้หมายถึง license ที่สอดคล้องกับ Open Source Definition ของ OSI ซึ่งรวมถึงการแจกจ่ายต่อได้อย่างเสรี และ &quot;No Discrimination Against Fields of Endeavor&quot; (ห้ามจำกัดการใช้เชิงพาณิชย์หรือสาขาการใช้) <strong>[ทางการ S56]</strong></li>
+<li><strong>Source-available</strong> คือเห็นซอร์สได้แต่มีข้อจำกัดการใช้ เช่น Business Source License (BSL 1.1) <strong>[ทางการ S62]</strong>, Functional Source License (FSL) <strong>[ทางการ S63]</strong>, Sustainable Use License ของ n8n, Monospace Sustainable Core License ของ Directus <strong>[โค้ด S55]</strong> สิ่งเหล่านี้ <strong>ไม่ใช่</strong> Open Source ตามนิยาม OSI และขัดกับข้อ &quot;ฟอร์กและแก้ไขได้&quot; ในระดับที่ผู้ใช้เชิงพาณิชย์ต้องการ</li>
+</ul>
+<h3 id="92-เปรียบเทียบ-license-ที่เหมาะสม"><a class="anchor" href="#92-เปรียบเทียบ-license-ที่เหมาะสม" aria-hidden="true">#</a>9.2 เปรียบเทียบ license ที่เหมาะสม</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>License</th>
+<th>สาระสำคัญ</th>
+<th>ข้อดีต่อเรา</th>
+<th>ข้อเสีย/ความเสี่ยง</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MIT <strong>[ทางการ S59]</strong></td>
+<td>อนุญาตกว้าง เก็บประกาศลิขสิทธิ์</td>
+<td>เรียบง่าย web-end ใช้อยู่แล้ว</td>
+<td>ไม่มีข้อความเรื่องสิทธิบัตรโดยตรง; คู่แข่งนำไปทำบริการปิดได้</td>
+</tr>
+<tr>
+<td>Apache-2.0 <strong>[ทางการ S57]</strong></td>
+<td>อนุญาตกว้าง + มอบสิทธิ์สิทธิบัตรโดยชัดแจ้ง + ยุติสิทธิ์เมื่อฟ้องสิทธิบัตร + ต้องระบุการแก้ไข</td>
+<td>องค์กรคุ้นเคยและฝ่ายกฎหมายยอมรับง่าย; เข้ากันได้กับ ecosystem ส่วนใหญ่</td>
+<td>คู่แข่งนำไปทำ managed service ปิดได้</td>
+</tr>
+<tr>
+<td>AGPL-3.0 <strong>[ทางการ S58]</strong></td>
+<td>copyleft + มาตรา 13: ผู้ให้บริการผ่านเครือข่ายที่แก้ไขต้องเปิดซอร์สให้ผู้ใช้</td>
+<td>ป้องกันผู้ให้บริการคลาวด์เอาไปทำบริการปิด</td>
+<td>องค์กรบางแห่งห้ามใช้ AGPL; ความสับสนว่าแอปที่ผู้ใช้สร้างติด AGPL หรือไม่ ต้องมีข้อยกเว้นชัด</td>
+</tr>
+</tbody></table></div>
+<p><strong>ข้อเสนอ [อนุมาน]:</strong></p>
+<ol>
+<li><strong>Runtime, SDK, app spec format, template ของแอปที่สร้าง → Apache-2.0</strong> (template ของโค้ดแอปอาจเป็น MIT/0BSD เพื่อให้แอปของผู้ใช้เป็นของผู้ใช้ 100%) เพราะเป้าหมายหลักคือให้ทุกคนเป็นเจ้าของและนำไปใช้ต่อได้โดยฝ่ายกฎหมายไม่ขวาง</li>
+<li><strong>Builder (UI + orchestrator): Apache-2.0 เช่นกัน</strong> ทางเลือก AGPL-3.0 พิจารณาได้ถ้าหลักฐานแสดงว่ามีผู้ให้บริการคลาวด์นำไปทำบริการแข่งแบบไม่ตอบแทน แต่ <strong>ห้ามเปลี่ยน license ย้อนหลัง</strong> ให้เข้มขึ้น เพราะทำลายความเชื่อมั่น</li>
+<li>web-end ปัจจุบันเป็น MIT การย้ายเป็น Apache-2.0 ทำได้สำหรับโค้ดใหม่ (MIT เข้ากันได้) แต่ต้องตัดสินใจก่อนมีผู้ร่วมพัฒนาภายนอกจำนวนมาก ใช้ DCO (Developer Certificate of Origin) แทน CLA ที่โอนสิทธิ์ เพื่อไม่ให้บริษัทเปลี่ยน license เป็นปิดได้ฝ่ายเดียว</li>
+<li>ปกป้องแบรนด์ด้วย <strong>trademark policy</strong> (ชื่อและโลโก้) ไม่ใช่ด้วยการปิดโค้ด</li>
+</ol>
+<h3 id="93-open-core-ปิดอะไรได้โดยไม่ขัดเป้าหมาย"><a class="anchor" href="#93-open-core-ปิดอะไรได้โดยไม่ขัดเป้าหมาย" aria-hidden="true">#</a>9.3 Open-core: ปิดอะไรได้โดยไม่ขัดเป้าหมาย</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ฟีเจอร์</th>
+<th>ปิดได้หรือไม่</th>
+<th>เหตุผล</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Export, backup/restore, rollback, BYOK, local model, self-host, custom domain, auth, permissions, automations, logs</td>
+<td><strong>ห้ามปิด</strong></td>
+<td>เป็นนิยามของ &quot;ทุกคนเป็นเจ้าของเองฟรี&quot; (ส่วนที่ 2 และ 10 ของโจทย์)</td>
+</tr>
+<tr>
+<td>SSO/SAML ระดับองค์กร, audit log ขั้นสูง, multi-tenant control plane สำหรับเอเจนซี</td>
+<td><strong>ไม่แนะนำให้ปิด</strong> แต่ถ้าจำเป็นต้องหารายได้ ปิดได้โดยขัดเป้าหมายน้อยที่สุด</td>
+<td>ผู้ใช้รายย่อยไม่จำเป็นต้องใช้; แต่จะทำให้ผู้ใช้องค์กรเห็นว่า &quot;ฟรีจริงเฉพาะรายเล็ก&quot;</td>
+</tr>
+<tr>
+<td>ตัว managed hosting, backup นอกสถานที่, monitoring 24/7</td>
+<td><strong>เป็นบริการ ไม่ใช่โค้ดที่ปิด</strong></td>
+<td>ขายการดูแล ไม่ขายสิทธิ์ใช้ซอฟต์แวร์</td>
+</tr>
+</tbody></table></div>
+<p><strong>ข้อเสนอ:</strong> ไม่ทำ open-core ในปีแรก รายได้มาจากบริการ (9.4) ถ้าต้องทำภายหลัง ให้ประกาศล่วงหน้าเป็นลายลักษณ์อักษรว่ารายการในแถวแรกจะไม่ถูกปิดตลอดไป</p>
+<h3 id="94-โมเดลรายได้ที่ไม่ขัดกับ-open-source-ฟรี"><a class="anchor" href="#94-โมเดลรายได้ที่ไม่ขัดกับ-open-source-ฟรี" aria-hidden="true">#</a>9.4 โมเดลรายได้ที่ไม่ขัดกับ Open Source ฟรี</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>โมเดล</th>
+<th>ใครจ่าย</th>
+<th>จ่ายเพื่ออะไร</th>
+<th>ต้นทุนที่เราต้องรับ</th>
+<th>ความเสี่ยง</th>
+<th>ความเหมาะสมช่วงแรก</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Managed hosting (ย้ายออกได้ทุกเมื่อ)</td>
+<td>ธุรกิจเล็กที่ไม่อยากดูแลเซิร์ฟเวอร์</td>
+<td>ไม่ต้องดูแล, HTTPS/โดเมน/อัปเดตให้</td>
+<td>เซิร์ฟเวอร์, การดูแล 24/7, ความปลอดภัยหลายผู้เช่า (sandbox ต้องแข็งกว่า)</td>
+<td>ต้นทุนผันแปรและภาระ on-call; แข่งกับผู้ให้บริการใหญ่</td>
+<td>สูง แต่เริ่มหลัง MVP ผ่านเกณฑ์</td>
+</tr>
+<tr>
+<td>Managed backups + monitoring (สำหรับ self-host)</td>
+<td>ผู้ self-host ที่กลัวข้อมูลหาย</td>
+<td>backup นอกสถานที่เข้ารหัส, แจ้งเตือน, restore drill</td>
+<td>พื้นที่เก็บข้อมูล (เข้ารหัสฝั่งลูกค้า เราไม่เห็นข้อมูล)</td>
+<td>ราคาต่ำ ต้องปริมาณมาก</td>
+<td>สูง (ต้นทุนต่ำ สอดคล้องคุณค่า)</td>
+</tr>
+<tr>
+<td>Support/SLA</td>
+<td>ธุรกิจที่ระบบสำคัญต่อรายได้</td>
+<td>เวลาตอบสนองที่สัญญาไว้</td>
+<td>เวลาของทีม</td>
+<td>ทีมเล็กรับไม่ไหวถ้าลูกค้ามาก</td>
+<td>กลาง</td>
+</tr>
+<tr>
+<td>ติดตั้งและดูแลสำหรับองค์กร</td>
+<td>องค์กร/หน่วยงานที่ต้องเก็บข้อมูลในประเทศ</td>
+<td>ติดตั้งบนเครื่ององค์กร, ฝึกอบรม, ปรับแต่ง</td>
+<td>เวลา, การเดินทาง</td>
+<td>รายได้เป็นโปรเจกต์ ไม่สม่ำเสมอ</td>
+<td>กลาง–สูงในไทย <strong>[อนุมาน]</strong></td>
+</tr>
+<tr>
+<td>Training และ consulting</td>
+<td>เอเจนซี/ฟรีแลนซ์/ทีมไอที</td>
+<td>หลักสูตรสร้างระบบให้ลูกค้าด้วยแพลตฟอร์ม</td>
+<td>เนื้อหา, ผู้สอน</td>
+<td>ขยายยาก</td>
+<td>สูง (สร้างช่องทางขายด้วย)</td>
+</tr>
+<tr>
+<td>Custom development</td>
+<td>ธุรกิจที่ต้องการฟีเจอร์เฉพาะ</td>
+<td>ฟีเจอร์/integration เฉพาะ</td>
+<td>เวลาทีม</td>
+<td>ดึงทีมออกจากผลิตภัณฑ์</td>
+<td>ต่ำ–กลาง (ทำผ่านพาร์ทเนอร์ดีกว่า)</td>
+</tr>
+<tr>
+<td>Marketplace (templates, integrations, บริการพาร์ทเนอร์)</td>
+<td>ผู้ใช้ที่อยากได้ของสำเร็จ</td>
+<td>template อุตสาหกรรม, integration เฉพาะ</td>
+<td>การคัดกรองคุณภาพ, ระบบชำระเงิน</td>
+<td>ต้องไม่ทำให้ core ด้อยลง</td>
+<td>ต่ำในปีแรก</td>
+</tr>
+</tbody></table></div>
+<p><strong>ต้นทุนที่เราต้องรับผิดชอบแม้ซอฟต์แวร์ฟรี:</strong> CI และ release, เอกสาร, ความปลอดภัย (รับแจ้งช่องโหว่ + ออกแพตช์), ดูแลชุมชน, เซิร์ฟเวอร์เว็บไซต์/เอกสาร, และถ้ามี managed mode: เซิร์ฟเวอร์ ค่าแบนด์วิดท์ backup storage และ on-call</p>
+<p><strong>ความเสี่ยงจากการให้บริการฟรีไม่จำกัด:</strong> ห้ามมี &quot;managed ฟรีไม่จำกัด&quot; เพราะต้นทุนเซิร์ฟเวอร์และ AI โตตามผู้ใช้โดยไม่มีรายได้ ฟรีจริงคือซอฟต์แวร์ + self-host; managed ฟรีมีเพดานชัดเจน (เช่น demo ที่ลบอัตโนมัติ) และ AI ใช้ key ของผู้ใช้เสมอ</p>
+<p><strong>ค่าใช้จ่ายที่ผู้ใช้ยังต้องจ่ายแม้แพลตฟอร์มฟรี (ต้องบอกตรง ๆ):</strong></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>รายการ</th>
+<th>Local mode</th>
+<th>Self-hosted mode</th>
+<th>Managed mode</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ค่าลิขสิทธิ์แพลตฟอร์ม</td>
+<td>0</td>
+<td>0</td>
+<td>0 (จ่ายค่าบริการดูแล)</td>
+</tr>
+<tr>
+<td>เครื่อง/เซิร์ฟเวอร์</td>
+<td>เครื่องผู้ใช้ + ค่าไฟ</td>
+<td>VPS หรือเครื่องในองค์กร</td>
+<td>รวมในค่าบริการ</td>
+</tr>
+<tr>
+<td>โดเมน</td>
+<td>ไม่จำเป็น</td>
+<td>จ่ายผู้จดโดเมน</td>
+<td>จ่ายผู้จดโดเมน</td>
+</tr>
+<tr>
+<td>อีเมลที่ส่งจากแอป</td>
+<td>–</td>
+<td>ผู้ให้บริการอีเมล (มีแผนฟรีจำกัด เช่น Resend 100/วัน ตาม README web-end <strong>[โค้ด S50]</strong>)</td>
+<td>ผู้ให้บริการอีเมล</td>
+</tr>
+<tr>
+<td>AI ตอนสร้างแอป</td>
+<td>0 ถ้าใช้ local model (ค่าไฟ/ฮาร์ดแวร์) หรือค่า API ของ provider</td>
+<td>ค่า API ของ provider</td>
+<td>ค่า API ของ provider (BYOK)</td>
+</tr>
+<tr>
+<td>ค่าธรรมเนียมรับชำระเงิน</td>
+<td>–</td>
+<td>Stripe ฯลฯ</td>
+<td>Stripe ฯลฯ</td>
+</tr>
+<tr>
+<td>เวลาดูแลระบบ</td>
+<td>ผู้ใช้</td>
+<td>ผู้ใช้หรือผู้ช่วยเทคนิค</td>
+<td>เรา</td>
+</tr>
+</tbody></table></div>
+<p>หมายเหตุ: web-end ปัจจุบันรันบนแผนฟรีของ Cloudflare ได้ภายในขีดจำกัด (Workers Free 100,000 requests/วัน, CPU 10 ms/request; D1 Free 500 MB/ฐานข้อมูล) <strong>[ทางการ S60, S61]</strong> เกินแล้วหยุดชั่วคราว ไม่เก็บเงิน <strong>[โค้ด S50]</strong></p>
+<h3 id="95-รักษาความเชื่อมั่นของชุมชนและความต่อเนื่องของโครงการ"><a class="anchor" href="#95-รักษาความเชื่อมั่นของชุมชนและความต่อเนื่องของโครงการ" aria-hidden="true">#</a>9.5 รักษาความเชื่อมั่นของชุมชนและความต่อเนื่องของโครงการ</h3>
+<ul>
+<li>เผยแพร่ ownership report ทุก release (ส่วนที่ 8) และ roadmap สาธารณะ</li>
+<li>governance เอกสาร: ใครมีสิทธิ์ merge, การตัดสินใจเรื่อง license ต้องผ่านการประกาศล่วงหน้า 90 วัน</li>
+<li><strong>แผนเมื่อผู้ก่อตั้งหยุดพัฒนา:</strong> maintainer อย่างน้อย 2 คนจากต่างองค์กรภายในปีแรก, สิทธิ์ admin ของ org/โดเมน/คีย์ลงนาม release เก็บแบบหลายคน, ไม่มีบริการกลางที่จำเป็น (O2), ระยะยาวพิจารณาย้ายเข้ามูลนิธิ (fiscal host)</li>
+<li>ไม่ใช้ CLA ที่ให้บริษัทเปลี่ยน license เป็นปิดได้; ใช้ DCO</li>
+</ul>
+<hr>
+<h2 id="10-mvp-และ-roadmap"><a class="anchor" href="#10-mvp-และ-roadmap" aria-hidden="true">#</a>10. MVP และ roadmap</h2>
+<h3 id="101-กลุ่มผู้ใช้เริ่มต้น"><a class="anchor" href="#101-กลุ่มผู้ใช้เริ่มต้น" aria-hidden="true">#</a>10.1 กลุ่มผู้ใช้เริ่มต้น</h3>
+<p><strong>เลือก: &quot;ผู้ช่วยเทคนิคที่สร้างระบบหลังบ้านให้ธุรกิจเล็กในไทย&quot;</strong> (ฟรีแลนซ์, เอเจนซีเว็บ 1–10 คน, ไอทีประจำบริษัท SME) โดยผู้ใช้งานรายวันคือเจ้าของธุรกิจและพนักงาน</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>เหตุผล</th>
+<th>ระดับหลักฐาน</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>web-end มีฟีเจอร์ตรงกลุ่มนี้แล้ว: ภาษาไทยทั้ง back office, PromptPay QR, การยินยอมรับข่าวสารแบบ PDPA, ร้านค้า/การจอง/อนุมัติ, เอกสารนำร่องภาษาไทย <code>docs/pilot-th.md</code></td>
+<td><strong>[โค้ด S50]</strong></td>
+</tr>
+<tr>
+<td>คู่แข่งหลักคิดเงินเป็นดอลลาร์ตามเครดิต ไม่มี self-host</td>
+<td><strong>[ทางการ S02, S45–S48]</strong></td>
+</tr>
+<tr>
+<td>ผู้ช่วยเทคนิคมีทักษะพอจะติดตั้งเอง และเป็นผู้จ่ายเงินที่มีแรงจูงใจ (ค่าติดตั้ง/ค่าดูแลรายเดือนจากลูกค้า)</td>
+<td><strong>[อนุมาน — ต้องสัมภาษณ์]</strong></td>
+</tr>
+<tr>
+<td>ความต้องการเก็บข้อมูลลูกค้าในระบบตัวเอง (PDPA)</td>
+<td><strong>[อนุมาน]</strong></td>
+</tr>
+<tr>
+<td>กลุ่มที่ไม่เลือกช่วงแรก: นักพัฒนามืออาชีพ (มี Dyad, bolt.diy, coding agents), องค์กรใหญ่ (ต้อง SSO/compliance), ผู้ทำ prototype ทั่วไป (Base44/Lovable ง่ายกว่า)</td>
+<td><strong>[อนุมาน]</strong></td>
+</tr>
+</tbody></table></div>
+<p><strong>หลักฐานที่จะทำให้เปลี่ยนกลุ่ม:</strong> สัมภาษณ์ 20 รายแล้วน้อยกว่า 5 รายยินดีติดตั้ง/ดูแลเองหรือจ่ายค่าบริการ → ย้ายไปเน้น managed mode สำหรับเจ้าของธุรกิจโดยตรง</p>
+<h3 id="102-ขอบเขต-mvp"><a class="anchor" href="#102-ขอบเขต-mvp" aria-hidden="true">#</a>10.2 ขอบเขต MVP</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ระดับ</th>
+<th>รายการ</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>จำเป็นต่อ MVP</strong></td>
+<td>(1) runtime แยกจาก Cloudflare: Docker หนึ่งคำสั่ง + SQLite (เก็บ Cloudflare adapter) (2) ฟีเจอร์ธุรกิจเดิมของ web-end ทำงานบน runtime ใหม่ผ่านชุดทดสอบเดิม (3) MCP server พร้อม auth แบบ header/OAuth (4) builder chat แบบมินิมอลที่ใช้ provider adapter (OpenAI-compatible + Anthropic) และ Ollama (5) changeset + validate + preview ข้อมูลสำเนา + rollback ที่พาข้อมูลกลับ (6) backup/restore + restore drill (7) ownership checklist O1–O5, O7–O9, O12 ใน CI (8) คู่มือติดตั้งไทย/อังกฤษ</td>
+</tr>
+<tr>
+<td><strong>เลื่อนได้</strong></td>
+<td>Postgres adapter, S3 storage, custom functions sandbox (ใช้ automations เมนูคงที่ไปก่อน), OIDC ทั่วไป, collaboration หลายคนพร้อมกัน, marketplace, managed mode, แก้ UI แบบลากวาง</td>
+</tr>
+<tr>
+<td><strong>ไม่ควรทำ</strong></td>
+<td>แอปมือถือ native, realtime multiplayer editing, ตลาด integrations หลายร้อยตัว, โมเดล AI ของตัวเอง, multi-tenant SaaS ก่อนมีลูกค้าจ่ายเงิน, การ &quot;clone เว็บคู่แข่ง&quot;</td>
+</tr>
+</tbody></table></div>
+<h3 id="103-ความเสี่ยงหลักที่ต้องพิสูจน์ก่อนลงทุนเพิ่ม"><a class="anchor" href="#103-ความเสี่ยงหลักที่ต้องพิสูจน์ก่อนลงทุนเพิ่ม" aria-hidden="true">#</a>10.3 ความเสี่ยงหลักที่ต้องพิสูจน์ก่อนลงทุนเพิ่ม</h3>
+<ol>
+<li><strong>ติดตั้งได้จริง:</strong> ผู้ช่วยเทคนิคติดตั้งสำเร็จด้วยตัวเอง</li>
+<li><strong>AI ทำงานได้ในกรอบ tools:</strong> โมเดลที่ผู้ใช้เข้าถึงได้ (รวม local) ผ่าน acceptance tests ในงานจริง</li>
+<li><strong>มีคนจ่าย:</strong> อย่างน้อยค่าติดตั้ง/managed backup/training</li>
+<li><strong>ความปลอดภัยของ auth/permissions:</strong> ผ่าน security review ภายนอก</li>
+</ol>
+<h3 id="104-แผน-306090-วัน"><a class="anchor" href="#104-แผน-306090-วัน" aria-hidden="true">#</a>10.4 แผน 30/60/90 วัน</h3>
+<p><strong>สมมติฐาน:</strong> ทีม 3 คน — Senior Full-stack 2 คน (เต็มเวลา), Product/UX Research 1 คน (ครึ่งเวลา); งบ AI สำหรับ benchmark มีจำกัด; ผู้ก่อตั้ง web-end ร่วมเป็น maintainer <strong>[อนุมาน]</strong></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ระยะ</th>
+<th>งานหลัก</th>
+<th>Dependencies</th>
+<th>เกณฑ์ผ่าน (เป้าหมายทดลอง ไม่ใช่ benchmark ที่พิสูจน์แล้ว)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>วัน 1–30: พิสูจน์ runtime พกพาได้</strong></td>
+<td>แยก storage/platform adapter; รัน smoke tests เดิมบน Node + SQLite; CI; ย้าย MCP auth ออกจาก URL; Docker image; สัมภาษณ์ผู้ช่วยเทคนิค 15–20 ราย; benchmark งานแก้ไข 20 งาน</td>
+<td>ความร่วมมือของ maintainer web-end</td>
+<td>smoke tests ≥ 95% ผ่านบน SQLite; ติดตั้งด้วย Docker ≤ 15 นาทีในเครื่องทีม; มีผู้สนใจทดลองนำร่อง ≥ 5 ราย</td>
+</tr>
+<tr>
+<td><strong>วัน 31–60: changeset + BYOK</strong></td>
+<td>builder chat มินิมอล + provider adapters + Ollama; changeset/validate/preview/rollback; backup format v2 + เอกสารสเปก; ownership tests O1–O5, O8, O9, O12</td>
+<td>ผล benchmark โมเดล</td>
+<td>AI ผ่าน acceptance ≥ 70% ของ 20 งานด้วยโมเดล frontier และรายงานผล local model ตามจริง; rollback ข้อมูลผ่าน 100% ของเคสทดสอบ</td>
+</tr>
+<tr>
+<td><strong>วัน 61–90: นำร่องจริง</strong></td>
+<td>นำร่อง 5 ธุรกิจผ่านผู้ช่วยเทคนิค 3 ราย; security review ภายนอก (auth/permissions/sandbox ของ html block); restore drill อัตโนมัติ; ทดสอบราคาบริการ (managed backup / ติดตั้ง)</td>
+<td>ผู้ร่วมนำร่อง, งบ security review</td>
+<td>ติดตั้งสำเร็จโดยไม่ช่วย ≥ 4 ใน 5; แอปแรกที่ผ่าน acceptance ภายใน 1 วันทำงาน; ≥ 2 รายยินดีจ่าย; ไม่มีช่องโหว่ระดับ critical ค้าง</td>
+</tr>
+</tbody></table></div>
+<h3 id="105-feature-cards-ฟีเจอร์สำคัญ"><a class="anchor" href="#105-feature-cards-ฟีเจอร์สำคัญ" aria-hidden="true">#</a>10.5 Feature cards (ฟีเจอร์สำคัญ)</h3>
+<p><strong>F1 ติดตั้งหนึ่งคำสั่ง (Local/Self-hosted)</strong></p>
+<ul>
+<li>User story: ในฐานะผู้ช่วยเทคนิค ฉันต้องการติดตั้งแพลตฟอร์มบน VPS ของลูกค้าด้วยคำสั่งเดียว เพื่อส่งมอบระบบภายในวันเดียว</li>
+<li>ขอบเขต: Docker Compose (app + Caddy HTTPS), SQLite volume, ตั้งค่าครั้งแรกผ่านเว็บ, ไม่มีบัญชีกับเรา</li>
+<li>Acceptance: VM ใหม่ (Ubuntu LTS 2 vCPU/2 GB) → เปิดหน้าเว็บ HTTPS และสร้างเจ้าของได้; ผ่าน O1, O8</li>
+<li>Failure cases: พอร์ต 80/443 ถูกใช้, DNS ยังไม่ชี้, ดิสก์เต็ม, เวลาเครื่องผิด → ข้อความแก้ไขเป็นภาษาคน</li>
+<li>วิธีทดสอบ: CI สร้าง VM ชั่วคราวและติดตั้งทุก release</li>
+<li>ภาระดูแล: อัปเดต base image, รองรับ OS หลายรุ่น, คู่มือแก้ปัญหา</li>
+</ul>
+<p><strong>F2 Changeset ที่ตรวจได้และย้อนได้</strong></p>
+<ul>
+<li>User story: ในฐานะเจ้าของธุรกิจ ฉันต้องการเห็นว่า AI จะเปลี่ยนอะไรก่อนกดใช้ และย้อนกลับได้ทั้งหน้าและข้อมูล</li>
+<li>ขอบเขต: diff ภาษาคน (หน้า, ตาราง/คอลัมน์, สิทธิ์, automations), ผลตรวจ, snapshot ก่อน apply, rollback</li>
+<li>Acceptance: changeset ที่เพิ่ม/เปลี่ยนชนิดคอลัมน์ → apply → rollback → checksum ข้อมูลเท่าก่อน (O12)</li>
+<li>Failure cases: migration ล้มกลางทาง (ต้อง transaction), ข้อมูลใหม่ระหว่าง apply กับ rollback (ต้องเตือนว่าจะหาย/เก็บแยก), changeset ใหญ่เกิน</li>
+<li>วิธีทดสอบ: property-based tests บน schema แบบสุ่ม + เคสตัวอย่างธุรกิจ</li>
+<li>ภาระดูแล: ทุก tool ใหม่ต้องประกาศผลต่อ schema/ข้อมูล</li>
+</ul>
+<p><strong>F3 Provider adapters + local model</strong></p>
+<ul>
+<li>User story: ในฐานะผู้ใช้ ฉันต้องการใช้ key ของฉันหรือโมเดลในเครื่อง และเปลี่ยนเมื่อไรก็ได้</li>
+<li>ขอบเขต: OpenAI-compatible, Anthropic, Google; ทดสอบ Ollama; ประมาณค่าใช้จ่ายก่อนรัน; เพดานค่าใช้จ่ายต่อวัน</li>
+<li>Acceptance: สลับ provider แล้ว benchmark 20 งานรันจบและรายงานผล (O7); key ไม่ปรากฏใน log</li>
+<li>Failure cases: โมเดลไม่รองรับ tool calling, rate limit, timeout, context ยาวเกิน → แจ้งและหยุดอย่างปลอดภัย</li>
+<li>วิธีทดสอบ: mock server ต่อ provider + benchmark จริงรายสัปดาห์</li>
+<li>ภาระดูแล: API ของ provider เปลี่ยนบ่อย ต้องมีเจ้าของ adapter</li>
+</ul>
+<p><strong>F4 Backup/restore + restore drill</strong></p>
+<ul>
+<li>User story: ในฐานะเจ้าของ ฉันต้องการมั่นใจว่ากู้ระบบได้จริง ไม่ใช่แค่มีไฟล์ backup</li>
+<li>ขอบเขต: backup ตามเวลาไปดิสก์/S3 ของผู้ใช้, เข้ารหัสได้, drill ไป instance ชั่วคราวแล้วรัน acceptance tests, รายงานผล</li>
+<li>Acceptance: ผ่าน O3–O5; drill ล้มแล้วแจ้งเตือนเจ้าของภายใน 1 ชั่วโมง</li>
+<li>Failure cases: ไฟล์เสีย (ตรวจ SHA-256), รุ่นรูปแบบเก่ากว่า (ต้องแปลงได้ย้อนหลัง 2 major), พื้นที่ไม่พอ</li>
+<li>ภาระดูแล: ความเข้ากันได้ของรูปแบบ backup ข้ามรุ่น</li>
+</ul>
+<p><strong>F5 สิทธิ์ที่ทดสอบอัตโนมัติ</strong></p>
+<ul>
+<li>User story: ในฐานะเจ้าของ ฉันต้องการรู้ว่าลูกค้าแต่ละคนเห็นเฉพาะข้อมูลของตัวเอง</li>
+<li>ขอบเขต: ตาราง &quot;ใครเห็น/แก้อะไร&quot; ที่สร้างจากกฎ, ทดสอบอัตโนมัติด้วยผู้ใช้จำลองทุกบทบาทก่อน deploy, ค่าเริ่มต้นปฏิเสธ</li>
+<li>Acceptance: changeset ที่ทำให้ข้อมูลส่วนตัวเปิดสาธารณะถูกบล็อกจนกว่าจะยืนยันชัดเจน</li>
+<li>Failure cases: กฎซ้อนกัน, ฟิลด์ใหม่ที่ไม่ได้ตั้งสิทธิ์ (ต้องปิดเป็นค่าเริ่มต้น)</li>
+<li>ภาระดูแล: ทุกชนิดข้อมูลใหม่ต้องมี test matrix</li>
+</ul>
+<p><strong>F6 Automations ที่ไม่ล้มเงียบ</strong></p>
+<ul>
+<li>User story: ในฐานะร้านค้า ฉันต้องการรู้ทันทีเมื่ออีเมลยืนยันการจองส่งไม่ออก</li>
+<li>ขอบเขต: retry แบบ backoff, idempotency, dead-letter, แจ้งเตือน, ปุ่ม &quot;ลองใหม่&quot;</li>
+<li>Acceptance: จำลองผู้ส่งอีเมลล่ม 1 ชม. → ไม่มีอีเมลซ้ำ, ส่งครบเมื่อกลับมา, เจ้าของได้แจ้งเตือน</li>
+<li>ภาระดูแล: ปรับเพดานตามขนาดเครื่อง</li>
+</ul>
+<h3 id="106-metrics-เป้าหมายทดลอง--ยังไม่ใช่-benchmark-ที่พิสูจน์แล้ว"><a class="anchor" href="#106-metrics-เป้าหมายทดลอง--ยังไม่ใช่-benchmark-ที่พิสูจน์แล้ว" aria-hidden="true">#</a>10.6 Metrics (เป้าหมายทดลอง — ยังไม่ใช่ benchmark ที่พิสูจน์แล้ว)</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>นิยาม</th>
+<th>เป้าหมายทดลอง 90 วัน</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>เวลาติดตั้งสำเร็จ</td>
+<td>จากเริ่มคำสั่งถึงสร้างเจ้าของได้ (ผู้ช่วยเทคนิคที่ไม่เคยเห็นมาก่อน)</td>
+<td>มัธยฐาน ≤ 30 นาที</td>
+</tr>
+<tr>
+<td>เวลาไปถึงแอปแรกที่ใช้ได้จริง</td>
+<td>จากติดตั้งเสร็จถึงแอปผ่าน acceptance checks ที่ตกลงกัน</td>
+<td>≤ 1 วันทำงาน</td>
+</tr>
+<tr>
+<td>อัตราสำเร็จของ AI</td>
+<td>% งานใน benchmark ที่ผ่าน acceptance tests โดยไม่ต้องแก้มือ</td>
+<td>≥ 70% (frontier), รายงาน local ตามจริง</td>
+</tr>
+<tr>
+<td>Regression หลังแก้ไข</td>
+<td>% changeset ที่ทำให้ test เดิมล้ม หลังผ่าน validate แล้ว</td>
+<td>≤ 5%</td>
+</tr>
+<tr>
+<td>ต้นทุนต่อการเปลี่ยนแปลงที่ผ่านการตรวจ</td>
+<td>ค่า AI (USD) ÷ จำนวน changeset ที่ deploy</td>
+<td>วัดและเผยแพร่ ยังไม่ตั้งเป้า</td>
+</tr>
+<tr>
+<td>ความสำเร็จในการ export และรันภายนอก</td>
+<td>% ของแอปนำร่องที่ผ่าน O3–O5</td>
+<td>100%</td>
+</tr>
+<tr>
+<td>ความสำเร็จในการ backup/restore</td>
+<td>% drill ที่ผ่าน</td>
+<td>≥ 99% ต่อเดือน</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="11-ความเสี่ยงและข้อสมมติที่ยังไม่พิสูจน์"><a class="anchor" href="#11-ความเสี่ยงและข้อสมมติที่ยังไม่พิสูจน์" aria-hidden="true">#</a>11. ความเสี่ยงและข้อสมมติที่ยังไม่พิสูจน์</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>ความเสี่ยง/ข้อสมมติ</th>
+<th>ระดับ</th>
+<th>สัญญาณเตือน</th>
+<th>การบรรเทา</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>R1</td>
+<td>ผู้ไม่เขียนโค้ดไม่ต้องการ self-host จริง (อยากได้ความสะดวกมากกว่าความเป็นเจ้าของ)</td>
+<td>สูง</td>
+<td>สัมภาษณ์แล้วไม่มีใครเลือก self-host</td>
+<td>เน้นผู้ช่วยเทคนิคเป็นช่องทาง + managed mode ที่ย้ายออกได้</td>
+</tr>
+<tr>
+<td>R2</td>
+<td>โมเดล local ทำ tool calling ได้ไม่ดีพอ</td>
+<td>สูง</td>
+<td>benchmark local &lt; 40%</td>
+<td>บอกตรง ๆ ว่า local เหมาะกับงานไหน แนะนำ BYOK frontier สำหรับงานซับซ้อน</td>
+</tr>
+<tr>
+<td>R3</td>
+<td>แนวทาง &quot;spec + tools&quot; แคบเกินกว่าความต้องการจริง</td>
+<td>กลาง</td>
+<td>คำขอที่ทำไม่ได้ &gt; 30% ในนำร่อง</td>
+<td>custom functions sandbox ในระยะถัดไป</td>
+</tr>
+<tr>
+<td>R4</td>
+<td>ความปลอดภัยของ auth/sandbox ที่เขียนเอง</td>
+<td>สูง</td>
+<td>พบช่องโหว่ใน review</td>
+<td>security review ภายนอก, bug bounty เล็ก, ใช้ไลบรารีมาตรฐาน</td>
+</tr>
+<tr>
+<td>R5</td>
+<td>Base44/Lovable เพิ่ม self-host หรือ export backend</td>
+<td>กลาง</td>
+<td>ประกาศ backend open source</td>
+<td>ความต่างที่เหลือ: ไม่ฝึกโมเดลด้วยข้อมูล, ไทย/PromptPay, ownership report</td>
+</tr>
+<tr>
+<td>R6</td>
+<td>แบ่งพลังระหว่าง Cloudflare adapter กับ runtime ใหม่</td>
+<td>กลาง</td>
+<td>bug แยกตามแพลตฟอร์มเพิ่มขึ้น</td>
+<td>ชุดทดสอบเดียวรันทั้งสอง adapter</td>
+</tr>
+<tr>
+<td>R7</td>
+<td>ผู้ดูแลหลักมีน้อย (bus factor)</td>
+<td>สูง</td>
+<td>commit มาจากคนเดียว</td>
+<td>ส่วนที่ 9.5</td>
+</tr>
+<tr>
+<td>R8</td>
+<td>ตัวเลขตลาด (ARR, ผู้ใช้) มาจากสื่อ</td>
+<td>กลาง</td>
+<td>–</td>
+<td>ไม่ใช้เป็นฐานคำนวณรายได้ของเรา</td>
+</tr>
+<tr>
+<td>R9</td>
+<td>ความถี่ของ pain points ยังไม่ได้วัด</td>
+<td>สูง</td>
+<td>–</td>
+<td>เก็บรีวิวจาก Reddit/Trustpilot/Discord ด้วยเบราว์เซอร์จริง + สัมภาษณ์</td>
+</tr>
+<tr>
+<td>R10</td>
+<td>ข้อกำหนดของ Base44 ห้ามใช้ Generated Output/แพลตฟอร์ม &quot;to build, train or improve a competing product&quot; <strong>[ทางการ S20]</strong></td>
+<td>กลาง</td>
+<td>–</td>
+<td>ทีมของเราไม่ใช้ Base44 สร้างหรือฝึกส่วนใดของผลิตภัณฑ์; ฟีเจอร์ import จากแพลตฟอร์มอื่นทำจากรูปแบบไฟล์ที่ผู้ใช้ส่งออกเอง และให้ที่ปรึกษากฎหมายตรวจก่อน</td>
+</tr>
+</tbody></table></div>
+<p><strong>ข้อสมมติที่ยังไม่พิสูจน์ (ต้องทดสอบตามลำดับ):</strong> A1 ผู้ช่วยเทคนิคในไทยยินดีจ่ายค่าบริการเสริม; A2 ธุรกิจเล็กให้คุณค่ากับ &quot;ข้อมูลอยู่ในระบบเรา&quot;; A3 แยก web-end เป็น adapter ได้ใน 3–5 สัปดาห์; A4 ฟีเจอร์ธุรกิจของ web-end (ร้าน/จอง/อนุมัติ) ครอบงานส่วนใหญ่ของกลุ่มเป้าหมาย</p>
+<hr>
+<h2 id="12-source-register"><a class="anchor" href="#12-source-register" aria-hidden="true">#</a>12. Source register</h2>
+<p>วันที่ตรวจ: <strong>8 พ.ย. 2026</strong> ทุกแหล่ง (ข้อมูลอาจเปลี่ยนหลังวันนี้)</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>แหล่ง</th>
+<th>URL</th>
+<th>ใช้เป็นหลักฐานเรื่อง</th>
+<th>ประเภท</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>S01</td>
+<td>Base44 หน้าแรก</td>
+<td><a href="https://base44.com">https://base44.com</a></td>
+<td>ข้อความขาย, ฟีเจอร์ที่โฆษณา</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S02</td>
+<td>Base44 Pricing</td>
+<td><a href="https://base44.com/pricing">https://base44.com/pricing</a></td>
+<td>แผน ราคา เครดิต FAQ ความเป็นเจ้าของ</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S03</td>
+<td>Getting to know the app editor</td>
+<td><a href="https://docs.base44.com/Getting-Started/app-editor-overview.md">https://docs.base44.com/Getting-Started/app-editor-overview.md</a></td>
+<td>ส่วนประกอบ editor</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S04</td>
+<td>Starting from your first prompt (ดัชนีเอกสาร)</td>
+<td><a href="https://docs.base44.com/Getting-Started/starting-from-your-first-prompt.md">https://docs.base44.com/Getting-Started/starting-from-your-first-prompt.md</a></td>
+<td>Plan mode, URL/Figma</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S05</td>
+<td>Using the AI Chat</td>
+<td><a href="https://docs.base44.com/Building-your-app/AI-chat-modes.md">https://docs.base44.com/Building-your-app/AI-chat-modes.md</a></td>
+<td>โหมด, เลือกโมเดล (Builder+), เครดิต Discuss</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S06</td>
+<td>Working with branches</td>
+<td><a href="https://docs.base44.com/Building-your-app/working-with-branches.md">https://docs.base44.com/Building-your-app/working-with-branches.md</a></td>
+<td>branch ใช้ข้อมูลจริง, test data Builder+</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S07</td>
+<td>Docs index (llms.txt)</td>
+<td><a href="https://docs.base44.com/llms.txt">https://docs.base44.com/llms.txt</a></td>
+<td>รายการฟีเจอร์ทั้งหมด, partner, security scan, Wix</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S08</td>
+<td>Credits</td>
+<td><a href="https://docs.base44.com/Account-and-billing/Credits.md">https://docs.base44.com/Account-and-billing/Credits.md</a></td>
+<td>ค่าเครดิต, รีเซ็ต, หมดแล้วหยุด</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S08b</td>
+<td>Billing and plans</td>
+<td><a href="https://docs.base44.com/Account-and-billing/Billing-and-plans.md">https://docs.base44.com/Account-and-billing/Billing-and-plans.md</a></td>
+<td>ผู้จ่าย, downgrade, ยกเลิก</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S09</td>
+<td>Migrating a project to Base44</td>
+<td><a href="https://docs.base44.com/Getting-Started/migrating-an-existing-app.md">https://docs.base44.com/Getting-Started/migrating-an-existing-app.md</a></td>
+<td>migrate เข้า</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S10</td>
+<td>GitHub Integration</td>
+<td><a href="https://docs.base44.com/developers/app-code/local-development/github.md">https://docs.base44.com/developers/app-code/local-development/github.md</a></td>
+<td>2-way sync, ข้อจำกัด, conflict ใช้เครดิต</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S11</td>
+<td>Export app source code (API beta)</td>
+<td><a href="https://docs.base44.com/api-reference/export-app-source-code.md">https://docs.base44.com/api-reference/export-app-source-code.md</a></td>
+<td>export zip</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S12</td>
+<td>Backend features</td>
+<td><a href="https://docs.base44.com/developers/backend/overview/features.md">https://docs.base44.com/developers/backend/overview/features.md</a></td>
+<td>NoSQL, schema ไม่บังคับ, auth, Deno, SPA hosting</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S13</td>
+<td>Backend introduction / pricing</td>
+<td><a href="https://docs.base44.com/developers/backend/overview/introduction.md">https://docs.base44.com/developers/backend/overview/introduction.md</a> · <a href="https://docs.base44.com/developers/backend/overview/pricing.md">https://docs.base44.com/developers/backend/overview/pricing.md</a></td>
+<td>backend beta ใช้ integration credits</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S14</td>
+<td>Project structure</td>
+<td><a href="https://docs.base44.com/developers/app-code/overview/project-structure.md">https://docs.base44.com/developers/app-code/overview/project-structure.md</a></td>
+<td>React/Vite, entities ไม่อยู่ใน repo</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S15</td>
+<td>Local development</td>
+<td><a href="https://docs.base44.com/developers/backend/overview/local-dev/local-development-overview.md">https://docs.base44.com/developers/backend/overview/local-dev/local-development-overview.md</a></td>
+<td>สิ่งที่ส่งต่อไป Base44, automations ไม่รันในเครื่อง</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S16</td>
+<td>Backup &amp; Restore</td>
+<td><a href="https://docs.base44.com/Enterprise/backup-and-restore.md">https://docs.base44.com/Enterprise/backup-and-restore.md</a></td>
+<td>Elite 7 วัน, Enterprise 28 วัน, data only</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S17</td>
+<td>Entities security (RLS/FLS)</td>
+<td><a href="https://docs.base44.com/developers/backend/resources/entities/security.md">https://docs.base44.com/developers/backend/resources/entities/security.md</a></td>
+<td>service role ข้ามกฎ</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S18</td>
+<td>Backend auth</td>
+<td><a href="https://docs.base44.com/developers/backend/resources/auth.md">https://docs.base44.com/developers/backend/resources/auth.md</a></td>
+<td>วิธียืนยันตัวตน</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S19</td>
+<td>Creating workflows</td>
+<td><a href="https://docs.base44.com/Building-your-app/Creating-workflows.md">https://docs.base44.com/Building-your-app/Creating-workflows.md</a></td>
+<td>Builder+, รอบถี่สุด 5 นาที, run history</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S20</td>
+<td>Terms of Service (Last updated June 22, 2026)</td>
+<td><a href="https://base44.com/terms-of-service">https://base44.com/terms-of-service</a></td>
+<td>ความเป็นเจ้าของ Generated Output, สิทธิ์ใช้ข้อมูล, export หลังสิ้นสุด, ห้ามสร้างผลิตภัณฑ์แข่ง</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S21</td>
+<td>Managing access</td>
+<td><a href="https://docs.base44.com/Setting-up-your-app/Managing-access.md">https://docs.base44.com/Setting-up-your-app/Managing-access.md</a></td>
+<td>private app เฉพาะแผนจ่าย</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S22</td>
+<td>Base Code · Bring your own agent</td>
+<td><a href="https://docs.base44.com/Getting-Started/base-code.md">https://docs.base44.com/Getting-Started/base-code.md</a> · <a href="https://docs.base44.com/developers/app-code/sandbox/bring-your-own-agent.md">https://docs.base44.com/developers/app-code/sandbox/bring-your-own-agent.md</a></td>
+<td>sandbox ภายนอก Builder+, secrets</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S23</td>
+<td>Privacy and security (AI model training)</td>
+<td><a href="https://docs.base44.com/Community-and-support/Privacy-and-security.md">https://docs.base44.com/Community-and-support/Privacy-and-security.md</a></td>
+<td>ข้อมูลแผนไม่ใช่ Enterprise อาจถูกใช้ฝึก ไม่มี opt-out</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S24</td>
+<td>Exploring app logs</td>
+<td><a href="https://docs.base44.com/Building-your-app/exploring-app-logs.md">https://docs.base44.com/Building-your-app/exploring-app-logs.md</a></td>
+<td>logs, audit log Enterprise</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S25</td>
+<td>Managing your app data</td>
+<td><a href="https://docs.base44.com/Building-your-app/Managing-your-app-data.md">https://docs.base44.com/Building-your-app/Managing-your-app-data.md</a></td>
+<td>export/import ตาราง</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S26</td>
+<td>Backend functions</td>
+<td><a href="https://docs.base44.com/developers/backend/resources/backend-functions/overview.md">https://docs.base44.com/developers/backend/resources/backend-functions/overview.md</a></td>
+<td>Deno, 5 นาที</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S27</td>
+<td>Integrations (using, built-in, custom, OAuth, app MCP)</td>
+<td><a href="https://docs.base44.com/Integrations/Using-integrations.md">https://docs.base44.com/Integrations/Using-integrations.md</a></td>
+<td>ประเภท integrations</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S28</td>
+<td>Secrets API (list/set/delete)</td>
+<td><a href="https://docs.base44.com/api-reference/set-secret.md">https://docs.base44.com/api-reference/set-secret.md</a></td>
+<td>secrets</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S29</td>
+<td>Custom domain</td>
+<td><a href="https://docs.base44.com/Setting-up-your-app/Setting-up-your-custom-domain.md">https://docs.base44.com/Setting-up-your-app/Setting-up-your-custom-domain.md</a></td>
+<td>ต่อโดเมน</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S30</td>
+<td>TechCrunch: Base44 sells to Wix for $80M cash (18 มิ.ย. 2025)</td>
+<td><a href="https://techcrunch.com/2025/06/18/6-month-old-solo-owned-vibe-coder-base44-sells-to-wix-for-80m-cash/">https://techcrunch.com/2025/06/18/6-month-old-solo-owned-vibe-coder-base44-sells-to-wix-for-80m-cash/</a></td>
+<td>ผู้ใช้ 250k, กำไร พ.ค. 2025, การเติบโตแบบ word of mouth</td>
+<td>สื่อ (อ้างบริษัท)</td>
+</tr>
+<tr>
+<td>S31</td>
+<td>TechCrunch: Base44 launches own model (29 มิ.ย. 2026)</td>
+<td><a href="https://techcrunch.com/2026/06/29/vibe-coding-platform-base44-launches-own-model-as-ai-startups-seek-defensibility/">https://techcrunch.com/2026/06/29/vibe-coding-platform-base44-launches-own-model-as-ai-startups-seek-defensibility/</a></td>
+<td>Base 1, ARR &gt;$150M, ลูกค้าองค์กร</td>
+<td>สื่อ (อ้างบริษัท)</td>
+</tr>
+<tr>
+<td>S32</td>
+<td>Wiz Research: Critical vulnerability in Base44 (29 ก.ค. 2025)</td>
+<td><a href="https://www.wiz.io/blog/critical-vulnerability-base44">https://www.wiz.io/blog/critical-vulnerability-base44</a></td>
+<td>auth bypass, แก้ใน &lt;24 ชม.</td>
+<td>บุคคลที่สาม (นักวิจัยความปลอดภัย)</td>
+</tr>
+<tr>
+<td>S33</td>
+<td>Ask HN: Are you paying for Lovable / Replit / Base44?</td>
+<td><a href="https://news.ycombinator.com/item?id=48830372">https://news.ycombinator.com/item?id=48830372</a></td>
+<td>คำถามเรื่องการจ่ายเงิน (ไม่มีคำตอบ)</td>
+<td>ผู้ใช้</td>
+</tr>
+<tr>
+<td>S34</td>
+<td>HN comment: 220 sites built with Lovable/Base44 vs bots</td>
+<td><a href="https://news.ycombinator.com/item?id=49080641">https://news.ycombinator.com/item?id=49080641</a></td>
+<td>เนื้อหาที่บอทไม่เห็น 82.1% (ยังไม่ได้ตรวจวิธีวิจัยต้นฉบับ)</td>
+<td>ผู้ใช้/บุคคลที่สาม</td>
+</tr>
+<tr>
+<td>S35</td>
+<td>HN comments เรื่องโฆษณา</td>
+<td><a href="https://news.ycombinator.com/item?id=48303786">https://news.ycombinator.com/item?id=48303786</a> · <a href="https://news.ycombinator.com/item?id=48222137">https://news.ycombinator.com/item?id=48222137</a></td>
+<td>ความรำคาญโฆษณา</td>
+<td>ผู้ใช้</td>
+</tr>
+<tr>
+<td>S36</td>
+<td>HN comment อ้างงาน RedAccess</td>
+<td><a href="https://news.ycombinator.com/item?id=48074312">https://news.ycombinator.com/item?id=48074312</a></td>
+<td>แอป vibe-coded เปิดเผยข้อมูล (แหล่งรอง)</td>
+<td>ผู้ใช้/บุคคลที่สาม</td>
+</tr>
+<tr>
+<td>S37</td>
+<td>HN comment: ร้านค้าที่เปิดให้แก้ไขได้</td>
+<td><a href="https://news.ycombinator.com/item?id=49722402">https://news.ycombinator.com/item?id=49722402</a></td>
+<td>กรณีสิทธิ์ผิด</td>
+<td>ผู้ใช้</td>
+</tr>
+<tr>
+<td>S38</td>
+<td>HN comment: RLS ปิดในแอปจาก AI builders</td>
+<td><a href="https://news.ycombinator.com/item?id=49794455">https://news.ycombinator.com/item?id=49794455</a></td>
+<td>ความเสี่ยงสิทธิ์ (ผู้เขียนขายเครื่องมือสแกน — มีส่วนได้เสีย)</td>
+<td>ผู้ใช้</td>
+</tr>
+<tr>
+<td>S39</td>
+<td>Base44 GitHub Discussions</td>
+<td><a href="https://github.com/orgs/base44/discussions">https://github.com/orgs/base44/discussions</a></td>
+<td>คำขอฟีเจอร์ (multiple environments, deployment receipts)</td>
+<td>ผู้ใช้</td>
+</tr>
+<tr>
+<td>S40</td>
+<td>GitHub org base44 (repo list via API)</td>
+<td><a href="https://api.github.com/orgs/base44/repos">https://api.github.com/orgs/base44/repos</a></td>
+<td>ไม่มี backend server สาธารณะ</td>
+<td>โค้ด</td>
+</tr>
+<tr>
+<td>S41</td>
+<td>base44/javascript-sdk <code>packages/sdk/src/client.ts</code> (commit 8ecb6e2)</td>
+<td><a href="https://github.com/base44/javascript-sdk">https://github.com/base44/javascript-sdk</a></td>
+<td>serverUrl ค่าเริ่มต้น <a href="https://base44.app">https://base44.app</a>, license MIT</td>
+<td>โค้ด</td>
+</tr>
+<tr>
+<td>S42</td>
+<td>base44/cli issues (#633, #636, #673)</td>
+<td><a href="https://github.com/base44/cli/issues">https://github.com/base44/cli/issues</a></td>
+<td>local dev เชื่อ JWT ที่ไม่ verify, ปัญหา validation</td>
+<td>โค้ด/ผู้ใช้</td>
+</tr>
+<tr>
+<td>S43</td>
+<td>Base44 Privacy Policy</td>
+<td><a href="https://base44.com/privacy-policy">https://base44.com/privacy-policy</a></td>
+<td>ใช้ข้อมูลพัฒนา ML</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S45</td>
+<td>Lovable Pricing</td>
+<td><a href="https://lovable.dev/pricing">https://lovable.dev/pricing</a></td>
+<td>เครดิต, การหมดอายุ, ฟรี 5/วัน</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S46</td>
+<td>Bolt Pricing</td>
+<td><a href="https://bolt.new/pricing">https://bolt.new/pricing</a></td>
+<td>tokens, ฟรี 1M/เดือน, $25</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S47</td>
+<td>Replit Pricing</td>
+<td><a href="https://replit.com/pricing">https://replit.com/pricing</a></td>
+<td>Core $20, Pro $100</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S48</td>
+<td>v0 Pricing</td>
+<td><a href="https://v0.app/pricing">https://v0.app/pricing</a></td>
+<td>เครดิตต่อผู้ใช้ ราคา/โมเดล</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S49</td>
+<td>Dyad</td>
+<td><a href="https://www.dyad.sh/">https://www.dyad.sh/</a> · <a href="https://github.com/dyad-sh/dyad">https://github.com/dyad-sh/dyad</a></td>
+<td>local, BYOK, license</td>
+<td>ทางการ/โค้ด</td>
+</tr>
+<tr>
+<td>S50</td>
+<td>web-end README (commit 8feec01)</td>
+<td><a href="https://github.com/michoder26-cloud/web-end">https://github.com/michoder26-cloud/web-end</a></td>
+<td>ฟีเจอร์, สถานะ early test, ค่าใช้จ่าย</td>
+<td>โค้ด</td>
+</tr>
+<tr>
+<td>S51</td>
+<td>web-end <code>cloud/src</code> (index.ts, mcp.ts, auth.ts, backup.ts, updates.ts)</td>
+<td><a href="https://github.com/michoder26-cloud/web-end/tree/main/cloud/src">https://github.com/michoder26-cloud/web-end/tree/main/cloud/src</a></td>
+<td>สถาปัตยกรรม, MCP tools, auth</td>
+<td>โค้ด</td>
+</tr>
+<tr>
+<td>S52</td>
+<td>web-end tests/gates/hooks</td>
+<td><a href="https://github.com/michoder26-cloud/web-end/tree/main/cloud/tests">https://github.com/michoder26-cloud/web-end/tree/main/cloud/tests</a></td>
+<td>ชุดทดสอบ, ไม่มี CI</td>
+<td>โค้ด</td>
+</tr>
+<tr>
+<td>S53</td>
+<td>web-end <code>docs/stack-proof.md</code></td>
+<td><a href="https://github.com/michoder26-cloud/web-end/blob/main/docs/stack-proof.md">https://github.com/michoder26-cloud/web-end/blob/main/docs/stack-proof.md</a></td>
+<td>ข้อจำกัด PBKDF2 บน Workers, Payload</td>
+<td>โค้ด</td>
+</tr>
+<tr>
+<td>S54</td>
+<td>REA README (commit 559083b)</td>
+<td><a href="https://github.com/morluto/rea">https://github.com/morluto/rea</a></td>
+<td>แนวทางหลักฐาน/ข้อจำกัด</td>
+<td>โค้ด</td>
+</tr>
+<tr>
+<td>S55</td>
+<td>GitHub API + LICENSE ของโครงการ open source (ส่วนที่ 4.1)</td>
+<td><a href="https://api.github.com/repos/%7Bowner%7D/%7Brepo%7D">https://api.github.com/repos/{owner}/{repo}</a></td>
+<td>license, archived, วันที่ push ล่าสุด</td>
+<td>โค้ด</td>
+</tr>
+<tr>
+<td>S56</td>
+<td>The Open Source Definition</td>
+<td><a href="https://opensource.org/osd">https://opensource.org/osd</a></td>
+<td>นิยาม Open Source</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S57</td>
+<td>Apache License 2.0</td>
+<td><a href="https://www.apache.org/licenses/LICENSE-2.0">https://www.apache.org/licenses/LICENSE-2.0</a></td>
+<td>สาระ license</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S58</td>
+<td>GNU AGPL v3 (OSI)</td>
+<td><a href="https://opensource.org/license/agpl-v3">https://opensource.org/license/agpl-v3</a></td>
+<td>มาตรา 13</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S59</td>
+<td>MIT License (OSI)</td>
+<td><a href="https://opensource.org/license/mit">https://opensource.org/license/mit</a></td>
+<td>สาระ license</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S60</td>
+<td>Cloudflare Workers limits</td>
+<td><a href="https://developers.cloudflare.com/workers/platform/limits/">https://developers.cloudflare.com/workers/platform/limits/</a></td>
+<td>100,000 req/วัน, CPU 10 ms (Free)</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S61</td>
+<td>Cloudflare D1 limits</td>
+<td><a href="https://developers.cloudflare.com/d1/platform/limits/">https://developers.cloudflare.com/d1/platform/limits/</a></td>
+<td>500 MB/ฐานข้อมูล (Free)</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S62</td>
+<td>Business Source License 1.1</td>
+<td><a href="https://mariadb.com/bsl11/">https://mariadb.com/bsl11/</a></td>
+<td>source-available</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S63</td>
+<td>Functional Source License</td>
+<td><a href="https://fsl.software/">https://fsl.software/</a></td>
+<td>source-available</td>
+<td>ทางการ</td>
+</tr>
+<tr>
+<td>S64</td>
+<td>หน้า login/register ของ Base44 (สังเกตแบบไม่ล็อกอิน)</td>
+<td><a href="https://app.base44.com/login">https://app.base44.com/login</a> · <a href="https://app.base44.com/register">https://app.base44.com/register</a></td>
+<td>Vite SPA, social login, Turnstile, cookie consent</td>
+<td>ทดลอง</td>
+</tr>
+</tbody></table></div>
+<p><strong>แหล่งที่พยายามเข้าแต่ไม่สำเร็จ:</strong> <a href="https://www.reddit.com/r/Base44">https://www.reddit.com/r/Base44</a> (HTTP 403), <a href="https://www.trustpilot.com/review/base44.com">https://www.trustpilot.com/review/base44.com</a> (HTTP 403), <a href="https://status.base44.com">https://status.base44.com</a> (HTTP 403), <a href="https://www.gnu.org/licenses/agpl-3.0.html">https://www.gnu.org/licenses/agpl-3.0.html</a> (HTTP 403 — ใช้ S58 แทน)</p>
+<hr>
+<h2 id="คำตอบสุดท้าย"><a class="anchor" href="#คำตอบสุดท้าย" aria-hidden="true">#</a>คำตอบสุดท้าย</h2>
+<h3 id="เราควรสร้างอะไรเป็นอย่างแรก"><a class="anchor" href="#เราควรสร้างอะไรเป็นอย่างแรก" aria-hidden="true">#</a>เราควรสร้างอะไรเป็นอย่างแรก</h3>
+<p><strong>&quot;Owned App Runtime&quot;</strong>: แยก web-end ออกจาก Cloudflare ให้รันได้ด้วย Docker หนึ่งคำสั่ง + SQLite บนเครื่องใดก็ได้ (คง Cloudflare ไว้เป็น adapter) พร้อมชุดทดสอบความเป็นเจ้าของ (export → restore บนเครื่องใหม่ → ลูกค้าล็อกอินต่อได้ → แอปผ่าน acceptance) ที่รันใน CI ทุก release จากนั้นจึงเพิ่ม builder chat ที่ใช้ AI provider ใดก็ได้ ลำดับนี้สำคัญ เพราะสิ่งที่คู่แข่งให้ไม่ได้คือ runtime ที่เป็นของผู้ใช้ ไม่ใช่ AI</p>
+<h3 id="ทำไมผู้ใช้จึงเลือกเราแทน-base44"><a class="anchor" href="#ทำไมผู้ใช้จึงเลือกเราแทน-base44" aria-hidden="true">#</a>ทำไมผู้ใช้จึงเลือกเราแทน Base44</h3>
+<p>ผู้ที่ต้องการ (ก) ระบบที่ทำงานต่อได้แม้เลิกใช้เครื่องมือสร้าง (ข) ข้อมูลลูกค้าอยู่ในเซิร์ฟเวอร์ของตัวเองและไม่ถูกนำไปฝึกโมเดล (ค) ไม่มีค่าเครดิตตอนแอปทำงาน และ (ง) ระบบภาษาไทยพร้อม PromptPay จะเลือกเรา ผู้ที่ต้องการความเร็วสูงสุดโดยไม่สนเรื่องเป็นเจ้าของจะยังเลือก Base44 และนั่นยอมรับได้</p>
+<h3 id="ข้อได้เปรียบที่มากกว่าคำว่า-ฟรี"><a class="anchor" href="#ข้อได้เปรียบที่มากกว่าคำว่า-ฟรี" aria-hidden="true">#</a>ข้อได้เปรียบที่มากกว่าคำว่า &quot;ฟรี&quot;</h3>
+<ol>
+<li>ความเป็นเจ้าของที่ <strong>พิสูจน์ด้วยการทดสอบสาธารณะ</strong> (ownership report) ไม่ใช่คำโฆษณา</li>
+<li>rollback ที่พาข้อมูลกลับตาม + test mode + preview ข้อมูลสำเนา (ลดความกลัวพัง)</li>
+<li>AI แก้ได้เฉพาะในกรอบ tools ที่ตรวจสอบได้ → ความเสี่ยงสิทธิ์/ข้อมูลรั่วต่ำกว่าการเขียนโค้ดอิสระ</li>
+<li>ต้นทุนโปร่งใส: จ่ายผู้ให้บริการโดยตรง เห็นค่า AI ก่อนรัน</li>
+<li>ความเหมาะกับตลาดไทย (ภาษา, PromptPay, การยินยอมแบบ PDPA)</li>
+</ol>
+<h3 id="เราต้องยอมแพ้ในด้านใดช่วงแรก"><a class="anchor" href="#เราต้องยอมแพ้ในด้านใดช่วงแรก" aria-hidden="true">#</a>เราต้องยอมแพ้ในด้านใดช่วงแรก</h3>
+<p>ความกว้างของสิ่งที่สร้างได้ (เกม แอปมือถือ ระบบแปลก ๆ), ความสวยของงานออกแบบอัตโนมัติ, จำนวน integrations, collaboration แบบเรียลไทม์, SSO องค์กร, และความง่ายแบบ &quot;เปิดเบราว์เซอร์แล้วใช้ได้เลย&quot; (จนกว่าจะมี managed mode)</p>
+<h3 id="หลักฐานอะไรจะทำให้เปลี่ยนแผน"><a class="anchor" href="#หลักฐานอะไรจะทำให้เปลี่ยนแผน" aria-hidden="true">#</a>หลักฐานอะไรจะทำให้เปลี่ยนแผน</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>หลักฐาน</th>
+<th>เปลี่ยนเป็น</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>สัมภาษณ์ 20 รายแล้ว &lt; 5 รายยอมติดตั้ง/จ่ายค่าบริการ self-host</td>
+<td>managed mode ที่ย้ายออกได้เป็นผลิตภัณฑ์หลัก</td>
+</tr>
+<tr>
+<td>benchmark: AI ผ่าน acceptance &lt; 50% แม้ใช้โมเดล frontier</td>
+<td>ลดขอบเขตเป็น &quot;ระบบตาม template + AI ปรับแต่ง&quot;</td>
+</tr>
+<tr>
+<td>ผู้นำร่อง &gt; 30% ของคำขอเกินขอบเขต tools</td>
+<td>เร่ง custom functions sandbox</td>
+</tr>
+<tr>
+<td>Base44 หรือ Lovable เปิด backend เป็น open source / self-host ได้</td>
+<td>เน้นตลาดไทย/อาเซียนและบริการ แทนการแข่งที่ตัวซอฟต์แวร์</td>
+</tr>
+<tr>
+<td>security review พบปัญหาเชิงสถาปัตยกรรมใน auth ของ web-end</td>
+<td>ใช้ auth library/บริการ open source ที่ผ่านการตรวจแล้วแทน</td>
+</tr>
+</tbody></table></div>
+<h3 id="งาน-10-ข้อแรกที่ทีมเริ่มได้ทันที"><a class="anchor" href="#งาน-10-ข้อแรกที่ทีมเริ่มได้ทันที" aria-hidden="true">#</a>งาน 10 ข้อแรกที่ทีมเริ่มได้ทันที</h3>
+<ol>
+<li>ตั้ง CI (GitHub Actions) ให้รัน <code>cloud/tests/smoke.mjs</code> กับ D1 local ทุก pull request และเผยแพร่ผล</li>
+<li>ย้าย MCP/owner authentication จาก secret ใน URL ไปเป็น header token หรือ OAuth ของ MCP และตรวจว่า Cloudflare logs ไม่เก็บ secret</li>
+<li>ออกแบบ interface <code>Storage</code> และ <code>Platform</code> แล้วห่อการเรียก <code>env.DB</code> ทั้งหมด (spike 1 สัปดาห์ วัดจำนวนจุดที่ต้องแก้)</li>
+<li>ทำ adapter SQLite + Node HTTP แล้วรัน smoke tests ชุดเดิมให้ผ่าน</li>
+<li>เขียนสเปกเอกสาร backup format (v1 ปัจจุบัน → v2 พร้อม manifest SHA-256) และทดสอบ O3–O5 อัตโนมัติ</li>
+<li>ลบหรือย้าย <code>template/</code> (Payload) และแก้ <code>.claude/</code> hooks กับ <code>scripts/gates/</code> ให้ครอบ <code>cloud/</code></li>
+<li>สร้าง benchmark 20 งานแก้ไขธุรกิจจริง (จอง ร้าน อนุมัติ สิทธิ์) พร้อม acceptance tests และรันกับ Claude, GPT, Gemini และโมเดลผ่าน Ollama</li>
+<li>สัมภาษณ์ผู้ช่วยเทคนิค/เอเจนซีในไทย 15–20 ราย ด้วยสคริปต์ที่ทดสอบ A1, A2, R1</li>
+<li>ทำ Docker Compose (app + Caddy) และวัดเวลาติดตั้งบน VPS ใหม่กับผู้ทดสอบ 3 คนที่ไม่เคยเห็นโครงการ</li>
+<li>เผยแพร่ ownership report ฉบับแรก (O1–O14 ระบุว่าผ่าน/ไม่ผ่าน/ยังไม่ทดสอบตามจริง) และ governance/DCO/trademark policy</li>
+</ol>
+<hr>
+<p><em>ภาคผนวก: หน้า sign-in/sign-up ตัวอย่างในโปรเจกต์นี้ เป็นการสร้างหน้าตาและพฤติกรรมใหม่ด้วยโค้ดของเราเอง (ไม่ใช้โค้ด โลโก้ หรือภาพของ Base44) เพื่อใช้เป็นต้นแบบหน้าเข้าสู่ระบบของแพลตฟอร์ม open source ที่เสนอ</em></p>
+</article>
+    </div>
+  </body>
+</html>

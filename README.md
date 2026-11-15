@@ -344,6 +344,8 @@ To test logging in with Google against a stand-in for Google on port 8824, start
 
 To test email against a stand-in for Resend on port 8823, start the site with `--var WEBHOOK_ALLOW_HTTP:1 --var RESEND_API_KEY:re_test_fake --var RESEND_API_BASE:http://localhost:8823`, and run the tests with `EMAIL_TEST=1`. The Resend address can only be changed while `WEBHOOK_ALLOW_HTTP` is on, which is for local tests only.
 
+[`dashboard/`](dashboard) is the code for https://tktfdesign.com: Google sign-in and an Apps dashboard where owners keep a list of their own web-end sites. It's a Cloudflare Pages project with Pages Functions and D1, and it isn't needed to install or run web-end.
+
 [`template/`](template) is an earlier, heavier version built on Payload CMS for developers who want a full CMS. It needs a paid Cloudflare plan and a Payload release that isn't out yet, and it isn't the recommended way to use web-end.
 
 ## License

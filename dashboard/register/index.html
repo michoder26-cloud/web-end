@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>web-end</title>
+    <meta name="description" content="Build useful apps you own, on your own server." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2040%2040%22%20aria-hidden%3D%22true%22%3E%3Ccircle%20cx%3D%2220%22%20cy%3D%2220%22%20r%3D%2220%22%20fill%3D%22%23ff6a00%22%2F%3E%3Cpath%20d%3D%22M9%2021h22a11%2011%200%200%201-22%200z%22%20fill%3D%22%23fff%22%2F%3E%3C%2Fsvg%3E" />
+    <script type="module" src="/src/auth.js"></script>
+  </head>
+  <body class="auth register">
+    <div class="shell">
+      <section class="side">
+        <header class="side-head"><a class="logo" href="/" aria-label="web-end home"><svg class="mark mark-small" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="20" fill="var(--brand)"/><path d="M9 21h22a11 11 0 0 1-22 0z" fill="#fff"/></svg><span class="wordmark">web-end</span></a></header>
+        <main class="main">
+          <div class="panel">
+            <div class="panel-mark"><svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="20" fill="var(--brand)"/><path d="M9 21h22a11 11 0 0 1-22 0z" fill="#fff"/></svg></div>
+            <h1 class="title">Create your account</h1>
+            <div class="providers">
+              <a class="btn outline" href="/auth/google" data-provider="google"><svg class="provider-icon" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"/></svg><span>Sign up with Google</span></a>
+            </div>
+            <p class="swap">Already have a web-end account? <a class="text-link" href="/login">Log in</a></p>
+            <p class="status" role="status" aria-live="polite" hidden></p>
+          </div>
+        </main>
+        <footer class="legal"><p>By signing up, you agree that we store what our <a href="/privacy/">Privacy notice</a> describes.</p></footer>
+      </section>
+      <aside class="art" aria-hidden="false">
+<div class="showcase" role="img" aria-label="Illustration: an app you own, with its data and servers">
+  <div class="sc-grid"></div>
+  <div class="sc-card">
+    <p class="sc-big">100%</p>
+    <p class="sc-label">Data you own</p>
+    <ul class="sc-legend"><li><i class="d d1"></i>Local</li><li><i class="d d2"></i>Server</li><li><i class="d d3"></i>Backup</li></ul>
+    <div class="sc-dots"><i class="d d1"></i><i class="d d1"></i><i class="d d1"></i><i class="d d3"></i><i class="d d1"></i><i class="d d3"></i><i class="d d1"></i><i class="d d1"></i><i class="d d1"></i><i class="d d3"></i><i class="d d1"></i><i class="d d3"></i><i class="d d1"></i><i class="d d2"></i><i class="d d1"></i><i class="d d3"></i><i class="d d1"></i><i class="d d3"></i><i class="d d1"></i><i class="d d2"></i><i class="d d1"></i><i class="d d3"></i><i class="d d1"></i><i class="d d3"></i></div>
+  </div>
+  <p class="sc-line">Your app, your server <span class="sc-cursor"></span></p>
+  <img class="sc-photo" src="/art/meadow.svg" alt="Abstract picture of a hill at sunset" width="226" height="340" /><div class="sc-glass"></div>
+  <div class="sc-halftone"></div>
+  <div class="sc-orange"><span class="sc-figure"></span></div>
+</div></aside>
+    </div>
+    
+  </body>
+</html>
