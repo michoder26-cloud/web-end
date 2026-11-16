@@ -1372,6 +1372,30 @@ check(previewHome.headers.get('referrer-policy') === 'no-referrer' && previewHom
 const previewDraft = await (await fetch(`${owner}/preview/draft-only`)).text()
 check(previewDraft.includes('Draft heading') && !previewDraft.includes('/frame/draft-only') && !previewDraft.includes('Draft code'), 'custom code stays out of the preview, where it could read the secret address')
 check(previewHomeBody.includes(`href="/owner/${code}/preview"`) && previewHomeBody.includes(`href="/site.css"`), 'preview links stay inside the preview')
+
+// The visual editor: the working copy, typed and visualOrder in the browser, saved as JSON.
+const visualPage = await fetch(`${owner}/editor/draft-only`)
+const visualHtml = await visualPage.text()
+const visualData = JSON.parse(visualHtml.match(/<script id="editor-data" type="application\/json">([\s\S]*?)<\/script>/)?.[1] ?? 'null')
+check(visualPage.status === 200 && visualPage.headers.get('content-security-policy')?.includes("script-src 'self'") && visualPage.headers.get('referrer-policy') === 'no-referrer' && visualHtml.includes('src="/editor.js"') && visualData?.blocks?.[0]?.heading === 'Draft heading' && visualData.catalog.hero.fields.some((field) => field.key === 'buttonHref'), 'the visual editor opens the working copy of a page with its own script only')
+check(ownerDashboard.includes(`/owner/${code}/editor/home`) || (await (await fetch(owner)).text()).includes(`/owner/${code}/editor/home`), 'Edit site opens the visual editor')
+const visualSave = (blocks, origin = base) => fetch(`${owner}/editor/draft-only`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin }, body: JSON.stringify({ blocks }) })
+const visualOrder = [visualData.blocks[1], { ...visualData.blocks[0], heading: 'Typed in the editor' }]
+const visualSaved = await visualSave(visualOrder)
+const afterVisual = (await call('get_page', { slug: 'draft-only' })).data
+check(visualSaved.status === 200 && afterVisual.blocks[0].type === 'html' && afterVisual.blocks[1].heading === 'Typed in the editor', 'the editor saves typed text and a new order', `${visualSaved.status}`)
+check(!(await (await fetch(`${base}/draft-only`)).text()).includes('Typed in the editor'), 'what the editor saves waits for publishing')
+const visualBad = await visualSave([{ type: 'hero', heading: '' }])
+const visualBadBody = await visualBad.json()
+check(visualBad.status === 400 && visualBadBody.block === 0 && (await call('get_page', { slug: 'draft-only' })).data.blocks[1].heading === 'Typed in the editor', 'an empty required box is refused and points at its section')
+check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd/editor/home`)).status === 404 && (await fetch(`${owner}/editor/no-such-page`)).status === 404 && (await fetch(`${owner}/editor/home/other`)).status === 404, 'the editor opens only real pages through a real link')
+const visualImage = new FormData()
+visualImage.append('file', new Blob([Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0))], { type: 'image/png' }), 'dot.png')
+const visualUpload = await (await fetch(`${owner}/editor/draft-only/image`, { method: 'POST', body: visualImage })).json()
+const visualPhoto = visualUpload.url && (await fetch(`${owner}/editor/draft-only/media/${visualUpload.url.split('/')[2]}`))
+check(/^\/media\/\d+$/.test(visualUpload.url ?? '') && visualPhoto?.status === 200 && visualPhoto.headers.get('content-type') === 'image/png', 'the editor uploads a photo and shows it back through the private link')
+// The checks below expect the draft page as it was.
+check((await visualSave(visualData.blocks)).status === 200, 'the editor can put a page back as it was')
 check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd/preview`)).status === 404, 'a wrong link cannot open the preview')
 check((await fetch(`${base}/frame/draft-only/1`)).status === 404, 'a draft custom code block has no public address')
 check((await (await fetch(`${owner}/publish`)).text()).includes('Waiting to be published'), 'the publish page lists the waiting changes')

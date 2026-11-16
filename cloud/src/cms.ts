@@ -17,6 +17,7 @@ import { clearTestData, endTestMode, startTestMode, testCounts } from './test-mo
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { saveImage } from './items'
 import { extraLanguages, languageName, localizePage, mainLanguage, siteMissing } from './languages'
+import { handleEditor } from './editor'
 import { handleNewsOffice } from './news-office'
 import { blockSchema, itemSchema, maxBlocksBytes, maxPagesPerSite, pageSlugSchema, settingsShape } from './mcp'
 import { officeText, officeWords } from './office-words'
@@ -125,7 +126,8 @@ export const office = (site: SiteRow, at: Desk | string, title: string, body: st
   }
   const keepKey = desk.code && !site.owner_customer_id ? `<p class="cms-notice cms-keep-key" role="note"><b>${t.admin.bannerTitle}.</b> ${t.admin.banner} ${t.admin.bannerLink(`${base}#owner-account`)}</p>` : ''
   const previewHref = desk.staff && !allows(desk, 'pages') ? '/' : `${base}/preview`
-  const editHref = isAvailable('/pages') ? `${base}/pages` : base
+  // Edit site opens the visual editor on the home page. The form editor stays under Pages.
+  const editHref = isAvailable('/pages') ? `${base}/editor/home` : base
   const canPublish = isAvailable('/publish')
   const identity = desk.staff ? escapeHtml(desk.staff.name) : escapeHtml(settings.name)
   const who = desk.staff
@@ -410,7 +412,7 @@ async function pagesList(env: Env, site: SiteRow, desk: Desk, notice?: { error?:
   const { results } = await env.DB.prepare('SELECT slug, title, published FROM pages WHERE site_id = ? ORDER BY slug').bind(site.id).all<{ published: number; slug: string; title: string }>()
   const rows = results
     .map(
-      (page) => `<li><a href="${escapeHtml(desk.base)}/page/${escapeHtml(page.slug)}">${escapeHtml(page.title)}</a> ${page.published ? '' : t.hiddenPage} <small>/${page.slug === 'home' ? '' : escapeHtml(page.slug)}</small>
+      (page) => `<li><a href="${escapeHtml(desk.base)}/editor/${escapeHtml(page.slug)}">${escapeHtml(page.title)}</a> ${page.published ? '' : t.hiddenPage} <small>/${page.slug === 'home' ? '' : escapeHtml(page.slug)}</small> <a class="button button--small button--ghost" href="${escapeHtml(desk.base)}/page/${escapeHtml(page.slug)}">${t.lang === 'th' ? 'แก้ด้วยฟอร์ม' : 'Edit as form'}</a>
 <form action="${escapeHtml(desk.base)}/pages/${escapeHtml(page.slug)}/duplicate" method="post"><label>${t.duplicatePageAddress}<input maxlength="60" name="slug" pattern="[a-z0-9]+(-[a-z0-9]+)*" required></label><button class="button button--small" type="submit">${t.duplicatePage}</button></form></li>`,
     )
     .join('')
@@ -454,7 +456,7 @@ async function addPage(request: Request, env: Env, url: URL, site: SiteRow, desk
   await env.DB.prepare('INSERT INTO pages (site_id, slug, title, description, published, blocks) VALUES (?, ?, ?, ?, 0, ?) ON CONFLICT (site_id, slug) DO NOTHING')
     .bind(site.id, slug.data, title, title, JSON.stringify([{ heading: title, type: 'hero' }]))
     .run()
-  return see(url, `${desk.base}/page/${slug.data}`)
+  return see(url, `${desk.base}/editor/${slug.data}`)
 }
 
 const variantLines = (variants: Variant[] = []) => variants.map((variant) => [variant.name, variant.price, variant.compare_price, variant.stock ?? ''].join(' | ')).join('\n')
@@ -719,7 +721,7 @@ export function staffMay(staff: StaffMember, post: boolean, area?: string, id?: 
   if (!area) return !post
   if (area === 'orders') return has('orders')
   if (area === 'items' || area === 'media') return has('products')
-  if (area === 'pages' || area === 'page' || area === 'preview') return has('pages')
+  if (area === 'pages' || area === 'page' || area === 'preview' || area === 'editor') return has('pages')
   if (area === 'publish') return has('publish')
   if (area === 'entry') return has('messages')
   if (area === 'customers') return has('customers') && !post
@@ -782,6 +784,7 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
 
   if (area === 'stats') return post || id ? notFound() : statsPage(env, url, site, desk)
 
+  if (area === 'editor') return handleEditor(request, env, site, desk, id, action, extra)
   if (area === 'pages' && !id) return post ? addPage(request, env, url, site, desk) : pagesList(env, site, desk)
   if (area === 'pages' && id && action === 'duplicate' && !extra && post) return duplicatePage(request, env, url, site, desk, id)
 

@@ -85,8 +85,9 @@ const button = (label: unknown, href: unknown, base: string) => {
   return label && target ? `<a class="button" href="${escapeHtml(target)}">${escapeHtml(label)}</a>` : ''
 }
 
+// "https://" alone is the empty photo a new section starts with, so it shows nothing.
 const picture = (url: unknown, alt: unknown, eager = false) =>
-  typeof url === 'string' && (url.startsWith('https://') || /^\/media\/\d+$/.test(url))
+  typeof url === 'string' && ((url.startsWith('https://') && url.length > 8) || /^\/media\/\d+$/.test(url))
     ? `<img alt="${escapeHtml(alt)}" decoding="async" loading="${eager ? 'eager' : 'lazy'}"${eager ? ' fetchpriority="high"' : ''} referrerpolicy="no-referrer" src="${escapeHtml(url)}">`
     : ''
 
@@ -478,17 +479,23 @@ type LayoutOptions = {
   title: string
 }
 
-/** The shared frame of every public page: colours, header, navigation and footer. */
-export function renderLayout(site: SiteRow, options: LayoutOptions) {
-  const settings = JSON.parse(site.settings) as Settings
-  const base = ''
+/** A site's look as the body of its pages carries it: the style name and the colour and font variables. */
+export function siteLook(settings: Settings) {
   const accent = isHexColor(settings.accent) ? settings.accent : defaults.accent
   const background = isHexColor(settings.background) ? settings.background : defaults.background
   const text = isHexColor(settings.text) ? settings.text : defaults.text
   const accentOnDark = contrast(accent, text) >= 3 ? accent : background
-  const style = siteStyles.includes(settings.style as never) ? settings.style : 'studio'
-  const lang = /^[a-zA-Z-]{2,12}$/.test(settings.language ?? '') ? settings.language : 'en'
+  const style = siteStyles.includes(settings.style as never) ? settings.style! : 'studio'
   const vars = `--accent:${accent};--accent-dark:${accentOnDark};--accent-text:${contrast(accent, background) >= 5 ? accent : text};--accent-text-dark:${contrast(accent, text) >= 5 ? accent : background};--base-bg:${background};--base-ink:${text};--on-accent:${readableOn(accent)};--on-accent-dark:${readableOn(accentOnDark)}`
+  return { style, vars: `${vars}${fontVars(settings.headingFont, settings.bodyFont)}` }
+}
+
+/** The shared frame of every public page: colours, header, navigation and footer. */
+export function renderLayout(site: SiteRow, options: LayoutOptions) {
+  const settings = JSON.parse(site.settings) as Settings
+  const base = ''
+  const { style, vars } = siteLook(settings)
+  const lang = /^[a-zA-Z-]{2,12}$/.test(settings.language ?? '') ? settings.language : 'en'
   const t = words(settings.language)
   // Pages are made with their address in the main language. Visitors of an extra language get it under its prefix, with links to the others.
   const where = (() => {
@@ -541,7 +548,7 @@ ${hreflang}
 ${customCss}
 ${options.head ?? ''}
 </head>
-<body class="${tabs ? 'has-tabs' : ''}" data-style="${style}" style="${vars}${fontVars(settings.headingFont, settings.bodyFont).replaceAll("'", '&#39;')}">
+<body class="${tabs ? 'has-tabs' : ''}" data-style="${style}" style="${vars.replaceAll("'", '&#39;')}">
 <header class="site-header"><div class="wrap site-header__inner"><a class="site-name" href="/">${escapeHtml(settings.name)}</a>${nav ? `<nav aria-label="Main">${nav}</nav>` : ''}${switcher}${headerButton}</div></header>
 <main>${options.main}</main>
 <footer class="site-footer"><div class="wrap"><div class="site-footer__grid"><div><p class="site-footer__name">${escapeHtml(settings.name)}</p>${settings.tagline ? `<p>${escapeHtml(settings.tagline)}</p>` : ''}${settings.footerText ? `<p class="pre-line">${escapeHtml(settings.footerText)}</p>` : ''}</div>${links ? `<nav aria-label="Footer">${links}</nav>` : ''}${settings.email || settings.phone || settings.address ? `<address>${settings.address ? `<p class="pre-line">${escapeHtml(settings.address)}</p>` : ''}${settings.phone ? `<a href="tel:${escapeHtml(settings.phone.replace(/[^\d+]/g, ''))}">${escapeHtml(settings.phone)}</a>` : ''}${settings.email ? `<a href="mailto:${escapeHtml(settings.email)}">${escapeHtml(settings.email)}</a>` : ''}</address>` : ''}</div><p class="site-credit">Made with <a href="${repository}">web-end</a>, free and open source.</p></div></footer>
