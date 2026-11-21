@@ -89,7 +89,16 @@ const usefulData = new Set(['BreadcrumbList', 'LocalBusiness', 'Offer', 'Organiz
 
 type PageDesign = { accent?: string; background?: string; buttonText?: string; fonts: string[]; text?: string }
 type PageSection = { buttons: string[]; firstLines: string[]; headings: string[]; images: string[]; kind: string; lines: number }
-type PageReading = { buttons: string[]; data: unknown[]; description: string; design: PageDesign; headings: { level: number; text: string }[]; images: { alt: string; url: string }[]; links: { href: string; text: string }[]; reviewReason?: string; sections: PageSection[]; text: string[]; title: string; tooFewWords?: boolean; truncated: boolean; url: string }
+/** One thing on the page, in the order a visitor meets it, with the innermost section it sits in. Used to rebuild the page. */
+export type FlowField = { label: string; options: string[]; required: boolean; type: string }
+export type FlowItem =
+  | { kind: 'heading'; level: number; section: null | PageSection; text: string }
+  | { kind: 'text'; listItem: boolean; section: null | PageSection; text: string }
+  | { kind: 'image'; alt: string; section: null | PageSection; url: string }
+  | { kind: 'link'; href: string; section: null | PageSection; text: string }
+  | { kind: 'button'; section: null | PageSection; text: string }
+  | { kind: 'form'; fields: FlowField[]; section: null | PageSection }
+export type PageReading = { buttons: string[]; data: unknown[]; description: string; design: PageDesign; flow?: FlowItem[]; headings: { level: number; text: string }[]; images: { alt: string; url: string }[]; links: { href: string; text: string }[]; reviewReason?: string; sections: PageSection[]; text: string[]; title: string; tooFewWords?: boolean; truncated: boolean; url: string }
 
 const maxSections = 40
 const maxPerSection = 12
@@ -117,15 +126,22 @@ function readDesign(css: string, themeColor: string): PageDesign {
   return design
 }
 
-/** Reads one page with the runtime's streaming HTML parser, keeping what a person would see and leaving out scripts. */
-export async function readWebPage(target: URL): Promise<PageReading | { error: string }> {
-  const response = await fetchPublic(target, 'text/html').catch((): null => null)
+const maxFlow = 1500
+
+/** Reads one page with the runtime's streaming HTML parser, keeping what a person would see and leaving out scripts.
+ *  With html, reads that instead of fetching: a page a browser already drew, for sites built by JavaScript. */
+export async function readWebPage(target: URL, html?: string): Promise<PageReading | { error: string }> {
+  if (html !== undefined && html.length > maxPageBytes) return { error: 'That page is too large to read here.' }
+  const response = html !== undefined ? new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } }) : await fetchPublic(target, 'text/html').catch((): null => null)
   if (!response) return { error: "That address couldn't be reached." }
   if (!response.ok) return { error: `That address answered with status ${response.status}. Is the page published?` }
   if (!(response.headers.get('content-type') ?? '').includes('html')) return { error: "That address isn't a web page." }
   if (Number(response.headers.get('content-length') || 0) > maxPageBytes) return { error: 'That page is too large to read here.' }
 
-  const page: PageReading = { buttons: [], data: [], description: '', design: { fonts: [] }, headings: [], images: [], links: [], sections: [], text: [], title: '', truncated: false, url: response.url || target.href }
+  const page: PageReading = { buttons: [], data: [], description: '', design: { fonts: [] }, flow: [], headings: [], images: [], links: [], sections: [], text: [], title: '', truncated: false, url: (html === undefined && response.url) || target.href }
+  const flow = page.flow!
+  const note = (item: FlowItem) => { if (flow.length < maxFlow) flow.push(item) }
+  let form: null | Extract<FlowItem, { kind: 'form' }> = null
   const seenText = new Set<string>()
   const seenImages = new Set<string>()
   const seenLinks = new Set<string>()
@@ -136,7 +152,7 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
     if (section && !section.buttons.includes(label) && section.buttons.length < maxPerSection) section.buttons.push(label)
   }
   let themeColor = ''
-  const addImage = (url: string | null | undefined, alt: string | null | undefined) => {
+  const addImage = (url: string | null | undefined, alt: string | null | undefined, shown = true) => {
     if (!url || url.startsWith('data:')) return
     let full: string
     try {
@@ -147,6 +163,7 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
     if (seenImages.has(full) || page.images.length >= maxListed) return
     seenImages.add(full)
     page.images.push({ alt: clean(alt ?? ''), url: full })
+    if (shown) note({ kind: 'image', alt: clean(alt ?? ''), section: open.at(-1) ?? null, url: full })
     const section = open.at(-1)
     if (section && section.images.length < maxPerSection) section.images.push(full)
   }
@@ -172,7 +189,7 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
       },
     }
   }
-  const addText = (text: string) => {
+  const addText = (text: string, listItem = false) => {
     if (seenText.has(text)) return
     if (chars + text.length > maxTextChars) {
       page.truncated = true
@@ -181,6 +198,7 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
     seenText.add(text)
     chars += text.length
     page.text.push(text)
+    note({ kind: 'text', listItem, section: open.at(-1) ?? null, text })
     const section = open.at(-1)
     if (section) {
       section.lines++
@@ -193,7 +211,7 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
   const rewriter = new HTMLRewriter()
     .on('br', { element: () => reading.forEach((open) => (open.value += '\n')) })
     .on('title', collect((text) => (page.title ||= text)))
-    .on('section, header, footer', {
+    .on('section, header, footer, nav, main, article, aside', {
       element(element) {
         if (page.sections.length >= maxSections) return
         const section: PageSection = { buttons: [], firstLines: [], headings: [], images: [], kind: element.tagName.toLowerCase(), lines: 0 }
@@ -217,10 +235,16 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
         const content = decode(element.getAttribute('content') ?? '')
         if (name === 'theme-color') themeColor = content.trim()
         if (name === 'description' || (name === 'og:description' && !page.description)) page.description = clean(content)
-        if (name === 'og:image') addImage(content, 'Main image')
+        if (name === 'og:image') addImage(content, 'Main image', false)
       },
     })
-    .on('img', { element: (element) => addImage(decode(element.getAttribute('src') ?? element.getAttribute('data-src') ?? ''), element.getAttribute('alt')) })
+    .on('img', {
+      element(element) {
+        // Icons and tracking pixels are not photos to rebuild.
+        const size = Math.min(Number(element.getAttribute('width') || 999), Number(element.getAttribute('height') || 999))
+        addImage(decode(element.getAttribute('src') ?? element.getAttribute('data-src') ?? ''), element.getAttribute('alt'), size >= 48)
+      },
+    })
     .on('wow-image', {
       element(element) {
         // The parser hands over attributes as written, and Wix writes this JSON with its quotes encoded.
@@ -234,6 +258,7 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
       try {
         const full = new URL(href, target)
         if (full.host === target.host) noteLabel(text)
+        if (text.length <= 60 && ['http:', 'https:', 'mailto:', 'tel:'].includes(full.protocol)) note({ kind: 'link', href: full.href, section: open.at(-1) ?? null, text })
         if (full.host !== target.host || seenLinks.has(full.href) || page.links.length >= maxListed) return
         seenLinks.add(full.href)
         page.links.push({ href: full.href, text })
@@ -244,6 +269,7 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
   for (const level of [1, 2, 3, 4, 5, 6]) {
     rewriter.on(`h${level}`, collect((text) => {
       if (page.headings.length < maxListed) page.headings.push({ level, text })
+      if (!seenText.has(text)) note({ kind: 'heading', level, section: open.at(-1) ?? null, text })
       const section = open.at(-1)
       if (section && section.headings.length < maxPerSection) section.headings.push(text)
       seenText.add(text)
@@ -271,8 +297,32 @@ export async function readWebPage(target: URL): Promise<PageReading | { error: s
   rewriter.on('button', collect((text) => {
     if (!page.buttons.includes(text) && page.buttons.length < maxListed) page.buttons.push(text)
     noteLabel(text)
+    if (!form && text.length <= 60) note({ kind: 'button', section: open.at(-1) ?? null, text })
   }))
-  rewriter.on('p', collect(addText)).on('li', collect(addText)).on('blockquote', collect(addText))
+  // Forms keep their fields, so they can come back as working forms.
+  rewriter.on('form', {
+    element(element) {
+      const started: Extract<FlowItem, { kind: 'form' }> = { kind: 'form', fields: [], section: open.at(-1) ?? null }
+      form = started
+      note(started)
+      element.onEndTag(() => { if (form === started) form = null })
+    },
+  })
+  rewriter.on('input, textarea, select', {
+    element(element) {
+      if (!form || form.fields.length >= 30) return
+      const tag = element.tagName.toLowerCase()
+      const type = tag === 'input' ? (element.getAttribute('type') ?? 'text').toLowerCase() : tag
+      if (['hidden', 'submit', 'button', 'image', 'reset', 'file', 'password', 'search', 'radio'].includes(type)) return
+      const label = clean(decode(element.getAttribute('aria-label') ?? element.getAttribute('placeholder') ?? element.getAttribute('name') ?? ''))
+      if (label) form.fields.push({ label: label.slice(0, 80), options: [], required: element.hasAttribute('required'), type })
+    },
+  })
+  rewriter.on('option', collect((text) => {
+    const field = form?.fields.at(-1)
+    if (field?.type === 'select' && field.options.length < 50 && !/^(-|please|bitte|select|choose)/i.test(text)) field.options.push(text.slice(0, 80))
+  }))
+  rewriter.on('p', collect((text) => addText(text))).on('li', collect((text) => addText(text, true))).on('blockquote', collect((text) => addText(text)))
   const transformed = rewriter.transform(response)
   const reader = transformed.body?.getReader()
   let bytes = 0
@@ -423,6 +473,14 @@ export async function checkMove(env: Env, site: SiteRow, target: URL, slug: stri
   if (!page) return { error: `There is no page called "${slug}".` }
   const old = await readWebPage(target)
   if ('error' in old) return { error: old.error }
+  await rememberReading(env, site.id, old, slug)
+  return { report: await comparePage(env, site, old, page as WorkingPage) }
+}
+
+/** Compares a page with a reading already made, such as one from a page a browser drew. */
+export async function checkMoveWith(env: Env, site: SiteRow, old: PageReading, slug: string) {
+  const page = await findWorkingPage(env, site, slug)
+  if (!page) return { error: `There is no page called "${slug}".` }
   await rememberReading(env, site.id, old, slug)
   return { report: await comparePage(env, site, old, page as WorkingPage) }
 }

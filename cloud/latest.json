@@ -1,4 +1,4 @@
 {
-  "version": "0.25.0",
-  "notes": "Your site's public pages can now be shown as a live preview on your tktf.at Apps page. Only tktf.at may show them, the back office still can't be shown inside any other site, and previews aren't counted as visits."
+  "version": "0.26.0",
+  "notes": "Moving from another website is easier: a page of your old site can now be rebuilt here in one step, with its words, photos, buttons, questions and answers and contact forms, as normal sections you can edit. The start page also brings the old name, menu and footer, and a report shows anything that didn't come across."
 }

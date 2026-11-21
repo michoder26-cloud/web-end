@@ -20,9 +20,10 @@ import { maxDailyLimit } from './news'
 import { registerNewsTools } from './news-tools'
 import { parsePrice } from './money'
 import { validPromptPayId } from './promptpay'
-import { checkMove, cleanPath, copyImage, importProducts, moveGate, moveReport, moveStatus, readWebPage, rememberReading, saveRedirects, scanWebsite } from './moving'
+import { checkMove, checkMoveWith, cleanPath, copyImage, importProducts, moveGate, moveReport, moveStatus, readWebPage, rememberReading, saveRedirects, scanWebsite } from './moving'
+import { blocksFromReading, chromeOf, photosOf, slugFor } from './importer'
 import { officeWords } from './office-words'
-import { getSite as findSite } from './owner'
+import { defaultSiteNames, getSite as findSite } from './owner'
 import { pageRevisions, rememberPage, restorePageRevision } from './page-history'
 import { orderLines, orderStatuses, setOrderStatus } from './shop'
 import { readPermissions, setStaff, staffAreas } from './staff'
@@ -860,7 +861,101 @@ export function createMcpServer(env: Env, origin: string, code: string) {
       const page = await readWebPage(target)
       if ('error' in page) return refuse(page.error)
       await rememberReading(env, (await getSite()).id, page)
-      return reply({ ...page, remember: "Keep the page's exact title when you rebuild it, so check_site can compare the two. check_site and publish_site will list anything that didn't come across." })
+      const { flow: _flow, ...shown } = page
+      return reply({ ...shown, remember: "Keep the page's exact title when you rebuild it, so check_site can compare the two. check_site and publish_site will list anything that didn't come across." })
+    }),
+  )
+
+  server.registerTool(
+    'import_page',
+    {
+      title: "Rebuild a page of the owner's old site here",
+      description: "Rebuilds one page of the owner's old site here in one step, as normal blocks the owner can edit: headings, text, photos (copied into this site), buttons, galleries, questions and answers, feature lists and contact forms. You don't write the blocks, and the words stay as they were. It then compares the new page with the old one and reports what didn't come across. The start page becomes home, and other pages take the last part of their address. If that page already exists, ask the owner first and set replace true. html is only for a page a browser already drew, such as a site built by JavaScript.",
+      inputSchema: {
+        url: text(500),
+        ownerConfirmed: ownSite,
+        html: z.string().max(3_000_000).optional().describe('The page as a browser drew it. Leave out to read the address.'),
+        slug: pageSlugSchema.optional().describe('Page name to use instead of the one from the address'),
+        replace: z.boolean().optional().describe('Replace a page with the same name. Only after the owner agreed.'),
+        useColors: z.boolean().optional().describe("Use the old site's colours. On by default for the home page."),
+      },
+    },
+    safely(async ({ html, replace, slug, url, useColors }) => {
+      const target = safeWebUrl(env, url)
+      if (!target) return refuse('Use a public https address.')
+      const reading = await readWebPage(target, html)
+      if ('error' in reading) return refuse(reading.error)
+      if (reading.tooFewWords) return refuse("This page is drawn by JavaScript in the browser, so there is almost nothing to read in it here. It needs the page as a browser drew it (html). Nothing changed.")
+      let name = slug ?? slugFor(reading.url)
+      if (!pageSlugSchema.safeParse(name).success) name = `${name}-page`.replace(/^-+/, '').slice(0, 60)
+      if (!pageSlugSchema.safeParse(name).success) name = 'page'
+      const site = await getSite()
+      const exists = await db.prepare('SELECT 1 AS found FROM pages WHERE site_id = ? AND slug = ?').bind(site.id, name).first()
+      if (exists && !replace) return refuse(`Nothing changed. This site already has a page called "${name}". Ask the owner whether to replace it, then call import_page again with replace true, or pass another slug.`)
+      if (!exists) {
+        const count = await db.prepare('SELECT COUNT(*) AS total FROM pages WHERE site_id = ?').bind(site.id).first<{ total: number }>()
+        if ((count?.total ?? 0) >= maxPagesPerSite) return refuse(`A site can have up to ${maxPagesPerSite} pages.`)
+      }
+      // Photos go into this site's own database, so they keep working after the old site closes.
+      // Cloudflare's free plan allows 50 outside requests per call, so only the first photos are copied.
+      const copies = new Map<string, string>()
+      let notCopied = 0
+      for (const photo of photosOf(reading).slice(0, 15)) {
+        const address = safeWebUrl(env, photo)
+        const stored = address ? await copyImage(env, site.id, address) : { error: 'not a public address' }
+        if (stored.url) copies.set(photo, stored.url)
+        else notCopied++
+      }
+      const built = blocksFromReading(reading, (photo) => copies.get(photo) ?? (photo.startsWith('https://') ? photo : undefined))
+      const blocks = built.flatMap((block) => {
+        const checked = blockSchema.safeParse(block)
+        return checked.success ? [checked.data] : []
+      })
+      if (!blocks.length) return refuse('Nothing on that page could be rebuilt as blocks. Nothing changed.')
+      const title = (reading.title || name).slice(0, 120)
+      const firstWords = reading.flow?.find((item) => item.kind === 'text')
+      const description = (reading.description || (firstWords?.kind === 'text' ? firstWords.text : '') || title).slice(0, 300)
+      await rememberPage(env, site.id, name)
+      await db
+        .prepare(`INSERT INTO pages (site_id, slug, title, description, published, blocks) VALUES (?, ?, ?, ?, 1, ?)
+          ON CONFLICT (site_id, slug) DO UPDATE SET title = excluded.title, description = excluded.description, published = 1, blocks = excluded.blocks, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`)
+        .bind(site.id, name, title, description, JSON.stringify(blocks))
+        .run()
+      // The home page also brings the old colours, menu and footer, where the site has none of its own yet.
+      const colours: Record<string, string> = {}
+      const siteParts: string[] = []
+      if (useColors ?? name === 'home') {
+        for (const key of ['accent', 'background', 'text'] as const) {
+          const value = reading.design[key]
+          if (value && isHexColor(value)) colours[key] = value
+        }
+      }
+      const current = JSON.parse(site.settings) as Settings
+      const changes: Partial<Settings> = { ...colours }
+      if (name === 'home') {
+        const chrome = chromeOf(reading)
+        const nav = chrome.nav.filter((entry) => isSafeHref(entry.href))
+        if (nav.length && !current.nav?.length) { changes.nav = nav; siteParts.push('menu') }
+        if (chrome.footerText && !current.footerText) { changes.footerText = chrome.footerText; siteParts.push('footer') }
+        if (chrome.name && (!current.name || defaultSiteNames.includes(current.name))) { changes.name = chrome.name; siteParts.push('name') }
+      }
+      if (Object.keys(changes).length) {
+        await db.prepare("UPDATE sites SET settings = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?").bind(JSON.stringify({ ...current, ...changes }), site.id).run()
+      }
+      const compared = await checkMoveWith(env, await getSite(), reading, name)
+      const report = 'report' in compared ? compared.report : null
+      return reply({
+        imported: name,
+        url: pageUrl(name),
+        blocks: blocks.map((block) => block.type),
+        photosCopied: copies.size,
+        photosNotCopied: notCopied + Math.max(0, photosOf(reading).length - 15),
+        colours: Object.keys(colours).length ? colours : 'kept',
+        ...(siteParts.length ? { alsoTaken: `The old ${siteParts.join(' and ')}` } : {}),
+        check: report ? { problems: report.problems, counts: report.counts, textMissing: report.textMissing.slice(0, 10), titleKept: report.titleKept } : compared,
+        next: 'Tell the owner in a few short lines which page was rebuilt and what did not come across, then offer the next steps as choices, such as looking at the page, importing the next page, fixing what is missing, or publishing.',
+        ...waiting(site, name),
+      })
     }),
   )
 

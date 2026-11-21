@@ -78,7 +78,7 @@ check((await rpc('/mcp/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd')).status === 404, 'M
 check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd`)).status === 404, 'the back office with a wrong link is refused')
 
 const { tools } = await client.listTools()
-check(tools.length === 63 && tools.some((tool) => tool.name === 'get_move_report') && tools.some((tool) => tool.name === 'get_wordpress_report') && tools.some((tool) => tool.name === 'duplicate_page') && tools.some((tool) => tool.name === 'restore_page_revision') && tools.some((tool) => tool.name === 'save_app_plan') && tools.some((tool) => tool.name === 'check_app_plan'), 'lists the tools', tools.map((tool) => tool.name).join(','))
+check(tools.length === 64 && tools.some((tool) => tool.name === 'import_page') && tools.some((tool) => tool.name === 'get_move_report') && tools.some((tool) => tool.name === 'get_wordpress_report') && tools.some((tool) => tool.name === 'duplicate_page') && tools.some((tool) => tool.name === 'restore_page_revision') && tools.some((tool) => tool.name === 'save_app_plan') && tools.some((tool) => tool.name === 'check_app_plan'), 'lists the tools', tools.map((tool) => tool.name).join(','))
 check(stepDone(await (await fetch(`${base}/owner/${code}`)).text(), 'claude') === '1', 'connecting Claude ticks its step')
 check(client.getInstructions()?.includes('apply_starter') && tools.find((tool) => tool.name === 'apply_starter')?.description.includes('replacePages'), 'Claude knows about starters and when it may replace pages')
 check(client.getInstructions()?.includes('web team'), 'gives Claude its working method')
@@ -1663,6 +1663,19 @@ check(!reading.text.includes('SCRIPT-TEXT') && !reading.text.includes('color:red
   check((await call('read_website_page', { url: 'http://localhost:8795/missing', ownerConfirmed: true })).isError && (await call('read_website_page', { url: 'http://localhost:8795/notes.txt', ownerConfirmed: true })).isError, 'missing pages and other files are explained')
   const copied = await call('copy_image', { url: 'http://localhost:8795/photo.png', ownerConfirmed: true })
   check(/^\/media\/\d+$/.test(copied.data.url) && (await fetch(`${base}${copied.data.url}`)).headers.get('content-type') === 'image/png', 'copies a photo into the database')
+  const imported = await call('import_page', { url: 'http://localhost:8795/', ownerConfirmed: true, slug: 'moved-cafe', useColors: false })
+  const movedPage = await call('get_page', { slug: 'moved-cafe' })
+  const movedText = JSON.stringify(movedPage.data.blocks ?? [])
+  check(!imported.isError && imported.data.imported === 'moved-cafe' && movedPage.data.blocks?.[0]?.type === 'hero' && movedPage.data.blocks[0].heading === 'Welcome home' && movedText.includes('We roast every day.') && movedText.includes('12 Roast Way') && /\/media\/\d+/.test(movedText) && !movedText.includes('SCRIPT-TEXT'), 'import_page rebuilds an old page as blocks with its words and copied photos, without its scripts', imported.text)
+  check(movedPage.data.title === 'Old & Gold Cafe' && typeof imported.data.check?.problems === 'number', 'an imported page keeps the old title and reports what did not come across')
+  const importedAgain = await call('import_page', { url: 'http://localhost:8795/', ownerConfirmed: true, slug: 'moved-cafe' })
+  check(importedAgain.isError && importedAgain.text.includes('replace true'), 'import_page never replaces a page without being told to')
+  const drawnForm = '<!doctype html><html><head><title>Contact</title></head><body><header><a href="/">Logo</a><a href="/menu">Menu</a></header><main><h1>Contact us</h1><p>Write to us.</p><form><input name="name" placeholder="Your name" required><input type="email" name="email" placeholder="Email"><textarea name="msg" placeholder="Message"></textarea><select name="topic"><option>Please choose</option><option>Booking</option><option>Other</option></select><input type="hidden" name="token" value="x"><button>Send</button></form></main><footer><p>Open daily</p></footer></body></html>'
+  const formImport = await call('import_page', { url: 'http://localhost:8795/contact-us', ownerConfirmed: true, html: drawnForm })
+  const formPage = await call('get_page', { slug: 'contact-us' })
+  const formBlock = formPage.data.blocks?.find((block) => block.type === 'form')
+  check(!formImport.isError && formBlock?.heading === 'Contact us' && formBlock.fields.length === 4 && formBlock.fields[0].required === true && formBlock.fields[1].type === 'email' && formBlock.fields[2].type === 'textarea' && JSON.stringify(formBlock.fields[3].options) === '["Booking","Other"]', 'import_page reads a page a browser drew and turns its form into a working form', formImport.text)
+  check(!JSON.stringify(formPage.data.blocks).includes('Open daily') && !JSON.stringify(formPage.data.blocks).includes('Logo'), "the old header and footer don't become page content")
   check((await call('copy_image', { url: 'http://localhost:8795/notes.txt', ownerConfirmed: true })).isError, 'a file that is not an image is refused')
   // Checking the move
   check((await call('copy_image', { url: 'http://localhost:8795/photo.png', ownerConfirmed: true })).data.url === copied.data.url, 'the same photo is not stored twice')
