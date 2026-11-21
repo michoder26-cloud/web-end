@@ -328,5 +328,5 @@ export async function handleStarters(request: Request, env: Env, url: URL, site:
   if (!isStarter(id) || !isStarterLanguage(language)) return notFound()
   const result = await applyStarter(env, site, id, language, form?.get('confirm') === 'on')
   if (result.error) return startersPage(env, url, site, desk, result.error === 'partial' ? (siteStarterLanguage(JSON.parse(site.settings) as Settings) === 'th' ? 'บางส่วนถูกนำไปใช้แล้ว แต่ไม่สามารถเพิ่มตารางได้ กรุณาตรวจสอบและลองอีกครั้ง' : 'The pages and design were applied, but the starter could not be completed. Check your tables before trying again.') : result.error === 'changed' ? (siteStarterLanguage(JSON.parse(site.settings) as Settings) === 'th' ? 'การตั้งค่าเปลี่ยนไป กรุณาลองอีกครั้ง ไม่มีการเปลี่ยนแปลงใด ๆ' : 'Settings changed while applying the starter. Nothing changed; please try again.') : officeText(site).start.notEmpty)
-  return see(url, `${desk.base}?started=${id}`)
+  return see(url, `${desk.base}/dashboard?started=${id}`)
 }

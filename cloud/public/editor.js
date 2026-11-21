@@ -9,7 +9,7 @@
   const W = TH
     ? {
         edit: 'แก้ไขเว็บ', page: 'หน้า', saved: 'บันทึกแล้ว', saving: 'กำลังบันทึก…', unsaved: 'ยังไม่ได้บันทึก', notSaved: 'บันทึกไม่ได้', retry: 'ลองอีกครั้ง',
-        undo: 'เลิกทำ', publish: 'เผยแพร่', templates: 'แม่แบบ', back: 'หลังบ้าน', view: 'ดูหน้าเว็บ', library: 'เพิ่มส่วน', libraryHelp: 'ลากไปวางบนหน้า หรือกดเพื่อเพิ่มต่อท้าย',
+        undo: 'เลิกทำ', publish: 'เผยแพร่', templates: 'แม่แบบ', back: 'แดชบอร์ด', keepKey: 'ที่อยู่หน้านี้คือกุญแจเดียวเข้าหลังบ้าน บุ๊กมาร์กไว้ หรือ', keepKeyLink: 'สร้างการเข้าสู่ระบบ', view: 'ดูหน้าเว็บ', library: 'เพิ่มส่วน', libraryHelp: 'ลากไปวางบนหน้า หรือกดเพื่อเพิ่มต่อท้าย',
         hint: 'คลิกข้อความเพื่อพิมพ์ทับ · จับปุ่ม ⠿ เพื่อลากสลับ · กดรูปเพื่อเปลี่ยน', gotIt: 'เข้าใจแล้ว',
         move: 'ลากเพื่อย้าย', up: 'เลื่อนขึ้น', down: 'เลื่อนลง', settings: 'ตั้งค่า', duplicate: 'ทำซ้ำ', remove: 'ลบ', addHere: 'เพิ่มส่วนตรงนี้', addSection: 'เพิ่มส่วน',
         addItem: 'เพิ่ม', removeItem: 'ลบรายการนี้', link: 'ลิงก์', linkHelp: 'ลิงก์ เช่น /about หรือ https://…', done: 'เสร็จ', close: 'ปิด',
@@ -22,7 +22,7 @@
       }
     : {
         edit: 'Edit site', page: 'Page', saved: 'Saved', saving: 'Saving…', unsaved: 'Not saved yet', notSaved: 'Not saved', retry: 'Try again',
-        undo: 'Undo', publish: 'Publish', templates: 'Templates', back: 'Dashboard', view: 'Preview', library: 'Add a section', libraryHelp: 'Drag onto the page, or click to add at the end',
+        undo: 'Undo', publish: 'Publish', templates: 'Templates', back: 'Dashboard', keepKey: 'This page’s address is your only key to the back office. Bookmark it, or', keepKeyLink: 'create a sign-in', view: 'Preview', library: 'Add a section', libraryHelp: 'Drag onto the page, or click to add at the end',
         hint: 'Click any text to type over it · drag ⠿ to reorder · click a photo to change it', gotIt: 'Got it',
         move: 'Drag to move', up: 'Move up', down: 'Move down', settings: 'Settings', duplicate: 'Duplicate', remove: 'Delete', addHere: 'Add a section here', addSection: 'Add a section',
         addItem: 'Add', removeItem: 'Remove this item', link: 'Link', linkHelp: 'Link, such as /about or https://…', done: 'Done', close: 'Close',
@@ -270,10 +270,10 @@
       data.pages.map((page) => h('option', { value: page.slug, selected: page.slug === data.slug || null, text: `${page.title} (/${page.slug === 'home' ? '' : page.slug})` })))
     els.publish = data.canPublish ? h('button', { type: 'button', class: 'ed-btn ed-btn--primary', onclick: publish, text: W.publish }) : null
     const bar = h('header', { class: 'ed-bar' },
-      h('a', { class: 'ed-mark', href: data.base, title: W.back, text: 'WE' }),
+      h('a', { class: 'ed-mark', href: data.dashboard || data.base, title: W.back, text: 'WE' }),
       h('div', { class: 'ed-bar__site' }, h('strong', { text: data.siteName }), h('span', { class: 'ed-bar__page' }, pagePick, data.published ? null : h('em', { text: W.hidden }))),
       els.status,
-      h('div', { class: 'ed-bar__acts' }, els.undo,
+      h('div', { class: 'ed-bar__acts' }, h('a', { class: 'ed-btn', href: data.dashboard || data.base, text: W.back }), els.undo,
         h('a', { class: 'ed-btn', href: `${data.base}/preview${data.slug === 'home' ? '' : `/${data.slug}`}`, target: '_blank', rel: 'noopener', text: W.view }),
         h('a', { class: 'ed-btn ed-btn--wide', href: `${data.base}/starters`, text: W.templates }), els.publish))
     els.lib = h('aside', { class: 'ed-lib', 'aria-label': W.library }, h('h2', { text: W.library }), h('p', { text: W.libraryHelp }),
@@ -282,7 +282,8 @@
     let hintSeen = false
     try { hintSeen = localStorage.getItem('we-editor-hint') === '1' } catch {}
     const hint = hintSeen ? null : h('p', { class: 'ed-hint' }, h('span', { text: W.hint }), h('button', { type: 'button', text: W.gotIt, onclick: (event) => { event.target.parentElement.remove(); try { localStorage.setItem('we-editor-hint', '1') } catch {} } }))
-    els.stage = h('main', { class: 'ed-stage' }, hint, h('div', { class: 'ed-site' }, els.page),
+    const keep = data.keepKey ? h('p', { class: 'ed-keep' }, h('span', { text: `${W.keepKey} ` }), h('a', { href: `${data.dashboard}#owner-account`, text: W.keepKeyLink })) : null
+    els.stage = h('main', { class: 'ed-stage' }, keep, hint, h('div', { class: 'ed-site' }, els.page),
       h('button', { type: 'button', class: 'ed-add-end', 'data-act': 'add-end' }, icon('plus'), W.addSection))
     els.toast = h('div', { class: 'ed-toast', role: 'status', hidden: true }, h('span'), h('button', { type: 'button', text: W.undo, onclick: undo }))
     root.replaceChildren(bar, h('div', { class: 'ed-work' }, els.lib, els.stage), els.toast)

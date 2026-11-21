@@ -33,18 +33,24 @@ const fieldsFor = (t: ReturnType<typeof officeText>) =>
     ]),
   )
 
-async function editorPage(env: Env, site: SiteRow, desk: Desk, slug: string) {
-  const [page, { results: pages }, { results: media }] = await Promise.all([
+/** The editor for one page. A site without a home page yet opens it empty; the first section saved creates it. */
+export async function editorPage(env: Env, site: SiteRow, desk: Desk, slug: string) {
+  const [found, { results: pages }, { results: media }] = await Promise.all([
     env.DB.prepare('SELECT title, blocks, published FROM pages WHERE site_id = ? AND slug = ?').bind(site.id, slug).first<{ blocks: string; published: number; title: string }>(),
     env.DB.prepare('SELECT slug, title FROM pages WHERE site_id = ? ORDER BY slug').bind(site.id).all<{ slug: string; title: string }>(),
     env.DB.prepare('SELECT id, name FROM media WHERE site_id = ? ORDER BY id DESC LIMIT 60').bind(site.id).all<{ id: number; name: string }>(),
   ])
-  if (!page) return notFound()
   const settings = JSON.parse(site.settings) as Settings
+  const page = found ?? (slug === 'home' ? { blocks: '[]', published: 1, title: settings.name } : null)
+  if (!page) return notFound()
+  if (!found) pages.unshift({ slug: 'home', title: settings.name })
   const t = officeText(site)
   const { style, vars } = siteLook(settings)
   const data = {
     base: desk.base,
+    dashboard: `${desk.base}/dashboard`,
+    // Until the owner has a sign-in, the secret address is their only way back in, so the editor says so too.
+    keepKey: Boolean(desk.code && !site.owner_customer_id),
     blocks: JSON.parse(page.blocks) as Block[],
     canPublish: !desk.staff || desk.staff.permissions.includes('publish'),
     catalog: fieldsFor(t),
@@ -94,6 +100,14 @@ async function savePage(request: Request, env: Env, site: SiteRow, slug: string)
   const stored = JSON.stringify(parsed.data.blocks)
   if (stored.length > maxBlocksBytes) return json({ error: t.notSaved(t.pageTooLarge) }, 400)
   const current = await env.DB.prepare('SELECT blocks FROM pages WHERE site_id = ? AND slug = ?').bind(site.id, slug).first<{ blocks: string }>()
+  if (!current && slug === 'home') {
+    // The first section dropped on an empty site's home page creates that page.
+    const settings = JSON.parse(site.settings) as Settings
+    await rememberPage(env, site.id, slug)
+    await env.DB.prepare('INSERT INTO pages (site_id, slug, title, description, published, blocks) VALUES (?, ?, ?, ?, 1, ?) ON CONFLICT (site_id, slug) DO NOTHING')
+      .bind(site.id, slug, settings.name, (settings.tagline || settings.name).slice(0, 300), stored).run()
+    return json({ ok: true, created: true })
+  }
   if (!current) return json({ error: 'not found' }, 404)
   if (current.blocks === stored) return json({ ok: true, unchanged: true })
   await rememberPage(env, site.id, slug)

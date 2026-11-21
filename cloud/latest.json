@@ -1,4 +1,4 @@
 {
-  "version": "0.26.0",
-  "notes": "Moving from another website is easier: a page of your old site can now be rebuilt here in one step, with its words, photos, buttons, questions and answers and contact forms, as normal sections you can edit. The start page also brings the old name, menu and footer, and a report shows anything that didn't come across."
+  "version": "0.27.0",
+  "notes": "The back office now opens straight into the drag-and-drop editor, with the overview one click away under Dashboard. A brand-new site opens on an empty start page you can fill right away. Your own editor can also be shown next to the AI assistant on tktf.at."
 }

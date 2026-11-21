@@ -318,10 +318,12 @@ async function visit(request: Request, env: Env, url: URL, site: SiteRow, parts:
 }
 
 // The Apps page on tktf.at shows a small live preview of each site. Public pages may therefore be shown
-// inside tktf.at, and nowhere else; the back office, private links, carts, checkout and logins never.
+// inside tktf.at, and nowhere else. The owner's own back office (behind the private owner link) may be shown
+// there too, next to the AI assistant; staff and admin pages, carts, checkout and logins never.
 const PREVIEW_HOST = 'https://tktf.at'
+const OWNER_PAGE = /^\/owner\/[A-Za-z0-9_-]{20,80}(\/|$)/
 function previewable(request: Request, path: string, response: Response) {
-  if (request.method !== 'GET' || response.status !== 200 || !countablePath(path)) return response
+  if (request.method !== 'GET' || response.status !== 200 || !(countablePath(path) || OWNER_PAGE.test(path))) return response
   const policy = response.headers.get('content-security-policy') ?? ''
   if (!policy.includes("frame-ancestors 'none'")) return response
   const shown = new Response(response.body, response)

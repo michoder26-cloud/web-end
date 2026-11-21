@@ -167,3 +167,5 @@ textarea.ed-input { resize: vertical; }
   .ed-btn--wide { display: none; }
   .ed-status { order: 5; width: 100%; }
 }
+.ed-keep { margin: 0 0 12px; padding: 10px 14px; border-radius: 10px; background: #14382c; color: #d7f5e8; font-size: 14px; }
+.ed-keep a { color: inherit; font-weight: 700; }

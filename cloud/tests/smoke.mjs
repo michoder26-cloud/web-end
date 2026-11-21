@@ -44,7 +44,9 @@ check((await (await fetch(base)).text()).includes('Check back soon'), 'the empty
 
 // The first steps checklist ticks itself from what really happened
 const stepDone = (html, step) => html.match(new RegExp(`data-done="([01])" data-step="${step}"`))?.[1]
-const firstOverview = await (await fetch(`${base}/owner/${code}`)).text()
+const firstOverview = await (await fetch(`${base}/owner/${code}/dashboard`)).text()
+const emptyDoor = await (await fetch(`${base}/owner/${code}`)).text()
+check(emptyDoor.includes('id="editor-data"') && emptyDoor.includes('"blocks":[]') && emptyDoor.includes('"keepKey":true'), 'an empty site opens the editor on an empty home page, with the keep-your-key note')
 check(['claude', 'build', 'phone', 'publish'].every((step) => stepDone(firstOverview, step) === '0'), 'a brand-new site shows its first steps, none done yet', ['claude', 'build', 'phone', 'publish'].map((step) => stepDone(firstOverview, step)).join())
 check(firstOverview.includes(`href="/owner/${code}/starters"`) && firstOverview.includes('Add custom connector') && firstOverview.includes(`value="${base}/mcp/${code}"`), 'the overview of an empty site links to the starters and shows how to connect Claude')
 check(firstOverview.includes('cms-build-choice') && firstOverview.includes('Choose an example') && firstOverview.includes('Build with Claude') && !firstOverview.includes('<h2 id="claude">'), 'an empty dashboard leads with build choices and keeps technical setup folded away')
@@ -79,7 +81,7 @@ check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd`)).status 
 
 const { tools } = await client.listTools()
 check(tools.length === 64 && tools.some((tool) => tool.name === 'import_page') && tools.some((tool) => tool.name === 'get_move_report') && tools.some((tool) => tool.name === 'get_wordpress_report') && tools.some((tool) => tool.name === 'duplicate_page') && tools.some((tool) => tool.name === 'restore_page_revision') && tools.some((tool) => tool.name === 'save_app_plan') && tools.some((tool) => tool.name === 'check_app_plan'), 'lists the tools', tools.map((tool) => tool.name).join(','))
-check(stepDone(await (await fetch(`${base}/owner/${code}`)).text(), 'claude') === '1', 'connecting Claude ticks its step')
+check(stepDone(await (await fetch(`${base}/owner/${code}/dashboard`)).text(), 'claude') === '1', 'connecting Claude ticks its step')
 check(client.getInstructions()?.includes('apply_starter') && tools.find((tool) => tool.name === 'apply_starter')?.description.includes('replacePages'), 'Claude knows about starters and when it may replace pages')
 check(client.getInstructions()?.includes('web team'), 'gives Claude its working method')
 check(client.getInstructions()?.includes('2 to 4 short choices') && client.getInstructions()?.includes('Only offer choices these tools can really deliver'), 'tells Claude to ask with choices and only offer what works')
@@ -97,7 +99,7 @@ const page = {
   ],
 }
 check(!(await call('save_page', page)).isError, 'saves a page')
-check(stepDone(await (await fetch(`${base}/owner/${code}`)).text(), 'build') === '1', 'a home page ticks the step to build the site')
+check(stepDone(await (await fetch(`${base}/owner/${code}/dashboard`)).text(), 'build') === '1', 'a home page ticks the step to build the site')
 const appPlan = {
   title: 'Class bookings',
   summary: 'Customers find a class and send a booking request. Staff can see the requests.',
@@ -214,7 +216,7 @@ const entries = await call('list_entries', {})
 check(entries.data.length === 1, 'keeps only the good entry', JSON.stringify(entries.data).slice(0, 200))
 check(entries.data[0]?.status === 'new' && entries.data[0]?.data.roles === undefined, 'drops fields the form did not define')
 
-const office = await fetch(`${base}/owner/${code}`)
+const office = await fetch(`${base}/owner/${code}/dashboard`)
 const officeBody = await office.text()
 check(office.status === 200 && officeBody.includes('Seats'), 'the back office shows entries with their labels')
 check(officeBody.includes('&lt;b&gt;Ana&lt;/b&gt;'), 'the back office shows entries as plain text')
@@ -226,7 +228,7 @@ check(noAccess.status === 404 && (await call('list_entries', {})).data.length ==
 const confirm = await fetch(`${base}/owner/${code}/entry/${id}`, { body: new URLSearchParams({ status: 'confirmed' }), method: 'POST', redirect: 'manual' })
 check(confirm.status === 303 && (await call('list_entries', {})).data[0].status === 'confirmed', 'the owner can confirm an entry in the back office')
 check(!(await call('update_entry', { id, status: 'done' })).isError, 'the owner can update an entry through Claude')
-const entryOffice = await (await fetch(`${base}/owner/${code}`)).text()
+const entryOffice = await (await fetch(`${base}/owner/${code}/dashboard`)).text()
 const unconfirmedDelete = await fetch(`${base}/owner/${code}/entry/${id}`, { body: new URLSearchParams({ status: 'delete' }), method: 'POST', redirect: 'manual' })
 const keptEntry = (await call('list_entries', {})).data.some((entry) => entry.id === id)
 const confirmedDelete = await fetch(`${base}/owner/${code}/entry/${id}`, { body: new URLSearchParams({ status: 'delete', confirm: 'on' }), method: 'POST', redirect: 'manual' })
@@ -317,13 +319,13 @@ for (const area of ['', '/pages', '/page/home', '/items', '/media', '/customers'
   const response = await fetch(`${owner}${area}`)
   check(response.status === 200 && response.headers.get('x-robots-tag') === 'noindex', `the back office opens: ${area || 'overview'}`)
 }
-const ownerDashboard = await (await fetch(owner)).text()
+const ownerDashboard = await (await fetch(`${owner}/dashboard`)).text()
 check(ownerDashboard.includes('cms-mode-tabs') && ownerDashboard.includes('Preview') && ownerDashboard.includes('Dashboard') && ownerDashboard.includes('Edit site') && ownerDashboard.includes('cms-command-card') && ownerDashboard.includes('/automations'), 'the owner dashboard groups preview, editing and operational controls')
 // Until there is an email sign-in, the private link is the only key, so the back office offers one without pasting anything.
 const accountCard = ownerDashboard.slice(ownerDashboard.indexOf('id="owner-account"'))
 check(ownerDashboard.includes('id="owner-account"') && accountCard.includes('action="/admin/claim"') && accountCard.includes(`name="code" type="hidden" value="${code}"`), 'the overview offers to create the owner sign-in, with the private code already filled in')
 const ordersBanner = await (await fetch(`${owner}/orders`)).text()
-check(ordersBanner.includes('Keep your way back in') && ordersBanner.includes(`${owner.slice(base.length)}#owner-account`), 'other back office pages remind the owner to keep a way back in')
+check(ordersBanner.includes('Keep your way back in') && ordersBanner.includes(`${owner.slice(base.length)}/dashboard#owner-account`), 'other back office pages remind the owner to keep a way back in')
 // Everyday pages stay in view; the rarely used ones fold under More, which opens while one of them is in use.
 const moreMenu = ownerDashboard.slice(ownerDashboard.indexOf('cms-nav-more'), ownerDashboard.indexOf('</details>', ownerDashboard.indexOf('cms-nav-more')))
 check(['/connect', '/move', '/wordpress', '/system', '/updates'].every((path) => moreMenu.includes(`${path}"`)) && !moreMenu.includes('/orders"') && !moreMenu.includes(' open>') && (await (await fetch(`${owner}/system`)).text()).includes('cms-nav-more" open'), 'the menu folds Connect, Move, WordPress, System and Updates under More')
@@ -1380,7 +1382,10 @@ const visualPage = await fetch(`${owner}/editor/draft-only`)
 const visualHtml = await visualPage.text()
 const visualData = JSON.parse(visualHtml.match(/<script id="editor-data" type="application\/json">([\s\S]*?)<\/script>/)?.[1] ?? 'null')
 check(visualPage.status === 200 && visualPage.headers.get('content-security-policy')?.includes("script-src 'self'") && visualPage.headers.get('referrer-policy') === 'no-referrer' && visualHtml.includes('src="/editor.js"') && visualData?.blocks?.[0]?.heading === 'Draft heading' && visualData.catalog.hero.fields.some((field) => field.key === 'buttonHref'), 'the visual editor opens the working copy of a page with its own script only')
-check(ownerDashboard.includes(`/owner/${code}/editor/home`) || (await (await fetch(owner)).text()).includes(`/owner/${code}/editor/home`), 'Edit site opens the visual editor')
+const frontDoorResponse = await fetch(owner)
+const frontDoor = await frontDoorResponse.text()
+check((frontDoorResponse.headers.get('content-security-policy') ?? '').includes('frame-ancestors https://tktf.at'), "the owner's editor may be shown next to the AI assistant on tktf.at")
+check(frontDoor.includes('id="editor-data"') && frontDoor.includes(`"dashboard":"/owner/${code}/dashboard"`) && ownerDashboard.includes(`href="/owner/${code}">`), 'the back office opens in the drag-and-drop editor, and Edit site leads there', frontDoor.slice(0, 300))
 const visualSave = (blocks, origin = base) => fetch(`${owner}/editor/draft-only`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin }, body: JSON.stringify({ blocks }) })
 const visualOrder = [visualData.blocks[1], { ...visualData.blocks[0], heading: 'Typed in the editor' }]
 const visualSaved = await visualSave(visualOrder)
@@ -2220,7 +2225,7 @@ if (process.env.GOOGLE_TEST === '1') {
   const fullStaffId = (await call('list_customers', {})).data.find((row) => row.email === 'allareas@auto.test')?.id
   const fullStaff = await call('set_customer_role', { id: fullStaffId, role: 'staff', areas: ['orders', 'products', 'pages', 'publish', 'data', 'messages', 'customers'] })
   const asFullStaff = (path, values) => fetch(`${base}${path}`, { ...(values ? { body: new URLSearchParams(values), method: 'POST' } : {}), headers: { Cookie: fullStaffCookie, Origin: base }, redirect: 'manual' })
-  const staffHomeAll = await (await asFullStaff('/staff')).text()
+  const staffHomeAll = await (await asFullStaff('/staff/dashboard')).text()
   check(!fullStaff.isError && staffHomeAll.includes('href="/staff/orders"') && !staffHomeAll.includes('href="/staff/automations"'), 'staff with every area see no Automations link', fullStaff.text)
   const staffTries = [await asFullStaff('/staff/automations'), await asFullStaff(`/staff/automations/${flag.saved}/switch`, { enabled: '0' }), await asFullStaff(`/staff/automations/${flag.saved}/delete`, { confirm: 'on' })]
   check(staffTries.every((response) => response.status === 403) && (await automationById(flag.saved))?.enabled === true, 'staff with every area are refused automations, to read or change', staffTries.map((response) => response.status).join())
@@ -2589,7 +2594,7 @@ if (process.env.GOOGLE_TEST === '1') {
 }
 
 // The back office in Thai
-const officePage = async (area = '') => (await fetch(`${owner}${area}`)).text()
+const officePage = async (area = '/dashboard') => (await fetch(`${owner}${area}`)).text()
 const languageBefore = (await call('get_site')).data.settings.language
 await call('update_site', { language: 'th' })
 const thaiOverview = await officePage()
@@ -2652,7 +2657,7 @@ while (attempts < 15 && !limited) {
 check(limited, 'repeated login attempts are slowed down', `after ${attempts}`)
 
 // Starters
-const ownerPage = async (area = '', headers = {}) => (await fetch(`${owner}${area}`, { headers })).text()
+const ownerPage = async (area = '', headers = {}) => (await fetch(`${owner}${!area || area.startsWith('?') ? `/dashboard${area}` : area}`, { headers })).text()
 const beforeStarter = await ownerPage()
 const published = Boolean((await call('get_site')).data.publishing.live_version)
 check(published && stepDone(beforeStarter, 'phone') === '0' && ['claude', 'build', 'publish'].every((step) => stepDone(beforeStarter, step) === '1'), 'publishing ticks its step', ['claude', 'build', 'phone', 'publish'].map((step) => stepDone(beforeStarter, step)).join())
@@ -2674,7 +2679,7 @@ check(unconfirmed.status === 409 && (await unconfirmed.text()).includes('Nothing
 check((await fetch(`${owner}/starters`, { body: new URLSearchParams({ starter: 'nope', language: 'en', confirm: 'on' }), method: 'POST', redirect: 'manual' })).status === 404, 'only real starters can be chosen')
 const confirmed = await fetch(`${owner}/starters`, { body: new URLSearchParams({ starter: 'cafe', language: 'en', confirm: 'on' }), method: 'POST', redirect: 'manual' })
 const replaced = await contentBefore()
-check(confirmed.status === 303 && (confirmed.headers.get('location') ?? '').endsWith(`/owner/${code}?started=cafe`) && replaced.pages === 'contact,home', 'with the tick, a starter replaces the pages', `${confirmed.status} ${replaced.pages}`)
+check(confirmed.status === 303 && (confirmed.headers.get('location') ?? '').endsWith(`/owner/${code}/dashboard?started=cafe`) && replaced.pages === 'contact,home', 'with the tick, a starter replaces the pages', `${confirmed.status} ${replaced.pages}`)
 check((await call('list_page_revisions', { slug: 'home' })).data.some((revision) => revision.title === 'Version two'), 'replacing pages with a starter preserves the old home page in its history')
 check(replaced.orders === kept.orders && replaced.customers === kept.customers && replaced.entries === kept.entries && replaced.tables === kept.tables && replaced.items === kept.items + 6, 'orders, customers, messages, tables, records and products are kept, and the samples are added', JSON.stringify([kept, replaced]))
 check((await ownerPage('?started=cafe')).includes('Visitors still see your published site until you'), 'a published site keeps showing its published version until the owner publishes the starter')
@@ -3041,7 +3046,7 @@ await call('update_site', { language: 'en', officeLanguage: 'auto' })
   const statsHtml = await (await fetch(`${owner}/stats`)).text()
   check(statsHtml.includes('>Statistics</h1>') && statsHtml.includes('<svg') && statsHtml.includes('role="img"') && !statsHtml.includes('<script') && statsHtml.includes('/stats-test') && statsHtml.includes('google.com') && statsHtml.includes('Conversion rate') && statsHtml.includes(`href="/owner/${code}/stats?days=30"`), 'the owner sees visitors, pages, referrers, conversions and a chart with no script')
   check((await (await fetch(`${owner}/stats?days=30`)).text()).includes('aria-current="page">Last 30 days'), 'the owner can see the last 30 days')
-  check((await (await fetch(`${owner}`)).text()).includes(`href="/owner/${code}/stats"`), 'Statistics is in the back office menu')
+  check((await (await fetch(`${owner}/dashboard`)).text()).includes(`href="/owner/${code}/stats"`), 'Statistics is in the back office menu')
   check((await fetch(`${owner}/stats`, { method: 'POST', redirect: 'manual' })).status === 404 && (await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd/stats`)).status === 404, 'the Statistics page only opens with the right link')
   await call('update_site', { officeLanguage: 'th' })
   const thaiStats = await (await fetch(`${owner}/stats`)).text()
@@ -3054,7 +3059,7 @@ await call('update_site', { language: 'en', officeLanguage: 'auto' })
   const statsStaff = (await call('list_customers', {})).data.find((row) => row.email === 'stats-staff@example.test')
   const asStaff = (path, method = 'GET') => fetch(`${base}${path}`, { headers: { Cookie: staffCookie, Origin: base }, method, redirect: 'manual' })
   await call('set_customer_role', { id: statsStaff.id, role: 'staff', areas: ['orders'] })
-  const staffHomeBefore = await (await asStaff('/staff')).text()
+  const staffHomeBefore = await (await asStaff('/staff/dashboard')).text()
   check((await asStaff('/staff/stats')).status === 403 && !staffHomeBefore.includes('href="/staff/stats"'), 'staff without Statistics can’t open it')
   const granted = await call('set_customer_role', { id: statsStaff.id, role: 'staff', areas: ['stats'] })
   const staffStats = await asStaff('/staff/stats')
@@ -3473,13 +3478,13 @@ check((await (await fetch(`${base}/admin`)).text()).includes('สร้างบ
 await call('update_site', { officeLanguage: 'en' })
 const adminClaim = await fetch(`${base}/admin/claim`, { body: new URLSearchParams({ code, email: 'owner@admin.test', name: 'Site owner', password: 'owner-password-123' }), method: 'POST', redirect: 'manual' })
 const adminCookie = (adminClaim.headers.get('set-cookie') ?? '').split(';')[0]
-const adminHome = await (await fetch(`${base}/admin`, { headers: { Cookie: adminCookie } })).text()
+const adminHome = await (await fetch(`${base}/admin/dashboard`, { headers: { Cookie: adminCookie } })).text()
 const adminSystem = await fetch(`${base}/admin/system`, { headers: { Cookie: adminCookie } })
 const crossSiteAdminWrite = await fetch(`${base}/admin/settings`, { body: new URLSearchParams({}), headers: { Cookie: adminCookie, Origin: 'https://not-your-site.test' }, method: 'POST', redirect: 'manual' })
 const crossSiteLogin = await fetch(`${base}/admin/login`, { body: new URLSearchParams({ email: 'owner@admin.test', password: 'owner-password-123' }), headers: { Origin: 'https://not-your-site.test' }, method: 'POST', redirect: 'manual' })
 const crossSiteRecover = await fetch(`${base}/admin/recover`, { body: new URLSearchParams({ code, password: 'stolen-password-123' }), headers: { 'Sec-Fetch-Site': 'cross-site' }, method: 'POST', redirect: 'manual' })
 check(crossSiteLogin.status === 403 && !(crossSiteLogin.headers.get('set-cookie') ?? '').includes('session=') && crossSiteRecover.status === 403, 'another website cannot post to the owner sign-in or recovery forms')
-check(!(await (await fetch(owner)).text()).includes('id="owner-account"') && !(await (await fetch(`${owner}/orders`)).text()).includes('Keep your way back in'), 'once the owner has a sign-in, the reminder goes away')
+check(!(await (await fetch(`${owner}/dashboard`)).text()).includes('id="owner-account"') && !(await (await fetch(`${owner}/orders`)).text()).includes('Keep your way back in'), 'once the owner has a sign-in, the reminder goes away')
 check(adminHome.includes('action="/admin/claude-link"') && !adminHome.includes(`/mcp/${code}`), 'the account dashboard offers a new Claude link without showing the current one')
 const crossSiteLink = await fetch(`${base}/admin/claude-link`, { body: new URLSearchParams({ confirm: 'on' }), headers: { Cookie: adminCookie, Origin: 'https://not-your-site.test' }, method: 'POST', redirect: 'manual' })
 const unconfirmedLink = await fetch(`${base}/admin/claude-link`, { body: new URLSearchParams({}), headers: { Cookie: adminCookie }, method: 'POST', redirect: 'manual' })
@@ -3541,7 +3546,7 @@ if (loadCount) {
   check(ordersPage.includes('class="test-badge"'), 'test orders carry a Test badge in the back office')
   const testSignup = await postForm('/signup', { email: 'test-signup@example.test', name: 'Test Signup', password: 'test-pass-123' }, testCookie)
   check(testSignup.status === 303, 'a visitor can sign up in test mode')
-  const overviewTest = await (await fetch(owner)).text()
+  const overviewTest = await (await fetch(`${owner}/dashboard`)).text()
   check(overviewTest.includes('id="test-mode"') && overviewTest.includes('Test data now: 1 orders') && overviewTest.includes('1 customer accounts') && overviewTest.includes('Test mode is on'), 'the overview counts the test data and says test mode is on')
   check((await call('get_status')).data.testData?.orders === 1, 'Claude can see how much test data exists')
   // Moving a test order on stays quiet and gives no stock back.
@@ -3617,7 +3622,7 @@ await call('update_site', { name: 'Renamed by Claude' })
 const settingsUndo = (await (await fetch(`${owner}/changes`)).text()).match(/action="[^"]*\/changes\/(\d+)\/undo"/)?.[1]
 await fetch(`${owner}/changes/${settingsUndo}/undo`, { method: 'POST', redirect: 'manual' })
 check((await call('get_site')).data.settings.name === settingsBefore && firstChange.length > 0, 'Undo puts the settings back too')
-check((await (await fetch(owner)).text()).includes('/changes">See what changed</a>'), 'the overview says how many changes Claude made today')
+check((await (await fetch(`${owner}/dashboard`)).text()).includes('/changes">See what changed</a>'), 'the overview says how many changes Claude made today')
 await call('delete_page', { slug: 'loop-test' })
 
 // Site usage: reference limits and page views are not mistaken for Worker requests.
@@ -3683,7 +3688,7 @@ const ownerLogin = await fetch(`${base}/admin/login`, { body: new URLSearchParam
 const ownerCookie = (ownerLogin.headers.get('set-cookie') ?? '').split(';')[0]
 const newLinkPage = await (await fetch(`${base}/admin/claude-link`, { body: new URLSearchParams({ confirm: 'on' }), headers: { Cookie: ownerCookie }, method: 'POST' })).text()
 const newCode = newLinkPage.match(/\/mcp\/([a-z0-9-]{20,60})/)?.[1]
-check(Boolean(newCode) && newCode !== code && newLinkPage.includes('data-copy="claude-link"') && newLinkPage.includes(`/owner/${newCode}`) && (await fetch(`${base}/owner/${newCode}`)).status === 200 && (await fetch(owner)).status === 404, 'a new Claude link works at once, and the old private link stops working')
+check(Boolean(newCode) && newCode !== code && newLinkPage.includes('data-copy="claude-link"') && newLinkPage.includes(`/owner/${newCode}`) && (await fetch(`${base}/owner/${newCode}`)).status === 200 && (await fetch(`${owner}/dashboard`)).status === 404, 'a new Claude link works at once, and the old private link stops working')
 
 await client.close()
 console.log(failed ? `\n${failed} checks failed.` : '\nAll checks passed.')

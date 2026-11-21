@@ -17,7 +17,7 @@ import { clearTestData, endTestMode, startTestMode, testCounts } from './test-mo
 import { escapeHtml, html, notFound, privateHeaders, see } from './http'
 import { saveImage } from './items'
 import { extraLanguages, languageName, localizePage, mainLanguage, siteMissing } from './languages'
-import { handleEditor } from './editor'
+import { editorPage, handleEditor } from './editor'
 import { handleNewsOffice } from './news-office'
 import { blockSchema, itemSchema, maxBlocksBytes, maxPagesPerSite, pageSlugSchema, settingsShape } from './mcp'
 import { officeText, officeWords } from './office-words'
@@ -101,15 +101,15 @@ export const office = (site: SiteRow, at: Desk | string, title: string, body: st
   const settings = JSON.parse(site.settings) as Settings
   const t = officeText(site)
   const base = `${escapeHtml(desk.base)}`
-  const links: [string, string][] = [['', t.nav.overview], ['/changes', t.nav.changes], ['/access', t.nav.access], ['/stats', t.nav.stats], ['/orders', t.nav.orders], ['/pages', t.nav.pages], ['/items', t.nav.products], ['/data', t.nav.data], ['/approvals', approvalWords(site).title], ['/automations', t.automations.title], ['/media', t.nav.images], ['/customers', t.nav.customers], ['/news', t.news.title], ['/publish', t.nav.publish], ['/connect', t.nav.connect], ['/move', t.nav.move], ['/wordpress', t.nav.wordpress], ['/settings', t.nav.settings], ['/system', t.nav.system], ['/updates', t.nav.updates]]
+  const links: [string, string][] = [['/dashboard', t.nav.overview], ['/changes', t.nav.changes], ['/access', t.nav.access], ['/stats', t.nav.stats], ['/orders', t.nav.orders], ['/pages', t.nav.pages], ['/items', t.nav.products], ['/data', t.nav.data], ['/approvals', approvalWords(site).title], ['/automations', t.automations.title], ['/media', t.nav.images], ['/customers', t.nav.customers], ['/news', t.news.title], ['/publish', t.nav.publish], ['/connect', t.nav.connect], ['/move', t.nav.move], ['/wordpress', t.nav.wordpress], ['/settings', t.nav.settings], ['/system', t.nav.system], ['/updates', t.nav.updates]]
   // Any staff member may be an approver, so Approvals is always in their menu. The page shows only what they may see.
-  const shown = desk.staff ? links.filter(([path]) => !path || path === '/approvals' || (staffMenu[path] && allows(desk, staffMenu[path]))) : links
+  const shown = desk.staff ? links.filter(([path]) => path === '/dashboard' || path === '/approvals' || (staffMenu[path] && allows(desk, staffMenu[path]))) : links
   const copy = t.lang === 'th'
     ? { build: 'สร้างและจัดการ', run: 'ดูแลระบบ', more: 'เพิ่มเติม: เชื่อมต่อ ย้ายเว็บ ระบบ', preview: 'ดูเว็บ', dashboard: 'หลังบ้าน', edit: 'แก้ไขเว็บ', live: 'เปิดหน้าเว็บ', workspace: 'พื้นที่ของเจ้าของ' }
     : { build: 'Build and manage', run: 'Run the business', more: 'More: connect, move, system', preview: 'Preview', dashboard: 'Dashboard', edit: 'Edit site', live: 'Open site', workspace: 'Owner workspace' }
   const item = new Map(shown)
   const isAvailable = (path: string) => item.has(path)
-  const activePath = links.find(([, label]) => label === title)?.[0] ?? ''
+  const activePath = links.find(([, label]) => label === title)?.[0] ?? '/dashboard'
   const navLink = (path: string, label?: string) => {
     const text = label ?? item.get(path)
     if (!text || !isAvailable(path)) return ''
@@ -124,10 +124,10 @@ export const office = (site: SiteRow, at: Desk | string, title: string, body: st
     const items = paths.map((path) => navLink(path)).join('')
     return items ? `<details class="cms-nav-group cms-nav-more"${paths.includes(activePath) ? ' open' : ''}><summary>${escapeHtml(label)}</summary><div class="cms-nav-more__links">${items}</div></details>` : ''
   }
-  const keepKey = desk.code && !site.owner_customer_id ? `<p class="cms-notice cms-keep-key" role="note"><b>${t.admin.bannerTitle}.</b> ${t.admin.banner} ${t.admin.bannerLink(`${base}#owner-account`)}</p>` : ''
+  const keepKey = desk.code && !site.owner_customer_id ? `<p class="cms-notice cms-keep-key" role="note"><b>${t.admin.bannerTitle}.</b> ${t.admin.banner} ${t.admin.bannerLink(`${base}/dashboard#owner-account`)}</p>` : ''
   const previewHref = desk.staff && !allows(desk, 'pages') ? '/' : `${base}/preview`
-  // Edit site opens the visual editor on the home page. The form editor stays under Pages.
-  const editHref = isAvailable('/pages') ? `${base}/editor/home` : base
+  // Edit site is the back office's front door: the visual editor on the home page. The form editor stays under Pages.
+  const editHref = isAvailable('/pages') ? base : `${base}/dashboard`
   const canPublish = isAvailable('/publish')
   const identity = desk.staff ? escapeHtml(desk.staff.name) : escapeHtml(settings.name)
   const who = desk.staff
@@ -141,7 +141,7 @@ export const office = (site: SiteRow, at: Desk | string, title: string, body: st
   <a class="cms-mark" href="${base}" aria-label="${escapeHtml(copy.dashboard)}">WE</a>
   <nav class="cms-mode-tabs" aria-label="${escapeHtml(t.navLabel)}">
     <a href="${escapeHtml(previewHref)}">${escapeHtml(copy.preview)}</a>
-    <a${activePath !== '/pages' ? ' aria-current="page"' : ''} href="${base}">${escapeHtml(copy.dashboard)}</a>
+    <a${activePath !== '/pages' ? ' aria-current="page"' : ''} href="${base}/dashboard">${escapeHtml(copy.dashboard)}</a>
     <a${activePath === '/pages' ? ' aria-current="page"' : ''} href="${escapeHtml(editHref)}">${escapeHtml(copy.edit)}</a>
   </nav>
   <p class="cms-site-name">${escapeHtml(settings.name)}</p>
@@ -151,7 +151,7 @@ ${keepKey}<div class="cms-console">
   <aside class="cms-sidebar">
     <p class="cms-sidebar-label">${escapeHtml(copy.dashboard)}</p>
     <nav aria-label="${escapeHtml(t.navLabel)}" class="cms-nav">
-      ${group(copy.build, ['', '/pages', '/items', '/data', '/media', '/news', '/changes'])}
+      ${group(copy.build, ['/dashboard', '/pages', '/items', '/data', '/media', '/news', '/changes'])}
       ${group(copy.run, ['/stats', '/orders', '/customers', '/approvals', '/automations', '/publish', '/access', '/settings'])}
       ${more(copy.more, ['/connect', '/move', '/wordpress', '/system', '/updates'])}
     </nav>
@@ -718,7 +718,7 @@ export async function staffEntry(request: Request, env: Env, url: URL, working: 
 /** Whether a staff member may open this address of the back office. Anything not named here is for the owner alone. */
 export function staffMay(staff: StaffMember, post: boolean, area?: string, id?: string, action?: string, extra?: string) {
   const has = (need: StaffArea) => staff.permissions.includes(need)
-  if (!area) return !post
+  if (!area || area === 'dashboard') return !post
   if (area === 'orders') return has('orders')
   if (area === 'items' || area === 'media') return has('products')
   if (area === 'pages' || area === 'page' || area === 'preview' || area === 'editor') return has('pages')
@@ -750,7 +750,9 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
   // browser origin for every write, so another site cannot submit their forms.
   if (desk.accountOwner && !desk.code && post && !fromThisSite(request, url)) return office(site, desk, t.staffRefusedTitle, `<p>${t.staffOtherSite}</p>`, undefined, 403)
 
-  if (!area) return post ? notFound() : overview(env, url, site, desk)
+  // The front door is the drag-and-drop editor, like the site builders owners know. Staff without pages see the dashboard.
+  if (!area) return post ? notFound() : !desk.staff || allows(desk, 'pages') ? editorPage(env, site, desk, 'home') : overview(env, url, site, desk)
+  if (area === 'dashboard' && !id) return post ? notFound() : overview(env, url, site, desk)
 
   const platform = handlePlatform(request, env, url, site, desk, area, id, action, extra, saved)
   if (platform) return platform
@@ -763,12 +765,12 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
     const form = await request.formData().catch((): null => null)
     const status = form?.get('status')
     if (status === 'delete') {
-      if (form?.get('confirm') !== 'on') return see(url, owner)
+      if (form?.get('confirm') !== 'on') return see(url, `${owner}/dashboard`)
       await env.DB.prepare('DELETE FROM entries WHERE id = ? AND site_id = ?').bind(Number(id), site.id).run()
     } else if (typeof status === 'string' && statuses.includes(status)) {
       await env.DB.prepare('UPDATE entries SET status = ? WHERE id = ? AND site_id = ?').bind(status, Number(id), site.id).run()
     }
-    return see(url, owner)
+    return see(url, `${owner}/dashboard`)
   }
 
   if (area === 'orders') {
@@ -892,11 +894,11 @@ export async function handleOffice(request: Request, env: Env, url: URL, site: S
   // Test mode belongs to the owner. Staff never start it or remove its data.
   if (area === 'test-mode' && post && desk.accountOwner && !desk.staff && !action) {
     if (!id) return startTestMode(env, url)
-    if (id === 'end') return endTestMode(env, url).then(() => see(url, `${desk.base}#test-mode`))
+    if (id === 'end') return endTestMode(env, url).then(() => see(url, `${desk.base}/dashboard#test-mode`))
     if (id === 'clear') {
       const form = await request.formData().catch((): null => null)
       if (form?.get('confirm') === 'on') await clearTestData(env)
-      return see(url, `${desk.base}?testcleared=1#test-mode`)
+      return see(url, `${desk.base}/dashboard?testcleared=1#test-mode`)
     }
   }
   return notFound()
