@@ -128,7 +128,10 @@ const renderers: Record<string, (block: Block, context: Context) => string> = {
   hero(block, { base, isMainHeading }) {
     const tag = isMainHeading ? 'h1' : 'h2'
     const layout = block.imageUrl ? block.layout || 'split' : block.layout === 'centered' ? 'centered' : 'plain'
-    const copy = `<div class="hero__copy">${block.eyebrow ? `<p class="eyebrow">${escapeHtml(block.eyebrow)}</p>` : ''}<${tag}>${escapeHtml(block.heading)}</${tag}>${block.text ? `<p class="lead">${escapeHtml(block.text)}</p>` : ''}${button(block.buttonLabel, block.buttonHref, base)}</div>`
+    const second = block.secondLabel && link(block.secondHref, base) ? `<a class="button button--ghost" href="${escapeHtml(link(block.secondHref, base))}">${escapeHtml(block.secondLabel)}</a>` : ''
+    const actions = second ? `<div class="hero__actions">${button(block.buttonLabel, block.buttonHref, base)}${second}</div>` : button(block.buttonLabel, block.buttonHref, base)
+    const figures = Array.isArray(block.figures) && block.figures.length ? `<dl class="hero__figures">${block.figures.map((item: any) => `<div><dt>${escapeHtml(item.value)}</dt><dd>${escapeHtml(item.label)}</dd></div>`).join('')}</dl>` : ''
+    const copy = `<div class="hero__copy">${block.eyebrow ? `<p class="eyebrow">${escapeHtml(block.eyebrow)}</p>` : ''}<${tag}>${escapeHtml(block.heading)}</${tag}>${block.text ? `<p class="lead">${escapeHtml(block.text)}</p>` : ''}${actions}${figures}</div>`
     const image = picture(block.imageUrl, block.imageAlt, isMainHeading)
     const media = layout === 'cover' ? `<div class="hero__media">${image}</div>` : ''
     const side = layout !== 'cover' && image ? `<div class="hero__image">${image}</div>` : ''

@@ -3011,3 +3011,53 @@ body[data-style] .cms-content .card {
   font-weight: 800;
   vertical-align: middle;
 }
+
+/* A second button and small figures in the top banner */
+.hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.hero__actions .button {
+  margin-top: 0;
+}
+
+.hero__actions .button--ghost {
+  background: transparent;
+  color: var(--base-ink);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--base-ink) 22%, transparent);
+}
+
+.tone-dark .hero__actions .button--ghost {
+  color: var(--base-bg);
+}
+
+.hero__figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 44px;
+  margin: 36px 0 0;
+  padding-top: 24px;
+  border-top: 1px solid color-mix(in srgb, var(--base-ink) 14%, transparent);
+}
+
+.hero__figures dt {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.hero__figures dd {
+  margin: 2px 0 0;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+/* Four features sit in one row on wide screens, as most sites show them. */
+@media (min-width: 960px) {
+  .grid.features:has(> .card:nth-child(4):last-child) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

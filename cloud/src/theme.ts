@@ -5,9 +5,11 @@ const serif = "'Noto Serif Thai Variable', serif"
 
 /** The fonts every site carries, each with a Thai font that suits it. */
 export const siteFonts = {
+  'Bai Jamjuree': `'Bai Jamjuree', ${sans}`,
   'Bricolage Grotesque': `'Bricolage Grotesque Variable', ${sans}`,
   Fraunces: `'Fraunces Variable', ${serif}`,
   Fredoka: `'Fredoka Variable', ${sans}`,
+  'IBM Plex Sans Thai': `'IBM Plex Sans Thai', ${sans}`,
   Inter: `'Inter Variable', ${sans}`,
   Manrope: `'Manrope Variable', ${sans}`,
   Nunito: `'Nunito Variable', ${sans}`,

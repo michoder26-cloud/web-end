@@ -1,6 +1,7 @@
 // Turns a reading of an old page into normal web-end blocks, with fixed rules and no AI:
 // the words stay exactly as they were, only the layout is chosen from what each part of the page holds.
 import type { FlowItem, PageReading } from './moving'
+import { readableOn } from './theme'
 import type { Block } from './types'
 
 type Group = FlowItem[]
@@ -12,6 +13,14 @@ type Form = Extract<FlowItem, { kind: 'form' }>
 // The site's own header, menu and footer come from web-end, so the old ones are not rebuilt as page content.
 const chrome = new Set(['header', 'footer', 'nav', 'aside'])
 const maxBlocks = 40
+const badge = /^(edit with |made with |built with |powered by |created with )?(base44|wix|webflow|framer|squarespace|lovable|bolt|weebly|jimdo|carrd)\b/i
+const isBadge = (item: FlowItem) => (item.kind === 'image' && (badge.test(item.alt) || item.url.startsWith('data:'))) || ((item.kind === 'link' || item.kind === 'text' || item.kind === 'button') && badge.test(item.text))
+// A price such as ฿1,290, € 12,50, $9.99, 1.290 €, 890 บาท.
+const price = /^(?:[฿€$£]\s?\d[\d.,\s]*|\d[\d.,\s]*\s?(?:[฿€$£]|บาท|THB|EUR|USD|CHF))$/i
+// Small figures with a label: "1,200+" "customers", "7 วัน" "returns".
+const figure = (text: string) => text.length <= 14 && /\d/.test(text) && !price.test(text)
+
+export type FoundProduct = { title: string; price?: string; comparePrice?: string; body?: string; imageUrl?: string; imageAlt?: string }
 
 /** Shortens text at a word end, so a limit never cuts a word in half. */
 export function cut(text: string, max: number) {
@@ -48,7 +57,8 @@ function linkFor(href: string, origin: string): string | undefined {
     if (url.protocol === 'mailto:' || url.protocol === 'tel:') return href.slice(0, 500)
     if (url.origin === origin) {
       const slug = slugFor(url.href)
-      return slug === 'home' ? '/' : `/${slug}`
+      const part = /^#[A-Za-z][\w-]{0,39}$/.test(url.hash) ? url.hash.toLowerCase() : ''
+      return `${slug === 'home' ? '/' : `/${slug}`}${part}`
     }
     return url.protocol === 'https:' ? url.href.slice(0, 500) : undefined
   } catch {
@@ -61,7 +71,7 @@ function groupsOf(flow: FlowItem[]) {
   const groups: Group[] = []
   let current: Group = []
   for (const item of flow) {
-    if (item.section && chrome.has(item.section.kind)) continue
+    if ((item.section && chrome.has(item.section.kind)) || isBadge(item)) continue
     const newSection = current.length > 0 && item.section !== current[0].section
     const bigHeading = item.kind === 'heading' && item.level <= 2 && current.some((earlier) => earlier.kind !== 'heading')
     // A short line just above a big heading is its label ("New collection"), so it stays with that heading.
@@ -99,7 +109,7 @@ function formBlock(form: Form, heading: string | undefined, intro: string, index
 }
 
 /** Rebuilds the page as blocks. image() gives the address to use for an old photo, or nothing to leave it out. */
-export function blocksFromReading(reading: PageReading, image: (url: string) => string | undefined) {
+export function blocksFromReading(reading: PageReading, image: (url: string) => string | undefined, products: FoundProduct[] = []) {
   const origin = (() => {
     try {
       return new URL(reading.url).origin
@@ -111,8 +121,7 @@ export function blocksFromReading(reading: PageReading, image: (url: string) => 
   let heroUsed = false
   let forms = 0
   let side: 'left' | 'right' = 'right'
-  let tint = false
-  const tone = () => ((tint = !tint) ? {} : { tone: 'tint' })
+  const tone = () => ({})
   const groups = groupsOf(reading.flow ?? [])
 
   groups.forEach((group, index) => {
@@ -174,12 +183,57 @@ export function blocksFromReading(reading: PageReading, image: (url: string) => 
       const before = group.slice(0, group.indexOf(main!)).find((item) => item.kind === 'text' && item.text.length <= 80)
       const eyebrow = before?.kind === 'text' ? before.text : undefined
       if (eyebrow) first.splice(first.indexOf(eyebrow), first.includes(eyebrow) ? 1 : 0)
-      add({ type: 'hero', ...(eyebrow ? { eyebrow } : {}), heading, ...(first.length ? { text: first.join(' ') } : {}), ...button, ...(images[0] ? { imageUrl: images[0].url, imageAlt: images[0].alt, layout: 'split' } : { layout: 'centered' }) })
+      const stats: { value: string; label: string }[] = []
+      for (let i = 0; i < texts.length - 1; i++) {
+        if (figure(texts[i]) && !figure(texts[i + 1]) && texts[i + 1].length <= 40) { stats.push({ value: texts[i], label: texts[i + 1] }); i++ }
+        else if (stats.length && stats.length < 2) stats.length = 0
+        else if (stats.length) break
+      }
+      const statWords = stats.length >= 2 ? stats.flatMap((item) => [item.value, item.label]) : []
+      for (const word of statWords) if (first.includes(word)) first.splice(first.indexOf(word), 1)
+      const second = group.find((item): item is Link => item.kind === 'link' && item !== link && Boolean(linkFor(item.href, origin)) && item.text.length <= 60)
+      const secondButton = link && second ? { secondLabel: cut(second.text, 60), secondHref: linkFor(second.href, origin)! } : {}
+      const figures = statWords.length && statWords.length <= 8 ? { figures: stats.slice(0, 4).map((item) => ({ value: cut(item.value, 24), label: cut(item.label, 120) })) } : {}
+      add({ type: 'hero', ...(eyebrow ? { eyebrow } : {}), heading, ...(first.length ? { text: first.join(' ') } : {}), ...button, ...secondButton, ...figures, ...(images[0] ? { imageUrl: images[0].url, imageAlt: images[0].alt, layout: 'split' } : { layout: 'centered' }) })
+      if (statWords.length > 8) add({ type: 'stats', items: stats.slice(0, 6).map((item) => ({ value: cut(item.value, 24), label: cut(item.label, 120) })) })
       const rest = group
-        .filter((item) => (item.kind === 'text' && !first.includes(item.text) && item.text !== eyebrow) || (item.kind === 'heading' && item !== main))
+        .filter((item) => (item.kind === 'text' && !first.includes(item.text) && item.text !== eyebrow && !statWords.includes(item.text)) || (item.kind === 'heading' && item !== main))
         .map((item) => (item.kind === 'text' || item.kind === 'heading' ? item.text : ''))
       if (rest.length) add({ type: 'text', body: cut(rest.join('\n\n'), 8000), ...tone() })
       if (images.length > 1) add({ type: 'gallery', images: images.slice(1, 25).map((item) => ({ imageUrl: item.url, imageAlt: item.alt })), ...tone() })
+      return
+    }
+
+    // Cards with a photo, a name and a price are products: they become shop items shown together.
+    const cards = subheadings.flatMap((item) => {
+      const at = group.indexOf(item)
+      let photo: Image | undefined
+      for (let i = at - 1; i >= 0 && group[i].kind !== 'heading'; i--) if (group[i].kind === 'image') { photo = group[i] as Image; break }
+      const words: string[] = []
+      for (const next of group.slice(at + 1)) {
+        if (next.kind === 'heading' || next.kind === 'image') break
+        if (next.kind === 'text') words.push(next.text)
+      }
+      const prices = words.filter((word) => price.test(word))
+      if (!prices.length) return []
+      const url = photo ? image(photo.url) : undefined
+      const card: FoundProduct = { title: cut(item.text, 160), price: prices[0].slice(0, 40), ...(prices[1] ? { comparePrice: prices[1].slice(0, 40) } : {}) }
+      const body = words.filter((word) => !price.test(word) && word.length > 12).join('\n\n')
+      if (body) card.body = cut(body, 4000)
+      if (url) Object.assign(card, { imageUrl: url, imageAlt: cut(photo!.alt || item.text, 200) })
+      return [card]
+    })
+    if (cards.length >= 3 && cards.length >= subheadings.length - 1) {
+      products.push(...cards.slice(0, 60))
+      const intro = texts.filter((line) => !cards.some((card) => card.body?.includes(line)) && !price.test(line) && line.length > 30).join(' ')
+      add({ type: 'collection', id: 'products', collection: 'products', ...(heading ? { heading } : {}), ...(intro ? { intro: cut(intro, 400) } : {}), ...tone() })
+      return
+    }
+
+    // A row of features with no title above it: every heading is one feature.
+    const flat = headings.length >= 3 && headings.every((item) => item.level === top && answered(item)) && !images.length && group[0]?.kind === 'heading'
+    if (flat && (heroUsed || index > 0)) {
+      add({ type: 'features', items: headings.slice(0, 12).map((item) => ({ title: cut(item.text, 120), text: cut(answered(item), 600) })), ...tone() })
       return
     }
 
@@ -216,11 +270,31 @@ export function blocksFromReading(reading: PageReading, image: (url: string) => 
   return blocks
 }
 
+/** Extra CSS that gives the site the old site's button colour and shape and its rounded corners. */
+export function lookCss(design: PageReading['design']) {
+  const rules: string[] = []
+  const safe = (value: string | undefined) => (value && /^(\d{1,3}px|0|#[0-9a-fA-F]{6})$/.test(value) ? value : undefined)
+  const corner = safe(design.cornerRadius)
+  // Rounded photos, as on the old site. Cards with only a line on top stay straight.
+  if (corner) rules.push(`body[data-style] main img { border-radius: ${corner}; }`)
+  const button: string[] = []
+  const color = safe(design.buttonColor)
+  if (color) button.push(`background: ${color}`, `color: ${readableOn(color)}`)
+  const radius = safe(design.buttonRadius)
+  if (radius) button.push(`border-radius: ${radius}`)
+  if (button.length) rules.push(`body[data-style] .button:not(.button--ghost) { ${button.join('; ')}; }`)
+  if (radius) rules.push(`body[data-style] .button--ghost { border-radius: ${radius}; }`)
+  const ink = safe(design.text)
+  const paper = safe(design.background)
+  if (design.darkFooter && ink && paper) rules.push(`body[data-style] .site-footer { background: ${ink}; color: ${paper}; }`, `body[data-style] .site-footer a { color: inherit; }`)
+  return rules.length ? `/* The look of the moved site */\n${rules.join('\n')}` : ''
+}
+
 /** The old page's photos that would show in the rebuilt page, in page order, without the site's header and footer. */
 export function photosOf(reading: PageReading) {
   const seen = new Set<string>()
   for (const item of reading.flow ?? []) {
-    if (item.kind === 'image' && !(item.section && chrome.has(item.section.kind))) seen.add(item.url)
+    if (item.kind === 'image' && !(item.section && chrome.has(item.section.kind)) && !isBadge(item)) seen.add(item.url)
   }
   return [...seen]
 }
@@ -241,7 +315,7 @@ export function chromeOf(reading: PageReading) {
     if ((kind === 'header' || kind === 'nav') && item.kind === 'link' && nav.length < 8) {
       const href = linkFor(item.href, origin)
       // The logo links to the start page, and the site's own name already does that.
-      if (href && href.startsWith('/') && href !== '/' && item.text.length <= 40 && !nav.some((entry) => entry.href === href || entry.label === item.text)) nav.push({ href, label: item.text })
+      if (href && href.startsWith('/') && href !== '/' && href !== '/#top' && !(reading.title && item.text.startsWith(reading.title.split(/\s+[—–|·-]\s+/)[0].trim())) && item.text.length <= 40 && !nav.some((entry) => entry.href === href || entry.label === item.text)) nav.push({ href, label: item.text })
     }
     if (kind === 'footer' && (item.kind === 'text' || item.kind === 'heading' || (item.kind === 'link' && !item.href.startsWith(origin)))) {
       const words = item.kind === 'link' ? item.text : item.text

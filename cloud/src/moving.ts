@@ -87,7 +87,32 @@ export async function scanWebsite(env: Env, start: URL) {
 
 const usefulData = new Set(['BreadcrumbList', 'LocalBusiness', 'Offer', 'Organization', 'Product', 'Service', 'Store'])
 
-type PageDesign = { accent?: string; background?: string; buttonText?: string; fonts: string[]; text?: string }
+type PageDesign = { accent?: string; background?: string; bodyFont?: string; buttonColor?: string; buttonRadius?: string; buttonText?: string; cornerRadius?: string; darkFooter?: boolean; fonts: string[]; headingFont?: string; text?: string }
+
+// Tailwind's corner sizes, as most sites made with site builders use them.
+const tailwindRadius: Record<string, string> = { none: '0', sm: '2px', '': '4px', md: '6px', lg: '8px', xl: '12px', '2xl': '16px', '3xl': '24px', full: '999px' }
+const radiusOf = (classes: string) => {
+  const match = /(?:^|\s)rounded(?:-(none|sm|md|lg|xl|2xl|3xl|full))?(?=\s|$)/.exec(classes)
+  return match ? tailwindRadius[match[1] ?? ''] : undefined
+}
+
+/** The look of the old site's first real button and first rounded card, read from their Tailwind classes. */
+function shapeFrom(design: PageDesign, buttonClasses: string, cardClasses: string, css: string) {
+  if (buttonClasses) {
+    design.buttonRadius = radiusOf(buttonClasses)
+    const bg = /(?:^|\s)bg-(\[#[0-9a-fA-F]{6}\]|[a-z]+(?:-\d{2,3})?)(?=\s|$)/.exec(buttonClasses)?.[1] ?? ''
+    const dark = /^(black|(neutral|gray|zinc|stone|slate)-(800|900|950))$/
+    const color = bg.startsWith('[#') ? bg.slice(1, 8).toLowerCase()
+      : bg === 'foreground' ? design.text
+      : bg === 'primary' || bg === 'accent' ? design.accent
+      : dark.test(bg) ? '#111111'
+      : bg === 'white' ? '#ffffff'
+      : undefined
+    if (color && /^#[0-9a-f]{6}$/i.test(color)) design.buttonColor = color
+  }
+  const rem = /--radius\s*:\s*(\d*\.?\d+)rem/.exec(css)?.[1]
+  design.cornerRadius = (cardClasses && radiusOf(cardClasses)) || (rem ? `${Math.round(Number(rem) * 16)}px` : undefined)
+}
 type PageSection = { buttons: string[]; firstLines: string[]; headings: string[]; images: string[]; kind: string; lines: number }
 /** One thing on the page, in the order a visitor meets it, with the innermost section it sits in. Used to rebuild the page. */
 export type FlowField = { label: string; options: string[]; required: boolean; type: string }
@@ -106,6 +131,35 @@ const maxStyleChars = 120_000
 const hexFrom = (rgb: string | undefined) => (rgb ? `#${rgb.split(',').map((part) => Number(part).toString(16).padStart(2, '0')).join('')}` : undefined)
 const systemFont = /^(var\(|inherit|initial|sans-serif|serif|monospace|system-ui|-apple|blinkmacsystem|wix|madefor|helvetica|din-next|arial|times|courier|segoe)/i
 
+function hslHex(value: string | undefined) {
+  const match = value && /^\s*(\d+(?:\.\d+)?)(?:deg)?\s+(\d+(?:\.\d+)?)%\s+(\d+(?:\.\d+)?)%\s*$/.exec(value)
+  if (!match) return undefined
+  const h = Number(match[1]) / 360, s = Number(match[2]) / 100, l = Number(match[3]) / 100
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s
+  const p = 2 * l - q
+  const part = (t: number) => {
+    const x = t < 0 ? t + 1 : t > 1 ? t - 1 : t
+    const v = x < 1 / 6 ? p + (q - p) * 6 * x : x < 1 / 2 ? q : x < 2 / 3 ? p + (q - p) * (2 / 3 - x) * 6 : p
+    return Math.round(v * 255).toString(16).padStart(2, '0')
+  }
+  return `#${part(h + 1 / 3)}${part(h)}${part(h - 1 / 3)}`
+}
+
+/** The light theme's colours of a shadcn/Tailwind site, from its :root variables. */
+function themeVariables(css: string) {
+  const root = [...css.matchAll(/:root\s*\{([^}]*)\}/g)].map((match) => match[1]).find((block) => /--primary\s*:/.test(block)) ?? ''
+  const read = (name: string) => hslHex(new RegExp(`--${name}\\s*:\\s*([^;}]+)`).exec(root)?.[1])
+  const font = (...names: string[]) => {
+    for (const name of names) {
+      const value = new RegExp(`--font-${name}\\s*:\\s*([^;}]+)`).exec(css)?.[1]
+      const first = value?.split(',')[0].trim().replace(/^["']|["']$/g, '')
+      if (first && !systemFont.test(first) && !/^(ui-|var\()/i.test(first)) return first
+    }
+    return undefined
+  }
+  return { accent: read('primary'), background: read('background'), text: read('foreground'), headingFont: font('heading', 'display'), bodyFont: font('body', 'sans') }
+}
+
 function readDesign(css: string, themeColor: string): PageDesign {
   const colors = new Map<string, string>()
   for (const match of css.matchAll(/--color_(\d+):\s*(\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3})\s*[;}]/g)) if (!colors.has(match[1])) colors.set(match[1], match[2].replace(/\s/g, ''))
@@ -123,6 +177,10 @@ function readDesign(css: string, themeColor: string): PageDesign {
   if (buttonText) design.buttonText = buttonText
   const text = hexFrom(colors.get('15'))
   if (text) design.text = text
+  const theme = themeVariables(css)
+  if (!design.accent) for (const key of ['accent', 'background', 'text'] as const) if (theme[key]) design[key] = theme[key]
+  if (theme.headingFont) design.headingFont = theme.headingFont
+  if (theme.bodyFont) design.bodyFont = theme.bodyFont
   return design
 }
 
@@ -208,6 +266,10 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
   let themeStyles = ''
   let otherStyles = ''
   let inThemeStyles = false
+  let styleSheet = ''
+  let buttonClasses = ''
+  let cardClasses = ''
+  let footerClasses = ''
   const rewriter = new HTMLRewriter()
     .on('br', { element: () => reading.forEach((open) => (open.value += '\n')) })
     .on('title', collect((text) => (page.title ||= text)))
@@ -228,6 +290,25 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
         if (inThemeStyles) { if (themeStyles.length < maxStyleChars) themeStyles += chunk.text }
         else if (otherStyles.length < maxStyleChars) otherStyles += chunk.text
       },
+    })
+    .on('a[class], button[class]', {
+      element(element) {
+        const classes = element.getAttribute('class') ?? ''
+        const inChrome = open.some((section) => ['header', 'nav', 'footer'].includes(section.kind))
+        if (!buttonClasses && !inChrome && /(?:^|\s)bg-/.test(classes) && /(?:^|\s)px-/.test(classes) && /(?:^|\s)rounded/.test(classes)) buttonClasses = classes
+      },
+    })
+    .on('footer[class]', {
+      element(element) { footerClasses ||= element.getAttribute('class') ?? '' },
+    })
+    .on('div[class*="rounded"]', {
+      element(element) {
+        const classes = element.getAttribute('class') ?? ''
+        if (!cardClasses && /overflow-hidden/.test(classes) && radiusOf(classes) && radiusOf(classes) !== '999px') cardClasses = classes
+      },
+    })
+    .on('link[rel~="stylesheet"]', {
+      element(element) { styleSheet ||= element.getAttribute('href') ?? '' },
     })
     .on('meta', {
       element(element) {
@@ -323,6 +404,8 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
     if (field?.type === 'select' && field.options.length < 50 && !/^(-|please|bitte|select|choose)/i.test(text)) field.options.push(text.slice(0, 80))
   }))
   rewriter.on('p', collect((text) => addText(text))).on('li', collect((text) => addText(text, true))).on('blockquote', collect((text) => addText(text)))
+  // Figures and their labels (1,200+ / customers) are often a definition list.
+  rewriter.on('dt, dd', collect((text) => addText(text)))
   const transformed = rewriter.transform(response)
   const reader = transformed.body?.getReader()
   let bytes = 0
@@ -337,6 +420,25 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
     }
   }
   page.design = readDesign(themeStyles || otherStyles, themeColor)
+  let sheetCss = ''
+  // Sites whose colours live in their own style file: read that one file too.
+  if (!page.design.accent && styleSheet) {
+    try {
+      const sheet = new URL(decode(styleSheet), page.url)
+      if (sheet.host === new URL(page.url).host && /^https?:$/.test(sheet.protocol)) {
+        const answer = await fetchPublic(sheet, 'text/css')
+        if (answer.ok) {
+          sheetCss = (await answer.text()).slice(0, maxStyleChars * 4)
+          const fromSheet = readDesign(sheetCss, themeColor)
+          page.design = { ...fromSheet, fonts: page.design.fonts, headingFont: page.design.headingFont ?? fromSheet.headingFont, bodyFont: page.design.bodyFont ?? fromSheet.bodyFont }
+        }
+      }
+    } catch {
+      // Without the style file the site keeps its own colours.
+    }
+  }
+  shapeFrom(page.design, buttonClasses, cardClasses, `${themeStyles || otherStyles}${sheetCss}`)
+  if (/(?:^|\s)bg-(foreground|black|(neutral|gray|zinc|stone|slate)-(800|900|950))(?=\s|$)/.test(footerClasses)) page.design.darkFooter = true
   page.sections = page.sections.filter((section) => section.headings.length || section.images.length || section.buttons.length || section.lines)
   const usable = page.headings.length + page.buttons.length + page.images.length + page.links.length
   if (page.text.join(' ').length < 60 && usable === 0) {

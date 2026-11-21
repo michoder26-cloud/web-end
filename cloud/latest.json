@@ -1,4 +1,4 @@
 {
-  "version": "0.27.0",
-  "notes": "The back office now opens straight into the drag-and-drop editor, with the overview one click away under Dashboard. A brand-new site opens on an empty start page you can fill right away. Your own editor can also be shown next to the AI assistant on tktf.at."
+  "version": "0.27.1",
+  "notes": "Moving an old site looks much more like the original: its menu, colours, fonts, button style, rounded photos and dark footer come along, the top banner keeps a second button and small figures, product cards become real shop products with photos and prices, and builder badges are left out. Two Thai fonts were added: Bai Jamjuree and IBM Plex Sans Thai."
 }

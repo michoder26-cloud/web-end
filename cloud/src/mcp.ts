@@ -21,7 +21,7 @@ import { registerNewsTools } from './news-tools'
 import { parsePrice } from './money'
 import { validPromptPayId } from './promptpay'
 import { checkMove, checkMoveWith, cleanPath, copyImage, importProducts, moveGate, moveReport, moveStatus, readWebPage, rememberReading, saveRedirects, scanWebsite } from './moving'
-import { blocksFromReading, chromeOf, photosOf, slugFor } from './importer'
+import { blocksFromReading, chromeOf, lookCss, photosOf, slugFor, type FoundProduct } from './importer'
 import { officeWords } from './office-words'
 import { defaultSiteNames, getSite as findSite } from './owner'
 import { pageRevisions, rememberPage, restorePageRevision } from './page-history'
@@ -120,7 +120,7 @@ export const itemSchema = z.object({
 })
 
 export const blockSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('hero'), eyebrow: optional(80), heading: text(160), text: optional(600), ...button, imageUrl: imageUrl.optional(), imageAlt: optional(200), layout: z.enum(['split', 'centered', 'cover']).optional(), tone }),
+  z.object({ type: z.literal('hero'), eyebrow: optional(80), heading: text(160), text: optional(600), ...button, secondLabel: optional(60).describe('A second, quieter button'), secondHref: href.optional(), figures: z.array(z.object({ value: text(24), label: text(120) })).max(4).optional().describe('Small real figures under the buttons, such as 7 days / returns'), imageUrl: imageUrl.optional(), imageAlt: optional(200), layout: z.enum(['split', 'centered', 'cover']).optional(), tone }),
   z.object({ type: z.literal('text'), heading, body: text(8000), tone }),
   z.object({ type: z.literal('split'), heading, body: text(3000), imageUrl, imageAlt: text(200), imageSide: z.enum(['left', 'right']).optional(), ...button, tone }),
   z.object({ type: z.literal('features'), heading, intro, items: titled.min(1).max(12), tone }),
@@ -906,7 +906,8 @@ export function createMcpServer(env: Env, origin: string, code: string) {
         if (stored.url) copies.set(photo, stored.url)
         else notCopied++
       }
-      const built = blocksFromReading(reading, (photo) => copies.get(photo) ?? (photo.startsWith('https://') ? photo : undefined))
+      const found: FoundProduct[] = []
+      const built = blocksFromReading(reading, (photo) => copies.get(photo) ?? (photo.startsWith('https://') ? photo : undefined), found)
       const blocks = built.flatMap((block) => {
         const checked = blockSchema.safeParse(block)
         return checked.success ? [checked.data] : []
@@ -915,6 +916,17 @@ export function createMcpServer(env: Env, origin: string, code: string) {
       const title = (reading.title || name).slice(0, 120)
       const firstWords = reading.flow?.find((item) => item.kind === 'text')
       const description = (reading.description || (firstWords?.kind === 'text' ? firstWords.text : '') || title).slice(0, 300)
+      // Product cards become shop items, once: a site that already has products keeps its own.
+      let productsAdded = 0
+      if (found.length) {
+        const have = await db.prepare("SELECT COUNT(*) AS total FROM items WHERE site_id = ? AND collection = 'products'").bind(site.id).first<{ total: number }>()
+        if (!have?.total) {
+          for (const [index, product] of found.entries()) {
+            const item = itemSchema.safeParse({ collection: 'products', ...product, sort: index, published: true })
+            if (item.success && (await writeItem(env, site.id, item.data))) productsAdded++
+          }
+        }
+      }
       await rememberPage(env, site.id, name)
       await db
         .prepare(`INSERT INTO pages (site_id, slug, title, description, published, blocks) VALUES (?, ?, ?, ?, 1, ?)
@@ -933,6 +945,14 @@ export function createMcpServer(env: Env, origin: string, code: string) {
       const current = JSON.parse(site.settings) as Settings
       const changes: Partial<Settings> = { ...colours }
       if (name === 'home') {
+        const look = useColors === false ? '' : lookCss(reading.design)
+        // The old site's fonts, when this site carries the same ones.
+        const known = (name: string | undefined) => siteFontNames.find((font) => font.toLowerCase() === name?.toLowerCase())
+        const heading = known(reading.design.headingFont ?? reading.design.fonts[0])
+        const body = known(reading.design.bodyFont ?? reading.design.fonts[1] ?? reading.design.fonts[0])
+        if (useColors !== false && heading && !current.headingFont) { changes.headingFont = heading; siteParts.push('heading font') }
+        if (useColors !== false && body && !current.bodyFont) { changes.bodyFont = body; siteParts.push('text font') }
+        if (look && !current.customCss) { changes.customCss = look; siteParts.push('button style and corners') }
         const chrome = chromeOf(reading)
         const nav = chrome.nav.filter((entry) => isSafeHref(entry.href))
         if (nav.length && !current.nav?.length) { changes.nav = nav; siteParts.push('menu') }
@@ -951,6 +971,7 @@ export function createMcpServer(env: Env, origin: string, code: string) {
         photosCopied: copies.size,
         photosNotCopied: notCopied + Math.max(0, photosOf(reading).length - 15),
         colours: Object.keys(colours).length ? colours : 'kept',
+        ...(productsAdded ? { productsAdded: `${productsAdded} products were added to the shop, with their photos and prices` } : {}),
         ...(siteParts.length ? { alsoTaken: `The old ${siteParts.join(' and ')}` } : {}),
         check: report ? { problems: report.problems, counts: report.counts, textMissing: report.textMissing.slice(0, 10), titleKept: report.titleKept } : compared,
         next: 'Tell the owner in a few short lines which page was rebuilt and what did not come across, then offer the next steps as choices, such as looking at the page, importing the next page, fixing what is missing, or publishing.',

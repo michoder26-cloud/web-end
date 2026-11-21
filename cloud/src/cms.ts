@@ -40,7 +40,7 @@ const maxOfficeBytes = 3_000_000
 const statuses = ['new', 'confirmed', 'done']
 
 type Kind = 'bool' | 'image' | 'lines' | 'list' | 'long' | 'number' | 'select' | 'text'
-export type Spec = { fields?: Spec[]; key: string; kind: Kind; label: string; options?: string[] }
+export type Spec = { fields?: Spec[]; key: string; kind: Kind; label: string; optional?: boolean; options?: string[] }
 
 export type Notice = { error?: string; saved?: string }
 
@@ -68,7 +68,7 @@ const list = (key: string, label: string, fields: Spec[]) => spec(key, label, 'l
 const titled = list('items', 'Items', [spec('title', 'Title'), spec('text', 'Text', 'long')])
 
 export const catalog: Record<string, { label: string; fields: Spec[]; start: Block }> = {
-  hero: { label: 'Top banner', start: { heading: 'New heading', type: 'hero' }, fields: [spec('eyebrow', 'Small line above'), spec('heading', 'Heading'), spec('text', 'Text', 'long'), ...buttons, spec('imageUrl', 'Photo', 'image'), spec('imageAlt', 'Photo description'), spec('layout', 'Layout', 'select', { options: ['', 'split', 'centered', 'cover'] }), tone] },
+  hero: { label: 'Top banner', start: { heading: 'New heading', type: 'hero' }, fields: [spec('eyebrow', 'Small line above'), spec('heading', 'Heading'), spec('text', 'Text', 'long'), ...buttons, spec('secondLabel', 'Second button text'), spec('secondHref', 'Second button link'), { ...list('figures', 'Small figures', [spec('value', 'Number'), spec('label', 'Label')]), optional: true }, spec('imageUrl', 'Photo', 'image'), spec('imageAlt', 'Photo description'), spec('layout', 'Layout', 'select', { options: ['', 'split', 'centered', 'cover'] }), tone] },
   text: { label: 'Text', start: { body: 'New text', type: 'text' }, fields: [heading, spec('body', 'Text', 'long'), tone] },
   split: { label: 'Text beside photo', start: { body: 'New text', imageAlt: 'Photo', imageUrl: 'https://', type: 'split' }, fields: [heading, spec('body', 'Text', 'long'), spec('imageUrl', 'Photo', 'image'), spec('imageAlt', 'Photo description'), spec('imageSide', 'Photo side', 'select', { options: ['', 'left', 'right'] }), ...buttons, tone] },
   features: { label: 'Features', start: { items: [{ title: 'New item' }], type: 'features' }, fields: [heading, intro, titled, tone] },
@@ -214,7 +214,7 @@ export const readField = (form: FormData, name: string, field: Spec): unknown =>
       // A select always sends a value, so it alone doesn't make a row count.
       if (Object.keys(row).some((key) => field.fields?.find((sub) => sub.key === key)?.kind !== 'select')) rows.push(row)
     }
-    return rows
+    return rows.length || !field.optional ? rows : undefined
   }
   return value || undefined
 }
