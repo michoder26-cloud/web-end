@@ -1,4 +1,4 @@
 {
-  "version": "0.24.0",
-  "notes": "Edit site now opens a visual editor: the page looks as visitors see it, text is typed in place, sections are dragged into order or added from a library, and photos are changed with a click. Changes save by themselves and go live with Publish. The form editor is still under Pages."
+  "version": "0.25.0",
+  "notes": "Your site's public pages can now be shown as a live preview on your tktf.at Apps page. Only tktf.at may show them, the back office still can't be shown inside any other site, and previews aren't counted as visits."
 }

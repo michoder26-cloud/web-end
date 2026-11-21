@@ -71,6 +71,8 @@ const countryOf = (request: Request) => {
 
 // Browsers ask for some pages before anyone opens them.
 const prefetched = (request: Request) => /prefetch|prerender/i.test(`${request.headers.get('sec-purpose') ?? ''} ${request.headers.get('purpose') ?? ''} ${request.headers.get('x-moz') ?? ''}`)
+// A page shown inside another page, such as the small preview on the tktf.at Apps page, is not a visit.
+const framed = (request: Request) => request.headers.get('sec-fetch-dest') === 'iframe'
 
 const hex = (bytes: ArrayBuffer | Uint8Array) => [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
 
@@ -128,7 +130,7 @@ export function countVisit(env: Env, request: Request, path: string, status: num
   if (status !== 200 || request.method !== 'GET') return
   const counted = countablePath(path)
   const agent = request.headers.get('user-agent') ?? ''
-  if (!counted || env.test || isBot(agent) || prefetched(request)) return
+  if (!counted || env.test || isBot(agent) || prefetched(request) || framed(request)) return
   const work = countView(env, request, counted, agent).catch((error) => console.error('A visit could not be counted', error))
   env.defer?.(work)
 }

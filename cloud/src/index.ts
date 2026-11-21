@@ -23,7 +23,7 @@ import { browserWords, officeText } from './office-words'
 import { claimSite, getSite, isOwner, setupPage, shell } from './owner'
 import { renderPage } from './render'
 import { cartCount, handleShop, releaseExpiredCardOrders } from './shop'
-import { cleanStats, countConversion, countVisit } from './stats'
+import { cleanStats, countablePath, countConversion, countVisit } from './stats'
 import { stripeWebhook } from './stripe'
 import type { Block, Env, FormField, Settings, SiteRow } from './types'
 import { findLivePage, findWorkingPage, liveSite, liveSlugs } from './versions'
@@ -317,6 +317,18 @@ async function visit(request: Request, env: Env, url: URL, site: SiteRow, parts:
   return await showPage(request, env, url, site, parts[0] ?? 'home')
 }
 
+// The Apps page on tktf.at shows a small live preview of each site. Public pages may therefore be shown
+// inside tktf.at, and nowhere else; the back office, private links, carts, checkout and logins never.
+const PREVIEW_HOST = 'https://tktf.at'
+function previewable(request: Request, path: string, response: Response) {
+  if (request.method !== 'GET' || response.status !== 200 || !countablePath(path)) return response
+  const policy = response.headers.get('content-security-policy') ?? ''
+  if (!policy.includes("frame-ancestors 'none'")) return response
+  const shown = new Response(response.body, response)
+  shown.headers.set('content-security-policy', policy.replace("frame-ancestors 'none'", `frame-ancestors ${PREVIEW_HOST}`))
+  return shown
+}
+
 export default {
   async fetch(request: Request, plainEnv: Env, context: ExecutionContext): Promise<Response> {
     const env: Env = { ...plainEnv, defer: (work) => context.waitUntil(work) }
@@ -326,7 +338,7 @@ export default {
     if (path === '/test-mode/end' && request.method === 'POST') return await endTestMode(env, new URL(request.url))
     if (testLanguage) env.test = true
     const answered = await answerOrRedirect(request, env)
-    const response = testLanguage ? withTestBanner(answered, testLanguage) : answered
+    const response = previewable(request, path, testLanguage ? withTestBanner(answered, testLanguage) : answered)
     // Counts a public page view after it is sent, with no cookies and nothing kept about the visitor. See stats.ts.
     countVisit(env, request, new URL(request.url).pathname, response.status)
     return response
