@@ -1,4 +1,4 @@
 {
-  "version": "0.27.1",
-  "notes": "Moving an old site looks much more like the original: its menu, colours, fonts, button style, rounded photos and dark footer come along, the top banner keeps a second button and small figures, product cards become real shop products with photos and prices, and builder badges are left out. Two Thai fonts were added: Bai Jamjuree and IBM Plex Sans Thai."
+  "version": "0.27.2",
+  "notes": "Moving a shop works end to end: each product brings its description, category, stock and options from the old site's own product list, the cart and customer logins are turned on, products get category filters, and moving the same page again brings those products up to date instead of adding them twice."
 }

@@ -123,7 +123,7 @@ export type FlowItem =
   | { kind: 'link'; href: string; section: null | PageSection; text: string }
   | { kind: 'button'; section: null | PageSection; text: string }
   | { kind: 'form'; fields: FlowField[]; section: null | PageSection }
-export type PageReading = { buttons: string[]; data: unknown[]; description: string; design: PageDesign; flow?: FlowItem[]; headings: { level: number; text: string }[]; images: { alt: string; url: string }[]; links: { href: string; text: string }[]; reviewReason?: string; sections: PageSection[]; text: string[]; title: string; tooFewWords?: boolean; truncated: boolean; url: string }
+export type PageReading = { scripts?: string[]; login?: boolean; buttons: string[]; data: unknown[]; description: string; design: PageDesign; flow?: FlowItem[]; headings: { level: number; text: string }[]; images: { alt: string; url: string }[]; links: { href: string; text: string }[]; reviewReason?: string; sections: PageSection[]; text: string[]; title: string; tooFewWords?: boolean; truncated: boolean; url: string }
 
 const maxSections = 40
 const maxPerSection = 12
@@ -358,6 +358,18 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
   }
   // Shops usually state prices and stock here, even when the page shows them in ways text reading misses.
   let script = ''
+  // The site's own script files, where sites made with app builders keep their product list.
+  const scripts: string[] = []
+  const addScript = (value: string | null) => {
+    try {
+      const url = new URL(decode(value ?? ''), page.url)
+      if (url.host === new URL(page.url).host && /\.m?js$/.test(url.pathname) && !scripts.includes(url.href) && scripts.length < 40) scripts.push(url.href)
+    } catch {
+      // Not an address.
+    }
+  }
+  rewriter.on('script[src]', { element: (element) => addScript(element.getAttribute('src')) })
+  rewriter.on('link[rel="modulepreload"]', { element: (element) => addScript(element.getAttribute('href')) })
   rewriter.on('script[type="application/ld+json"]', {
     element(element) {
       script = ''
@@ -440,6 +452,8 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
   shapeFrom(page.design, buttonClasses, cardClasses, `${themeStyles || otherStyles}${sheetCss}`)
   if (/(?:^|\s)bg-(foreground|black|(neutral|gray|zinc|stone|slate)-(800|900|950))(?=\s|$)/.test(footerClasses)) page.design.darkFooter = true
   page.sections = page.sections.filter((section) => section.headings.length || section.images.length || section.buttons.length || section.lines)
+  page.scripts = scripts
+  page.login = (page.flow ?? []).some((item) => (item.kind === 'button' || item.kind === 'link') && /^(เข้าสู่ระบบ|ล็อกอิน|log ?in|sign ?in|anmelden|einloggen)$/i.test(item.text.trim()))
   const usable = page.headings.length + page.buttons.length + page.images.length + page.links.length
   if (page.text.join(' ').length < 60 && usable === 0) {
     page.tooFewWords = true

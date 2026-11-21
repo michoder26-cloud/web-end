@@ -21,7 +21,7 @@ import { registerNewsTools } from './news-tools'
 import { parsePrice } from './money'
 import { validPromptPayId } from './promptpay'
 import { checkMove, checkMoveWith, cleanPath, copyImage, importProducts, moveGate, moveReport, moveStatus, readWebPage, rememberReading, saveRedirects, scanWebsite } from './moving'
-import { blocksFromReading, chromeOf, lookCss, photosOf, slugFor, type FoundProduct } from './importer'
+import { blocksFromReading, chromeOf, lookCss, photosOf, productDetailsFrom, slugFor, type FoundProduct } from './importer'
 import { officeWords } from './office-words'
 import { defaultSiteNames, getSite as findSite } from './owner'
 import { pageRevisions, rememberPage, restorePageRevision } from './page-history'
@@ -917,14 +917,46 @@ export function createMcpServer(env: Env, origin: string, code: string) {
       const firstWords = reading.flow?.find((item) => item.kind === 'text')
       const description = (reading.description || (firstWords?.kind === 'text' ? firstWords.text : '') || title).slice(0, 300)
       // Product cards become shop items, once: a site that already has products keeps its own.
+      // What the cards leave out (description, category, stock, sizes) comes from the site's own product list.
       let productsAdded = 0
-      if (found.length) {
-        const have = await db.prepare("SELECT COUNT(*) AS total FROM items WHERE site_id = ? AND collection = 'products'").bind(site.id).first<{ total: number }>()
-        if (!have?.total) {
-          for (const [index, product] of found.entries()) {
-            const item = itemSchema.safeParse({ collection: 'products', ...product, sort: index, published: true })
-            if (item.success && (await writeItem(env, site.id, item.data))) productsAdded++
+      let detailsFrom = 0
+      if (found.length && reading.scripts?.length) {
+        // Product lists often sit in a file another script loads, so imported files are followed too.
+        const wanted = /data|product|catalog|items|seed|mock|store|shop/i
+        const queue = [...reading.scripts]
+        const seen = new Set(queue)
+        let missing = found.length
+        for (let fetched = 0; fetched < 14 && missing && queue.length; fetched++) {
+          queue.sort((a, b) => Number(wanted.test(b.split('/').pop() ?? '')) - Number(wanted.test(a.split('/').pop() ?? '')))
+          const script = queue.shift()!
+          const address = safeWebUrl(env, script)
+          if (!address) continue
+          const answer = await fetch(address, { headers: { Accept: 'text/javascript' }, signal: AbortSignal.timeout(8000) }).catch((): null => null)
+          if (!answer?.ok || Number(answer.headers.get('content-length') || 0) > 2_000_000) continue
+          const code = (await answer.text()).slice(0, 2_000_000)
+          const before = found.filter((product) => product.category || product.stock !== undefined || product.variants).length
+          if (productDetailsFrom(code, found)) detailsFrom++
+          missing -= found.filter((product) => product.category || product.stock !== undefined || product.variants).length - before
+          for (const match of code.matchAll(/["'`]((?:\.\.?\/|\/)[\w./-]{1,120}\.m?js)["'`]/g)) {
+            try {
+              const next = new URL(match[1], address)
+              if (next.host === address.host && !seen.has(next.href) && seen.size < 200) { seen.add(next.href); queue.push(next.href) }
+            } catch {
+              // Not an address.
+            }
           }
+        }
+      }
+      let productsUpdated = 0
+      if (found.length) {
+        const { results: have } = await db.prepare("SELECT id, title FROM items WHERE site_id = ? AND collection = 'products'").bind(site.id).all<{ id: number; title: string }>()
+        for (const [index, product] of found.entries()) {
+          const item = itemSchema.safeParse({ collection: 'products', ...product, sort: index, published: true })
+          if (!item.success) continue
+          // Moving the same page again brings the same products up to date; a site's other products stay as they are.
+          const same = have.find((row) => row.title === product.title)
+          if (same && replace) { if (await writeItem(env, site.id, item.data, same.id)) productsUpdated++ }
+          else if (!have.length && (await writeItem(env, site.id, item.data))) productsAdded++
         }
       }
       await rememberPage(env, site.id, name)
@@ -945,6 +977,14 @@ export function createMcpServer(env: Env, origin: string, code: string) {
       const current = JSON.parse(site.settings) as Settings
       const changes: Partial<Settings> = { ...colours }
       if (name === 'home') {
+        if (found.length && !current.cart) {
+          changes.cart = true
+          const symbol = found.find((product) => product.price)?.price ?? ''
+          const currency = /฿|บาท|thb/i.test(symbol) ? 'thb' : /€|eur/i.test(symbol) ? 'eur' : /\$|usd/i.test(symbol) ? 'usd' : /£/.test(symbol) ? 'gbp' : /chf/i.test(symbol) ? 'chf' : ''
+          if (currency && !current.currency) changes.currency = currency
+          siteParts.push('shop with cart')
+        }
+        if (reading.login && !current.accounts) { changes.accounts = true; siteParts.push('customer logins') }
         const look = useColors === false ? '' : lookCss(reading.design)
         // The old site's fonts, when this site carries the same ones.
         const known = (name: string | undefined) => siteFontNames.find((font) => font.toLowerCase() === name?.toLowerCase())
@@ -971,7 +1011,9 @@ export function createMcpServer(env: Env, origin: string, code: string) {
         photosCopied: copies.size,
         photosNotCopied: notCopied + Math.max(0, photosOf(reading).length - 15),
         colours: Object.keys(colours).length ? colours : 'kept',
-        ...(productsAdded ? { productsAdded: `${productsAdded} products were added to the shop, with their photos and prices` } : {}),
+        ...(productsAdded ? { productsAdded: `${productsAdded} products were added to the shop, with their photos and prices${detailsFrom ? ', descriptions, categories, stock and options from the old site’s product list' : ''}` } : {}),
+        ...(productsUpdated ? { productsUpdated: `${productsUpdated} products already in the shop were brought up to date` } : {}),
+        ...(found.length ? { productScripts: `${reading.scripts?.length ?? 0} script files, ${detailsFrom} with product details` } : {}),
         ...(siteParts.length ? { alsoTaken: `The old ${siteParts.join(' and ')}` } : {}),
         check: report ? { problems: report.problems, counts: report.counts, textMissing: report.textMissing.slice(0, 10), titleKept: report.titleKept } : compared,
         next: 'Tell the owner in a few short lines which page was rebuilt and what did not come across, then offer the next steps as choices, such as looking at the page, importing the next page, fixing what is missing, or publishing.',

@@ -20,7 +20,104 @@ const price = /^(?:[฿€$£]\s?\d[\d.,\s]*|\d[\d.,\s]*\s?(?:[฿€$£]|บา
 // Small figures with a label: "1,200+" "customers", "7 วัน" "returns".
 const figure = (text: string) => text.length <= 14 && /\d/.test(text) && !price.test(text)
 
-export type FoundProduct = { title: string; price?: string; comparePrice?: string; body?: string; imageUrl?: string; imageAlt?: string }
+export type FoundProduct = { title: string; price?: string; comparePrice?: string; body?: string; imageUrl?: string; imageAlt?: string; category?: string; stock?: number; variants?: { name: string }[] }
+
+type Plain = string | number | boolean | null | Plain[]
+
+/** Reads one object literal of plain values ({id:`p1`,name:`…`,price:890,variants:[`a`,`b`]}) starting at a brace. */
+function literalAt(code: string, start: number): Record<string, Plain> | null {
+  let at = start + 1
+  const out: Record<string, Plain> = {}
+  const space = () => { while (/\s/.test(code[at] ?? '')) at++ }
+  const value = (): Plain | undefined => {
+    space()
+    const c = code[at]
+    if (c === '"' || c === "'" || c === '`') {
+      let text = ''
+      at++
+      while (at < code.length && code[at] !== c) {
+        if (code[at] === '\\') { at++; text += code[at] === 'n' ? '\n' : code[at] }
+        else if (c === '`' && code[at] === '$' && code[at + 1] === '{') return undefined
+        else text += code[at]
+        at++
+      }
+      at++
+      return text
+    }
+    if (c === '[') {
+      at++
+      const list: Plain[] = []
+      for (;;) {
+        space()
+        if (code[at] === ']') { at++; return list }
+        const item = value()
+        if (item === undefined || list.length > 50) return undefined
+        list.push(item)
+        space()
+        if (code[at] === ',') at++
+      }
+    }
+    const word = /^(-?\d+(?:\.\d+)?|null|true|false|!0|!1)/.exec(code.slice(at, at + 24))?.[1]
+    if (!word) return undefined
+    at += word.length
+    return word === 'null' ? null : word === 'true' || word === '!0' ? true : word === 'false' || word === '!1' ? false : Number(word)
+  }
+  for (let fields = 0; fields < 40; fields++) {
+    space()
+    if (code[at] === '}') return out
+    const key = /^["']?([A-Za-z_$][\w$]*)["']?\s*:/.exec(code.slice(at, at + 60))
+    if (!key) return null
+    at += key[0].length
+    const read = value()
+    if (read === undefined) return null
+    out[key[1]] = read
+    space()
+    if (code[at] === ',') at++
+  }
+  return null
+}
+
+const asText = (value: Plain | undefined) => (typeof value === 'string' ? value.trim() : '')
+
+/** Fills in what a product card leaves out (description, category, stock, sizes) from the site's own product list in its code. */
+export function productDetailsFrom(code: string, products: FoundProduct[]) {
+  let filled = 0
+  for (const product of products) {
+    const name = product.title.replace(/[\\`'"]/g, '')
+    if (name.length < 2) continue
+    for (const quote of ['`', '"', "'"]) {
+      const at = code.indexOf(`${quote}${name}${quote}`)
+      if (at < 0) continue
+      // The object the name sits in: the nearest opening brace before it.
+      let depth = 0
+      let start = -1
+      for (let i = at; i >= Math.max(0, at - 400); i--) {
+        if (code[i] === '}') depth++
+        else if (code[i] === '{') { if (depth === 0) { start = i; break } depth-- }
+      }
+      const found = start >= 0 ? literalAt(code, start) : null
+      if (!found || ![found.name, found.title].some((value) => asText(value) === name)) continue
+      const description = asText(found.description ?? found.desc ?? found.body ?? found.details)
+      const tagline = asText(found.tagline ?? found.subtitle ?? found.short_description ?? found.shortDescription)
+      const body = [tagline, description].filter(Boolean).join('\n\n')
+      if (body) product.body = cut(body, 4000)
+      const category = asText(found.category ?? found.type ?? found.collection)
+      if (category && category.length <= 60) product.category = category
+      const stock = found.stock ?? found.inventory ?? found.quantity
+      if (typeof stock === 'number' && Number.isInteger(stock) && stock >= 0) product.stock = stock
+      const compare = found.compare_at ?? found.compareAt ?? found.compare_price ?? found.comparePrice ?? found.original_price
+      if (typeof compare === 'number' && !product.comparePrice && product.price) product.comparePrice = product.price.replace(/[\d.,]+/, compare.toLocaleString('en-US'))
+      const variants = found.variants ?? found.options ?? found.sizes
+      if (Array.isArray(variants)) {
+        const names = variants.map((item) => asText(item)).filter((item) => item && item.length <= 60).slice(0, 30)
+        if (names.length) product.variants = names.map((variant) => ({ name: variant }))
+      }
+      filled++
+      break
+    }
+  }
+  return filled
+}
 
 /** Shortens text at a word end, so a limit never cuts a word in half. */
 export function cut(text: string, max: number) {
@@ -226,7 +323,7 @@ export function blocksFromReading(reading: PageReading, image: (url: string) => 
     if (cards.length >= 3 && cards.length >= subheadings.length - 1) {
       products.push(...cards.slice(0, 60))
       const intro = texts.filter((line) => !cards.some((card) => card.body?.includes(line)) && !price.test(line) && line.length > 30).join(' ')
-      add({ type: 'collection', id: 'products', collection: 'products', ...(heading ? { heading } : {}), ...(intro ? { intro: cut(intro, 400) } : {}), ...tone() })
+      add({ type: 'collection', id: 'products', collection: 'products', filters: true, ...(heading ? { heading } : {}), ...(intro ? { intro: cut(intro, 400) } : {}), ...tone() })
       return
     }
 
