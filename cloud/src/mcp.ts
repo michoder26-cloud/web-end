@@ -878,9 +878,10 @@ export function createMcpServer(env: Env, origin: string, code: string) {
         slug: pageSlugSchema.optional().describe('Page name to use instead of the one from the address'),
         replace: z.boolean().optional().describe('Replace a page with the same name. Only after the owner agreed.'),
         useColors: z.boolean().optional().describe("Use the old site's colours. On by default for the home page."),
+        homeUrl: z.string().max(500).optional().describe("The old site's start page, when it is not at /, such as https://name.wixstudio.com/shop. Links to it point to the new home page."),
       },
     },
-    safely(async ({ html, replace, slug, url, useColors }) => {
+    safely(async ({ homeUrl, html, replace, slug, url, useColors }) => {
       const target = safeWebUrl(env, url)
       if (!target) return refuse('Use a public https address.')
       const reading = await readWebPage(target, html)
@@ -907,7 +908,8 @@ export function createMcpServer(env: Env, origin: string, code: string) {
         else notCopied++
       }
       const found: FoundProduct[] = []
-      const built = blocksFromReading(reading, (photo) => copies.get(photo) ?? (photo.startsWith('https://') ? photo : undefined), found)
+      const startPage = homeUrl || (name === 'home' ? reading.url : '')
+      const built = blocksFromReading(reading, (photo) => copies.get(photo) ?? (photo.startsWith('https://') ? photo : undefined), found, startPage)
       const blocks = built.flatMap((block) => {
         const checked = blockSchema.safeParse(block)
         return checked.success ? [checked.data] : []
@@ -993,7 +995,7 @@ export function createMcpServer(env: Env, origin: string, code: string) {
         if (useColors !== false && heading && !current.headingFont) { changes.headingFont = heading; siteParts.push('heading font') }
         if (useColors !== false && body && !current.bodyFont) { changes.bodyFont = body; siteParts.push('text font') }
         if (look && !current.customCss) { changes.customCss = look; siteParts.push('button style and corners') }
-        const chrome = chromeOf(reading)
+        const chrome = chromeOf(reading, startPage)
         const nav = chrome.nav.filter((entry) => isSafeHref(entry.href))
         if (nav.length && !current.nav?.length) { changes.nav = nav; siteParts.push('menu') }
         if (chrome.footerText && !current.footerText) { changes.footerText = chrome.footerText; siteParts.push('footer') }

@@ -1,4 +1,4 @@
 {
-  "version": "0.30.0",
-  "notes": "Payments are simpler: each way to pay is a card with an on/off switch that saves by itself, its boxes show only when it is on, and a note says when customers can't order yet. Orders, members and form messages now show inside the editor, and an order's status can be changed there, so nothing sends you off to the dashboard."
+  "version": "0.30.1",
+  "notes": "Moving a site whose start page lives at its own address, such as a free Wix site at /your-name, now makes that page the new home page, and menu links and buttons that pointed to it lead to the home page."
 }

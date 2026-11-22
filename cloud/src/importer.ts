@@ -147,13 +147,22 @@ export function slugFor(address: string) {
   return slug === 'index' ? 'home' : slug || 'page'
 }
 
+const pathOf = (address: string) => {
+  try {
+    return new URL(address).pathname.replace(/\/+$/, '') || '/'
+  } catch {
+    return ''
+  }
+}
+
 /** Links within the old site point to the rebuilt pages; others stay as they are. */
-function linkFor(href: string, origin: string): string | undefined {
+function linkFor(href: string, origin: string, home = ''): string | undefined {
   try {
     const url = new URL(href)
     if (url.protocol === 'mailto:' || url.protocol === 'tel:') return href.slice(0, 500)
     if (url.origin === origin) {
-      const slug = slugFor(url.href)
+      // The old start page may live at its own address, such as /getdigital on a free Wix site.
+      const slug = home && pathOf(url.href) === home ? 'home' : slugFor(url.href)
       const part = /^#[A-Za-z][\w-]{0,39}$/.test(url.hash) ? url.hash.toLowerCase() : ''
       return `${slug === 'home' ? '/' : `/${slug}`}${part}`
     }
@@ -206,7 +215,8 @@ function formBlock(form: Form, heading: string | undefined, intro: string, index
 }
 
 /** Rebuilds the page as blocks. image() gives the address to use for an old photo, or nothing to leave it out. */
-export function blocksFromReading(reading: PageReading, image: (url: string) => string | undefined, products: FoundProduct[] = []) {
+export function blocksFromReading(reading: PageReading, image: (url: string) => string | undefined, products: FoundProduct[] = [], homeUrl = '') {
+  const home = homeUrl ? pathOf(homeUrl) : ''
   const origin = (() => {
     try {
       return new URL(reading.url).origin
@@ -231,8 +241,8 @@ export function blocksFromReading(reading: PageReading, image: (url: string) => 
       .filter((item): item is Image => item.kind === 'image')
       .map((item) => ({ url: image(item.url), alt: cut(item.alt || heading || reading.title || 'Photo', 200) }))
       .filter((item): item is { alt: string; url: string } => Boolean(item.url))
-    const link = group.find((item): item is Link => item.kind === 'link' && Boolean(linkFor(item.href, origin)))
-    const button = link ? { buttonLabel: cut(link.text, 60), buttonHref: linkFor(link.href, origin)! } : {}
+    const link = group.find((item): item is Link => item.kind === 'link' && Boolean(linkFor(item.href, origin, home)))
+    const button = link ? { buttonLabel: cut(link.text, 60), buttonHref: linkFor(link.href, origin, home)! } : {}
     const form = group.find((item): item is Form => item.kind === 'form' && item.fields.length > 0)
     const subheadings = headings.filter((item) => item !== main)
     const textChars = texts.join(' ').length
@@ -288,8 +298,8 @@ export function blocksFromReading(reading: PageReading, image: (url: string) => 
       }
       const statWords = stats.length >= 2 ? stats.flatMap((item) => [item.value, item.label]) : []
       for (const word of statWords) if (first.includes(word)) first.splice(first.indexOf(word), 1)
-      const second = group.find((item): item is Link => item.kind === 'link' && item !== link && Boolean(linkFor(item.href, origin)) && item.text.length <= 60)
-      const secondButton = link && second ? { secondLabel: cut(second.text, 60), secondHref: linkFor(second.href, origin)! } : {}
+      const second = group.find((item): item is Link => item.kind === 'link' && item !== link && Boolean(linkFor(item.href, origin, home)) && item.text.length <= 60)
+      const secondButton = link && second ? { secondLabel: cut(second.text, 60), secondHref: linkFor(second.href, origin, home)! } : {}
       const figures = statWords.length && statWords.length <= 8 ? { figures: stats.slice(0, 4).map((item) => ({ value: cut(item.value, 24), label: cut(item.label, 120) })) } : {}
       add({ type: 'hero', ...(eyebrow ? { eyebrow } : {}), heading, ...(first.length ? { text: first.join(' ') } : {}), ...button, ...secondButton, ...figures, ...(images[0] ? { imageUrl: images[0].url, imageAlt: images[0].alt, layout: 'split' } : { layout: 'centered' }) })
       if (statWords.length > 8) add({ type: 'stats', items: stats.slice(0, 6).map((item) => ({ value: cut(item.value, 24), label: cut(item.label, 120) })) })
@@ -397,7 +407,8 @@ export function photosOf(reading: PageReading) {
 }
 
 /** The old site's menu and footer words, for the site's own menu and footer. */
-export function chromeOf(reading: PageReading) {
+export function chromeOf(reading: PageReading, homeUrl = '') {
+  const home = homeUrl ? pathOf(homeUrl) : ''
   const origin = (() => {
     try {
       return new URL(reading.url).origin
@@ -410,7 +421,7 @@ export function chromeOf(reading: PageReading) {
   for (const item of reading.flow ?? []) {
     const kind = item.section?.kind
     if ((kind === 'header' || kind === 'nav') && item.kind === 'link' && nav.length < 8) {
-      const href = linkFor(item.href, origin)
+      const href = linkFor(item.href, origin, home)
       // The logo links to the start page, and the site's own name already does that.
       if (href && href.startsWith('/') && href !== '/' && href !== '/#top' && !(reading.title && item.text.startsWith(reading.title.split(/\s+[—–|·-]\s+/)[0].trim())) && item.text.length <= 40 && !nav.some((entry) => entry.href === href || entry.label === item.text)) nav.push({ href, label: item.text })
     }
