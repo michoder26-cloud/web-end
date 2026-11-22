@@ -116,13 +116,14 @@ function shapeFrom(design: PageDesign, buttonClasses: string, cardClasses: strin
 type PageSection = { buttons: string[]; firstLines: string[]; headings: string[]; images: string[]; kind: string; lines: number }
 /** One thing on the page, in the order a visitor meets it, with the innermost section it sits in. Used to rebuild the page. */
 export type FlowField = { label: string; options: string[]; required: boolean; type: string }
-export type FlowItem =
+export type FlowItem = (
   | { kind: 'heading'; level: number; section: null | PageSection; text: string }
   | { kind: 'text'; listItem: boolean; section: null | PageSection; text: string }
   | { kind: 'image'; alt: string; section: null | PageSection; url: string }
   | { kind: 'link'; href: string; section: null | PageSection; text: string }
   | { kind: 'button'; section: null | PageSection; text: string }
   | { kind: 'form'; fields: FlowField[]; section: null | PageSection }
+) & { y?: number; x?: number }
 export type PageReading = { scripts?: string[]; login?: boolean; buttons: string[]; data: unknown[]; description: string; design: PageDesign; flow?: FlowItem[]; headings: { level: number; text: string }[]; images: { alt: string; url: string }[]; links: { href: string; text: string }[]; reviewReason?: string; sections: PageSection[]; text: string[]; title: string; tooFewWords?: boolean; truncated: boolean; url: string }
 
 const maxSections = 40
@@ -198,7 +199,18 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
 
   const page: PageReading = { buttons: [], data: [], description: '', design: { fonts: [] }, flow: [], headings: [], images: [], links: [], sections: [], text: [], title: '', truncated: false, url: (html === undefined && response.url) || target.href }
   const flow = page.flow!
-  const note = (item: FlowItem) => { if (flow.length < maxFlow) flow.push(item) }
+  // The page reader (a real browser) writes where each element showed: data-we-y, -x, -w and -h.
+  // Sites built in a page builder such as Wix place things by position, so the code's order is not the order seen.
+  let atY: number | undefined
+  let atX: number | undefined
+  let noteAt: { x?: number; y?: number } | null = null
+  const note = (item: FlowItem) => {
+    if (flow.length >= maxFlow) return
+    const where = noteAt ?? { x: atX, y: atY }
+    if (where.y !== undefined) Object.assign(item, { y: where.y, x: where.x ?? 0 })
+    flow.push(item)
+  }
+  let wixImage: { alt: string | undefined; uri: string } | null = null
   let form: null | Extract<FlowItem, { kind: 'form' }> = null
   const seenText = new Set<string>()
   const seenImages = new Set<string>()
@@ -234,12 +246,16 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
         buffer = { value: '' }
         const own = buffer
         reading.add(own)
-        // An element can only be read while its own handler runs, so its link is kept for the end tag.
+        // An element can only be read while its own handler runs, so its link and position are kept for the end tag.
         const href = decode(element.getAttribute('href') ?? '')
+        const at = { x: atX, y: atY }
         element.onEndTag(() => {
           reading.delete(own)
           const text = clean(own.value)
+          const before = noteAt
+          noteAt = at
           if (text) done(text, href)
+          noteAt = before
         })
       },
       text(chunk: Text) {
@@ -271,6 +287,13 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
   let cardClasses = ''
   let footerClasses = ''
   const rewriter = new HTMLRewriter()
+    // First, so every other handler of the same element already knows where it showed.
+    .on('[data-we-y]', {
+      element(element) {
+        const y = Number(element.getAttribute('data-we-y'))
+        if (Number.isFinite(y)) { atY = y; atX = Number(element.getAttribute('data-we-x')) || 0 }
+      },
+    })
     .on('br', { element: () => reading.forEach((open) => (open.value += '\n')) })
     .on('title', collect((text) => (page.title ||= text)))
     .on('section, header, footer, nav, main, article, aside', {
@@ -321,9 +344,17 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
     })
     .on('img', {
       element(element) {
-        // Icons and tracking pixels are not photos to rebuild.
-        const size = Math.min(Number(element.getAttribute('width') || 999), Number(element.getAttribute('height') || 999))
-        addImage(decode(element.getAttribute('src') ?? element.getAttribute('data-src') ?? ''), element.getAttribute('alt'), size >= 48)
+        // Icons, stars and tracking pixels are not photos to rebuild. The size is the one the browser showed
+        // (data-we-w/-h), else the one Wix asks its image server for (/fill/w_18,h_18/), else the tag's own.
+        const src = decode(element.getAttribute('src') ?? element.getAttribute('data-src') ?? '')
+        const wix = /\/(?:fill|fit|crop)\/w_(\d+),h_(\d+)/.exec(src)
+        const width = Number(element.getAttribute('data-we-w') || wix?.[1] || element.getAttribute('width') || 999)
+        const height = Number(element.getAttribute('data-we-h') || wix?.[2] || element.getAttribute('height') || 999)
+        const photo = Math.min(width, height) >= 60 && Math.max(width, height) >= 100
+        if (wixImage) {
+          addImage(wixImage.uri, wixImage.alt ?? element.getAttribute('alt'), photo)
+          wixImage = null
+        } else addImage(src, element.getAttribute('alt'), photo)
       },
     })
     .on('wow-image', {
@@ -332,7 +363,13 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
         const info = decode(element.getAttribute('data-image-info') ?? '')
         const uri = /"uri"\s*:\s*"([^"]+)"/.exec(info)?.[1]
         const alt = /"alt"\s*:\s*"([^"]+)"/.exec(info)?.[1] ?? /"name"\s*:\s*"([^"]+)"/.exec(info)?.[1]
-        if (uri) addImage(uri, alt)
+        if (!uri) return
+        const address = /^[\w.~-]+\.(?:jpe?g|png|webp|gif|avif)$/i.test(uri) ? `https://static.wixstatic.com/media/${uri}` : uri
+        wixImage = { alt, uri: address }
+        element.onEndTag(() => {
+          if (wixImage?.uri === address) addImage(address, alt)
+          wixImage = null
+        })
       },
     })
     .on('a[href]', collect((text, href) => {

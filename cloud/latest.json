@@ -1,4 +1,4 @@
 {
-  "version": "0.30.1",
-  "notes": "Moving a site whose start page lives at its own address, such as a free Wix site at /your-name, now makes that page the new home page, and menu links and buttons that pointed to it lead to the home page."
+  "version": "0.30.2",
+  "notes": "Moving sites built with page builders such as Wix Studio follows the order a visitor sees, using where each part showed on the page. Small icons are no longer copied as photos, Wix photos named without an address come along, rows of figures become a figures section, and words with one button stay one section."
 }

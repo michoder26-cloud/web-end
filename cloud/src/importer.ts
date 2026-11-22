@@ -173,13 +173,20 @@ function linkFor(href: string, origin: string, home = ''): string | undefined {
 }
 
 /** Splits the page into parts: each section of the old page, and a new part at each big heading after content. */
-function groupsOf(flow: FlowItem[]) {
+function groupsOf(unsorted: FlowItem[]) {
+  // Things without a position stay with the one before them; then top to bottom, left to right within a row.
+  let lastY = 0
+  const flow = unsorted.some((item) => item.y !== undefined)
+    ? unsorted.map((item, index) => ({ item, index, y: item.y ?? lastY, x: item.x ?? 0 })).map((one) => { lastY = one.y; return one })
+      .sort((a, b) => Math.round(a.y / 24) - Math.round(b.y / 24) || a.x - b.x || a.index - b.index).map((one) => one.item)
+    : unsorted
   const groups: Group[] = []
   let current: Group = []
   for (const item of flow) {
     if ((item.section && chrome.has(item.section.kind)) || isBadge(item)) continue
     const newSection = current.length > 0 && item.section !== current[0].section
-    const bigHeading = item.kind === 'heading' && item.level <= 2 && current.some((earlier) => earlier.kind !== 'heading')
+    const sameColumn = (earlier: FlowItem) => item.x === undefined || earlier.x === undefined || Math.abs(earlier.x - item.x) < 200
+    const bigHeading = item.kind === 'heading' && item.level <= 2 && current.some((earlier) => earlier.kind !== 'heading' && sameColumn(earlier))
     // A short line just above a big heading is its label ("New collection"), so it stays with that heading.
     const label = bigHeading && !newSection && current.every((earlier) => earlier.kind === 'text' && earlier.text.length <= 80) && current.length <= 2
     if ((newSection || bigHeading) && !label) {
@@ -311,6 +318,21 @@ export function blocksFromReading(reading: PageReading, image: (url: string) => 
       return
     }
 
+    // A row of figures with their labels: "+300" "Expert employees", or all figures above all labels.
+    const words = group.filter((item) => item.kind === 'text' || item.kind === 'heading').map((item) => (item.kind === 'text' || item.kind === 'heading' ? item.text : ''))
+    const half = words.length / 2
+    const paired = words.length >= 4 && words.length % 2 === 0
+      ? words.every((word, i) => (i % 2 === 0 ? figure(word) : !figure(word) && word.length <= 40))
+        ? words.flatMap((word, i) => (i % 2 === 0 ? [{ value: word, label: words[i + 1] }] : []))
+        : words.every((word, i) => (i < half ? figure(word) : !figure(word) && word.length <= 40))
+          ? words.slice(0, half).map((value, i) => ({ value, label: words[half + i] }))
+          : null
+      : null
+    if (paired && paired.length <= 6) {
+      add({ type: 'stats', items: paired.map((item) => ({ value: cut(item.value, 24), label: cut(item.label, 120) })), ...tone() })
+      return
+    }
+
     // Cards with a photo, a name and a price are products: they become shop items shown together.
     const cards = subheadings.flatMap((item) => {
       const at = group.indexOf(item)
@@ -364,11 +386,12 @@ export function blocksFromReading(reading: PageReading, image: (url: string) => 
       return
     }
 
-    if (body) {
+    if (body && link && heading && body.length <= 600) {
+      add({ type: 'cta', heading, text: body, ...button, tone: 'plain' })
+    } else if (body) {
       add({ type: 'text', ...(heading ? { heading } : {}), body: cut(body, 8000), ...tone() })
-      if (link) add({ type: 'cta', heading: cut(link.text, 160), ...button, ...tone() })
     } else if (heading && link) {
-      add({ type: 'cta', heading, ...button, ...tone() })
+      add({ type: 'cta', heading, ...button, tone: 'plain' })
     } else if (heading && !images.length) {
       add({ type: 'text', body: heading, ...tone() })
     }
