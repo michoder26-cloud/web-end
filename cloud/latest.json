@@ -1,4 +1,4 @@
 {
-  "version": "0.27.2",
-  "notes": "Moving a shop works end to end: each product brings its description, category, stock and options from the old site's own product list, the cart and customer logins are turned on, products get category filters, and moving the same page again brings those products up to date instead of adding them twice."
+  "version": "0.28.0",
+  "notes": "The drag-and-drop editor now does the everyday work in one place: a side panel to switch and add pages, change products (photo, price, stock, description), set up the shop and how customers pay, and change the site's name, colours and fonts. Publish works right in the editor and says first if something should be fixed. Orders, messages and the rest stay under More."
 }

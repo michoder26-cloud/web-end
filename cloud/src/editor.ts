@@ -1,13 +1,16 @@
 import { z } from 'zod'
 
-import { catalog, firstProblem } from './cms'
+import { allows, catalog, firstProblem, writeItem } from './cms'
 import type { Desk } from './cms'
+import { releaseSummary } from './cms-platform'
 import { escapeHtml, html, notFound, privateHeaders } from './http'
 import { saveImage, showImage } from './items'
-import { blockSchema, maxBlocksBytes } from './mcp'
+import { blockSchema, itemSchema, maxBlocksBytes, maxPagesPerSite, pageSlugSchema, settingsShape } from './mcp'
 import { officeText } from './office-words'
 import { rememberPage } from './page-history'
 import { siteLook } from './render'
+import { siteFontNames, siteStyles } from './theme'
+import { publishVersion, unpublishedChanges } from './versions'
 import type { Block, Env, Settings, SiteRow } from './types'
 
 /**
@@ -115,6 +118,100 @@ async function savePage(request: Request, env: Env, site: SiteRow, slug: string)
   return json({ ok: true })
 }
 
+// ---- The side panel: pages, products, shop and payment, the site's look, and publishing -----------------
+
+// Settings the editor's panel may change. Email, API and code settings stay in the dashboard.
+const panelKeys = ['name', 'tagline', 'style', 'headingFont', 'bodyFont', 'accent', 'background', 'text', 'footerText', 'phone', 'email', 'address',
+  'cart', 'accounts', 'currency', 'payTransfer', 'transferDetails', 'payPromptPay', 'promptPayId', 'promptPayName', 'payCod', 'shippingFee', 'freeShippingOver'] as const
+const panelSettings = z.object(Object.fromEntries(panelKeys.map((key) => [key, settingsShape[key]])) as { [K in (typeof panelKeys)[number]]: (typeof settingsShape)[K] }).strict()
+
+async function panelData(env: Env, site: SiteRow, desk: Desk) {
+  const settings = JSON.parse(site.settings) as Settings
+  const [{ results: items }, { results: pages }, waiting, summary] = await Promise.all([
+    allows(desk, 'products')
+      ? env.DB.prepare("SELECT id, title, price, compare_price AS comparePrice, category, stock, body, image_url AS imageUrl, image_alt AS imageAlt, published FROM items WHERE site_id = ? AND collection = 'products' ORDER BY sort, id LIMIT 200").bind(site.id).all()
+      : Promise.resolve({ results: [] }),
+    env.DB.prepare('SELECT slug, title, published FROM pages WHERE site_id = ? ORDER BY slug = \'home\' DESC, slug').bind(site.id).all<{ published: number; slug: string; title: string }>(),
+    unpublishedChanges(env, site),
+    allows(desk, 'publish') ? releaseSummary(env, site) : Promise.resolve(null),
+  ])
+  return {
+    owner: !desk.staff,
+    canProducts: allows(desk, 'products'),
+    canPublish: allows(desk, 'publish'),
+    settings: desk.staff ? {} : Object.fromEntries(panelKeys.map((key) => [key, settings[key] ?? null])),
+    fonts: siteFontNames,
+    styles: siteStyles,
+    items,
+    pages: pages.map((page) => ({ slug: page.slug, title: page.title, published: Boolean(page.published) })),
+    // null: never published, so everything waits. Otherwise the pages and settings that differ from the live site.
+    waiting: waiting ? waiting.pages.length + (waiting.settings ? 1 : 0) : null,
+    problems: summary?.problems ?? [],
+  }
+}
+
+async function saveSettings(request: Request, env: Env, site: SiteRow, desk: Desk) {
+  if (desk.staff) return json({ error: 'Only the owner can change these settings.' }, 403)
+  const body = (await request.json().catch((): null => null)) as Record<string, unknown> | null
+  // Empty boxes come as null: they remove the setting, so they are not checked like values.
+  const given = Object.fromEntries(Object.entries(body ?? {}).filter(([, value]) => value !== null && value !== ''))
+  const cleared = Object.keys(body ?? {}).filter((key) => (body![key] === null || body![key] === '') && key !== 'name' && (panelKeys as readonly string[]).includes(key))
+  const parsed = panelSettings.safeParse(given)
+  if (!parsed.success) return json({ error: firstProblem(parsed.error), field: parsed.error.issues[0]?.path[0] ?? null }, 400)
+  const current = JSON.parse(site.settings) as Settings
+  const next: Settings = { ...current }
+  // An emptied box or a font set back to the style's own removes the setting.
+  for (const key of cleared) delete (next as Record<string, unknown>)[key]
+  Object.assign(next, parsed.data)
+  await env.DB.prepare("UPDATE sites SET settings = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?").bind(JSON.stringify(next), site.id).run()
+  return json({ ok: true })
+}
+
+async function saveProduct(request: Request, env: Env, site: SiteRow, desk: Desk) {
+  if (!allows(desk, 'products')) return json({ error: 'You may not change products.' }, 403)
+  const body = (await request.json().catch((): null => null)) as Record<string, unknown> | null
+  const id = typeof body?.id === 'number' && Number.isInteger(body.id) && body.id > 0 ? body.id : undefined
+  if (body?.delete === true && id) {
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM item_variants WHERE item_id = ? AND item_id IN (SELECT id FROM items WHERE site_id = ?)').bind(id, site.id),
+      env.DB.prepare('DELETE FROM items WHERE id = ? AND site_id = ?').bind(id, site.id),
+    ])
+    return json({ ok: true })
+  }
+  const { id: _, delete: __, ...fields } = body ?? {}
+  const parsed = itemSchema.safeParse({ collection: 'products', ...fields })
+  if (!parsed.success) return json({ error: firstProblem(parsed.error), field: parsed.error.issues[0]?.path[0] ?? null }, 400)
+  if (!id) {
+    const count = await env.DB.prepare('SELECT COUNT(*) AS total FROM items WHERE site_id = ?').bind(site.id).first<{ total: number }>()
+    if ((count?.total ?? 0) >= 500) return json({ error: 'A site can have up to 500 items.' }, 400)
+  }
+  const saved = await writeItem(env, site.id, parsed.data, id)
+  return saved ? json({ ok: true, id: saved }) : json({ error: 'not found' }, 404)
+}
+
+/** A new page from a title: its address comes from the title, or page-2, page-3 … for titles in other scripts. */
+async function newPage(request: Request, env: Env, site: SiteRow, desk: Desk) {
+  const body = (await request.json().catch((): null => null)) as { title?: unknown } | null
+  const title = String(body?.title ?? '').trim().slice(0, 120)
+  if (!title) return json({ error: 'Give the page a name.' }, 400)
+  const { results } = await env.DB.prepare('SELECT slug FROM pages WHERE site_id = ?').bind(site.id).all<{ slug: string }>()
+  if (results.length >= maxPagesPerSite) return json({ error: `A site can have up to ${maxPagesPerSite} pages.` }, 400)
+  const taken = new Set(results.map((row) => row.slug))
+  const base = title.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50).replace(/-+$/, '') || 'page'
+  let slug = pageSlugSchema.safeParse(base).success && !taken.has(base) ? base : ''
+  for (let n = 2; !slug; n++) if (!taken.has(`${base}-${n}`) && pageSlugSchema.safeParse(`${base}-${n}`).success) slug = `${base}-${n}`
+  await rememberPage(env, site.id, slug)
+  await env.DB.prepare('INSERT INTO pages (site_id, slug, title, description, published, blocks) VALUES (?, ?, ?, ?, 1, ?)')
+    .bind(site.id, slug, title, title, JSON.stringify([{ type: 'hero', heading: title }])).run()
+  return json({ ok: true, slug, url: `${desk.base}/editor/${slug}` })
+}
+
+async function publishNow(env: Env, site: SiteRow, desk: Desk) {
+  if (!allows(desk, 'publish')) return json({ error: 'You may not publish.' }, 403)
+  const published = await publishVersion(env, site, officeText(site).lang === 'th' ? 'เผยแพร่จากตัวแก้เว็บ' : 'Published from the editor')
+  return published.error ? json({ error: published.error }, 409) : json({ ok: true, version: published.id })
+}
+
 async function uploadImage(request: Request, env: Env, site: SiteRow) {
   const file = (await request.formData().catch((): null => null))?.get('file')
   if (!(file instanceof File) || !file.size) return json({ error: officeText(site).chooseImage }, 400)
@@ -142,5 +239,10 @@ export async function handleEditor(request: Request, env: Env, site: SiteRow, de
   if (request.method !== 'POST') return notFound()
   if (!action) return savePage(request, env, site, page)
   if (action === 'image') return uploadImage(request, env, site)
+  if (action === 'panel') return json(await panelData(env, site, desk))
+  if (action === 'settings') return saveSettings(request, env, site, desk)
+  if (action === 'product') return saveProduct(request, env, site, desk)
+  if (action === 'new-page') return newPage(request, env, site, desk)
+  if (action === 'publish') return publishNow(env, site, desk)
   return notFound()
 }

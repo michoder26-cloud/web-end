@@ -19,6 +19,16 @@
         publishing: 'กำลังเผยแพร่…', leave: 'ยังมีการแก้ที่ไม่ได้บันทึก', hidden: 'หน้านี้ซ่อนอยู่', empty: 'หน้านี้ยังว่าง เพิ่มส่วนแรกได้เลย',
         type: 'พิมพ์ข้อความ', last: 'หน้าต้องมีอย่างน้อย 1 ส่วน', yes: 'ใช่', no: 'ไม่',
         needs: (n) => `ส่วน "${n}" ยังมีช่องที่ว่างอยู่ พิมพ์ข้อความลงไปก่อน แล้วระบบจะบันทึกเอง`,
+        tabAdd: 'เพิ่ม', tabPages: 'หน้า', tabProducts: 'สินค้า', tabShop: 'ร้านค้า', tabSite: 'เว็บ', more: 'เมนูอื่น ๆ',
+        pages: 'หน้าในเว็บ', newPage: 'เพิ่มหน้าใหม่', newPageName: 'ชื่อหน้าใหม่ เช่น เกี่ยวกับเรา', create: 'สร้าง', hiddenTag: 'ซ่อน',
+        products: 'สินค้า', addProduct: 'เพิ่มสินค้า', noProducts: 'ยังไม่มีสินค้า', product: 'สินค้า', pName: 'ชื่อสินค้า', pPrice: 'ราคา เช่น ฿890', pCompare: 'ราคาเดิม (ถ้าลดราคา)',
+        pCategory: 'หมวด', pStock: 'จำนวนคงเหลือ (เว้นว่าง = ไม่จำกัด)', pBody: 'รายละเอียด', pShown: 'แสดงในร้าน', save: 'บันทึก', del: 'ลบสินค้านี้', sure: 'ลบสินค้านี้เลยไหม', stockLeft: (n) => `เหลือ ${n}`, hiddenItem: 'ซ่อนอยู่',
+        shop: 'ร้านค้าและการรับเงิน', cart: 'เปิดตะกร้าและสั่งซื้อ', accounts: 'ให้ลูกค้าสมัครสมาชิกและล็อกอิน', payHow: 'ลูกค้าจ่ายเงินได้ทางไหน',
+        payTransfer: 'โอนเงินเข้าบัญชี', transferDetails: 'ธนาคาร ชื่อบัญชี เลขบัญชี', payPromptPay: 'พร้อมเพย์ (สแกน QR)', promptPayId: 'เบอร์มือถือหรือเลขบัตรที่ผูกพร้อมเพย์', promptPayName: 'ชื่อบัญชีพร้อมเพย์ (ไม่บังคับ)',
+        payCod: 'เก็บเงินปลายทาง', shipping: 'ค่าส่งต่อออเดอร์', freeOver: 'ส่งฟรีเมื่อซื้อครบ', currency: 'สกุลเงิน',
+        site: 'หน้าตาและข้อมูลเว็บ', sName: 'ชื่อร้าน', sTagline: 'คำโปรย', sStyle: 'สไตล์', sHeading: 'ฟอนต์หัวข้อ', sBody: 'ฟอนต์เนื้อหา', fromStyle: 'ตามสไตล์', sAccent: 'สีหลัก', sBg: 'สีพื้น', sText: 'สีตัวอักษร',
+        sPhone: 'เบอร์โทร', sEmail: 'อีเมลติดต่อ', sAddress: 'ที่อยู่', sFooter: 'ข้อความท้ายเว็บ', savedNote: 'บันทึกแล้ว จะขึ้นเว็บจริงเมื่อกดเผยแพร่', ownerOnly: 'ส่วนนี้แก้ได้เฉพาะเจ้าของเว็บ',
+        published: 'เผยแพร่แล้ว เว็บจริงเป็นแบบนี้แล้ว', openLive: 'เปิดดูเว็บ', problemsT: 'ก่อนเผยแพร่ ลองดูเรื่องเหล่านี้', publishAnyway: 'เผยแพร่เลย', fixFirst: 'กลับไปแก้ก่อน', waiting: (n) => `มี ${n} อย่างรอเผยแพร่`, upToDate: 'เว็บจริงตรงกับที่แก้แล้ว',
       }
     : {
         edit: 'Edit site', page: 'Page', saved: 'Saved', saving: 'Saving…', unsaved: 'Not saved yet', notSaved: 'Not saved', retry: 'Try again',
@@ -32,6 +42,16 @@
         publishing: 'Publishing…', leave: 'You have unsaved changes', hidden: 'This page is hidden', empty: 'This page is empty. Add the first section.',
         type: 'Type here', last: 'A page needs at least one section', yes: 'Yes', no: 'No',
         needs: (n) => `The "${n}" section has an empty box that needs text. Type something and it saves by itself.`,
+        tabAdd: 'Add', tabPages: 'Pages', tabProducts: 'Products', tabShop: 'Shop', tabSite: 'Site', more: 'More',
+        pages: 'Pages', newPage: 'Add a page', newPageName: 'Name of the new page, such as About us', create: 'Create', hiddenTag: 'hidden',
+        products: 'Products', addProduct: 'Add a product', noProducts: 'No products yet', product: 'Product', pName: 'Name', pPrice: 'Price, such as €12', pCompare: 'Former price (for a sale)',
+        pCategory: 'Category', pStock: 'In stock (empty = no limit)', pBody: 'Description', pShown: 'Show in the shop', save: 'Save', del: 'Delete this product', sure: 'Delete this product?', stockLeft: (n) => `${n} left`, hiddenItem: 'hidden',
+        shop: 'Shop and payment', cart: 'Turn on the cart and orders', accounts: 'Let customers sign up and log in', payHow: 'How customers can pay',
+        payTransfer: 'Bank transfer', transferDetails: 'Bank, account name, account number', payPromptPay: 'PromptPay (QR code)', promptPayId: 'Mobile number or ID linked to PromptPay', promptPayName: 'Name on the PromptPay account (optional)',
+        payCod: 'Pay on delivery', shipping: 'Delivery fee per order', freeOver: 'Free delivery from', currency: 'Currency',
+        site: 'Look and details', sName: 'Site name', sTagline: 'Tagline', sStyle: 'Style', sHeading: 'Heading font', sBody: 'Text font', fromStyle: 'From the style', sAccent: 'Main colour', sBg: 'Background', sText: 'Text colour',
+        sPhone: 'Phone', sEmail: 'Contact email', sAddress: 'Address', sFooter: 'Footer text', savedNote: 'Saved. It goes live when you publish.', ownerOnly: 'Only the site owner can change this.',
+        published: 'Published. The live site looks like this now.', openLive: 'Open the site', problemsT: 'Before you publish, have a look at these', publishAnyway: 'Publish anyway', fixFirst: 'Go back and fix', waiting: (n) => `${n} change${n === 1 ? '' : 's'} waiting to go live`, upToDate: 'The live site matches your edits',
       }
   const NAMES_TH = { hero: 'หัวเว็บ', text: 'ข้อความ', split: 'ข้อความคู่รูป', features: 'จุดเด่น', steps: 'ขั้นตอน', stats: 'ตัวเลข', pricing: 'ราคา', testimonials: 'คำชมจากลูกค้า', team: 'ทีมงาน', gallery: 'แกลเลอรี', info: 'ข้อมูล เช่น เวลาเปิด', faq: 'คำถามที่พบบ่อย', links: 'ลิงก์', cta: 'แถบเชิญชวน', form: 'ฟอร์ม', collection: 'สินค้าหรือรายการ', records: 'ข้อมูลจากตาราง', table: 'ตาราง', 'record-form': 'ฟอร์มเพิ่มข้อมูล', record: 'แก้ข้อมูลของตัวเอง', html: 'โค้ดเอง' }
   const DESC_TH = { hero: 'หัวข้อใหญ่ รูป และปุ่ม', text: 'ย่อหน้าข้อความ', split: 'รูปด้านหนึ่ง ข้อความอีกด้าน', features: 'การ์ดหลายช่อง', steps: 'ลำดับ 1 2 3', stats: 'ตัวเลขเด่น', pricing: 'แพ็กเกจและราคา', testimonials: 'คำพูดจริงของลูกค้า', team: 'รูปและชื่อคนในทีม', gallery: 'รูปหลายรูป', info: 'เวลาเปิด ที่อยู่ เบอร์โทร', faq: 'คำถามกับคำตอบ', links: 'ลิงก์ไปหน้าอื่น', cta: 'ข้อความเด่นกับปุ่ม', form: 'ติดต่อ จองคิว สมัคร' }
@@ -268,16 +288,19 @@
     els.undo = h('button', { type: 'button', class: 'ed-btn', disabled: true, onclick: undo, text: W.undo })
     const pagePick = h('select', { class: 'ed-select', 'aria-label': W.page, onchange: async (event) => { if (await save()) location.href = `${data.base}/editor/${event.target.value}` } },
       data.pages.map((page) => h('option', { value: page.slug, selected: page.slug === data.slug || null, text: `${page.title} (/${page.slug === 'home' ? '' : page.slug})` })))
-    els.publish = data.canPublish ? h('button', { type: 'button', class: 'ed-btn ed-btn--primary', onclick: publish, text: W.publish }) : null
+    els.publish = data.canPublish ? h('button', { type: 'button', class: 'ed-btn ed-btn--primary', onclick: () => publish(false), text: W.publish }) : null
     const bar = h('header', { class: 'ed-bar' },
       h('a', { class: 'ed-mark', href: data.dashboard || data.base, title: W.back, text: 'WE' }),
       h('div', { class: 'ed-bar__site' }, h('strong', { text: data.siteName }), h('span', { class: 'ed-bar__page' }, pagePick, data.published ? null : h('em', { text: W.hidden }))),
       els.status,
-      h('div', { class: 'ed-bar__acts' }, h('a', { class: 'ed-btn', href: data.dashboard || data.base, text: W.back }), els.undo,
+      h('div', { class: 'ed-bar__acts' }, h('a', { class: 'ed-btn', href: data.dashboard || data.base, text: W.more }), els.undo,
         h('a', { class: 'ed-btn', href: `${data.base}/preview${data.slug === 'home' ? '' : `/${data.slug}`}`, target: '_blank', rel: 'noopener', text: W.view }),
         h('a', { class: 'ed-btn ed-btn--wide', href: `${data.base}/starters`, text: W.templates }), els.publish))
-    els.lib = h('aside', { class: 'ed-lib', 'aria-label': W.library }, h('h2', { text: W.library }), h('p', { text: W.libraryHelp }),
+    els.addPanel = h('div', { class: 'ed-panel', 'data-panel': 'add' }, h('h2', { text: W.library }), h('p', { text: W.libraryHelp }),
       h('ul', {}, LIBRARY.filter((type) => data.catalog[type]).map((type) => h('li', {}, libCard(type)))))
+    els.tabs = h('nav', { class: 'ed-tabs', 'aria-label': W.more })
+    els.panelBody = h('div', { class: 'ed-panel-body' }, els.addPanel)
+    els.lib = h('aside', { class: 'ed-lib', 'aria-label': W.library }, els.tabs, els.panelBody)
     els.page = h('div', { class: 'ed-page', id: 'ed-page' })
     let hintSeen = false
     try { hintSeen = localStorage.getItem('we-editor-hint') === '1' } catch {}
@@ -601,16 +624,185 @@
     select(to, true)
   }
 
-  // ---- publish --------------------------------------------------------------------------------------
-  async function publish() {
+  // ---- publish, right here ---------------------------------------------------------------------------
+  async function publish(anyway = false) {
+    if (!(await save())) return
+    await loadPanel()
+    if (!anyway && panel?.problems?.length) {
+      return openSheet(W.problemsT, [h('ul', { class: 'ed-problems' }, panel.problems.slice(0, 12).map((problem) => h('li', { text: problem }))),
+        h('div', { class: 'ed-row' }, h('button', { type: 'button', class: 'ed-btn ed-btn--primary', text: W.publishAnyway, onclick: () => { closeSheet(); publish(true) } }), h('button', { type: 'button', class: 'ed-btn', text: W.fixFirst, onclick: closeSheet }))])
+    }
     els.publish.disabled = true
     els.publish.textContent = W.publishing
-    if (!(await save())) { els.publish.disabled = false; els.publish.textContent = W.publish; return }
-    // The publish page does the release and shows what went live.
-    const form = h('form', { method: 'post', action: `${data.base}/publish` }, h('input', { type: 'hidden', name: 'note', value: TH ? 'แก้ด้วยตัวแก้เว็บ' : 'Visual editor' }))
-    document.body.append(form)
-    dirty = false
-    form.submit()
+    try {
+      await post('publish', {})
+      toast(W.published)
+      els.toast.firstChild.append(' ', h('a', { href: liveUrl(), target: '_blank', rel: 'noopener', text: W.openLive }))
+    } catch (error) {
+      toast(String(error.message || error))
+    } finally {
+      els.publish.disabled = false
+      await loadPanel()
+    }
+  }
+  const liveUrl = () => (data.slug === 'home' ? '/' : `/${data.slug}`)
+
+  // ---- the side panel: pages, products, shop, site ----------------------------------------------------
+  let panel = null
+  let tab = 'add'
+  async function post(action, body) {
+    const response = await fetch(`${data.base}/editor/${data.slug}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const answer = await response.json().catch(() => ({}))
+    if (!response.ok) throw Object.assign(new Error(answer.error || `${response.status}`), { field: answer.field })
+    return answer
+  }
+  async function loadPanel() {
+    try { panel = await post('panel', {}) } catch { return }
+    if (els.publish) {
+      const n = panel.waiting
+      els.publish.textContent = n ? `${W.publish} (${n})` : W.publish
+      els.publish.title = n === 0 ? W.upToDate : n ? W.waiting(n) : ''
+    }
+    drawTabs()
+    if (tab !== 'add') showTab(tab)
+  }
+  function drawTabs() {
+    const tabs = [['add', W.tabAdd], ['pages', W.tabPages], ...(panel?.canProducts ? [['products', W.tabProducts]] : []), ...(panel?.owner ? [['shop', W.tabShop], ['site', W.tabSite]] : [])]
+    els.tabs.replaceChildren(...tabs.map(([key, label]) => h('button', { type: 'button', class: 'ed-tab', 'aria-pressed': String(key === tab), onclick: () => showTab(key), text: label })))
+  }
+  function showTab(key) {
+    tab = key
+    drawTabs()
+    const body = key === 'add' ? els.addPanel : key === 'pages' ? pagesPanel() : key === 'products' ? productsPanel() : key === 'shop' ? shopPanel() : sitePanel()
+    els.panelBody.replaceChildren(body)
+  }
+  const field = (label, input, note) => h('label', { class: 'ed-field' }, h('span', { text: label }), input, note ? h('small', { class: 'ed-note', text: note }) : null)
+  const check = (label, input) => h('label', { class: 'ed-check' }, input, h('span', { text: label }))
+  const input = (value, attrs = {}) => { const el = h('input', { class: 'ed-input', ...attrs }); el.value = value ?? ''; return el }
+  const area = (value) => { const el = h('textarea', { class: 'ed-input', rows: '3' }); el.value = value ?? ''; return el }
+  const box = (on) => h('input', { type: 'checkbox', checked: on ? true : null })
+
+  function pagesPanel() {
+    const name = input('', { placeholder: W.newPageName, maxlength: '120' })
+    const status = h('p', { class: 'ed-note' })
+    const create = h('button', { type: 'button', class: 'ed-btn ed-btn--primary', text: W.create, onclick: async () => {
+      if (!name.value.trim()) return name.focus()
+      create.disabled = true
+      try {
+        const made = await post('new-page', { title: name.value.trim() })
+        if (await save()) location.href = made.url
+      } catch (error) { status.textContent = String(error.message || error); create.disabled = false }
+    } })
+    return h('div', { class: 'ed-panel' }, h('h2', { text: W.pages }),
+      h('ul', { class: 'ed-list' }, (panel?.pages || data.pages).map((page) => h('li', {}, h('a', { class: `ed-list__row${page.slug === data.slug ? ' is-here' : ''}`, href: `${data.base}/editor/${page.slug}`, onclick: async (event) => { event.preventDefault(); if (await save()) location.href = `${data.base}/editor/${page.slug}` } },
+        h('b', { text: page.title }), h('small', { text: `/${page.slug === 'home' ? '' : page.slug}${page.published === false ? ` · ${W.hiddenTag}` : ''}` }))))),
+      h('h3', { text: W.newPage }), name, h('div', { class: 'ed-row' }, create), status)
+  }
+
+  function productsPanel() {
+    const items = panel?.items || []
+    return h('div', { class: 'ed-panel' }, h('h2', { text: W.products }),
+      h('button', { type: 'button', class: 'ed-btn ed-btn--primary ed-wide', text: `+ ${W.addProduct}`, onclick: () => openProduct({ published: 1 }) }),
+      items.length ? h('ul', { class: 'ed-list' }, items.map((item) => h('li', {}, h('button', { type: 'button', class: 'ed-list__row ed-list__row--item', onclick: () => openProduct(item) },
+        goodImage(item.imageUrl) ? h('img', { src: shown(item.imageUrl), alt: '', loading: 'lazy' }) : h('span', { class: 'ed-list__ph' }),
+        h('span', {}, h('b', { text: item.title }), h('small', { text: [item.price, item.stock != null ? W.stockLeft(item.stock) : '', item.published ? '' : W.hiddenItem].filter(Boolean).join(' · ') })))))) : h('p', { class: 'ed-note', text: W.noProducts }))
+  }
+  function openProduct(item) {
+    let imageUrl = item.imageUrl || ''
+    const pic = h('button', { type: 'button', class: 'ed-product-photo' })
+    const drawPic = () => pic.replaceChildren(goodImage(imageUrl) ? h('img', { src: shown(imageUrl), alt: '' }) : h('span', { text: W.addPhoto }))
+    drawPic()
+    pic.addEventListener('click', () => pickPhoto((url) => { imageUrl = url; drawPic() }))
+    const f = { title: input(item.title, { maxlength: '160' }), price: input(item.price, { maxlength: '40' }), comparePrice: input(item.comparePrice, { maxlength: '40' }), category: input(item.category, { maxlength: '60' }),
+      stock: input(item.stock ?? '', { type: 'number', min: '0' }), body: area(item.body), published: box(item.published !== 0 && item.published !== false) }
+    const status = h('p', { class: 'ed-note' })
+    const saveIt = h('button', { type: 'button', class: 'ed-btn ed-btn--primary', text: W.save, onclick: async () => {
+      saveIt.disabled = true
+      const body = { title: f.title.value.trim(), price: f.price.value.trim(), comparePrice: f.comparePrice.value.trim(), category: f.category.value.trim(), body: f.body.value.trim(),
+        stock: f.stock.value === '' ? null : Number(f.stock.value), published: f.published.checked, imageUrl: goodImage(imageUrl) ? imageUrl : '', imageAlt: f.title.value.trim().slice(0, 200) }
+      for (const key of ['price', 'comparePrice', 'category', 'body']) if (!body[key]) delete body[key]
+      try {
+        await post('product', item.id ? { id: item.id, ...body } : body)
+        closeSheet()
+        await loadPanel()
+        showTab('products')
+      } catch (error) { status.textContent = String(error.message || error); saveIt.disabled = false }
+    } })
+    const remove = item.id ? h('button', { type: 'button', class: 'ed-btn ed-btn--danger', text: W.del, onclick: async () => {
+      if (!confirm(W.sure)) return
+      try { await post('product', { id: item.id, delete: true }); closeSheet(); await loadPanel(); showTab('products') } catch (error) { status.textContent = String(error.message || error) }
+    } }) : null
+    openSheet(item.id ? item.title : W.addProduct, [h('div', { class: 'ed-form' }, pic, field(W.pName, f.title), field(W.pPrice, f.price), field(W.pCompare, f.comparePrice), field(W.pCategory, f.category), field(W.pStock, f.stock), field(W.pBody, f.body), check(W.pShown, f.published)),
+      h('div', { class: 'ed-row' }, saveIt, remove), status])
+    f.title.focus()
+  }
+  // Choosing a photo from the site's photos or uploading one, for things other than a section.
+  function pickPhoto(done) {
+    const file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif', hidden: true })
+    const status = h('p', { class: 'ed-note', text: W.photoTooBig })
+    const inner = h('div', { class: 'ed-photo-picker' })
+    const close = () => inner.remove()
+    const grid = h('div', { class: 'ed-photos' }, data.media.map((image) => h('button', { type: 'button', class: 'ed-photo-pick', title: image.name, onclick: () => { done(image.url); close() } }, h('img', { src: shown(image.url), alt: image.name, loading: 'lazy' }))))
+    const upload = h('button', { type: 'button', class: 'ed-btn ed-btn--primary', text: W.upload, onclick: () => file.click() })
+    file.addEventListener('change', async () => {
+      const chosen = file.files?.[0]
+      if (!chosen) return
+      upload.disabled = true
+      status.textContent = W.uploading
+      try {
+        const body = new FormData()
+        body.append('file', await shrink(chosen), chosen.name.replace(/\.[^.]+$/, '') + '.jpg')
+        const response = await fetch(`${data.base}/editor/${data.slug}/image`, { method: 'POST', body })
+        const result = await response.json().catch(() => ({}))
+        if (!response.ok || !result.url) throw new Error(result.error || `${response.status}`)
+        data.media.unshift({ name: chosen.name, url: result.url })
+        done(result.url)
+        close()
+      } catch (error) { status.textContent = String(error.message || error); upload.disabled = false }
+    })
+    inner.append(grid, h('div', { class: 'ed-row' }, upload, file, h('button', { type: 'button', class: 'ed-btn', text: W.close, onclick: close })), status)
+    document.querySelector('.ed-sheet__body')?.prepend(inner)
+  }
+
+  // Shop and payment, and the site's look: saved to the working copy, live after Publish.
+  function settingsPanel(title, rows, keys, after) {
+    const status = h('p', { class: 'ed-note' })
+    const saveIt = h('button', { type: 'button', class: 'ed-btn ed-btn--primary', text: W.save, onclick: async () => {
+      saveIt.disabled = true
+      const body = {}
+      for (const [key, el] of Object.entries(keys)) {
+        if (el.type === 'checkbox') body[key] = el.checked
+        else if (el.type === 'number') body[key] = el.value === '' ? null : Number(el.value)
+        else body[key] = el.value.trim() === '' ? null : el.value.trim()
+      }
+      try {
+        await post('settings', body)
+        status.textContent = W.savedNote
+        await loadPanel()
+        after?.()
+      } catch (error) {
+        status.textContent = String(error.message || error)
+        if (error.field && keys[error.field]) keys[error.field].focus()
+      } finally { saveIt.disabled = false }
+    } })
+    return h('div', { class: 'ed-panel' }, h('h2', { text: title }), h('div', { class: 'ed-form' }, rows), h('div', { class: 'ed-row' }, saveIt), status)
+  }
+  function shopPanel() {
+    const s = panel?.settings || {}
+    const k = { cart: box(s.cart), accounts: box(s.accounts), payTransfer: box(s.payTransfer), transferDetails: area(s.transferDetails), payPromptPay: box(s.payPromptPay), promptPayId: input(s.promptPayId, { inputmode: 'numeric', maxlength: '40' }),
+      promptPayName: input(s.promptPayName, { maxlength: '80' }), payCod: box(s.payCod), shippingFee: input(s.shippingFee, { type: 'number', min: '0' }), freeShippingOver: input(s.freeShippingOver, { type: 'number', min: '0' }), currency: input(s.currency || 'thb', { maxlength: '3' }) }
+    return settingsPanel(W.shop, [check(W.cart, k.cart), check(W.accounts, k.accounts), h('h3', { text: W.payHow }), check(W.payTransfer, k.payTransfer), field(W.transferDetails, k.transferDetails),
+      check(W.payPromptPay, k.payPromptPay), field(W.promptPayId, k.promptPayId), field(W.promptPayName, k.promptPayName), check(W.payCod, k.payCod), field(W.shipping, k.shippingFee), field(W.freeOver, k.freeShippingOver), field(W.currency, k.currency)], k)
+  }
+  function sitePanel() {
+    const s = panel?.settings || {}
+    const pick = (value, options, empty) => { const el = h('select', { class: 'ed-input' }, empty ? h('option', { value: '', text: empty }) : null, options.map((option) => h('option', { value: option, text: option }))); el.value = value || ''; return el }
+    const colour = (value) => input(value || '#000000', { type: 'color' })
+    const k = { name: input(s.name, { maxlength: '80' }), tagline: input(s.tagline, { maxlength: '160' }), style: pick(s.style, panel?.styles || []), headingFont: pick(s.headingFont, panel?.fonts || [], W.fromStyle), bodyFont: pick(s.bodyFont, panel?.fonts || [], W.fromStyle),
+      accent: colour(s.accent), background: colour(s.background || '#ffffff'), text: colour(s.text || '#111111'), phone: input(s.phone, { maxlength: '40' }), email: input(s.email, { type: 'email' }), address: area(s.address), footerText: area(s.footerText) }
+    // The page here shows the site's look, so it is drawn again with the new one.
+    return settingsPanel(W.site, [field(W.sName, k.name), field(W.sTagline, k.tagline), field(W.sStyle, k.style), field(W.sHeading, k.headingFont), field(W.sBody, k.bodyFont),
+      h('div', { class: 'ed-colours' }, field(W.sAccent, k.accent), field(W.sBg, k.background), field(W.sText, k.text)), field(W.sPhone, k.phone), field(W.sEmail, k.email), field(W.sAddress, k.address), field(W.sFooter, k.footerText)], k, () => { if (!dirty) location.reload() })
   }
 
   // ---- list item tools, added after each render ---------------------------------------------------------
@@ -634,6 +826,8 @@
 
   frame()
   render()
+  drawTabs()
+  loadPanel()
   root.addEventListener('click', onClick)
   root.addEventListener('keydown', onKey)
   root.addEventListener('focusin', onFocusIn)
