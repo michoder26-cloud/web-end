@@ -1,4 +1,4 @@
 {
-  "version": "0.30.2",
-  "notes": "Moving sites built with page builders such as Wix Studio follows the order a visitor sees, using where each part showed on the page. Small icons are no longer copied as photos, Wix photos named without an address come along, rows of figures become a figures section, and words with one button stay one section."
+  "version": "0.30.3",
+  "notes": "Moved pages from page builders look more like the original: a page that opens with words beside a photo gets a real top banner, cards side by side (services, projects) become cards, short labels stay with their headings, and the site's name is taken from the page title without words like Home."
 }

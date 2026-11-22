@@ -188,7 +188,8 @@ function groupsOf(unsorted: FlowItem[]) {
     const sameColumn = (earlier: FlowItem) => item.x === undefined || earlier.x === undefined || Math.abs(earlier.x - item.x) < 200
     const bigHeading = item.kind === 'heading' && item.level <= 2 && current.some((earlier) => earlier.kind !== 'heading' && sameColumn(earlier))
     // A short line just above a big heading is its label ("New collection"), so it stays with that heading.
-    const label = bigHeading && !newSection && current.every((earlier) => earlier.kind === 'text' && earlier.text.length <= 80) && current.length <= 2
+    const column = current.filter(sameColumn)
+    const label = bigHeading && !newSection && column.length <= 2 && column.every((earlier) => earlier.kind === 'text' && earlier.text.length <= 80)
     if ((newSection || bigHeading) && !label) {
       groups.push(current)
       current = []
@@ -287,7 +288,8 @@ export function blocksFromReading(reading: PageReading, image: (url: string) => 
       return
     }
 
-    if (!heroUsed && heading && (top === 1 || index === 0)) {
+    const nearTop = index <= 1 && (main?.y === undefined || main.y < 1200)
+    if (!heroUsed && heading && (index === 0 || nearTop || (top === 1 && (main?.y === undefined || main.y < 1200)))) {
       heroUsed = true
       const first: string[] = []
       for (const line of texts) {
@@ -359,6 +361,35 @@ export function blocksFromReading(reading: PageReading, image: (url: string) => 
       return
     }
 
+    // Cards side by side (services, projects): on a measured page, things that sit in three to six columns.
+    // A main heading that sits in the row of cards is the first card's title, not the title of the part.
+    const mainInRow = main?.x !== undefined && main.y !== undefined && group.some((item) => item !== main && (item.kind === 'text' || item.kind === 'heading') && item.y !== undefined && Math.abs(item.y - main.y!) < 30 && Math.abs((item.x ?? 0) - main.x!) > 100)
+    const placed = group.filter((item) => (item !== main || mainInRow) && item.x !== undefined && (item.kind === 'text' || item.kind === 'heading' || item.kind === 'image'))
+    if (placed.length >= 6) {
+      const cardsHeading = mainInRow ? undefined : heading
+      const columns: FlowItem[][] = []
+      for (const item of [...placed].sort((a, b) => a.x! - b.x!)) {
+        const last = columns.at(-1)
+        if (last && item.x! - last[0].x! < 60) last.push(item)
+        else columns.push([item])
+      }
+      const cards = columns.filter((col) => col.some((item) => item.kind !== 'image')).map((col) => {
+        const inOrder = [...col].sort((a, b) => (a.y ?? 0) - (b.y ?? 0))
+        const words = inOrder.filter((item): item is Extract<FlowItem, { kind: 'heading' | 'text' }> => item.kind === 'heading' || item.kind === 'text').map((item) => item.text)
+        const photo = inOrder.find((item): item is Image => item.kind === 'image')
+        return { title: words[0] ?? '', text: words.slice(1).join('\n\n'), photo }
+      })
+      const rows = new Set(placed.map((item) => Math.round((item.y ?? 0) / 300)))
+      if (cards.length >= 3 && cards.length <= 6 && cards.length === columns.length && rows.size <= 3 && cards.every((card) => card.title && card.title.length <= 120)) {
+        const intro = group.filter((item) => item.kind === 'text' && !placed.includes(item)).map((item) => (item.kind === 'text' ? item.text : '')).join(' ')
+        const withPhotos = cards.filter((card) => card.photo && image(card.photo.url)).length >= cards.length - 1
+        if (withPhotos) add({ type: 'team', ...(cardsHeading ? { heading: cardsHeading } : {}), ...(intro ? { intro: cut(intro, 400) } : {}), members: cards.map((card) => ({ name: cut(card.title, 80), ...(card.text ? { text: cut(card.text, 500) } : {}), ...(card.photo && image(card.photo.url) ? { imageUrl: image(card.photo.url)! } : {}) })), ...tone() })
+        else add({ type: 'features', ...(cardsHeading ? { heading: cardsHeading } : {}), ...(intro ? { intro: cut(intro, 400) } : {}), items: cards.map((card) => ({ title: cut(card.title, 120), text: cut(card.text || card.title, 600) })), ...tone() })
+        if (link) add({ type: 'cta', heading: cut(link.text, 160), ...button, tone: 'plain' })
+        return
+      }
+    }
+
     // A row of features with no title above it: every heading is one feature.
     const flat = headings.length >= 3 && headings.every((item) => item.level === top && answered(item)) && !images.length && group[0]?.kind === 'heading'
     if (flat && (heroUsed || index > 0)) {
@@ -397,6 +428,13 @@ export function blocksFromReading(reading: PageReading, image: (url: string) => 
     }
     if (images.length && !(images.length === 1 && body)) add({ type: 'gallery', ...(body || !heading ? {} : { heading }), images: images.slice(0, 24).map((item) => ({ imageUrl: item.url, imageAlt: item.alt })), ...tone() })
   })
+  // A page that starts with words beside a photo starts with a top banner, as the old one did.
+  const first = blocks[0]
+  if (first?.type === 'split' && first.heading && !blocks.some((block) => block.type === 'hero')) {
+    const lines = String(first.body ?? '').split('\n\n').filter(Boolean)
+    const eyebrow = lines.length > 1 && lines[0].length <= 60 ? lines.shift() : undefined
+    blocks[0] = { type: 'hero', ...(eyebrow ? { eyebrow } : {}), heading: first.heading, ...(lines.length ? { text: cut(lines.join(' '), 600) } : {}), ...(first.buttonLabel ? { buttonLabel: first.buttonLabel, buttonHref: first.buttonHref } : {}), imageUrl: first.imageUrl, imageAlt: first.imageAlt, layout: 'split' }
+  }
   return blocks
 }
 
@@ -454,6 +492,8 @@ export function chromeOf(reading: PageReading, homeUrl = '') {
     }
   }
   // "Araya — Things for every day" names the site in its first part.
-  const name = cut(reading.title.split(/\s+[—–|·-]\s+/)[0].trim(), 80)
+  const parts = reading.title.split(/\s+[—–|·-]\s+/).map((part) => part.trim()).filter(Boolean)
+  const generic = /^(home|homepage|start|startseite|accueil|inicio|หน้าแรก|หน้าหลัก|welcome|index)$/i
+  const name = cut((parts.find((part) => !generic.test(part)) ?? parts[0] ?? '').trim(), 80)
   return { name, nav, footerText: footer.length ? cut(footer.join(' · '), 500) : '' }
 }
