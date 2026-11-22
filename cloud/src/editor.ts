@@ -11,6 +11,8 @@ import { rememberPage } from './page-history'
 import { siteLook } from './render'
 import { siteFontNames, siteStyles } from './theme'
 import { publishVersion, unpublishedChanges } from './versions'
+import { formatMoney } from './money'
+import { orderStatuses, setOrderStatus } from './shop'
 import type { Block, Env, Settings, SiteRow } from './types'
 
 /**
@@ -142,6 +144,14 @@ async function panelData(env: Env, site: SiteRow, desk: Desk) {
       (SELECT COUNT(*) FROM customers WHERE site_id = ?1) AS customers,
       (SELECT COUNT(*) FROM entries WHERE site_id = ?1) AS entries,
       (SELECT COUNT(*) FROM orders WHERE site_id = ?1) AS orders`).bind(site.id).first<{ customers: number; entries: number; items: number; orders: number; tables: number }>()
+  // The latest orders, members and form messages, shown in the editor itself.
+  const [{ results: orders }, { results: members }, { results: messages }] = await Promise.all([
+    allows(desk, 'orders')
+      ? env.DB.prepare('SELECT id, name, phone, address, note, payment, status, total, money_prefix, money_suffix, created_at FROM orders WHERE site_id = ? ORDER BY id DESC LIMIT 30').bind(site.id).all<{ address: string; created_at: string; id: number; money_prefix: string; money_suffix: string; name: string; note: string; payment: string; phone: string; status: string; total: number }>()
+      : Promise.resolve({ results: [] as never[] }),
+    allows(desk, 'customers') ? env.DB.prepare('SELECT name, email, created_at FROM customers WHERE site_id = ? ORDER BY id DESC LIMIT 30').bind(site.id).all<{ created_at: string; email: string; name: string }>() : Promise.resolve({ results: [] as never[] }),
+    allows(desk, 'messages') ? env.DB.prepare('SELECT form, page, data, status, created_at FROM entries WHERE site_id = ? ORDER BY id DESC LIMIT 30').bind(site.id).all<{ created_at: string; data: string; form: string; page: string; status: string }>() : Promise.resolve({ results: [] as never[] }),
+  ])
   const used = new Set(pages.flatMap((page) => { try { return (JSON.parse(page.blocks) as Block[]).map((block) => block.type) } catch { return [] } }))
   const content = pages.filter((page) => page.blocks !== '[]').length
   return {
@@ -164,6 +174,14 @@ async function panelData(env: Env, site: SiteRow, desk: Desk) {
       entries: counts?.entries ?? 0,
       tables: counts?.tables ?? 0,
     },
+    orders: orders.map((order) => ({ id: order.id, name: order.name, phone: order.phone, address: order.address, note: order.note, payment: order.payment, status: order.status, total: formatMoney(order.total, order.money_prefix, order.money_suffix), at: order.created_at })),
+    orderStatuses,
+    members: members.map((member) => ({ name: member.name, email: member.email, at: member.created_at })),
+    messages: messages.map((entry) => {
+      let fields: Record<string, unknown> = {}
+      try { fields = JSON.parse(entry.data) } catch { /* shown empty */ }
+      return { form: entry.form, page: entry.page, status: entry.status, at: entry.created_at, fields: Object.entries(fields).slice(0, 8).map(([key, value]) => [key, String(value ?? '').slice(0, 300)]) }
+    }),
     // Card payments need the owner's Stripe account connected to the site.
     cardReady: Boolean(env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET),
     // null: never published, so everything waits. Otherwise the pages and settings that differ from the live site.
@@ -228,6 +246,18 @@ async function newPage(request: Request, env: Env, site: SiteRow, desk: Desk) {
   return json({ ok: true, slug, url: `${desk.base}/editor/${slug}` })
 }
 
+async function changeOrder(request: Request, env: Env, site: SiteRow, desk: Desk) {
+  if (!allows(desk, 'orders')) return json({ error: 'You may not change orders.' }, 403)
+  const body = (await request.json().catch((): null => null)) as { id?: unknown; status?: unknown } | null
+  const id = typeof body?.id === 'number' && Number.isInteger(body.id) ? body.id : 0
+  const status = typeof body?.status === 'string' && orderStatuses.includes(body.status) ? body.status : ''
+  if (!id || !status) return json({ error: 'not found' }, 400)
+  const result = await setOrderStatus(env, site.id, id, status, { actor: desk.staff ? 'staff' : 'owner', origin: new URL(request.url).origin, staff: desk.staff })
+  if (result === 'missing') return json({ error: 'not found' }, 404)
+  if (result === 'no-stock') return json({ error: officeText(site).noStock }, 409)
+  return json({ ok: true })
+}
+
 async function publishNow(env: Env, site: SiteRow, desk: Desk) {
   if (!allows(desk, 'publish')) return json({ error: 'You may not publish.' }, 403)
   const published = await publishVersion(env, site, officeText(site).lang === 'th' ? 'เผยแพร่จากตัวแก้เว็บ' : 'Published from the editor')
@@ -266,5 +296,6 @@ export async function handleEditor(request: Request, env: Env, site: SiteRow, de
   if (action === 'product') return saveProduct(request, env, site, desk)
   if (action === 'new-page') return newPage(request, env, site, desk)
   if (action === 'publish') return publishNow(env, site, desk)
+  if (action === 'order') return changeOrder(request, env, site, desk)
   return notFound()
 }

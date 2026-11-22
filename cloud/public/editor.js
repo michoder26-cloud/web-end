@@ -33,6 +33,12 @@
         card: 'บัตรเครดิต/เดบิต ผ่าน Stripe', cardReady: 'เชื่อม Stripe แล้ว', cardNot: 'ยังไม่ได้เชื่อม Stripe ตั้งค่าได้ที่', settingsLink: 'ตั้งค่าเพิ่มเติม', localPay: 'วิธีอื่น',
         members: 'สมาชิก', membersCount: (n) => `มีสมาชิก ${n} คน`, seeMembers: 'ดูรายชื่อสมาชิก', forms: 'ข้อความจากฟอร์ม', entriesCount: (n) => `มีข้อความ ${n} รายการ`, seeEntries: 'เปิดอ่านข้อความ',
         data: 'ข้อมูลและการจอง', tablesCount: (n) => `มี ${n} ตาราง`, seeData: 'เปิดดูข้อมูล', orders: (n) => `ออเดอร์ ${n} รายการ`, seeOrders: 'ดูออเดอร์',
+        tabOrders: 'ออเดอร์', noOrders: 'ยังไม่มีออเดอร์', noMembers: 'ยังไม่มีสมาชิก', noMessages: 'ยังไม่มีข้อความ', newTag: 'ใหม่',
+        status: { pending: 'รอชำระ', paid: 'จ่ายแล้ว', shipped: 'ส่งแล้ว', done: 'เสร็จ', cancelled: 'ยกเลิก' },
+        payTitle: 'ลูกค้าจ่ายเงินได้ทางไหน', payHelp: 'เปิดวิธีที่ใช้ได้ แล้วระบบบันทึกให้เอง เปิดอย่างน้อย 1 วิธีเพื่อให้ลูกค้าสั่งซื้อได้',
+        cardDesc: 'บัตรเครดิต เดบิต Apple Pay Google Pay เงินเข้าบัญชี Stripe ของคุณ', cardLater: 'ยังเชื่อม Stripe ไม่ได้จากตรงนี้ เรากำลังทำปุ่มเชื่อมแบบกดครั้งเดียว ระหว่างนี้เปิดโอนเงินหรือเก็บเงินปลายทางได้เลย',
+        transferDesc: 'ลูกค้าโอนเข้าบัญชีของคุณ แล้วคุณกดว่าได้รับเงินแล้วในแท็บออเดอร์', codDesc: 'ลูกค้าจ่ายตอนได้รับของ', promptDesc: 'ลูกค้าสแกน QR จ่ายด้วยแอปธนาคารไทย',
+        delivery: 'ค่าส่ง', savedTick: 'บันทึกแล้ว ✓', noPay: 'ยังไม่ได้เปิดวิธีรับเงิน ลูกค้ายังสั่งซื้อไม่ได้', openTable: 'เปิดตารางเต็ม',
         published: 'เผยแพร่แล้ว เว็บจริงเป็นแบบนี้แล้ว', openLive: 'เปิดดูเว็บ', problemsT: 'ก่อนเผยแพร่ ลองดูเรื่องเหล่านี้', publishAnyway: 'เผยแพร่เลย', fixFirst: 'กลับไปแก้ก่อน', waiting: (n) => `มี ${n} อย่างรอเผยแพร่`, upToDate: 'เว็บจริงตรงกับที่แก้แล้ว',
       }
     : {
@@ -61,6 +67,12 @@
         card: 'Cards with Stripe', cardReady: 'Stripe is connected', cardNot: 'Stripe is not connected yet. Set it up in', settingsLink: 'More settings', localPay: 'Other ways to pay',
         members: 'Members', membersCount: (n) => `${n} member${n === 1 ? '' : 's'}`, seeMembers: 'See members', forms: 'Messages from forms', entriesCount: (n) => `${n} message${n === 1 ? '' : 's'}`, seeEntries: 'Read messages',
         data: 'Data and bookings', tablesCount: (n) => `${n} table${n === 1 ? '' : 's'}`, seeData: 'Open the data', orders: (n) => `${n} order${n === 1 ? '' : 's'}`, seeOrders: 'See orders',
+        tabOrders: 'Orders', noOrders: 'No orders yet', noMembers: 'No members yet', noMessages: 'No messages yet', newTag: 'new',
+        status: { pending: 'Waiting for payment', paid: 'Paid', shipped: 'Shipped', done: 'Done', cancelled: 'Cancelled' },
+        payTitle: 'How customers pay', payHelp: 'Switch on the ways you accept. Changes save by themselves. Turn on at least one so customers can order.',
+        cardDesc: 'Credit and debit cards, Apple Pay and Google Pay, paid into your own Stripe account', cardLater: 'Stripe can’t be connected from here yet. A one-click connect button is on its way. Until then, switch on bank transfer or pay on delivery.',
+        transferDesc: 'Customers pay into your bank account; you mark the order paid in Orders', codDesc: 'Customers pay when they receive the order', promptDesc: 'Customers scan a QR code with a Thai banking app',
+        delivery: 'Delivery', savedTick: 'Saved ✓', noPay: 'No way to pay is on yet, so customers can’t order.', openTable: 'Open the full table',
         published: 'Published. The live site looks like this now.', openLive: 'Open the site', problemsT: 'Before you publish, have a look at these', publishAnyway: 'Publish anyway', fixFirst: 'Go back and fix', waiting: (n) => `${n} change${n === 1 ? '' : 's'} waiting to go live`, upToDate: 'The live site matches your edits',
       }
   const NAMES_TH = { hero: 'หัวเว็บ', text: 'ข้อความ', split: 'ข้อความคู่รูป', features: 'จุดเด่น', steps: 'ขั้นตอน', stats: 'ตัวเลข', pricing: 'ราคา', testimonials: 'คำชมจากลูกค้า', team: 'ทีมงาน', gallery: 'แกลเลอรี', info: 'ข้อมูล เช่น เวลาเปิด', faq: 'คำถามที่พบบ่อย', links: 'ลิงก์', cta: 'แถบเชิญชวน', form: 'ฟอร์ม', collection: 'สินค้าหรือรายการ', records: 'ข้อมูลจากตาราง', table: 'ตาราง', 'record-form': 'ฟอร์มเพิ่มข้อมูล', record: 'แก้ข้อมูลของตัวเอง', html: 'โค้ดเอง' }
@@ -685,7 +697,7 @@
     if (has.empty && !blocks.length) showEmpty()
     else document.querySelector('.ed-start')?.remove()
     const tabs = [['add', W.tabAdd], ['pages', W.tabPages],
-      ...(has.shop && panel?.canProducts ? [['products', W.tabProducts]] : []), ...(has.shop && panel?.owner ? [['shop', W.tabPay]] : []),
+      ...(has.shop && panel?.canProducts ? [['products', W.tabProducts]] : []), ...(has.shop && panel?.owner ? [['shop', W.tabPay]] : []), ...(has.shop && panel?.orders ? [['orders', W.tabOrders]] : []),
       ...(has.members && panel?.owner ? [['members', W.tabMembers]] : []), ...(has.forms ? [['forms', W.tabForms]] : []), ...(has.data && panel?.owner ? [['data', W.tabData]] : []),
       ...(panel?.owner ? [['site', W.tabSite]] : [])]
     if (!tabs.some(([key]) => key === tab)) tab = 'add'
@@ -695,9 +707,8 @@
     tab = key
     drawTabs()
     const body = key === 'add' ? els.addPanel : key === 'pages' ? pagesPanel() : key === 'products' ? productsPanel() : key === 'shop' ? shopPanel()
-      : key === 'members' ? infoPanel(W.members, [W.membersCount(panel.has.customers)], 'accounts', W.accounts, [`${data.base}/customers`, W.seeMembers])
-      : key === 'forms' ? infoPanel(W.forms, [W.entriesCount(panel.has.entries)], null, null, [data.dashboard || data.base, W.seeEntries])
-      : key === 'data' ? infoPanel(W.data, [W.tablesCount(panel.has.tables)], null, null, [`${data.base}/data`, W.seeData]) : sitePanel()
+      : key === 'orders' ? ordersPanel() : key === 'members' ? membersPanel() : key === 'forms' ? messagesPanel()
+      : key === 'data' ? infoPanel(W.data, [W.tablesCount(panel.has.tables)], null, null, [`${data.base}/data`, W.openTable]) : sitePanel()
     els.panelBody.replaceChildren(body)
   }
   const field = (label, input, note) => h('label', { class: 'ed-field' }, h('span', { text: label }), input, note ? h('small', { class: 'ed-note', text: note }) : null)
@@ -816,22 +827,88 @@
   const CURRENCIES = ['usd', 'eur', 'gbp', 'chf', 'cad', 'aud', 'nzd', 'jpy', 'sgd', 'hkd', 'inr', 'brl', 'mxn', 'sek', 'nok', 'dkk', 'pln', 'czk', 'huf', 'zar', 'aed', 'thb', 'myr', 'idr', 'php', 'vnd', 'krw']
   function shopPanel() {
     const s = panel?.settings || {}
+    const status = h('p', { class: 'ed-note ed-saved', role: 'status' })
+    let timer
+    const saveNow = async (body) => {
+      try {
+        await post('settings', body)
+        Object.assign(panel.settings, body)
+        status.textContent = W.savedTick
+        clearTimeout(timer)
+        timer = setTimeout(() => { status.textContent = '' }, 2500)
+        warn()
+        const n = await post('panel', {}).catch(() => null)
+        if (n) { panel.waiting = n.waiting; panel.problems = n.problems; if (els.publish) els.publish.textContent = n.waiting ? `${W.publish} (${n.waiting})` : W.publish }
+      } catch (error) { status.textContent = String(error.message || error) }
+    }
+    const later = (key, el) => el.addEventListener('change', () => saveNow({ [key]: el.value.trim() === '' ? null : el.type === 'number' ? Number(el.value) : el.value.trim() }))
+    // One way to pay: a switch, a line saying what it is, and its own boxes when it is on.
+    const method = (key, title, desc, fields = [], { locked = null } = {}) => {
+      const on = h('input', { type: 'checkbox', class: 'ed-switch', checked: s[key] ? true : null, disabled: locked ? true : null, 'aria-label': title })
+      const more = h('div', { class: 'ed-method__more', hidden: !s[key] || !fields.length }, fields)
+      on.addEventListener('change', () => { more.hidden = !on.checked || !fields.length; saveNow({ [key]: on.checked }) })
+      return h('div', { class: `ed-method${locked ? ' is-locked' : ''}` }, h('label', { class: 'ed-method__head' }, h('span', {}, h('b', { text: title }), h('small', { text: desc })), on), locked ? h('p', { class: 'ed-note', text: locked }) : null, more)
+    }
+    const details = area(s.transferDetails)
+    later('transferDetails', details)
+    const promptId = input(s.promptPayId, { inputmode: 'numeric', maxlength: '40' })
+    const promptName = input(s.promptPayName, { maxlength: '80' })
+    later('promptPayId', promptId)
+    later('promptPayName', promptName)
     const currency = h('select', { class: 'ed-input' }, h('option', { value: '', text: '—' }), CURRENCIES.map((code) => h('option', { value: code, text: code.toUpperCase() })))
     currency.value = s.currency || ''
-    const k = { cart: box(s.cart), payCard: box(s.payCard), payTransfer: box(s.payTransfer), transferDetails: area(s.transferDetails), payPromptPay: box(s.payPromptPay), promptPayId: input(s.promptPayId, { inputmode: 'numeric', maxlength: '40' }),
-      promptPayName: input(s.promptPayName, { maxlength: '80' }), payCod: box(s.payCod), shippingFee: input(s.shippingFee, { type: 'number', min: '0' }), freeShippingOver: input(s.freeShippingOver, { type: 'number', min: '0' }), currency }
-    const cardNote = h('small', { class: 'ed-note' }, panel?.cardReady ? W.cardReady : [`${W.cardNot} `, h('a', { href: `${data.base}/settings`, text: W.settingsLink })])
-    const thai = h('div', { class: 'ed-form' }, check(W.payPromptPay, k.payPromptPay), field(W.promptPayId, k.promptPayId), field(W.promptPayName, k.promptPayName))
-    const showThai = () => { thai.hidden = currency.value !== 'thb' }
-    currency.addEventListener('change', showThai)
-    showThai()
-    return settingsPanel(W.shop, [check(W.cart, k.cart), field(W.currency, k.currency), h('h3', { text: W.payHow }), check(W.card, k.payCard), cardNote, h('h3', { text: W.localPay }),
-      check(W.payTransfer, k.payTransfer), field(W.transferDetails, k.transferDetails), thai, check(W.payCod, k.payCod), field(W.shipping, k.shippingFee), field(W.freeOver, k.freeShippingOver),
-      panel?.has?.orders ? h('p', { class: 'ed-note' }, `${W.orders(panel.has.orders)} · `, h('a', { href: `${data.base}/orders`, text: W.seeOrders })) : null], k)
+    const fee = input(s.shippingFee, { type: 'number', min: '0' })
+    const free = input(s.freeShippingOver, { type: 'number', min: '0' })
+    later('shippingFee', fee)
+    later('freeShippingOver', free)
+    const methods = h('div', { class: 'ed-methods' })
+    const drawMethods = () => methods.replaceChildren(...[
+      method('payCard', W.card, W.cardDesc, [], { locked: panel?.cardReady ? null : W.cardLater }),
+      method('payTransfer', W.payTransfer, W.transferDesc, [field(W.transferDetails, details)]),
+      method('payCod', W.payCod, W.codDesc),
+      currency.value === 'thb' ? method('payPromptPay', W.payPromptPay, W.promptDesc, [field(W.promptPayId, promptId), field(W.promptPayName, promptName)]) : null].filter(Boolean))
+    currency.addEventListener('change', () => { saveNow({ currency: currency.value || null }); drawMethods() })
+    drawMethods()
+    const warning = h('p', { class: 'ed-warn', text: W.noPay })
+    const warn = () => { const st = panel?.settings || {}; warning.hidden = !st.cart || Boolean((st.payCard && panel?.cardReady) || st.payTransfer || st.payCod || (st.payPromptPay && st.currency === 'thb')) }
+    warn()
+    const cart = h('input', { type: 'checkbox', class: 'ed-switch', checked: s.cart ? true : null, 'aria-label': W.cart })
+    cart.addEventListener('change', () => saveNow({ cart: cart.checked }))
+    return h('div', { class: 'ed-panel' }, h('h2', { text: W.shop }),
+      h('label', { class: 'ed-method__head ed-method__head--plain' }, h('b', { text: W.cart }), cart), field(W.currency, currency),
+      h('h3', { text: W.payTitle }), h('p', { class: 'ed-note', text: W.payHelp }), warning, methods,
+      h('h3', { text: W.delivery }), field(W.shipping, fee), field(W.freeOver, free), status)
+  }
+  const when = (at) => { try { return new Date(at).toLocaleString(TH ? 'th-TH' : undefined, { dateStyle: 'medium', timeStyle: 'short' }) } catch { return at } }
+  function ordersPanel() {
+    const orders = panel?.orders || []
+    return h('div', { class: 'ed-panel' }, h('h2', { text: W.tabOrders }), orders.length ? h('ul', { class: 'ed-list' }, orders.map((order) => {
+      const pick = h('select', { class: 'ed-input ed-input--small', 'aria-label': `#${order.id}` }, (panel.orderStatuses || []).map((code) => h('option', { value: code, text: W.status[code] || code })))
+      pick.value = order.status
+      pick.addEventListener('change', async () => {
+        try { await post('order', { id: order.id, status: pick.value }); order.status = pick.value; toast(W.savedTick) } catch (error) { pick.value = order.status; toast(String(error.message || error)) }
+      })
+      return h('li', { class: 'ed-order' }, h('div', { class: 'ed-order__top' }, h('b', { text: `#${order.id} · ${order.name}` }), h('span', { text: order.total })),
+        h('small', { text: [when(order.at), { cod: W.payCod, transfer: W.payTransfer, promptpay: W.payPromptPay, card: W.card }[order.payment] || order.payment, order.phone].filter(Boolean).join(' · ') }), order.address ? h('small', { class: 'ed-pre', text: order.address }) : null, order.note ? h('small', { class: 'ed-pre', text: order.note }) : null, pick)
+    })) : h('p', { class: 'ed-note', text: W.noOrders }))
+  }
+  function membersPanel() {
+    const members = panel?.members || []
+    const on = h('input', { type: 'checkbox', class: 'ed-switch', checked: panel?.settings?.accounts ? true : null, 'aria-label': W.accounts })
+    on.addEventListener('change', async () => { try { await post('settings', { accounts: on.checked }); panel.settings.accounts = on.checked; toast(W.savedTick) } catch (error) { toast(String(error.message || error)) } })
+    return h('div', { class: 'ed-panel' }, h('h2', { text: W.members }), h('label', { class: 'ed-method__head ed-method__head--plain' }, h('span', { text: W.accounts }), on),
+      h('p', { class: 'ed-big', text: W.membersCount(panel?.has?.customers || 0) }),
+      members.length ? h('ul', { class: 'ed-list' }, members.map((member) => h('li', { class: 'ed-order' }, h('b', { text: member.name || member.email }), h('small', { text: `${member.email} · ${when(member.at)}` })))) : h('p', { class: 'ed-note', text: W.noMembers }))
+  }
+  function messagesPanel() {
+    const messages = panel?.messages || []
+    return h('div', { class: 'ed-panel' }, h('h2', { text: W.forms }), messages.length ? h('ul', { class: 'ed-list' }, messages.map((entry) => h('li', { class: 'ed-order' },
+      h('div', { class: 'ed-order__top' }, h('b', { text: entry.form }), entry.status === 'new' ? h('span', { class: 'ed-tag', text: W.newTag }) : null), h('small', { text: `${when(entry.at)} · /${entry.page === 'home' ? '' : entry.page}` }),
+      h('dl', { class: 'ed-fields' }, entry.fields.map(([key, value]) => h('div', {}, h('dt', { text: key }), h('dd', { text: value }))))))) : h('p', { class: 'ed-note', text: W.noMessages }))
   }
   // Members, messages and data: what there is, one switch where it fits, and the way to the full list.
   function infoPanel(title, lines, key, label, [href, linkText]) {
-    const rows = [...lines.map((line) => h('p', { class: 'ed-big', text: line })), h('a', { class: 'ed-btn ed-wide', href, text: linkText })]
+    const rows = [...lines.map((line) => h('p', { class: 'ed-big', text: line })), h('a', { class: 'ed-btn ed-wide', href, target: '_blank', rel: 'noopener', text: `${linkText} ↗` })]
     if (!key) return h('div', { class: 'ed-panel' }, h('h2', { text: title }), h('div', { class: 'ed-form' }, rows))
     const k = { [key]: box(panel?.settings?.[key]) }
     return settingsPanel(title, [check(label, k[key]), ...rows], k)

@@ -1,4 +1,4 @@
 {
-  "version": "0.29.0",
-  "notes": "The editor follows what each site has: an empty site shows no tools until something is built, and the side panel only offers what fits, such as products and payments for a shop, members for sign-ups, messages for forms and data for bookings. Payments work for any currency, with cards through Stripe first; PromptPay shows only for Thai baht."
+  "version": "0.30.0",
+  "notes": "Payments are simpler: each way to pay is a card with an on/off switch that saves by itself, its boxes show only when it is on, and a note says when customers can't order yet. Orders, members and form messages now show inside the editor, and an order's status can be changed there, so nothing sends you off to the dashboard."
 }
