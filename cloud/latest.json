@@ -1,4 +1,4 @@
 {
-  "version": "0.30.3",
-  "notes": "Moved pages from page builders look more like the original: a page that opens with words beside a photo gets a real top banner, cards side by side (services, projects) become cards, short labels stay with their headings, and the site's name is taken from the page title without words like Home."
+  "version": "0.31.0",
+  "notes": "Moving a site works from what a real browser measured on the old page, whatever built it: its real colours, button look and background bands, words in plain boxes, and a Shopify shop's whole product list. Rows of cards and prices are kept together, and the top banner comes first."
 }

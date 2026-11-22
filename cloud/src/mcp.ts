@@ -21,7 +21,7 @@ import { registerNewsTools } from './news-tools'
 import { parsePrice } from './money'
 import { validPromptPayId } from './promptpay'
 import { checkMove, checkMoveWith, cleanPath, copyImage, importProducts, moveGate, moveReport, moveStatus, readWebPage, rememberReading, saveRedirects, scanWebsite } from './moving'
-import { blocksFromReading, chromeOf, lookCss, photosOf, productDetailsFrom, slugFor, type FoundProduct } from './importer'
+import { blocksFromReading, chromeOf, lookCss, photosOf, priceOf, productDetailsFrom, slugFor, type FoundProduct } from './importer'
 import { officeWords } from './office-words'
 import { defaultSiteNames, getSite as findSite } from './owner'
 import { pageRevisions, rememberPage, restorePageRevision } from './page-history'
@@ -915,6 +915,42 @@ export function createMcpServer(env: Env, origin: string, code: string) {
         return checked.success ? [checked.data] : []
       })
       if (!blocks.length) return refuse('Nothing on that page could be rebuilt as blocks. Nothing changed.')
+      // A Shopify shop lists its products itself (products.json), with every detail: better than reading cards.
+      if (reading.shop || reading.images.some((one) => one.url.includes('cdn.shopify.com')) || reading.scripts?.some((one) => one.includes('/cdn/shop/'))) {
+        try {
+          // The page reader's browser fetched the list from inside the shop's own page; shops refuse other readers.
+          let data: { products?: Record<string, any>[] } | null = reading.shop ? { products: JSON.parse(reading.shop) } : null
+          if (!data) {
+            const list = safeWebUrl(env, `${new URL(reading.url).origin}/products.json?limit=60`)
+            const answer = list ? await fetch(list, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(8000) }) : null
+            data = answer?.ok ? ((await answer.json()) as { products?: Record<string, any>[] }) : null
+          }
+          // The shop's own way of writing money, taken from a price on the page ("$385.00 CAD").
+          const sample = reading.text.map((line) => priceOf(line)).find(Boolean) ?? ''
+          const before = /^[^\d]*/.exec(sample)?.[0] ?? ''
+          const after = /[^\d.,]*$/.exec(sample)?.[0] ?? ''
+          const cost = (value: unknown) => (value ? `${before}${String(value)}${after}`.slice(0, 40) : undefined)
+          const listed = (data?.products ?? []).slice(0, 60).flatMap((product): FoundProduct[] => {
+            const first = product.variants?.[0]
+            if (typeof product.title !== 'string' || !first?.price) return []
+            const names = (product.variants as Record<string, any>[]).map((variant) => String(variant.title ?? '')).filter((title) => title && title !== 'Default Title' && title.length <= 60)
+            const source = typeof product.image === 'string' ? product.image : product.images?.[0]?.src
+            const picture = typeof source === 'string' && source.startsWith('https://') ? source : undefined
+            return [{
+              title: product.title.slice(0, 160), price: cost(first.price),
+              ...(Number(first.compare_at_price) > Number(first.price) ? { comparePrice: cost(first.compare_at_price) } : {}),
+              ...(product.body_html ? { body: String(product.body_html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 4000) } : {}),
+              ...(product.product_type ? { category: String(product.product_type).slice(0, 60) } : {}),
+              ...(picture ? { imageUrl: picture, imageAlt: product.title.slice(0, 200) } : {}),
+              ...(names.length > 1 ? { variants: names.slice(0, 30).map((variant) => ({ name: variant })) } : {}),
+            }]
+          })
+          if (listed.length > found.length) found.splice(0, found.length, ...listed)
+        } catch {
+          // The cards read from the page stay.
+        }
+      }
+      if (found.length && !blocks.some((block) => block.type === 'collection')) blocks.splice(Math.min(1, blocks.length), 0, { type: 'collection', id: 'products', collection: 'products', filters: true })
       const title = (reading.title || name).slice(0, 120)
       const firstWords = reading.flow?.find((item) => item.kind === 'text')
       const description = (reading.description || (firstWords?.kind === 'text' ? firstWords.text : '') || title).slice(0, 300)

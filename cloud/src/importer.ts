@@ -20,6 +20,9 @@ const price = /^(?:[฿€$£]\s?\d[\d.,\s]*|\d[\d.,\s]*\s?(?:[฿€$£]|บา
 // Small figures with a label: "1,200+" "customers", "7 วัน" "returns".
 const figure = (text: string) => text.length <= 14 && /\d/.test(text) && !price.test(text)
 
+const money = /(?:[฿€$£¥]\s?\d[\d.,]*|\d[\d.,]*\s?(?:[฿€$£¥]|บาท|THB|EUR|USD|CAD|AUD|GBP|CHF|SEK|NOK|DKK|PLN|JPY)\b)(?:\s?(?:THB|EUR|USD|CAD|AUD|GBP|CHF)\b)?/i
+export const priceOf = (text: string) => (text.length <= 60 ? money.exec(text)?.[0] : undefined)
+
 export type FoundProduct = { title: string; price?: string; comparePrice?: string; body?: string; imageUrl?: string; imageAlt?: string; category?: string; stock?: number; variants?: { name: string }[] }
 
 type Plain = string | number | boolean | null | Plain[]
@@ -184,13 +187,17 @@ function groupsOf(unsorted: FlowItem[]) {
   let current: Group = []
   for (const item of flow) {
     if ((item.section && chrome.has(item.section.kind)) || isBadge(item)) continue
-    const newSection = current.length > 0 && item.section !== current[0].section
+    const newSection = current.length > 0 && (item.section !== current[0].section || item.band !== current[0].band)
     const sameColumn = (earlier: FlowItem) => item.x === undefined || earlier.x === undefined || Math.abs(earlier.x - item.x) < 200
-    const bigHeading = item.kind === 'heading' && item.level <= 2 && current.some((earlier) => earlier.kind !== 'heading' && sameColumn(earlier))
+    // A row of cards starts its own part: the first heading that has another heading beside it.
+    const inRow = (one: FlowItem) => one.kind === 'heading' && one.y !== undefined && flow.some((other) => other !== one && other.kind === 'heading' && other.y !== undefined && Math.abs(other.y - one.y!) < 30 && Math.abs((other.x ?? 0) - (one.x ?? 0)) > 100)
+    const rowStart = inRow(item) && current.some((earlier) => earlier.kind === 'heading' && earlier.level === 1) && !current.some(inRow)
+    // A price written as a heading ("$15/mo") belongs to its card, it does not start a part.
+    const bigHeading = item.kind === 'heading' && item.level <= 2 && !priceOf(item.text) && !inRow(item) && current.some((earlier) => earlier.kind !== 'heading' && sameColumn(earlier))
     // A short line just above a big heading is its label ("New collection"), so it stays with that heading.
     const column = current.filter(sameColumn)
     const label = bigHeading && !newSection && column.length <= 2 && column.every((earlier) => earlier.kind === 'text' && earlier.text.length <= 80)
-    if ((newSection || bigHeading) && !label) {
+    if (rowStart || ((newSection || bigHeading) && !label)) {
       groups.push(current)
       current = []
     }
@@ -236,10 +243,16 @@ export function blocksFromReading(reading: PageReading, image: (url: string) => 
   let heroUsed = false
   let forms = 0
   let side: 'left' | 'right' = 'right'
-  const tone = () => ({})
+  // A part keeps the kind of background its band had: dark, or set off from the page, or plain.
+  const pageBg = reading.design.background ?? '#ffffff'
+  const far = (a: string, b: string) => [1, 3, 5].reduce((sum, i) => sum + Math.abs(parseInt(a.slice(i, i + 2), 16) - parseInt(b.slice(i, i + 2), 16)), 0) > 24
+  let groupTone: { tone?: string } = {}
+  const tone = () => groupTone
   const groups = groupsOf(reading.flow ?? [])
 
   groups.forEach((group, index) => {
+    const band = group.find((item) => item.band !== undefined)
+    groupTone = band?.bgPhoto ? { tone: 'dark' } : band?.bg ? (readableOn(band.bg) === '#ffffff' ? { tone: 'dark' } : far(band.bg, pageBg) ? { tone: 'tint' } : {}) : {}
     const headings = group.filter((item): item is Heading => item.kind === 'heading')
     const top = Math.min(...headings.map((item) => item.level))
     const main = headings.find((item) => item.level === top)
@@ -254,7 +267,8 @@ export function blocksFromReading(reading: PageReading, image: (url: string) => 
     const form = group.find((item): item is Form => item.kind === 'form' && item.fields.length > 0)
     const subheadings = headings.filter((item) => item !== main)
     const textChars = texts.join(' ').length
-    const add = (block: Block) => { if (blocks.length < maxBlocks) blocks.push(block) }
+    // A stray word or two on its own (a badge, a counter) is not worth a section.
+    const add = (block: Block) => { if (blocks.length < maxBlocks && !(block.type === 'text' && !block.heading && String(block.body ?? '').length < 40)) blocks.push(block) }
 
     // Every word of the part, in order, except the main heading: nothing is dropped when a part becomes text.
     const body = group
@@ -310,7 +324,7 @@ export function blocksFromReading(reading: PageReading, image: (url: string) => 
       const second = group.find((item): item is Link => item.kind === 'link' && item !== link && Boolean(linkFor(item.href, origin, home)) && item.text.length <= 60)
       const secondButton = link && second ? { secondLabel: cut(second.text, 60), secondHref: linkFor(second.href, origin, home)! } : {}
       const figures = statWords.length && statWords.length <= 8 ? { figures: stats.slice(0, 4).map((item) => ({ value: cut(item.value, 24), label: cut(item.label, 120) })) } : {}
-      add({ type: 'hero', ...(eyebrow ? { eyebrow } : {}), heading, ...(first.length ? { text: first.join(' ') } : {}), ...button, ...secondButton, ...figures, ...(images[0] ? { imageUrl: images[0].url, imageAlt: images[0].alt, layout: 'split' } : { layout: 'centered' }) })
+      add({ type: 'hero', ...(eyebrow ? { eyebrow } : {}), heading, ...(first.length ? { text: first.join(' ') } : {}), ...button, ...secondButton, ...figures, ...(images[0] ? { imageUrl: images[0].url, imageAlt: images[0].alt, layout: 'split' } : { layout: 'centered' }), ...tone() })
       if (statWords.length > 8) add({ type: 'stats', items: stats.slice(0, 6).map((item) => ({ value: cut(item.value, 24), label: cut(item.label, 120) })) })
       const rest = group
         .filter((item) => (item.kind === 'text' && !first.includes(item.text) && item.text !== eyebrow && !statWords.includes(item.text)) || (item.kind === 'heading' && item !== main))
@@ -345,11 +359,11 @@ export function blocksFromReading(reading: PageReading, image: (url: string) => 
         if (next.kind === 'heading' || next.kind === 'image') break
         if (next.kind === 'text') words.push(next.text)
       }
-      const prices = words.filter((word) => price.test(word))
+      const prices = words.flatMap((word) => { const found = priceOf(word); return found ? [found] : [] })
       if (!prices.length) return []
       const url = photo ? image(photo.url) : undefined
       const card: FoundProduct = { title: cut(item.text, 160), price: prices[0].slice(0, 40), ...(prices[1] ? { comparePrice: prices[1].slice(0, 40) } : {}) }
-      const body = words.filter((word) => !price.test(word) && word.length > 12).join('\n\n')
+      const body = words.filter((word) => !priceOf(word) && word.length > 12).join('\n\n')
       if (body) card.body = cut(body, 4000)
       if (url) Object.assign(card, { imageUrl: url, imageAlt: cut(photo!.alt || item.text, 200) })
       return [card]
@@ -382,10 +396,19 @@ export function blocksFromReading(reading: PageReading, image: (url: string) => 
       const rows = new Set(placed.map((item) => Math.round((item.y ?? 0) / 300)))
       if (cards.length >= 3 && cards.length <= 6 && cards.length === columns.length && rows.size <= 3 && cards.every((card) => card.title && card.title.length <= 120)) {
         const intro = group.filter((item) => item.kind === 'text' && !placed.includes(item)).map((item) => (item.kind === 'text' ? item.text : '')).join(' ')
+        const lines = cards.map((card) => [card.title, ...card.text.split('\n\n')].filter(Boolean))
+        if (lines.every((list) => list.some((line) => priceOf(line))) && !cards.some((card) => card.photo)) {
+          add({ type: 'pricing', ...(cardsHeading ? { heading: cardsHeading } : {}), ...(intro ? { intro: cut(intro, 400) } : {}), plans: lines.map((list) => {
+            const cost = list.find((line) => priceOf(line))!
+            const name = list.find((line) => line !== cost) ?? cost
+            return { name: cut(name, 80), price: cut(cost, 40), features: cut(list.filter((line) => line !== cost && line !== name).join('\n'), 1000) || undefined }
+          }), ...tone() })
+          return
+        }
         const withPhotos = cards.filter((card) => card.photo && image(card.photo.url)).length >= cards.length - 1
         if (withPhotos) add({ type: 'team', ...(cardsHeading ? { heading: cardsHeading } : {}), ...(intro ? { intro: cut(intro, 400) } : {}), members: cards.map((card) => ({ name: cut(card.title, 80), ...(card.text ? { text: cut(card.text, 500) } : {}), ...(card.photo && image(card.photo.url) ? { imageUrl: image(card.photo.url)! } : {}) })), ...tone() })
         else add({ type: 'features', ...(cardsHeading ? { heading: cardsHeading } : {}), ...(intro ? { intro: cut(intro, 400) } : {}), items: cards.map((card) => ({ title: cut(card.title, 120), text: cut(card.text || card.title, 600) })), ...tone() })
-        if (link) add({ type: 'cta', heading: cut(link.text, 160), ...button, tone: 'plain' })
+        if (link) add({ type: 'cta', heading: cut(link.text, 160), ...button, ...(groupTone.tone ? groupTone : { tone: 'plain' }) })
         return
       }
     }
@@ -418,22 +441,24 @@ export function blocksFromReading(reading: PageReading, image: (url: string) => 
     }
 
     if (body && link && heading && body.length <= 600) {
-      add({ type: 'cta', heading, text: body, ...button, tone: 'plain' })
+      add({ type: 'cta', heading, text: body, ...button, ...(groupTone.tone ? groupTone : { tone: 'plain' }) })
     } else if (body) {
       add({ type: 'text', ...(heading ? { heading } : {}), body: cut(body, 8000), ...tone() })
     } else if (heading && link) {
-      add({ type: 'cta', heading, ...button, tone: 'plain' })
+      add({ type: 'cta', heading, ...button, ...(groupTone.tone ? groupTone : { tone: 'plain' }) })
     } else if (heading && !images.length) {
       add({ type: 'text', body: heading, ...tone() })
     }
     if (images.length && !(images.length === 1 && body)) add({ type: 'gallery', ...(body || !heading ? {} : { heading }), images: images.slice(0, 24).map((item) => ({ imageUrl: item.url, imageAlt: item.alt })), ...tone() })
   })
+  const heroAt = blocks.findIndex((block) => block.type === 'hero')
+  if (heroAt > 0 && heroAt <= 3) blocks.unshift(...blocks.splice(heroAt, 1))
   // A page that starts with words beside a photo starts with a top banner, as the old one did.
   const first = blocks[0]
   if (first?.type === 'split' && first.heading && !blocks.some((block) => block.type === 'hero')) {
     const lines = String(first.body ?? '').split('\n\n').filter(Boolean)
     const eyebrow = lines.length > 1 && lines[0].length <= 60 ? lines.shift() : undefined
-    blocks[0] = { type: 'hero', ...(eyebrow ? { eyebrow } : {}), heading: first.heading, ...(lines.length ? { text: cut(lines.join(' '), 600) } : {}), ...(first.buttonLabel ? { buttonLabel: first.buttonLabel, buttonHref: first.buttonHref } : {}), imageUrl: first.imageUrl, imageAlt: first.imageAlt, layout: 'split' }
+    blocks[0] = { type: 'hero', ...(eyebrow ? { eyebrow } : {}), heading: first.heading, ...(lines.length ? { text: cut(lines.join(' '), 600) } : {}), ...(first.buttonLabel ? { buttonLabel: first.buttonLabel, buttonHref: first.buttonHref } : {}), imageUrl: first.imageUrl, imageAlt: first.imageAlt, layout: 'split', ...(first.tone ? { tone: first.tone } : {}) }
   }
   return blocks
 }

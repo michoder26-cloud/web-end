@@ -123,8 +123,8 @@ export type FlowItem = (
   | { kind: 'link'; href: string; section: null | PageSection; text: string }
   | { kind: 'button'; section: null | PageSection; text: string }
   | { kind: 'form'; fields: FlowField[]; section: null | PageSection }
-) & { y?: number; x?: number }
-export type PageReading = { scripts?: string[]; login?: boolean; buttons: string[]; data: unknown[]; description: string; design: PageDesign; flow?: FlowItem[]; headings: { level: number; text: string }[]; images: { alt: string; url: string }[]; links: { href: string; text: string }[]; reviewReason?: string; sections: PageSection[]; text: string[]; title: string; tooFewWords?: boolean; truncated: boolean; url: string }
+) & { y?: number; x?: number; band?: number; bg?: string; bgPhoto?: string }
+export type PageReading = { scripts?: string[]; shop?: string; login?: boolean; buttons: string[]; data: unknown[]; description: string; design: PageDesign; flow?: FlowItem[]; headings: { level: number; text: string }[]; images: { alt: string; url: string }[]; links: { href: string; text: string }[]; reviewReason?: string; sections: PageSection[]; text: string[]; title: string; tooFewWords?: boolean; truncated: boolean; url: string }
 
 const maxSections = 40
 const maxPerSection = 12
@@ -208,9 +208,15 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
     if (flow.length >= maxFlow) return
     const where = noteAt ?? { x: atX, y: atY }
     if (where.y !== undefined) Object.assign(item, { y: where.y, x: where.x ?? 0 })
+    const band = bands.at(-1)
+    if (band) Object.assign(item, { band: band.id, ...(band.bg ? { bg: band.bg } : {}), ...(band.photo ? { bgPhoto: band.photo } : {}) })
     flow.push(item)
   }
   let wixImage: { alt: string | undefined; uri: string } | null = null
+  let measured = ''
+  // Full-width bands with their own background, as the browser saw them: each is one part of the page.
+  const bands: { bg: string; id: number; photo: string }[] = []
+  let bandCount = 0
   let form: null | Extract<FlowItem, { kind: 'form' }> = null
   const seenText = new Set<string>()
   const seenImages = new Set<string>()
@@ -287,6 +293,19 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
   let cardClasses = ''
   let footerClasses = ''
   const rewriter = new HTMLRewriter()
+    .on('[data-we-bg]', {
+      element(element) {
+        const bg = (element.getAttribute('data-we-bg') ?? '').toLowerCase()
+        const photo = decode(element.getAttribute('data-we-bgimg') ?? '')
+        const band = { bg: /^#[0-9a-f]{6}$/.test(bg) ? bg : '', id: ++bandCount, photo: photo.startsWith('https://') ? photo : '' }
+        bands.push(band)
+        try {
+          element.onEndTag(() => { const at = bands.lastIndexOf(band); if (at >= 0) bands.splice(at, 1) })
+        } catch {
+          bands.pop()
+        }
+      },
+    })
     // First, so every other handler of the same element already knows where it showed.
     .on('[data-we-y]', {
       element(element) {
@@ -338,6 +357,8 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
         const name = (element.getAttribute('name') ?? element.getAttribute('property') ?? '').toLowerCase()
         const content = decode(element.getAttribute('content') ?? '')
         if (name === 'theme-color') themeColor = content.trim()
+        // What the page reader's browser measured: the real colours, fonts and button look, whatever built the site.
+        if (name === 'we-design') measured = content
         if (name === 'description' || (name === 'og:description' && !page.description)) page.description = clean(content)
         if (name === 'og:image') addImage(content, 'Main image', false)
       },
@@ -406,6 +427,9 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
     }
   }
   rewriter.on('script[src]', { element: (element) => addScript(element.getAttribute('src')) })
+  // A shop's own product list, fetched by the page reader's browser from inside the shop's page.
+  let shop = ''
+  rewriter.on('script#we-products', { text(chunk) { if (shop.length < 600_000) shop += chunk.text } })
   rewriter.on('link[rel="modulepreload"]', { element: (element) => addScript(element.getAttribute('href')) })
   rewriter.on('script[type="application/ld+json"]', {
     element(element) {
@@ -455,6 +479,8 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
   rewriter.on('p', collect((text) => addText(text))).on('li', collect((text) => addText(text, true))).on('blockquote', collect((text) => addText(text)))
   // Figures and their labels (1,200+ / customers) are often a definition list.
   rewriter.on('dt, dd', collect((text) => addText(text)))
+  // Words in plain boxes and table cells, not in a paragraph: the page reader marks the outermost such element.
+  rewriter.on('[data-we-t]', collect((text) => { if (text.length <= 2000) addText(text) }))
   const transformed = rewriter.transform(response)
   const reader = transformed.body?.getReader()
   let bytes = 0
@@ -487,9 +513,38 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
     }
   }
   shapeFrom(page.design, buttonClasses, cardClasses, `${themeStyles || otherStyles}${sheetCss}`)
+  if (measured) {
+    try {
+      const seen = JSON.parse(measured) as Record<string, unknown>
+      const colour = (value: unknown) => (typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : undefined)
+      const design = page.design
+      const background = colour(seen.background)
+      const ink = colour(seen.headingColor) ?? colour(seen.text)
+      const button = colour(seen.buttonColor)
+      if (background) design.background = background
+      if (ink) design.text = ink
+      if (button) {
+        design.buttonColor = button
+        // A colourful button is the site's main colour; a black or grey one leaves the main colour as found.
+        const [r, g, b] = [1, 3, 5].map((i) => parseInt(button.slice(i, i + 2), 16))
+        if (Math.max(r, g, b) - Math.min(r, g, b) > 50) design.accent = button
+        else design.accent ??= button
+      }
+      if (typeof seen.buttonRadius === 'number' && seen.buttonRadius >= 0) design.buttonRadius = `${Math.min(999, Math.round(seen.buttonRadius))}px`
+      if (typeof seen.headingFont === 'string' && seen.headingFont.length <= 60) design.headingFont ??= seen.headingFont
+      if (typeof seen.bodyFont === 'string' && seen.bodyFont.length <= 60) design.bodyFont ??= seen.bodyFont
+    } catch {
+      // Without it the look found in the code stays.
+    }
+  }
   if (/(?:^|\s)bg-(foreground|black|(neutral|gray|zinc|stone|slate)-(800|900|950))(?=\s|$)/.test(footerClasses)) page.design.darkFooter = true
   page.sections = page.sections.filter((section) => section.headings.length || section.images.length || section.buttons.length || section.lines)
   page.scripts = scripts
+  try {
+    if (shop && Array.isArray(JSON.parse(shop))) page.shop = shop
+  } catch {
+    // Not a product list.
+  }
   page.login = (page.flow ?? []).some((item) => (item.kind === 'button' || item.kind === 'link') && /^(เข้าสู่ระบบ|ล็อกอิน|log ?in|sign ?in|anmelden|einloggen)$/i.test(item.text.trim()))
   const usable = page.headings.length + page.buttons.length + page.images.length + page.links.length
   if (page.text.join(' ').length < 60 && usable === 0) {
