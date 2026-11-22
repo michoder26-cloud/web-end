@@ -1,4 +1,4 @@
 {
-  "version": "0.28.0",
-  "notes": "The drag-and-drop editor now does the everyday work in one place: a side panel to switch and add pages, change products (photo, price, stock, description), set up the shop and how customers pay, and change the site's name, colours and fonts. Publish works right in the editor and says first if something should be fixed. Orders, messages and the rest stay under More."
+  "version": "0.29.0",
+  "notes": "The editor follows what each site has: an empty site shows no tools until something is built, and the side panel only offers what fits, such as products and payments for a shop, members for sign-ups, messages for forms and data for bookings. Payments work for any currency, with cards through Stripe first; PromptPay shows only for Thai baht."
 }

@@ -122,7 +122,7 @@ async function savePage(request: Request, env: Env, site: SiteRow, slug: string)
 
 // Settings the editor's panel may change. Email, API and code settings stay in the dashboard.
 const panelKeys = ['name', 'tagline', 'style', 'headingFont', 'bodyFont', 'accent', 'background', 'text', 'footerText', 'phone', 'email', 'address',
-  'cart', 'accounts', 'currency', 'payTransfer', 'transferDetails', 'payPromptPay', 'promptPayId', 'promptPayName', 'payCod', 'shippingFee', 'freeShippingOver'] as const
+  'cart', 'accounts', 'currency', 'payCard', 'payTransfer', 'transferDetails', 'payPromptPay', 'promptPayId', 'promptPayName', 'payCod', 'shippingFee', 'freeShippingOver'] as const
 const panelSettings = z.object(Object.fromEntries(panelKeys.map((key) => [key, settingsShape[key]])) as { [K in (typeof panelKeys)[number]]: (typeof settingsShape)[K] }).strict()
 
 async function panelData(env: Env, site: SiteRow, desk: Desk) {
@@ -131,10 +131,19 @@ async function panelData(env: Env, site: SiteRow, desk: Desk) {
     allows(desk, 'products')
       ? env.DB.prepare("SELECT id, title, price, compare_price AS comparePrice, category, stock, body, image_url AS imageUrl, image_alt AS imageAlt, published FROM items WHERE site_id = ? AND collection = 'products' ORDER BY sort, id LIMIT 200").bind(site.id).all()
       : Promise.resolve({ results: [] }),
-    env.DB.prepare('SELECT slug, title, published FROM pages WHERE site_id = ? ORDER BY slug = \'home\' DESC, slug').bind(site.id).all<{ published: number; slug: string; title: string }>(),
+    env.DB.prepare('SELECT slug, title, published, blocks FROM pages WHERE site_id = ? ORDER BY slug = \'home\' DESC, slug').bind(site.id).all<{ blocks: string; published: number; slug: string; title: string }>(),
     unpublishedChanges(env, site),
     allows(desk, 'publish') ? releaseSummary(env, site) : Promise.resolve(null),
   ])
+  // What this site actually has, so the editor shows the tools for that and nothing else.
+  const counts = await env.DB.prepare(`SELECT
+      (SELECT COUNT(*) FROM items WHERE site_id = ?1) AS items,
+      (SELECT COUNT(*) FROM data_tables WHERE site_id = ?1) AS tables,
+      (SELECT COUNT(*) FROM customers WHERE site_id = ?1) AS customers,
+      (SELECT COUNT(*) FROM entries WHERE site_id = ?1) AS entries,
+      (SELECT COUNT(*) FROM orders WHERE site_id = ?1) AS orders`).bind(site.id).first<{ customers: number; entries: number; items: number; orders: number; tables: number }>()
+  const used = new Set(pages.flatMap((page) => { try { return (JSON.parse(page.blocks) as Block[]).map((block) => block.type) } catch { return [] } }))
+  const content = pages.filter((page) => page.blocks !== '[]').length
   return {
     owner: !desk.staff,
     canProducts: allows(desk, 'products'),
@@ -144,6 +153,19 @@ async function panelData(env: Env, site: SiteRow, desk: Desk) {
     styles: siteStyles,
     items,
     pages: pages.map((page) => ({ slug: page.slug, title: page.title, published: Boolean(page.published) })),
+    has: {
+      empty: content === 0 && !counts?.items && !counts?.tables,
+      shop: Boolean(settings.cart || counts?.items || used.has('collection')),
+      members: Boolean(settings.accounts || counts?.customers || used.has('record')),
+      forms: Boolean(used.has('form') || counts?.entries),
+      data: Boolean(counts?.tables || used.has('table') || used.has('records') || used.has('record-form')),
+      orders: counts?.orders ?? 0,
+      customers: counts?.customers ?? 0,
+      entries: counts?.entries ?? 0,
+      tables: counts?.tables ?? 0,
+    },
+    // Card payments need the owner's Stripe account connected to the site.
+    cardReady: Boolean(env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET),
     // null: never published, so everything waits. Otherwise the pages and settings that differ from the live site.
     waiting: waiting ? waiting.pages.length + (waiting.settings ? 1 : 0) : null,
     problems: summary?.problems ?? [],

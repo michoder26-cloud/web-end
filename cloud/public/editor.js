@@ -28,6 +28,11 @@
         payCod: 'เก็บเงินปลายทาง', shipping: 'ค่าส่งต่อออเดอร์', freeOver: 'ส่งฟรีเมื่อซื้อครบ', currency: 'สกุลเงิน',
         site: 'หน้าตาและข้อมูลเว็บ', sName: 'ชื่อร้าน', sTagline: 'คำโปรย', sStyle: 'สไตล์', sHeading: 'ฟอนต์หัวข้อ', sBody: 'ฟอนต์เนื้อหา', fromStyle: 'ตามสไตล์', sAccent: 'สีหลัก', sBg: 'สีพื้น', sText: 'สีตัวอักษร',
         sPhone: 'เบอร์โทร', sEmail: 'อีเมลติดต่อ', sAddress: 'ที่อยู่', sFooter: 'ข้อความท้ายเว็บ', savedNote: 'บันทึกแล้ว จะขึ้นเว็บจริงเมื่อกดเผยแพร่', ownerOnly: 'ส่วนนี้แก้ได้เฉพาะเจ้าของเว็บ',
+        tabPay: 'รับเงิน', tabMembers: 'สมาชิก', tabForms: 'ข้อความ', tabData: 'ข้อมูล',
+        emptyT: 'ยังไม่มีอะไรในเว็บนี้', emptyAi: 'บอก AI ทางซ้ายว่าอยากได้เว็บแบบไหน เช่น ร้านขายของออนไลน์ หน้าสมัครสมาชิก หรือหน้าจองคิว แล้วเครื่องมือแก้ไขที่ตรงกับเว็บจะขึ้นมาตรงนี้', emptyOwn: 'เริ่มจากเพิ่มส่วนแรก หรือเลือกแม่แบบ แล้วเครื่องมือแก้ไขที่ตรงกับเว็บจะขึ้นมาเอง',
+        card: 'บัตรเครดิต/เดบิต ผ่าน Stripe', cardReady: 'เชื่อม Stripe แล้ว', cardNot: 'ยังไม่ได้เชื่อม Stripe ตั้งค่าได้ที่', settingsLink: 'ตั้งค่าเพิ่มเติม', localPay: 'วิธีอื่น',
+        members: 'สมาชิก', membersCount: (n) => `มีสมาชิก ${n} คน`, seeMembers: 'ดูรายชื่อสมาชิก', forms: 'ข้อความจากฟอร์ม', entriesCount: (n) => `มีข้อความ ${n} รายการ`, seeEntries: 'เปิดอ่านข้อความ',
+        data: 'ข้อมูลและการจอง', tablesCount: (n) => `มี ${n} ตาราง`, seeData: 'เปิดดูข้อมูล', orders: (n) => `ออเดอร์ ${n} รายการ`, seeOrders: 'ดูออเดอร์',
         published: 'เผยแพร่แล้ว เว็บจริงเป็นแบบนี้แล้ว', openLive: 'เปิดดูเว็บ', problemsT: 'ก่อนเผยแพร่ ลองดูเรื่องเหล่านี้', publishAnyway: 'เผยแพร่เลย', fixFirst: 'กลับไปแก้ก่อน', waiting: (n) => `มี ${n} อย่างรอเผยแพร่`, upToDate: 'เว็บจริงตรงกับที่แก้แล้ว',
       }
     : {
@@ -51,6 +56,11 @@
         payCod: 'Pay on delivery', shipping: 'Delivery fee per order', freeOver: 'Free delivery from', currency: 'Currency',
         site: 'Look and details', sName: 'Site name', sTagline: 'Tagline', sStyle: 'Style', sHeading: 'Heading font', sBody: 'Text font', fromStyle: 'From the style', sAccent: 'Main colour', sBg: 'Background', sText: 'Text colour',
         sPhone: 'Phone', sEmail: 'Contact email', sAddress: 'Address', sFooter: 'Footer text', savedNote: 'Saved. It goes live when you publish.', ownerOnly: 'Only the site owner can change this.',
+        tabPay: 'Payments', tabMembers: 'Members', tabForms: 'Messages', tabData: 'Data',
+        emptyT: 'Nothing here yet', emptyAi: 'Tell the AI on the left what you want: an online shop, a sign-up page, bookings, anything. The editing tools that fit your site appear here as it is built.', emptyOwn: 'Add a first section or pick a template. The editing tools that fit your site appear as you build.',
+        card: 'Cards with Stripe', cardReady: 'Stripe is connected', cardNot: 'Stripe is not connected yet. Set it up in', settingsLink: 'More settings', localPay: 'Other ways to pay',
+        members: 'Members', membersCount: (n) => `${n} member${n === 1 ? '' : 's'}`, seeMembers: 'See members', forms: 'Messages from forms', entriesCount: (n) => `${n} message${n === 1 ? '' : 's'}`, seeEntries: 'Read messages',
+        data: 'Data and bookings', tablesCount: (n) => `${n} table${n === 1 ? '' : 's'}`, seeData: 'Open the data', orders: (n) => `${n} order${n === 1 ? '' : 's'}`, seeOrders: 'See orders',
         published: 'Published. The live site looks like this now.', openLive: 'Open the site', problemsT: 'Before you publish, have a look at these', publishAnyway: 'Publish anyway', fixFirst: 'Go back and fix', waiting: (n) => `${n} change${n === 1 ? '' : 's'} waiting to go live`, upToDate: 'The live site matches your edits',
       }
   const NAMES_TH = { hero: 'หัวเว็บ', text: 'ข้อความ', split: 'ข้อความคู่รูป', features: 'จุดเด่น', steps: 'ขั้นตอน', stats: 'ตัวเลข', pricing: 'ราคา', testimonials: 'คำชมจากลูกค้า', team: 'ทีมงาน', gallery: 'แกลเลอรี', info: 'ข้อมูล เช่น เวลาเปิด', faq: 'คำถามที่พบบ่อย', links: 'ลิงก์', cta: 'แถบเชิญชวน', form: 'ฟอร์ม', collection: 'สินค้าหรือรายการ', records: 'ข้อมูลจากตาราง', table: 'ตาราง', 'record-form': 'ฟอร์มเพิ่มข้อมูล', record: 'แก้ข้อมูลของตัวเอง', html: 'โค้ดเอง' }
@@ -353,6 +363,8 @@
   })
 
   function insertAt(index, type) {
+    document.body.classList.remove('ed-is-empty')
+    document.querySelector('.ed-start')?.remove()
     edit(() => blocks.splice(index, 0, startFor(type)))
     select(index, true)
   }
@@ -667,13 +679,25 @@
     if (tab !== 'add') showTab(tab)
   }
   function drawTabs() {
-    const tabs = [['add', W.tabAdd], ['pages', W.tabPages], ...(panel?.canProducts ? [['products', W.tabProducts]] : []), ...(panel?.owner ? [['shop', W.tabShop], ['site', W.tabSite]] : [])]
+    const has = panel?.has || {}
+    // An empty site shows no tools yet: the page area says how to start, and the tools appear once there is something.
+    document.body.classList.toggle('ed-is-empty', Boolean(has.empty && !blocks.length))
+    if (has.empty && !blocks.length) showEmpty()
+    else document.querySelector('.ed-start')?.remove()
+    const tabs = [['add', W.tabAdd], ['pages', W.tabPages],
+      ...(has.shop && panel?.canProducts ? [['products', W.tabProducts]] : []), ...(has.shop && panel?.owner ? [['shop', W.tabPay]] : []),
+      ...(has.members && panel?.owner ? [['members', W.tabMembers]] : []), ...(has.forms ? [['forms', W.tabForms]] : []), ...(has.data && panel?.owner ? [['data', W.tabData]] : []),
+      ...(panel?.owner ? [['site', W.tabSite]] : [])]
+    if (!tabs.some(([key]) => key === tab)) tab = 'add'
     els.tabs.replaceChildren(...tabs.map(([key, label]) => h('button', { type: 'button', class: 'ed-tab', 'aria-pressed': String(key === tab), onclick: () => showTab(key), text: label })))
   }
   function showTab(key) {
     tab = key
     drawTabs()
-    const body = key === 'add' ? els.addPanel : key === 'pages' ? pagesPanel() : key === 'products' ? productsPanel() : key === 'shop' ? shopPanel() : sitePanel()
+    const body = key === 'add' ? els.addPanel : key === 'pages' ? pagesPanel() : key === 'products' ? productsPanel() : key === 'shop' ? shopPanel()
+      : key === 'members' ? infoPanel(W.members, [W.membersCount(panel.has.customers)], 'accounts', W.accounts, [`${data.base}/customers`, W.seeMembers])
+      : key === 'forms' ? infoPanel(W.forms, [W.entriesCount(panel.has.entries)], null, null, [data.dashboard || data.base, W.seeEntries])
+      : key === 'data' ? infoPanel(W.data, [W.tablesCount(panel.has.tables)], null, null, [`${data.base}/data`, W.seeData]) : sitePanel()
     els.panelBody.replaceChildren(body)
   }
   const field = (label, input, note) => h('label', { class: 'ed-field' }, h('span', { text: label }), input, note ? h('small', { class: 'ed-note', text: note }) : null)
@@ -771,6 +795,7 @@
       saveIt.disabled = true
       const body = {}
       for (const [key, el] of Object.entries(keys)) {
+        if (el.closest('[hidden]')) continue
         if (el.type === 'checkbox') body[key] = el.checked
         else if (el.type === 'number') body[key] = el.value === '' ? null : Number(el.value)
         else body[key] = el.value.trim() === '' ? null : el.value.trim()
@@ -787,12 +812,36 @@
     } })
     return h('div', { class: 'ed-panel' }, h('h2', { text: title }), h('div', { class: 'ed-form' }, rows), h('div', { class: 'ed-row' }, saveIt), status)
   }
+  // Prices in any currency. Cards through the owner's own Stripe come first; PromptPay only for Thai baht.
+  const CURRENCIES = ['usd', 'eur', 'gbp', 'chf', 'cad', 'aud', 'nzd', 'jpy', 'sgd', 'hkd', 'inr', 'brl', 'mxn', 'sek', 'nok', 'dkk', 'pln', 'czk', 'huf', 'zar', 'aed', 'thb', 'myr', 'idr', 'php', 'vnd', 'krw']
   function shopPanel() {
     const s = panel?.settings || {}
-    const k = { cart: box(s.cart), accounts: box(s.accounts), payTransfer: box(s.payTransfer), transferDetails: area(s.transferDetails), payPromptPay: box(s.payPromptPay), promptPayId: input(s.promptPayId, { inputmode: 'numeric', maxlength: '40' }),
-      promptPayName: input(s.promptPayName, { maxlength: '80' }), payCod: box(s.payCod), shippingFee: input(s.shippingFee, { type: 'number', min: '0' }), freeShippingOver: input(s.freeShippingOver, { type: 'number', min: '0' }), currency: input(s.currency || 'thb', { maxlength: '3' }) }
-    return settingsPanel(W.shop, [check(W.cart, k.cart), check(W.accounts, k.accounts), h('h3', { text: W.payHow }), check(W.payTransfer, k.payTransfer), field(W.transferDetails, k.transferDetails),
-      check(W.payPromptPay, k.payPromptPay), field(W.promptPayId, k.promptPayId), field(W.promptPayName, k.promptPayName), check(W.payCod, k.payCod), field(W.shipping, k.shippingFee), field(W.freeOver, k.freeShippingOver), field(W.currency, k.currency)], k)
+    const currency = h('select', { class: 'ed-input' }, h('option', { value: '', text: '—' }), CURRENCIES.map((code) => h('option', { value: code, text: code.toUpperCase() })))
+    currency.value = s.currency || ''
+    const k = { cart: box(s.cart), payCard: box(s.payCard), payTransfer: box(s.payTransfer), transferDetails: area(s.transferDetails), payPromptPay: box(s.payPromptPay), promptPayId: input(s.promptPayId, { inputmode: 'numeric', maxlength: '40' }),
+      promptPayName: input(s.promptPayName, { maxlength: '80' }), payCod: box(s.payCod), shippingFee: input(s.shippingFee, { type: 'number', min: '0' }), freeShippingOver: input(s.freeShippingOver, { type: 'number', min: '0' }), currency }
+    const cardNote = h('small', { class: 'ed-note' }, panel?.cardReady ? W.cardReady : [`${W.cardNot} `, h('a', { href: `${data.base}/settings`, text: W.settingsLink })])
+    const thai = h('div', { class: 'ed-form' }, check(W.payPromptPay, k.payPromptPay), field(W.promptPayId, k.promptPayId), field(W.promptPayName, k.promptPayName))
+    const showThai = () => { thai.hidden = currency.value !== 'thb' }
+    currency.addEventListener('change', showThai)
+    showThai()
+    return settingsPanel(W.shop, [check(W.cart, k.cart), field(W.currency, k.currency), h('h3', { text: W.payHow }), check(W.card, k.payCard), cardNote, h('h3', { text: W.localPay }),
+      check(W.payTransfer, k.payTransfer), field(W.transferDetails, k.transferDetails), thai, check(W.payCod, k.payCod), field(W.shipping, k.shippingFee), field(W.freeOver, k.freeShippingOver),
+      panel?.has?.orders ? h('p', { class: 'ed-note' }, `${W.orders(panel.has.orders)} · `, h('a', { href: `${data.base}/orders`, text: W.seeOrders })) : null], k)
+  }
+  // Members, messages and data: what there is, one switch where it fits, and the way to the full list.
+  function infoPanel(title, lines, key, label, [href, linkText]) {
+    const rows = [...lines.map((line) => h('p', { class: 'ed-big', text: line })), h('a', { class: 'ed-btn ed-wide', href, text: linkText })]
+    if (!key) return h('div', { class: 'ed-panel' }, h('h2', { text: title }), h('div', { class: 'ed-form' }, rows))
+    const k = { [key]: box(panel?.settings?.[key]) }
+    return settingsPanel(title, [check(label, k[key]), ...rows], k)
+  }
+  // The page area before anything is built.
+  function showEmpty() {
+    if (document.querySelector('.ed-start')) return
+    const framed = window.top !== window
+    els.stage.prepend(h('div', { class: 'ed-start' }, h('h2', { text: W.emptyT }), h('p', { text: framed ? W.emptyAi : W.emptyOwn }),
+      framed ? null : h('div', { class: 'ed-row' }, h('button', { type: 'button', class: 'ed-btn ed-btn--primary', text: W.addSection, onclick: () => openAdd(0) }), h('a', { class: 'ed-btn', href: `${data.base}/starters`, text: W.templates }))))
   }
   function sitePanel() {
     const s = panel?.settings || {}

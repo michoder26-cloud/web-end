@@ -204,3 +204,14 @@ textarea.ed-input { resize: vertical; }
 .ed-tabs { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 2px; padding: 6px; }
 .ed-tab { padding: 7px 2px; font-size: 12px; white-space: nowrap; }
 .ed-product-photo { aspect-ratio: auto; height: 180px; }
+
+/* Before anything is built: no tools, just how to start. */
+.ed-is-empty .ed-lib, .ed-is-empty .ed-add-end, .ed-is-empty .ed-hint, .ed-is-empty .ed-site { display: none; }
+.ed-is-empty .ed-work { grid-template-columns: minmax(0, 1fr); }
+.ed-start { display: grid; place-items: center; gap: 10px; max-width: 520px; margin: 12vh auto 0; padding: 32px; text-align: center; color: var(--ed-ink); font-family: var(--ed-font); }
+.ed-start h2 { margin: 0; font: 600 22px/1.3 var(--ed-font); letter-spacing: 0; }
+.ed-start p { margin: 0; color: var(--ed-ink-2); font-size: 15px; line-height: 1.55; }
+.ed-big { margin: 0; font: 600 18px/1.3 var(--ed-font); }
+.ed-body [hidden] { display: none !important; }
+.ed-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ed-tab { overflow: hidden; text-overflow: ellipsis; }
