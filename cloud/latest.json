@@ -1,4 +1,4 @@
 {
-  "version": "0.31.0",
-  "notes": "Moving a site works from what a real browser measured on the old page, whatever built it: its real colours, button look and background bands, words in plain boxes, and a Shopify shop's whole product list. Rows of cards and prices are kept together, and the top banner comes first."
+  "version": "0.32.0",
+  "notes": "Moving a site keeps more of it: price tables become plans, customer quotes become reviews with names, lists of linked posts stay one list, cards in several rows keep their own words, and a title that sits in the old page's header becomes the top banner. Photos from Squarespace and Shopify are fetched in a size that fits. The old site's own footer is no longer rebuilt as page content, and the words beside a contact form stay."
 }

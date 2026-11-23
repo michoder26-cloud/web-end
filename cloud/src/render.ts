@@ -135,7 +135,9 @@ const renderers: Record<string, (block: Block, context: Context) => string> = {
     const image = picture(block.imageUrl, block.imageAlt, isMainHeading)
     const media = layout === 'cover' ? `<div class="hero__media">${image}</div>` : ''
     const side = layout !== 'cover' && image ? `<div class="hero__image">${image}</div>` : ''
-    return `<section class="block block--hero hero--${layout} tone-${block.tone || 'plain'}">${media}<div class="wrap hero">${copy}${side}</div></section>`
+    // A long title beside a photo is set smaller, so its words are not broken apart.
+    const long = layout === 'split' && String(block.heading ?? '').length > 28 ? ' hero--long' : ''
+    return `<section class="block block--hero hero--${layout}${long} tone-${block.tone || 'plain'}">${media}<div class="wrap hero">${copy}${side}</div></section>`
   },
   text: (block) =>
     section('text', block.tone, `<div class="wrap prose">${block.heading ? `<h2>${escapeHtml(block.heading)}</h2>` : ''}${paragraphs(block.body)}</div>`),

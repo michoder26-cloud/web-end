@@ -269,8 +269,23 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
       },
     }
   }
+  const shownAt = new Map<string, { x: number; y: number }[]>()
+  /** True when these words already showed at about this place (the same element read twice), or too often. */
+  const sameSpot = (text: string) => {
+    const where = noteAt ?? { x: atX, y: atY }
+    if (where.y === undefined) return true
+    const spots = shownAt.get(text) ?? []
+    if (spots.length >= 12 || spots.some((spot) => Math.abs(spot.y - where.y!) < 40 && Math.abs(spot.x - (where.x ?? 0)) < 60)) return true
+    spots.push({ x: where.x ?? 0, y: where.y })
+    shownAt.set(text, spots)
+    return false
+  }
   const addText = (text: string, listItem = false) => {
-    if (seenText.has(text)) return
+    if (seenText.has(text)) {
+      if (text.length >= 12 && !sameSpot(text)) note({ kind: 'text', listItem, section: open.at(-1) ?? null, text })
+      return
+    }
+    sameSpot(text)
     if (chars + text.length > maxTextChars) {
       page.truncated = true
       return
@@ -408,7 +423,7 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
   for (const level of [1, 2, 3, 4, 5, 6]) {
     rewriter.on(`h${level}`, collect((text) => {
       if (page.headings.length < maxListed) page.headings.push({ level, text })
-      if (!seenText.has(text)) note({ kind: 'heading', level, section: open.at(-1) ?? null, text })
+      if (!seenText.has(text) ? (sameSpot(text), true) : !sameSpot(text)) note({ kind: 'heading', level, section: open.at(-1) ?? null, text })
       const section = open.at(-1)
       if (section && section.headings.length < maxPerSection) section.headings.push(text)
       seenText.add(text)
@@ -554,14 +569,27 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
   return page
 }
 
+/** Addresses of smaller versions of a photo, where the old host makes them on request. */
+export function smallerCopies(target: URL): string[] {
+  const wix = /static\.wixstatic\.com\/media\/([^/?#]+)/.exec(target.href)?.[1]
+  if (wix) return [`https://static.wixstatic.com/media/${wix}/v1/fit/w_1600,h_1600,q_80/${wix.replace(/\.[a-z]+$/i, '.jpg')}`]
+  const sized = (name: string, value: string) => { const copy = new URL(target.href); copy.searchParams.set(name, value); return copy.href }
+  if (target.hostname.endsWith('squarespace-cdn.com')) return [sized('format', '1500w'), sized('format', '1000w')]
+  if (target.hostname === 'cdn.shopify.com' || target.pathname.startsWith('/cdn/shop/')) return [sized('width', '1600'), sized('width', '1000')]
+  // Many hosts take the width in the address (?width=3840, ?w=2400): ask for a sensible one.
+  for (const name of ['width', 'w']) {
+    if (Number(target.searchParams.get(name)) > 1600) return [sized(name, '1600')]
+  }
+  return []
+}
+
 /** Copies a photo into the owner's own database, so it keeps working after they leave the old host. */
 export async function copyImage(env: Env, siteId: number, target: URL): Promise<{ error?: string; url?: string }> {
   const source = originalImage(target.href)
   const held = await env.DB.prepare('SELECT id FROM media WHERE site_id = ? AND source = ?').bind(siteId, source).first<{ id: number }>()
   if (held) return { url: `/media/${held.id}` }
-  const original = /static\.wixstatic\.com\/media\/([^/?#]+)/.exec(target.href)?.[1]
   // A smaller copy fits the 1 MB limit far more often than the original upload does.
-  const attempts = original ? [`https://static.wixstatic.com/media/${original}/v1/fit/w_1600,h_1600,q_80/${original.replace(/\.[a-z]+$/i, '.jpg')}`, target.href] : [target.href]
+  const attempts = [...smallerCopies(target), target.href]
   let problem = "That image couldn't be downloaded."
   for (const attempt of attempts) {
     const response = await fetchPublic(new URL(attempt), 'image/*').catch((): null => null)
