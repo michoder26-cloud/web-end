@@ -286,6 +286,8 @@ export function blocksFromReading(reading: PageReading, image: (url: string) => 
   let groupTone: { tone?: string } = {}
   const tone = () => groupTone
   const groups = groupsOf(reading.flow ?? [])
+  // Which part of the page the last block came from.
+  let lastFrom = -1
 
   groups.forEach((group, index) => {
     const band = group.find((item) => item.band !== undefined)
@@ -305,7 +307,47 @@ export function blocksFromReading(reading: PageReading, image: (url: string) => 
     const subheadings = headings.filter((item) => item !== main)
     const textChars = texts.join(' ').length
     // A stray word or two on its own (a badge, a counter) is not worth a section.
-    const add = (block: Block) => { if (blocks.length < maxBlocks && !(block.type === 'text' && !block.heading && String(block.body ?? '').length < 40)) blocks.push(block) }
+    const add = (block: Block) => {
+      const last = blocks.at(-1)
+      const untitled = block.type === 'text' && !block.heading ? String(block.body ?? '') : ''
+      const shortLine = block.type === 'text' && !block.heading && untitled.length < 40
+      // A row of cards, each a photo with a short line (a scrolling strip of examples, a grid of recipes), is one gallery:
+      // the line under a photo is its caption, and the next card's photo joins the same gallery.
+      if (untitled && untitled.length <= 120 && !untitled.includes('\n\n') && lastFrom >= index - 1 && last?.type === 'gallery' && Array.isArray(last.images)) {
+        // The photos at the end that have no caption yet: the line belongs to the first of them,
+        // whether each card's line follows its photo or the lines follow a whole row of photos.
+        const photos = last.images as { caption?: string }[]
+        let at = photos.length
+        while (at > 0 && !photos[at - 1].caption) at--
+        if (photos[at]) {
+          photos[at].caption = cut(String(block.body), 200)
+          lastFrom = index
+          return
+        }
+        // Every photo has its line already: a second short line on the same card (who made it, a date) joins it.
+        const lastPhoto = photos.at(-1)
+        if (lastPhoto?.caption && lastFrom === index && lastPhoto.caption.length + untitled.length <= 197) {
+          lastPhoto.caption = `${lastPhoto.caption} · ${untitled}`
+          return
+        }
+      }
+      if (block.type === 'gallery' && !block.heading && last?.type === 'gallery' && !last.heading && last.tone === block.tone && Array.isArray(last.images) && Array.isArray(block.images) && last.images.length + block.images.length <= 24) {
+        last.images.push(...block.images)
+        lastFrom = index
+        return
+      }
+      // Untitled words of neighbouring parts (cards that each stood alone) read on as one block, so a long page
+      // isn't cut off when it reaches the most blocks a page can have. Every word stays, in order.
+      if (untitled && !shortLine && lastFrom >= index - 1 && last?.type === 'text' && !last.heading && last.tone === block.tone && String(last.body ?? '').length + untitled.length <= 7000) {
+        last.body = `${last.body}\n\n${untitled}`
+        lastFrom = index
+        return
+      }
+      if (blocks.length < maxBlocks && !shortLine) {
+        blocks.push(block)
+        lastFrom = index
+      }
+    }
 
     // Every word of the part, in order, except the main heading: nothing is dropped when a part becomes text.
     const body = group

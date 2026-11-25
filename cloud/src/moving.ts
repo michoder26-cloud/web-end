@@ -2,6 +2,7 @@ import { sha256 } from './auth'
 import { loadPageRecords } from './data'
 import { loadItems, saveImage } from './items'
 import { renderPage } from './render'
+import { contrast } from './theme'
 import type { Block, Env, Settings, SiteRow } from './types'
 import { findWorkingPage } from './versions'
 import { safeWebUrl } from './webhooks'
@@ -553,6 +554,17 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
     }
   }
   if (/(?:^|\s)bg-(foreground|black|(neutral|gray|zinc|stone|slate)-(800|900|950))(?=\s|$)/.test(footerClasses)) page.design.darkFooter = true
+  // A main colour that is the page's own background (a dark site's near-black, a white site's white) would make
+  // every button vanish: the button's own colour is used instead, else the text colour.
+  {
+    const design = page.design
+    const hex = (value: string | undefined) => (value && /^#[0-9a-f]{6}$/i.test(value) ? value : undefined)
+    const paper = hex(design.background)
+    if (paper && hex(design.accent) && contrast(design.accent!, paper) < 3) {
+      const swap = [design.buttonColor, design.text].map(hex).find((value) => value && contrast(value, paper) >= 3)
+      if (swap) design.accent = swap.toLowerCase()
+    }
+  }
   page.sections = page.sections.filter((section) => section.headings.length || section.images.length || section.buttons.length || section.lines)
   page.scripts = scripts
   try {

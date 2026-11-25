@@ -436,7 +436,7 @@ const trades: Record<StarterLanguage, StarterContent> = {
     label: 'Repair job requests',
     description: 'Customers describe a repair job. The owner reviews requests, agrees a time and tracks each job.',
     includes: ['Service page and private request form', 'Owner-only work requests with status, agreed date and assigned person', 'Automatic job numbers', 'This starter does not create quotes, invoices or a technician calendar'],
-    settings: { name: 'Sample Repair Service', tagline: 'Tell us what needs fixing', style: 'solid', accent: '#31576b', cart: false, nav: [{ label: 'Services', href: '/#services' }, { label: 'Request a visit', href: '/request' }], headerButtonLabel: 'Request a visit', headerButtonHref: '/request', footerText: footer.en },
+    settings: { name: 'Sample Repair Service', tagline: 'Tell us what needs fixing', style: 'bold', accent: '#31576b', cart: false, nav: [{ label: 'Services', href: '/#services' }, { label: 'Request a visit', href: '/request' }], headerButtonLabel: 'Request a visit', headerButtonHref: '/request', footerText: footer.en },
     pages: [
       { slug: 'home', title: 'Sample Repair Service', description: 'A sample repair service website where customers can request a visit and the owner tracks jobs privately.', blocks: [
         { type: 'hero', layout: 'centered', eyebrow: 'Sample repair service', heading: 'Tell us what needs fixing', text: 'Send a short request. We review it and contact you to agree a visit. These service descriptions are samples.', buttonLabel: 'Request a visit', buttonHref: '/request' },
@@ -456,7 +456,7 @@ const trades: Record<StarterLanguage, StarterContent> = {
     label: 'รับงานช่าง',
     description: 'ลูกค้าเล่าเรื่องที่ต้องซ่อม เจ้าของตรวจคำขอ นัดหมาย และติดตามสถานะของแต่ละงาน',
     includes: ['หน้าบริการและแบบฟอร์มรับงานส่วนตัว', 'รายการงานในหลังบ้านพร้อมสถานะ วันนัด และผู้รับผิดชอบ', 'เลขที่งานอัตโนมัติ', 'ยังไม่มีใบเสนอราคา ใบแจ้งหนี้ หรือปฏิทินช่าง'],
-    settings: { name: 'ร้านซ่อมตัวอย่าง', tagline: 'บอกเราว่าต้องซ่อมอะไร', style: 'solid', accent: '#31576b', cart: false, nav: [{ label: 'บริการ', href: '/#services' }, { label: 'แจ้งงาน', href: '/request' }], headerButtonLabel: 'แจ้งงาน', headerButtonHref: '/request', footerText: footer.th },
+    settings: { name: 'ร้านซ่อมตัวอย่าง', tagline: 'บอกเราว่าต้องซ่อมอะไร', style: 'bold', accent: '#31576b', cart: false, nav: [{ label: 'บริการ', href: '/#services' }, { label: 'แจ้งงาน', href: '/request' }], headerButtonLabel: 'แจ้งงาน', headerButtonHref: '/request', footerText: footer.th },
     pages: [
       { slug: 'home', title: 'ร้านซ่อมตัวอย่าง', description: 'เว็บร้านซ่อมตัวอย่างที่ลูกค้าส่งคำขอและเจ้าของติดตามงานในหลังบ้านได้', blocks: [
         { type: 'hero', layout: 'centered', eyebrow: 'ร้านซ่อมตัวอย่าง', heading: 'บอกเราว่าต้องซ่อมอะไร', text: 'ส่งคำขอสั้น ๆ ร้านจะตรวจแล้วติดต่อกลับเพื่อนัดหมาย รายการบริการในหน้านี้เป็นตัวอย่าง', buttonLabel: 'แจ้งงาน', buttonHref: '/request' },

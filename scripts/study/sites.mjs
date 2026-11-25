@@ -1,0 +1,22 @@
+// The sites studied for the patterns guide: the owner's list of 100 plus 12 from the service-type table.
+const groups = {
+  minimal: ['https://linear.app', 'https://stripe.com', 'https://www.notion.com', 'https://www.figma.com', 'https://vercel.com', 'https://supabase.com', 'https://www.raycast.com', 'https://attio.com', 'https://superhuman.com', 'https://arc.net', 'https://www.perplexity.ai', 'https://cursor.com', 'https://retool.com', 'https://www.airtable.com', 'https://www.loom.com', 'https://cal.com', 'https://calendly.com', 'https://slack.com', 'https://zoom.com', 'https://www.dropbox.com'],
+  saas: ['https://www.shopify.com', 'https://www.squarespace.com', 'https://webflow.com', 'https://www.framer.com', 'https://www.canva.com', 'https://www.adobe.com', 'https://motion.dev', 'https://lottiefiles.com', 'https://miro.com', 'https://www.mural.co', 'https://asana.com', 'https://monday.com', 'https://clickup.com', 'https://basecamp.com', 'https://height.app', 'https://superlist.com', 'https://todoist.com', 'https://trello.com', 'https://www.atlassian.com/software/jira', 'https://www.hubspot.com'],
+  devai: ['https://openai.com', 'https://chatgpt.com', 'https://claude.ai', 'https://gemini.google.com', 'https://www.midjourney.com', 'https://runwayml.com', 'https://elevenlabs.io', 'https://huggingface.co', 'https://github.com', 'https://about.gitlab.com', 'https://www.docker.com', 'https://kubernetes.io', 'https://www.postman.com', 'https://www.mongodb.com', 'https://redis.io', 'https://www.cloudflare.com', 'https://www.datadoghq.com', 'https://sentry.io', 'https://neon.tech', 'https://resend.com'],
+  agency: ['https://burocratik.com', 'https://locomotive.ca', 'https://obys.agency', 'https://activetheory.net', 'https://resn.co.nz', 'https://lusion.co', 'https://unseen.co', 'https://studiofreight.com', 'https://basement.studio', 'https://darkroom.engineering', 'https://antinomy.studio', 'https://zajno.com', 'https://bureau.cool', 'https://offbrand.studio', 'https://www.refokus.com', 'https://www.aristidebenoist.com', 'https://dannpetty.com', 'https://dennissnellenberg.com', 'https://bruno-simon.com', 'https://adrienlaurent.fr'],
+  editorial: ['https://www.apple.com', 'https://www.nike.com', 'https://www.aesop.com', 'https://www.balenciaga.com', 'https://off---white.com', 'https://www.gucci.com', 'https://www.theverge.com', 'https://pudding.cool', 'https://cooking.nytimes.com', 'https://spotify.design', 'https://airbnb.design', 'https://www.uber.com/design', 'https://www.ibm.com/design', 'https://design.microsoft.com', 'https://design.google', 'https://m3.material.io', 'https://developer.apple.com/design/human-interface-guidelines', 'https://www.awwwards.com', 'https://www.siteinspire.com', 'https://land-book.com'],
+  services: ['https://lu.ma', 'https://www.masterclass.com', 'https://www.patreon.com', 'https://www.procurify.com', 'https://pory.io', 'https://www.justworks.com', 'https://www.jasper.ai', 'https://circle.so', 'https://www.typeform.com', 'https://www.headspace.com', 'https://www.nytimes.com/games/wordle/index.html', 'https://www.nerdwallet.com/calculators'],
+}
+
+// The service-type table: which site shows each kind of website the owner sells.
+export const serviceTypes = {
+  'Business website': ['stripe.com'], 'Agency website': ['burocratik.com'], 'Landing page / one-page': ['linear.app'], 'Waitlist page': ['arc.net'],
+  'Portfolio / personal site': ['dennissnellenberg.com'], 'Blog / content site': ['theverge.com'], 'Online store': ['shopify.com'], 'Booking & appointments': ['calendly.com'],
+  'Event & RSVP': ['lu.ma'], 'Online course': ['masterclass.com'], 'Membership site': ['patreon.com'], CRM: ['attio.com'], 'Analytics / dashboard': ['linear.app'],
+  'Project & task management': ['superlist.com'], 'Inventory management': ['procurify.com'], 'Client portal': ['pory.io'], 'HR & hiring': ['justworks.com'],
+  'Invoice & finance tracker': ['stripe.com'], 'SaaS web app': ['figma.com'], 'AI chatbot / agent': ['chatgpt.com'], 'AI content tools': ['jasper.ai'],
+  'Community & forum': ['circle.so'], 'Quiz & assessment': ['typeform.com'], 'Health & fitness': ['headspace.com'], 'Journal / notes app': ['notion.com'],
+  'Browser game': ['nytimes.com/games/wordle'], 'Calculators & tools': ['nerdwallet.com/calculators'],
+}
+
+export const sites = Object.entries(groups).flatMap(([group, urls]) => urls.map((url) => ({ group, url })))
