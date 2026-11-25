@@ -584,7 +584,8 @@ export async function readWebPage(target: URL, html?: string): Promise<PageReadi
 /** Addresses of smaller versions of a photo, where the old host makes them on request. */
 export function smallerCopies(target: URL): string[] {
   const wix = /static\.wixstatic\.com\/media\/([^/?#]+)/.exec(target.href)?.[1]
-  if (wix) return [`https://static.wixstatic.com/media/${wix}/v1/fit/w_1600,h_1600,q_80/${wix.replace(/\.[a-z]+$/i, '.jpg')}`]
+  // Pictures with see-through parts stay PNG: as JPG their clear parts turn black.
+  if (wix) return [`https://static.wixstatic.com/media/${wix}/v1/fit/w_1600,h_1600,q_80/${wix.replace(/\.[a-z]+$/i, /\.png$/i.test(wix) ? '.png' : '.jpg')}`]
   const sized = (name: string, value: string) => { const copy = new URL(target.href); copy.searchParams.set(name, value); return copy.href }
   if (target.hostname.endsWith('squarespace-cdn.com')) return [sized('format', '1500w'), sized('format', '1000w')]
   if (target.hostname === 'cdn.shopify.com' || target.pathname.startsWith('/cdn/shop/')) return [sized('width', '1600'), sized('width', '1000')]
@@ -678,9 +679,13 @@ async function comparePage(env: Env, site: SiteRow, old: Reading, page: WorkingP
   const textMissing = lines.filter((line) => !uses(line))
   const linkTextMissing = [...new Set([...old.links.map((link) => link.text), ...(old.buttons ?? [])])].filter((line) => comparable(line).length > 1 && !uses(line) && !textMissing.includes(line))
   const sources = old.images.map((image) => image.url)
-  const { results: copies } = sources.length
-    ? await env.DB.prepare(`SELECT id, source FROM media WHERE site_id = ? AND source IN (${sources.map(() => '?').join(',')})`).bind(site.id, ...sources).all<{ id: number; source: string }>()
-    : { results: [] as { id: number; source: string }[] }
+  // A query takes at most 100 values, so pages with many photos are looked up in parts.
+  const copies: { id: number; source: string }[] = []
+  for (let start = 0; start < sources.length; start += 90) {
+    const part = sources.slice(start, start + 90)
+    const { results } = await env.DB.prepare(`SELECT id, source FROM media WHERE site_id = ? AND source IN (${part.map(() => '?').join(',')})`).bind(site.id, ...part).all<{ id: number; source: string }>()
+    copies.push(...results)
+  }
   const copied = new Map(copies.map((row) => [row.source, row.id]))
   const shows = `${html} ${customCode}`
   const usedOnPage = (id: number) => new RegExp(`/media/${id}(?![0-9])`).test(shows)

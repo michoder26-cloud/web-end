@@ -1,3 +1,4 @@
+import { isCopyPage } from './copying'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 
 import { handleAccount } from './account'
@@ -13,7 +14,7 @@ import { tellOwnerAboutEntry } from './email'
 import { validateEntry } from './forms'
 import { guidedStart, noteClaude, notePhone } from './first-steps'
 import { endTestMode, testModeLanguage, withTestBanner } from './test-mode'
-import { escapeHtml, html, notFound, privateHeaders, see } from './http'
+import { copyHeaders, escapeHtml, html, notFound, privateHeaders, securityHeaders, see } from './http'
 import { loadItems, showImage } from './items'
 import { alternates, extraLanguages, keepLanguage, languageName, localizePage, localizeSite, mainLanguage, siteLanguages } from './languages'
 import { createMcpServer } from './mcp'
@@ -80,6 +81,8 @@ async function showPage(request: Request, env: Env, url: URL, site: SiteRow, slu
         sent: url.searchParams.get('sent') ?? undefined,
       },
     ),
+    200,
+    isCopyPage(blocks) ? copyHeaders : securityHeaders,
   )
 }
 
@@ -112,7 +115,7 @@ async function showPreview(env: Env, url: URL, working: SiteRow, desk: Desk, par
     // A frame could read its own address, and this address holds the owner's secret.
     .replace(/<iframe class="custom-html"[^>]*><\/iframe>/g, `<p role="status">${t.customCodeLater}</p>`)
     .replace(/(<body[^>]*>)/, `$1${banner}`)
-  return html(body, 200, privateHeaders)
+  return html(body, 200, isCopyPage(blocks) ? { ...privateHeaders, 'Content-Security-Policy': copyHeaders['Content-Security-Policy'] } : privateHeaders)
 }
 
 async function showFrame(env: Env, site: SiteRow, slug: string, index: string) {

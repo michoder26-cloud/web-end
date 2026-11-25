@@ -76,10 +76,36 @@ export async function saveImage(env: Env, siteId: number, file: File, source: nu
   return { url: `/media/${row!.id}` }
 }
 
+// Files a copied page needs besides photos: drawings (SVG) and fonts.
+const fontSignatures: [string, (bytes: Uint8Array) => boolean][] = [
+  ['font/woff2', (b) => b[0] === 0x77 && b[1] === 0x4f && b[2] === 0x46 && b[3] === 0x32],
+  ['font/woff', (b) => b[0] === 0x77 && b[1] === 0x4f && b[2] === 0x46 && b[3] === 0x46],
+  ['font/ttf', (b) => b[0] === 0x00 && b[1] === 0x01 && b[2] === 0x00 && b[3] === 0x00],
+  ['font/otf', (b) => b[0] === 0x4f && b[1] === 0x54 && b[2] === 0x54 && b[3] === 0x4f],
+]
+
+/** Stores a photo, drawing or font of a copied page, by what its bytes are. Drawings are always served so their scripts can't run. */
+export async function saveCopiedFile(env: Env, siteId: number, bytes: Uint8Array, name: string, source: string) {
+  if (bytes.length > maxImageBytes) return { error: 'larger than 1 MB' }
+  let type = [...signatures, ...fontSignatures].find(([, matches]) => matches(bytes))?.[0]
+  if (!type) {
+    const start = new TextDecoder().decode(bytes.slice(0, 600)).replace(/^﻿/, '').trimStart()
+    if (/^(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*)*(<!DOCTYPE svg[^>]*>\s*)?<svg[\s>]/i.test(start)) type = 'image/svg+xml'
+  }
+  if (!type) return { error: 'not a photo, drawing or font' }
+  const used = await env.DB.prepare('SELECT COALESCE(SUM(size), 0) AS total FROM media WHERE site_id = ?').bind(siteId).first<{ total: number }>()
+  if ((used?.total ?? 0) + bytes.length > maxSiteImageBytes) return { error: 'the file storage is full' }
+  const row = await env.DB.prepare('INSERT INTO media (site_id, name, type, size, bytes, source) VALUES (?, ?, ?, ?, ?, ?) RETURNING id')
+    .bind(siteId, name.slice(0, 120) || 'file', type, bytes.length, bytes.buffer, source)
+    .first<{ id: number }>()
+  return { url: `/media/${row!.id}` }
+}
+
 export async function showImage(env: Env, siteId: number, id: string) {
   const row = await env.DB.prepare('SELECT type, bytes FROM media WHERE site_id = ? AND id = ?').bind(siteId, Number(id)).first<{ bytes: number[]; type: string }>()
   if (!row) return null
   return new Response(new Uint8Array(row.bytes), {
-    headers: { 'Cache-Control': 'public, max-age=86400', 'Content-Type': row.type, 'X-Content-Type-Options': 'nosniff' },
+    // A drawing opened on its own is still a document: nothing in it may run.
+    headers: { 'Cache-Control': 'public, max-age=86400', 'Content-Security-Policy': "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox", 'Content-Type': row.type, 'X-Content-Type-Options': 'nosniff' },
   })
 }

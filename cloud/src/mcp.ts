@@ -20,6 +20,7 @@ import { maxDailyLimit } from './news'
 import { registerNewsTools } from './news-tools'
 import { parsePrice } from './money'
 import { validPromptPayId } from './promptpay'
+import { copyMoreFiles, copyPage, copyTexts, copyWaiting, editCopy, isCopyPage, maxCopyBytes } from './copying'
 import { checkMove, checkMoveWith, cleanPath, copyImage, importProducts, moveGate, moveReport, moveStatus, readWebPage, rememberReading, saveRedirects, scanWebsite } from './moving'
 import { blocksFromReading, chromeOf, lookCss, photosOf, priceOf, productDetailsFrom, slugFor, type FoundProduct } from './importer'
 import { officeWords } from './office-words'
@@ -441,7 +442,14 @@ export function createMcpServer(env: Env, origin: string, code: string) {
         return reply({ slug, language, mainLanguage: mainLanguage(settings), title: shown.title, description: shown.description, blocks: shown.blocks, untranslated: shown.missing, published: Boolean(page.published), url: `${origin}/${language}${slug === 'home' ? '/' : `/${slug}`}`, note: 'Untranslated texts show the main language. To translate, send these blocks back to save_translation with the same blocks in the same order, changing only the words.' })
       }
       const languages = Object.keys(readJson<PageTranslation>(translations))
-      return reply({ ...plain, blocks: JSON.parse(page.blocks), published: Boolean(page.published), url: pageUrl(slug), ...(languages.length ? { translatedInto: languages } : {}) })
+      const blocks = JSON.parse(page.blocks) as Block[]
+      if (isCopyPage(blocks)) {
+        const copy = blocks[0]
+        const photos = [...new Set([...copy.html.matchAll(/<img\b[^>]*\ssrc="([^"]+)"/g)].map((match) => match[1]))].slice(0, 80)
+        const links = [...new Set([...copy.html.matchAll(/<a\b[^>]*\shref="([^"]+)"/g)].map((match) => match[1]))].slice(0, 80)
+        return reply({ ...plain, blocks: undefined, published: Boolean(page.published), url: pageUrl(slug), look: `Moved from ${copy.source} with its own look. It has no blocks: change its words, photos and links with edit_copied_page, using the exact texts below.`, texts: copyTexts(copy.html).slice(0, 400), photos, links, filesWaiting: copyWaiting(copy) })
+      }
+      return reply({ ...plain, blocks, published: Boolean(page.published), url: pageUrl(slug), ...(languages.length ? { translatedInto: languages } : {}) })
     }),
   )
 
@@ -867,10 +875,60 @@ export function createMcpServer(env: Env, origin: string, code: string) {
   )
 
   server.registerTool(
+    'copy_page_files',
+    {
+      title: "Copy the rest of a moved page's files",
+      description: 'A page moved with its own look may still load some fonts and photos from the old site, because one call can only copy so many. This copies the next ones into this site. Call it again until filesWaiting is 0.',
+      inputSchema: { slug: pageSlugSchema },
+    },
+    safely(async ({ slug }) => {
+      const site = await getSite()
+      const page = await db.prepare('SELECT blocks FROM pages WHERE site_id = ? AND slug = ?').bind(site.id, slug).first<{ blocks: string }>()
+      if (!page) return refuse(`There is no page called "${slug}".`)
+      const blocks = JSON.parse(page.blocks) as Block[]
+      if (!isCopyPage(blocks)) return refuse('That page was not moved with its own look, so it has no files waiting.')
+      if (!copyWaiting(blocks[0])) return reply({ slug, filesWaiting: 0, note: 'Every file this page needs is already copied, or could not be copied.' })
+      const done = await copyMoreFiles(env, site.id, blocks[0])
+      await rememberPage(env, site.id, slug)
+      await db.prepare("UPDATE pages SET blocks = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE site_id = ? AND slug = ?").bind(JSON.stringify([done.block]), site.id, slug).run()
+      return reply({ slug, filesCopied: done.copied, filesNotCopied: done.notCopied, filesWaiting: done.waiting, ...(done.waiting ? { next: `Call copy_page_files again with slug "${slug}".` } : {}), ...waiting(site, slug) })
+    }),
+  )
+
+  server.registerTool(
+    'edit_copied_page',
+    {
+      title: 'Change words, photos or links on a page moved with its own look',
+      description: 'Changes a page that import_page moved with its own look. Read it with get_page first: texts lists its words exactly as they are, photos its picture addresses and links its link addresses. Each change replaces the first place that matches. A text can only change within one piece of text: to change a sentence with a bold word in it, change the pieces on each side. Only use words and photos the owner gave you or asked for.',
+      inputSchema: {
+        slug: pageSlugSchema,
+        texts: z.array(z.object({ from: text(2000), to: z.string().max(4000) })).max(60).optional().describe('Words to change, exactly as get_page shows them, or part of them'),
+        images: z.array(z.object({ from: z.string().min(1).max(2000), to: imageUrl })).max(40).optional().describe('Photo addresses to swap, such as an old photo for one uploaded to /media/'),
+        links: z.array(z.object({ from: z.string().min(1).max(2000), to: href })).max(40).optional().describe("Link addresses to change, such as an old page address to this site's /contact"),
+        title: optional(120).describe('A new page title'),
+      },
+    },
+    safely(async ({ images, links, slug, texts, title }) => {
+      const site = await getSite()
+      const page = await db.prepare('SELECT blocks FROM pages WHERE site_id = ? AND slug = ?').bind(site.id, slug).first<{ blocks: string }>()
+      if (!page) return refuse(`There is no page called "${slug}".`)
+      const blocks = JSON.parse(page.blocks) as Block[]
+      if (!isCopyPage(blocks)) return refuse('That page is made of blocks. Change it with get_page and save_page.')
+      const edited = editCopy(blocks[0], { images, links, texts })
+      const stored = JSON.stringify([edited.block])
+      if (stored.length > maxCopyBytes) return refuse('Nothing changed: the page would be too large.')
+      await rememberPage(env, site.id, slug)
+      if (title) await db.prepare("UPDATE pages SET blocks = ?, title = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE site_id = ? AND slug = ?").bind(stored, title, site.id, slug).run()
+      else await db.prepare("UPDATE pages SET blocks = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE site_id = ? AND slug = ?").bind(stored, site.id, slug).run()
+      return reply({ saved: true, url: pageUrl(slug), ...(edited.notFound.length ? { notFound: edited.notFound, note: 'These were not found, so they did not change. Read the page with get_page and use its exact texts and addresses.' } : {}), ...waiting(site, slug) })
+    }),
+  )
+
+  server.registerTool(
     'import_page',
     {
       title: "Rebuild a page of the owner's old site here",
-      description: "Rebuilds one page of the owner's old site here in one step, as normal blocks the owner can edit: headings, text, photos (copied into this site), buttons, galleries, questions and answers, feature lists and contact forms. You don't write the blocks, and the words stay as they were. It then compares the new page with the old one and reports what didn't come across. The start page becomes home, and other pages take the last part of their address. If that page already exists, ask the owner first and set replace true. html is only for a page a browser already drew, such as a site built by JavaScript.",
+      description: "Moves one page of the owner's old site here in one step. By default it keeps the page's own look: the page as it was drawn, with its style sheets, fonts and photos copied into this site, and none of the old site's code. Menus, sliders and pop-ups that needed that code show as they first appeared; phones get a simple menu button. Change its words, photos and links with edit_copied_page. With keepLook false it rebuilds the page as normal blocks instead (headings, text, photos, buttons, galleries, questions and answers, feature lists and contact forms), which the owner can edit block by block but which use this site's own design. Either way the words stay as they were, and it compares the new page with the old one and reports what didn't come across. The start page becomes home, and other pages take the last part of their address. If that page already exists, ask the owner first and set replace true. html is only for a page a browser already drew, such as a site built by JavaScript.",
       inputSchema: {
         url: text(500),
         ownerConfirmed: ownSite,
@@ -879,9 +937,10 @@ export function createMcpServer(env: Env, origin: string, code: string) {
         replace: z.boolean().optional().describe('Replace a page with the same name. Only after the owner agreed.'),
         useColors: z.boolean().optional().describe("Use the old site's colours. On by default for the home page."),
         homeUrl: z.string().max(500).optional().describe("The old site's start page, when it is not at /, such as https://name.wixstudio.com/shop. Links to it point to the new home page."),
+        keepLook: z.boolean().optional().describe("Keep the page's own look (the default). False rebuilds it as this site's blocks, for owners who want a fresh design they can edit block by block."),
       },
     },
-    safely(async ({ homeUrl, html, replace, slug, url, useColors }) => {
+    safely(async ({ homeUrl, html, keepLook, replace, slug, url, useColors }) => {
       const target = safeWebUrl(env, url)
       if (!target) return refuse('Use a public https address.')
       const reading = await readWebPage(target, html)
@@ -896,6 +955,43 @@ export function createMcpServer(env: Env, origin: string, code: string) {
       if (!exists) {
         const count = await db.prepare('SELECT COUNT(*) AS total FROM pages WHERE site_id = ?').bind(site.id).first<{ total: number }>()
         if ((count?.total ?? 0) >= maxPagesPerSite) return refuse(`A site can have up to ${maxPagesPerSite} pages.`)
+      }
+      let lookNote = ''
+      if (keepLook !== false) {
+        // The page as it was, with its own look. Without a drawn page, the address is read once more for its HTML.
+        let source = html ?? ''
+        if (!source) {
+          const again = safeWebUrl(env, reading.url)
+          const answer = again ? await fetch(again, { headers: { Accept: 'text/html', 'User-Agent': "web-end-site-mover/1.0 (moving an owner's own site)" }, signal: AbortSignal.timeout(10_000) }).catch((): null => null) : null
+          source = answer?.ok ? (await answer.text()).slice(0, 3_000_000) : ''
+        }
+        const copied = source ? await copyPage(env, site.id, source, reading.url, homeUrl || (name === 'home' ? reading.url : '')) : null
+        if (copied && copied.report.size <= maxCopyBytes && copyTexts(copied.block.html).length) {
+          const title = (reading.title || copied.title || name).slice(0, 120)
+          const description = (reading.description || title).slice(0, 300)
+          await rememberPage(env, site.id, name)
+          await db
+            .prepare(`INSERT INTO pages (site_id, slug, title, description, published, blocks) VALUES (?, ?, ?, ?, 1, ?)
+              ON CONFLICT (site_id, slug) DO UPDATE SET title = excluded.title, description = excluded.description, published = 1, blocks = excluded.blocks, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`)
+            .bind(site.id, name, title, description, JSON.stringify([copied.block]))
+            .run()
+          const compared = await checkMoveWith(env, await getSite(), reading, name)
+          const report = 'report' in compared ? compared.report : null
+          const waitingFiles = copied.report.filesWaiting
+          return reply({
+            imported: name,
+            url: pageUrl(name),
+            look: 'kept: the page looks as it did, with none of its old code',
+            blocks: ['copy'],
+            photosCopied: copied.report.filesCopied,
+            photosNotCopied: copied.report.filesNotCopied,
+            ...copied.report,
+            check: report ? { problems: report.problems, counts: report.counts, textMissing: report.textMissing.slice(0, 10), titleKept: report.titleKept } : compared,
+            next: `${waitingFiles ? `${waitingFiles} fonts and photos still load from the old site. Call copy_page_files with slug "${name}" until none are waiting, before the old site closes. ` : ''}Tell the owner in a few short lines which page was moved and what did not come across. Menus, sliders and pop-ups that needed the old site's code now show as they first appeared, and forms of the old site do not send: offer a page with a form block for messages. Then offer the next steps as choices, such as looking at the page, moving the next page, changing words with edit_copied_page, or publishing.`,
+            ...waiting(site, name),
+          })
+        }
+        lookNote = !copied ? "The page's HTML could not be read again, so it was rebuilt as blocks." : copied.report.size > maxCopyBytes ? 'The page is too large to keep with its own look, so it was rebuilt as blocks.' : 'Nothing readable was left after removing the old code, so it was rebuilt as blocks.'
       }
       // Photos go into this site's own database, so they keep working after the old site closes.
       // Cloudflare's free plan allows 50 outside requests per call, so only the first photos are copied.
@@ -1054,6 +1150,7 @@ export function createMcpServer(env: Env, origin: string, code: string) {
         ...(found.length ? { productScripts: `${reading.scripts?.length ?? 0} script files, ${detailsFrom} with product details` } : {}),
         ...(siteParts.length ? { alsoTaken: `The old ${siteParts.join(' and ')}` } : {}),
         check: report ? { problems: report.problems, counts: report.counts, textMissing: report.textMissing.slice(0, 10), titleKept: report.titleKept } : compared,
+        ...(lookNote ? { look: lookNote } : {}),
         next: 'Tell the owner in a few short lines which page was rebuilt and what did not come across, then offer the next steps as choices, such as looking at the page, importing the next page, fixing what is missing, or publishing.',
         ...waiting(site, name),
       })

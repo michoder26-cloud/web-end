@@ -80,7 +80,7 @@ check((await rpc('/mcp/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd')).status === 404, 'M
 check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd`)).status === 404, 'the back office with a wrong link is refused')
 
 const { tools } = await client.listTools()
-check(tools.length === 64 && tools.some((tool) => tool.name === 'import_page') && tools.some((tool) => tool.name === 'get_move_report') && tools.some((tool) => tool.name === 'get_wordpress_report') && tools.some((tool) => tool.name === 'duplicate_page') && tools.some((tool) => tool.name === 'restore_page_revision') && tools.some((tool) => tool.name === 'save_app_plan') && tools.some((tool) => tool.name === 'check_app_plan'), 'lists the tools', tools.map((tool) => tool.name).join(','))
+check(tools.length === 66 && tools.some((tool) => tool.name === 'import_page') && tools.some((tool) => tool.name === 'edit_copied_page') && tools.some((tool) => tool.name === 'copy_page_files') && tools.some((tool) => tool.name === 'get_move_report') && tools.some((tool) => tool.name === 'get_wordpress_report') && tools.some((tool) => tool.name === 'duplicate_page') && tools.some((tool) => tool.name === 'restore_page_revision') && tools.some((tool) => tool.name === 'save_app_plan') && tools.some((tool) => tool.name === 'check_app_plan'), 'lists the tools', tools.map((tool) => tool.name).join(','))
 check(stepDone(await (await fetch(`${base}/owner/${code}/dashboard`)).text(), 'claude') === '1', 'connecting Claude ticks its step')
 check(client.getInstructions()?.includes('apply_starter') && tools.find((tool) => tool.name === 'apply_starter')?.description.includes('replacePages'), 'Claude knows about starters and when it may replace pages')
 check(client.getInstructions()?.includes('web team'), 'gives Claude its working method')
@@ -1654,6 +1654,18 @@ if (process.env.WEBHOOK_TEST === '1') {
       const parts = Array.from({ length: 45 }, (_, at) => `<section data-we-y="${400 + at * 120}"><p data-we-y="${400 + at * 120}" data-we-x="0">Card number ${at + 1} tells one short story about the shop's week.</p></section>`).join('')
       return response.end(`<!doctype html><html><head><title>Many cards</title></head><body><main><section data-we-y="80"><h1 data-we-y="100" data-we-x="0">News from the shop</h1><p data-we-y="180" data-we-x="0">Everything that happened this month, in short cards.</p></section>${parts}</main></body></html>`)
     }
+    if (request.url === '/look.css') {
+      response.setHeader('Content-Type', 'text/css')
+      return response.end('.roast{color:rgb(1,2,3);font-family:Oldie}.never-used{color:red}@font-face{font-family:Oldie;src:url(/oldie.woff2) format("woff2")}@font-face{font-family:Unused;src:url(/unused.woff2)}@media print{.roast{color:blue}}.hero-art{background:url(photo.png)}')
+    }
+    if (request.url === '/oldie.woff2') {
+      response.setHeader('Content-Type', 'font/woff2')
+      return response.end(Buffer.concat([Buffer.from('wOF2'), Buffer.alloc(60)]))
+    }
+    if (request.url === '/styled') {
+      response.setHeader('Content-Type', 'text/html')
+      return response.end('<!doctype html><html class="theme-old"><head><title>Styled Cafe</title><link rel="stylesheet" href="/look.css"><style>.menu-row{display:flex}</style><script>document.title="SCRIPT-TEXT"</script></head><body class="home"><header><nav class="menu-row"><a href="/about">About us</a><a href="https://elsewhere.test/x">Elsewhere</a></nav></header><main><h1 class="roast" onclick="alert(1)">Roasted in the old style</h1><p>Same coffee, same corner.</p><p>Same coffee, same corner.</p><div class="hero-art"></div><img src="/photo.png" alt="Cup"><form action="https://collect.test/send"><input name="q"></form><a href="javascript:alert(2)">Bad link</a></main><div id="onetrust-banner-sdk"><p>COOKIE-TEXT</p></div></body></html>')
+    }
     if (request.url === '/dark-strip') {
       response.setHeader('Content-Type', 'text/html; charset=utf-8')
       const cards = ['Planning a launch', 'Running a help desk', 'Hiring a team', 'Moving an office', 'Closing the books'].map((line, at) => `<article data-we-y="900" data-we-x="${at * 260}"><img src="/card-${at}.png" alt="" data-we-y="900" data-we-x="${at * 260}" data-we-w="240" data-we-h="160"><p data-we-y="1070" data-we-x="${at * 260}">${line}</p></article>`).join('')
@@ -1686,7 +1698,7 @@ check(!reading.text.includes('SCRIPT-TEXT') && !reading.text.includes('color:red
   check((await call('read_website_page', { url: 'http://localhost:8795/missing', ownerConfirmed: true })).isError && (await call('read_website_page', { url: 'http://localhost:8795/notes.txt', ownerConfirmed: true })).isError, 'missing pages and other files are explained')
   const copied = await call('copy_image', { url: 'http://localhost:8795/photo.png', ownerConfirmed: true })
   check(/^\/media\/\d+$/.test(copied.data.url) && (await fetch(`${base}${copied.data.url}`)).headers.get('content-type') === 'image/png', 'copies a photo into the database')
-  const imported = await call('import_page', { url: 'http://localhost:8795/', ownerConfirmed: true, slug: 'moved-cafe', useColors: false })
+  const imported = await call('import_page', { url: 'http://localhost:8795/', ownerConfirmed: true, slug: 'moved-cafe', useColors: false, keepLook: false })
   const movedPage = await call('get_page', { slug: 'moved-cafe' })
   const movedText = JSON.stringify(movedPage.data.blocks ?? [])
   check(!imported.isError && imported.data.imported === 'moved-cafe' && movedPage.data.blocks?.[0]?.type === 'hero' && movedPage.data.blocks[0].heading === 'Welcome home' && movedText.includes('We roast every day.') && movedText.includes('12 Roast Way') && /\/media\/\d+/.test(movedText) && !movedText.includes('SCRIPT-TEXT'), 'import_page rebuilds an old page as blocks with its words and copied photos, without its scripts', imported.text)
@@ -1694,20 +1706,49 @@ check(!reading.text.includes('SCRIPT-TEXT') && !reading.text.includes('color:red
   const importedAgain = await call('import_page', { url: 'http://localhost:8795/', ownerConfirmed: true, slug: 'moved-cafe' })
   check(importedAgain.isError && importedAgain.text.includes('replace true'), 'import_page never replaces a page without being told to')
   const drawnForm = '<!doctype html><html><head><title>Contact</title></head><body><header><a href="/">Logo</a><a href="/menu">Menu</a></header><main><h1>Contact us</h1><p>Write to us.</p><form><input name="name" placeholder="Your name" required><input type="email" name="email" placeholder="Email"><textarea name="msg" placeholder="Message"></textarea><select name="topic"><option>Please choose</option><option>Booking</option><option>Other</option></select><input type="hidden" name="token" value="x"><button>Send</button></form></main><footer><p>Open daily</p></footer></body></html>'
-  const formImport = await call('import_page', { url: 'http://localhost:8795/contact-us', ownerConfirmed: true, html: drawnForm })
+  const formImport = await call('import_page', { url: 'http://localhost:8795/contact-us', ownerConfirmed: true, html: drawnForm, keepLook: false })
   const formPage = await call('get_page', { slug: 'contact-us' })
   const formBlock = formPage.data.blocks?.find((block) => block.type === 'form')
   check(!formImport.isError && formBlock?.heading === 'Contact us' && formBlock.fields.length === 4 && formBlock.fields[0].required === true && formBlock.fields[1].type === 'email' && formBlock.fields[2].type === 'textarea' && JSON.stringify(formBlock.fields[3].options) === '["Booking","Other"]', 'import_page reads a page a browser drew and turns its form into a working form', formImport.text)
   check(!JSON.stringify(formPage.data.blocks).includes('Open daily') && !JSON.stringify(formPage.data.blocks).includes('Logo'), "the old header and footer don't become page content")
-  const manyImport = await call('import_page', { url: 'http://localhost:8795/many-cards', ownerConfirmed: true, slug: 'many-cards', useColors: false })
+  const manyImport = await call('import_page', { url: 'http://localhost:8795/many-cards', ownerConfirmed: true, slug: 'many-cards', useColors: false, keepLook: false })
   const manyBlocks = (await call('get_page', { slug: 'many-cards' })).data.blocks ?? []
   check(!manyImport.isError && manyBlocks.length < 10 && JSON.stringify(manyBlocks).includes('Card number 45 tells') && JSON.stringify(manyBlocks).includes('Card number 1 tells'), 'a long page of small untitled cards keeps every card, in fewer blocks, instead of stopping at the block limit', String(manyBlocks.length))
   const darkReading = (await call('read_website_page', { url: 'http://localhost:8795/dark-strip', ownerConfirmed: true })).data
   check(darkReading.design?.accent === '#e5e5e6' && darkReading.design.background === '#08090a', "a main colour that is the page's own background is replaced by the button colour, so buttons stay visible", JSON.stringify(darkReading.design))
-  const stripImport = await call('import_page', { url: 'http://localhost:8795/dark-strip', ownerConfirmed: true, slug: 'dark-strip', useColors: false })
+  const stripImport = await call('import_page', { url: 'http://localhost:8795/dark-strip', ownerConfirmed: true, slug: 'dark-strip', useColors: false, keepLook: false })
   const stripBlocks = (await call('get_page', { slug: 'dark-strip' })).data.blocks ?? []
   const stripGalleries = stripBlocks.filter((block) => block.type === 'gallery')
   check(!stripImport.isError && stripGalleries.length === 1 && stripGalleries[0].images.length === 5 && stripGalleries[0].images[1].caption === 'Running a help desk' && JSON.stringify(stripBlocks).includes('Built for teams of any size'), 'a strip of photo cards becomes one gallery with the line under each card as its caption, and the page goes on after it', JSON.stringify(stripBlocks.map((block) => [block.type, block.images?.length])))
+  // Moving a page with its own look
+  const kept = await call('import_page', { url: 'http://localhost:8795/styled', ownerConfirmed: true, slug: 'kept' })
+  const keptPage = await call('get_page', { slug: 'kept' })
+  check(!kept.isError && String(kept.data.look).startsWith('kept') && JSON.stringify(kept.data.blocks) === '["copy"]' && kept.data.filesWaiting === 0, 'import_page keeps the old look by default, copying its files', kept.text)
+  check(keptPage.data.blocks === undefined && keptPage.data.texts?.includes('Roasted in the old style') && keptPage.data.photos?.some((photo) => /^\/media\/\d+$/.test(photo)), 'get_page shows a copied page as its words and photos, not its code', keptPage.text.slice(0, 300))
+  const keptView = await fetch(`${owner}/preview/kept`)
+  const keptHtml = await keptView.text()
+  const keptPolicy = keptView.headers.get('content-security-policy') ?? ''
+  check(keptHtml.includes('color:rgb(1,2,3)') && keptHtml.includes('.menu-row{display:flex}') && keptHtml.includes('class="theme-old"') && keptHtml.includes('class="home"'), 'the copied page keeps the old style sheets and its own classes')
+  check(!keptHtml.includes('never-used') && !keptHtml.includes('@media print') && !keptHtml.includes('Unused'), 'styles, fonts and print rules the page never uses are left out')
+  check(!keptHtml.includes('<script') && !keptHtml.includes('SCRIPT-TEXT') && !keptHtml.includes('onclick') && !keptHtml.includes('javascript:') && !keptHtml.includes('COOKIE-TEXT') && !keptHtml.includes('collect.test') && keptPolicy.includes("script-src 'none'"), 'none of the old code, cookie notices or outside form addresses come along, and scripts are switched off')
+  check(keptHtml.includes('href="/about"') && keptHtml.includes('href="https://elsewhere.test/x"') && /<img[^>]+src="\/media\/\d+"/.test(keptHtml) && /url\("?\/media\/\d+"?\) format/.test(keptHtml) && /hero-art\{background:url\("?\/media\/\d+/.test(keptHtml), 'links to the old site become this site, and photos, background photos and fonts are copied here', keptHtml.slice(0, 1500))
+  const keptFont = keptHtml.match(/url\("?(\/media\/\d+)"?\) format/)?.[1]
+  const keptFontFile = keptFont && (await fetch(`${base}${keptFont}`))
+  check(keptFontFile?.headers.get('content-type') === 'font/woff2' && (keptFontFile.headers.get('content-security-policy') ?? '').includes('sandbox'), 'copied fonts are served as fonts, and stored files can never run code')
+  check(keptHtml.includes('class="we-copy-menu"') && keptHtml.includes('>About us</a>'), 'phones get a menu made from the old menu')
+  check((await call('copy_page_files', { slug: 'kept' })).data.filesWaiting === 0 && (await call('copy_page_files', { slug: 'moved-cafe' })).isError, 'copy_page_files says when nothing waits, and only works on copied pages')
+  const keptEdit = await call('edit_copied_page', { slug: 'kept', texts: [{ from: 'old style', to: 'new style' }, { from: 'Not on the page', to: 'x' }], links: [{ from: '/about', to: '/contact' }] })
+  const keptEdited = await (await fetch(`${owner}/preview/kept`)).text()
+  check(!keptEdit.isError && keptEdited.includes('Roasted in the new style') && keptEdited.includes('href="/contact"') && keptEdit.data.notFound?.length === 1, 'edit_copied_page changes words and links in place and says what it could not find', keptEdit.text)
+  check((await call('edit_copied_page', { slug: 'moved-cafe', texts: [{ from: 'a', to: 'b' }] })).isError, 'pages made of blocks are not changed by edit_copied_page')
+  const keptEditor = await (await fetch(`${owner}/editor/kept`)).text()
+  check(keptEditor.includes('id="we-edit-bar"') && keptEditor.includes('/copy-editor.js') && keptEditor.includes('color:rgb(1,2,3)'), 'the editor shows a copied page as it looks, ready to type over')
+  const keptSave = await fetch(`${owner}/editor/kept/copy`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base }, body: JSON.stringify({ texts: [{ from: 'Same coffee, same corner.', nth: 1, to: 'Fresh beans every week.' }] }) })
+  const keptSaved = await (await fetch(`${owner}/preview/kept`)).text()
+  check(keptSave.ok && keptSaved.includes('Same coffee, same corner.') && keptSaved.includes('Fresh beans every week.') && keptSaved.indexOf('Same coffee') < keptSaved.indexOf('Fresh beans'), 'the editor changes the exact piece of text it was typed into, even when the same words appear twice')
+  const keptBlocks = await call('import_page', { url: 'http://localhost:8795/styled', ownerConfirmed: true, slug: 'kept-blocks', keepLook: false })
+  check(!keptBlocks.isError && !JSON.stringify(keptBlocks.data.blocks).includes('copy'), 'keepLook false still rebuilds the page as blocks')
+  await call('delete_page', { slug: 'kept-blocks' })
   check((await call('copy_image', { url: 'http://localhost:8795/notes.txt', ownerConfirmed: true })).isError, 'a file that is not an image is refused')
   // Checking the move
   check((await call('copy_image', { url: 'http://localhost:8795/photo.png', ownerConfirmed: true })).data.url === copied.data.url, 'the same photo is not stored twice')

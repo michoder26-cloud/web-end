@@ -1,3 +1,4 @@
+import { isCopyPage, renderCopy } from './copying'
 import { canChange, canCreate, showRecord } from './data'
 import type { DataField, PageRecords } from './data'
 import { contrast, fontVars, isHexColor, isSafeHref, readableOn, siteStyles } from './theme'
@@ -567,6 +568,8 @@ export function renderPage(
   page: { blocks: Block[]; description: string; slug: string; title: string },
   options: { canonical: string; cartCount?: number; customer: Customer | null; error?: string; items: Map<string, Item[]>; query?: URLSearchParams; records?: Map<number, PageRecords>; sent?: string; untranslated?: { blocks: Set<number>; label: string } },
 ) {
+  // A page moved with its own look is drawn as it was, without this site's header and footer.
+  if (isCopyPage(page.blocks)) return renderCopy(site, page, page.blocks[0], options.canonical)
   const settings = JSON.parse(site.settings) as Settings
   const firstHero = page.blocks.findIndex((block) => block.type === 'hero')
   const blocks = page.blocks

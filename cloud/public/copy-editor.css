@@ -1,0 +1,10 @@
+#we-edit-bar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:2147483647;display:flex;align-items:center;gap:12px;flex-wrap:wrap;max-width:calc(100vw - 24px);padding:10px 14px;border-radius:14px;background:#16201b;color:#fff;font:500 14px/1.35 system-ui,-apple-system,"Segoe UI",sans-serif;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+#we-edit-bar a{color:#fff;text-decoration:underline;text-underline-offset:3px}
+#we-edit-bar button{font:inherit;font-weight:700;border:0;border-radius:999px;padding:8px 18px;background:#fff;color:#16201b;cursor:pointer}
+#we-edit-bar button:disabled{opacity:.45;cursor:default}
+#we-edit-status{opacity:.9}
+[contenteditable="true"]{outline:2px dashed #2f80ed!important;outline-offset:3px;cursor:text}
+body :is(h1,h2,h3,h4,h5,h6,p,span,a,li,button,img,label):hover{outline:1px dashed rgba(47,128,237,.6);outline-offset:2px}
+.we-copy-menu{bottom:84px}
+/* Some sites hide empty elements: one being typed into stays, even while it is empty for a moment. */
+[contenteditable="true"]:empty{display:block!important;min-height:1em;min-width:2ch}

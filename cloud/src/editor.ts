@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { editCopy, isCopyPage, maxCopyBytes, renderCopy } from './copying'
+
 import { allows, catalog, firstProblem, writeItem } from './cms'
 import type { Desk } from './cms'
 import { releaseSummary } from './cms-platform'
@@ -48,6 +50,8 @@ export async function editorPage(env: Env, site: SiteRow, desk: Desk, slug: stri
   const settings = JSON.parse(site.settings) as Settings
   const page = found ?? (slug === 'home' ? { blocks: '[]', published: 1, title: settings.name } : null)
   if (!page) return notFound()
+  const stored = JSON.parse(page.blocks) as Block[]
+  if (isCopyPage(stored)) return copyEditor(site, desk, slug, page.title, stored[0])
   if (!found) pages.unshift({ slug: 'home', title: settings.name })
   const t = officeText(site)
   const { style, vars } = siteLook(settings)
@@ -118,6 +122,40 @@ async function savePage(request: Request, env: Env, site: SiteRow, slug: string)
   await rememberPage(env, site.id, slug)
   await env.DB.prepare("UPDATE pages SET blocks = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE site_id = ? AND slug = ?").bind(stored, site.id, slug).run()
   return json({ ok: true })
+}
+
+// ---- Pages moved with their own look: the page itself, with words and photos changed in place ------------
+
+const copyEditorHeaders = { ...editorHeaders, 'Content-Security-Policy': editorHeaders['Content-Security-Policy'].replace("font-src 'self'", "font-src 'self' https: data:") }
+
+function copyEditor(site: SiteRow, desk: Desk, slug: string, title: string, block: Parameters<typeof renderCopy>[2]) {
+  const t = officeText(site)
+  const th = t.lang === 'th'
+  const page = renderCopy(site, { description: '', slug, title }, block, '/')
+  const data = JSON.stringify({ base: desk.base, lang: th ? 'th' : 'en', slug }).replace(/</g, '\\u003c')
+  const bar = `<div id="we-edit-bar" role="toolbar"><a href="${escapeHtml(desk.base)}/dashboard">${th ? '← แดชบอร์ด' : '← Dashboard'}</a><span id="we-edit-status">${th ? 'คลิกข้อความเพื่อพิมพ์แก้ คลิกรูปเพื่อเปลี่ยนรูป' : 'Click any words to type over them. Click a photo to change it.'}</span><button id="we-edit-save" type="button" disabled>${th ? 'บันทึก' : 'Save'}</button><a href="${escapeHtml(desk.base)}/publish">${th ? 'เผยแพร่' : 'Publish'}</a></div>`
+  const tools = `${bar}<script id="copy-edit-data" type="application/json">${data}</script><link rel="stylesheet" href="/copy-editor.css"><script src="/copy-editor.js"></script>`
+  return html(page.replace(/<\/body>\s*<\/html>\s*$/, `${tools}</body></html>`).replace('<head>', '<head><meta name="robots" content="noindex">'), 200, copyEditorHeaders)
+}
+
+const copyEditSchema = z.object({
+  texts: z.array(z.object({ from: z.string().min(1).max(4000), nth: z.number().int().min(0).max(100_000), to: z.string().max(4000) })).max(500).optional(),
+  images: z.array(z.object({ from: z.string().min(1).max(2000), to: z.string().trim().max(1000).refine((value) => value.startsWith('https://') || /^\/media\/\d+$/.test(value)) })).max(100).optional(),
+})
+
+async function saveCopy(request: Request, env: Env, site: SiteRow, slug: string) {
+  const t = officeText(site)
+  const parsed = copyEditSchema.safeParse(await request.json().catch((): null => null))
+  if (!parsed.success) return json({ error: t.notSaved(firstProblem(parsed.error)) }, 400)
+  const current = await env.DB.prepare('SELECT blocks FROM pages WHERE site_id = ? AND slug = ?').bind(site.id, slug).first<{ blocks: string }>()
+  const blocks = current ? (JSON.parse(current.blocks) as Block[]) : []
+  if (!isCopyPage(blocks)) return json({ error: 'not found' }, 404)
+  const edited = editCopy(blocks[0], parsed.data)
+  const stored = JSON.stringify([edited.block])
+  if (stored.length > maxCopyBytes) return json({ error: t.notSaved(t.pageTooLarge) }, 400)
+  await rememberPage(env, site.id, slug)
+  await env.DB.prepare("UPDATE pages SET blocks = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE site_id = ? AND slug = ?").bind(stored, site.id, slug).run()
+  return json({ ok: true, notFound: edited.notFound.length })
 }
 
 // ---- The side panel: pages, products, shop and payment, the site's look, and publishing -----------------
@@ -291,6 +329,7 @@ export async function handleEditor(request: Request, env: Env, site: SiteRow, de
   if (request.method !== 'POST') return notFound()
   if (!action) return savePage(request, env, site, page)
   if (action === 'image') return uploadImage(request, env, site)
+  if (action === 'copy') return saveCopy(request, env, site, page)
   if (action === 'panel') return json(await panelData(env, site, desk))
   if (action === 'settings') return saveSettings(request, env, site, desk)
   if (action === 'product') return saveProduct(request, env, site, desk)

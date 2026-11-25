@@ -5,6 +5,9 @@ export const securityHeaders = {
   'X-Content-Type-Options': 'nosniff',
 }
 
+// A page moved with its own look may still load fonts and photos from the old site until they are copied. Scripts stay off.
+export const copyHeaders = { ...securityHeaders, 'Content-Security-Policy': securityHeaders['Content-Security-Policy'].replace("font-src 'self'", "font-src 'self' https: data:") }
+
 // Owner links hold a secret, so they must not leak to other sites or search engines.
 export const privateHeaders = { ...securityHeaders, 'Referrer-Policy': 'no-referrer', 'X-Robots-Tag': 'noindex' }
 
