@@ -14,7 +14,7 @@
         bigger: 'กรอบใหญ่ขึ้น', copy: 'ทำซ้ำ', remove: 'ลบ', photo: 'เปลี่ยนรูป', link: 'ลิงก์', linkAsk: 'ลิงก์ไปที่ไหน (เช่น /contact หรือ https://…):', back: 'คืนที่เดิม', front: 'ไว้หน้าสุด', type: 'พิมพ์แก้',
         hint: 'คลิกเพื่อเลือก ลากเพื่อย้าย ดับเบิลคลิกเพื่อพิมพ์', typing: 'กำลังพิมพ์ กด Enter หรือคลิกที่อื่นเมื่อเสร็จ',
         panel: 'แต่งหน้าตา', text: 'ตัวอักษร', size: 'ขนาด', bold: 'หนา', italic: 'เอียง', underline: 'ขีดเส้นใต้', align: 'จัดวาง', left: 'ซ้าย', center: 'กลาง', right: 'ขวา', color: 'สีตัวอักษร',
-        box: 'กล่อง', fill: 'สีพื้นหลัง', none: 'ไม่มี', corners: 'มุมโค้ง', space: 'ระยะขอบใน', shadow: 'เงา', soft: 'อ่อน', strong: 'เข้ม', fade: 'ความชัด', width: 'กว้าง', reset: 'ล้างการแต่งของชิ้นนี้', more: 'สีอื่น', hide: 'ซ่อน',
+        box: 'กล่อง', fill: 'สีพื้นหลัง', none: 'ไม่มี', corners: 'มุมโค้ง', space: 'ระยะขอบใน', shadow: 'เงา', soft: 'อ่อน', strong: 'เข้ม', fade: 'ความชัด', width: 'กว้าง', reset: 'ล้างการแต่งของชิ้นนี้', more: 'สีอื่น', hide: 'ซ่อน', copyStyle: 'คัดลอกสไตล์', pasteStyle: 'วางสไตล์', styleCopied: 'คัดลอกสไตล์แล้ว เลือกชิ้นอื่นแล้วกด วางสไตล์', show: 'แสดงบน', desktop: 'คอม', phone: 'มือถือ', position: 'ตำแหน่ง', middle: 'จัดกึ่งกลาง', addTitle: 'เพิ่มลงในหน้า', addHint: 'ชิ้นใหม่ใช้หน้าตาเดียวกับเว็บของคุณ และวางต่อจากชิ้นที่เลือกไว้', heading: 'หัวข้อ', paragraph: 'ข้อความ', buttonPart: 'ปุ่ม', image: 'รูป', divider: 'เส้นคั่น', spacer: 'ช่องว่าง', boxPart: 'กล่อง', newHeading: 'หัวข้อใหม่', newText: 'พิมพ์ข้อความของคุณตรงนี้', newButton: 'ปุ่มใหม่', nothingUndo: 'ไม่มีอะไรให้เลิกทำแล้ว', nothingRedo: 'ไม่มีอะไรให้ทำซ้ำแล้ว', helpTitle: 'คีย์ลัด', close: 'ปิด', ai: 'AI', aiTitle: 'บอก AI ว่าอยากให้ชิ้นนี้เป็นแบบไหน', aiPlaceholder: 'เช่น ทำให้ดูหรูขึ้น ใช้สีทอง', aiSend: 'ให้ AI ทำ', aiWorking: 'AI กำลังทำ…', aiDone: 'AI แก้แล้ว ไม่ชอบกด Ctrl+Z ได้', aiOnlyHere: 'AI ใช้ได้เมื่อแก้เว็บในหน้า Edit with AI ของ tktf.at', aiTooBig: 'ชิ้นนี้ใหญ่เกินไป ลองเลือกชิ้นที่เล็กลง', aiSlow: 'AI ตอบช้าเกินไป ลองใหม่อีกครั้ง', aiNote: 'ใช้ 1 ข้อความ AI ต่อครั้ง', chips: ['ดูหรูขึ้น', 'เขียนให้น่าซื้อขึ้น', 'ทำให้เด่นขึ้น', 'สั้นลง', 'เป็นกันเองขึ้น', 'แปลเป็นภาษาอังกฤษ', 'แปลเป็นภาษาไทย'],
       }
     : {
         saving: 'Saving…', saved: 'Saved. Publish when you are ready.', failed: 'That did not work', changed: 'Unsaved changes', leave: 'You have unsaved changes',
@@ -22,10 +22,10 @@
         bigger: 'Bigger frame', copy: 'Repeat', remove: 'Remove', photo: 'Change photo', link: 'Link', linkAsk: 'Where should it link to (such as /contact or https://…):', back: 'Put back', front: 'Bring to front', type: 'Type',
         hint: 'Click to select, drag to move, double-click to type', typing: 'Typing. Press Enter or click elsewhere when done.',
         panel: 'Style', text: 'Text', size: 'Size', bold: 'Bold', italic: 'Italic', underline: 'Underline', align: 'Align', left: 'Left', center: 'Centre', right: 'Right', color: 'Text colour',
-        box: 'Box', fill: 'Background', none: 'None', corners: 'Corners', space: 'Inner space', shadow: 'Shadow', soft: 'Soft', strong: 'Strong', fade: 'Opacity', width: 'Width', reset: 'Clear this part’s styling', more: 'More colours', hide: 'Hide',
+        box: 'Box', fill: 'Background', none: 'None', corners: 'Corners', space: 'Inner space', shadow: 'Shadow', soft: 'Soft', strong: 'Strong', fade: 'Opacity', width: 'Width', reset: 'Clear this part’s styling', more: 'More colours', hide: 'Hide', copyStyle: 'Copy style', pasteStyle: 'Paste style', styleCopied: 'Style copied. Select another part and press Paste style.', show: 'Show on', desktop: 'Computer', phone: 'Phone', position: 'Position', middle: 'Centre it', addTitle: 'Add to the page', addHint: 'New parts take your site’s own look, and go after the part you selected.', heading: 'Heading', paragraph: 'Text', buttonPart: 'Button', image: 'Photo', divider: 'Divider', spacer: 'Space', boxPart: 'Box', newHeading: 'New heading', newText: 'Type your words here', newButton: 'New button', nothingUndo: 'Nothing left to undo', nothingRedo: 'Nothing left to redo', helpTitle: 'Shortcuts', close: 'Close', ai: 'AI', aiTitle: 'Tell the AI how this part should be', aiPlaceholder: 'Such as: make it look more premium, in gold', aiSend: 'Ask the AI', aiWorking: 'The AI is working…', aiDone: 'Changed by the AI. Not right? Press Ctrl+Z.', aiOnlyHere: 'The AI works when you edit in Edit with AI on tktf.at', aiTooBig: 'This part is too big. Try a smaller one.', aiSlow: 'The AI took too long. Please try again.', aiNote: 'Uses 1 AI message each time', chips: ['More premium', 'More persuasive', 'Stand out more', 'Shorter', 'Friendlier', 'Translate to English', 'Translate to Thai'],
       }
 
-  const ui = '#we-edit-bar, #we-tools, #we-panel, #we-panel-open, .we-copy-menu, #we-file, #we-drop-line, .we-guide, .we-handle, #we-size'
+  const ui = '#we-edit-bar, #we-tools, #we-panel, #we-panel-open, #we-add, #we-help, #we-ai, .we-copy-menu, #we-file, #we-drop-line, .we-guide, .we-handle, #we-size'
   const ours = (element) => Boolean(element?.closest?.(ui))
   const status = (text) => { document.getElementById('we-edit-status').textContent = text }
   const flat = (value) => value.replace(/\s+/g, ' ').trim()
@@ -35,6 +35,11 @@
   let selected = null
   let editing = null
   const history = []
+  const future = []
+  const historyButtons = () => {
+    document.getElementById('we-edit-undo').disabled = !history.length
+    document.getElementById('we-edit-redo').disabled = !future.length
+  }
 
   // The page's own parts, without the editor's buttons and marks.
   const content = () => {
@@ -47,7 +52,8 @@
   const remember = () => {
     history.push(content())
     if (history.length > 60) history.shift()
-    document.getElementById('we-edit-undo').disabled = false
+    future.length = 0
+    historyButtons()
   }
   const changed = () => {
     dirty = true
@@ -123,12 +129,16 @@
       return
     }
     element.setAttribute('data-we-selected', '')
+    aiBox.hidden = true
     tools.replaceChildren(
+      button(`✨ ${say.ai}`, 'ai'),
       ...(element.parentElement && element.parentElement !== document.body ? [button(`⬚ ${say.bigger}`, 'bigger')] : []),
       ...(hasWords(element) ? [button(`✎ ${say.type}`, 'type')] : []),
       ...(element instanceof HTMLImageElement ? [button(`🖼 ${say.photo}`, 'photo')] : []),
       ...(element.closest('a') ? [button(`🔗 ${say.link}`, 'link')] : []),
       button(`⧉ ${say.copy}`, 'copy', 'Ctrl+D'),
+      button(`🖌 ${say.copyStyle}`, 'copyStyle', 'Ctrl+Alt+C'),
+      ...(copiedStyle ? [button(`🖌 ${say.pasteStyle}`, 'pasteStyle', 'Ctrl+Alt+V')] : []),
       ...(element.style.translate ? [button(`▲ ${say.front}`, 'front'), button(`↺ ${say.back}`, 'back')] : []),
       button(`✕ ${say.remove}`, 'remove', 'Delete'),
     )
@@ -240,6 +250,15 @@
       row(say.space, slider('space', 0, 120, Math.min(120, padding), (style, value) => { style.padding = `${value}px` })),
       row(say.shadow, toggle(say.none, !shadow, (style) => { style.boxShadow = 'none' }, 'shadow'), toggle(say.soft, shadow && look.boxShadow.includes('24px'), (style) => { style.boxShadow = '0 6px 24px rgba(0,0,0,.12)' }, 'shadow'), toggle(say.strong, shadow && look.boxShadow.includes('40px'), (style) => { style.boxShadow = '0 14px 40px rgba(0,0,0,.28)' }, 'shadow')),
       row(say.fade, slider('fade', 10, 100, Math.round(Number(look.opacity) * 100), (style, value) => { style.opacity = String(value / 100) }, '%')),
+      make('h3', { text: say.position }),
+      row(say.show, toggle(`🖥 ${say.desktop}`, !selected.classList.contains('we-hide-desktop'), () => { selected.classList.toggle('we-hide-desktop') }, 'show'), toggle(`📱 ${say.phone}`, !selected.classList.contains('we-hide-phone'), () => { selected.classList.toggle('we-hide-phone') }, 'show')),
+      row('', make('button', { type: 'button', text: `↔ ${say.middle}`, onclick: () => {
+        // Moves the part so its middle meets the middle of the box it sits in.
+        const box = selected.getBoundingClientRect()
+        const outer = (selected.parentElement ?? document.body).getBoundingClientRect()
+        const [x, y] = translateOf(selected)
+        styleChange('middle', (style) => { style.translate = `${Math.round(x + outer.left + outer.width / 2 - (box.left + box.width / 2))}px ${y}px` })
+      } })),
       make('button', { type: 'button', class: 'we-reset', text: say.reset, onclick: () => { styleChange('reset', () => { selected.removeAttribute('style') }); buildPanel() } }),
     )
     panel.replaceChildren(...sections)
@@ -247,16 +266,36 @@
   }
 
   // ---- Toolbar actions ------------------------------------------------------------------------------------
+  // A copied style: the look a part shows, without where it sits or how big it is.
+  let copiedStyle = null
+  const styleKeys = ['color', 'background-color', 'background-image', 'font-family', 'font-size', 'font-weight', 'font-style', 'text-decoration-line', 'text-align', 'letter-spacing', 'line-height', 'border-radius', 'border', 'padding', 'box-shadow', 'opacity']
   const act = (action) => {
     if (!selected) return
+    if (action === 'copyStyle') {
+      const look = getComputedStyle(selected)
+      copiedStyle = Object.fromEntries(styleKeys.map((key) => [key, look.getPropertyValue(key)]))
+      select(selected)
+      status(say.styleCopied)
+      return
+    }
+    if (action === 'pasteStyle') {
+      if (!copiedStyle) return
+      remember()
+      for (const [key, value] of Object.entries(copiedStyle)) if (value) selected.style.setProperty(key, value)
+      changed()
+      buildPanel()
+      place()
+      return
+    }
+    if (action === 'ai') return openAi()
     if (action === 'bigger') return select(selected.parentElement)
     if (action === 'type') return startEditing(selected)
     if (action === 'photo') return file.click()
     if (action === 'copy') {
       remember()
+      // The twin sits next to the original and keeps its marks, so the site's own styles still reach it.
       const twin = selected.cloneNode(true)
       twin.removeAttribute('data-we-selected')
-      twin.removeAttribute('id')
       selected.after(twin)
       select(twin)
     } else if (action === 'link') {
@@ -417,6 +456,10 @@
     // A press on the page selects that part at once, so it can be dragged straight away.
     if (target !== document.body && target !== document.documentElement) {
       event.preventDefault()
+      // Pressing the page normally gives it the keyboard; preventing that press is undone here, so Ctrl+Z,
+      // Delete and the arrows reach the editor, also when it sits in a frame of another page.
+      if (document.activeElement && document.activeElement !== document.body && document.activeElement !== editing) document.activeElement.blur()
+      window.focus()
       if (!selected || !selected.contains(target) || selected === document.body) select(pick(target))
       beginPress(event, selected, 'move')
     }
@@ -500,7 +543,8 @@
     }
     history.push(before)
     if (history.length > 60) history.shift()
-    document.getElementById('we-edit-undo').disabled = false
+    future.length = 0
+    historyButtons()
     changed()
     select(element)
   }
@@ -527,14 +571,20 @@
 
   // Keys: Enter finishes typing, Escape lets go, arrows nudge, Delete removes, Ctrl+Z undoes, Ctrl+D repeats.
   document.addEventListener('keydown', (event) => {
-    if (ours(event.target) && event.target.tagName === 'INPUT') return
+    if (ours(event.target) && ['INPUT', 'TEXTAREA'].includes(event.target.tagName)) return
+    const mod = event.ctrlKey || event.metaKey
+    const key = event.key.toLowerCase()
     if (editing) {
       if (event.key === 'Enter' || event.key === 'Escape') { event.preventDefault(); editing.blur(); stopEditing() }
+      // While typing, Ctrl+Z first undoes the typing itself; once that is all gone, the page's own steps.
       return
     }
-    const mod = event.ctrlKey || event.metaKey
-    if (mod && event.key.toLowerCase() === 'z') { event.preventDefault(); undo(); return }
+    if (mod && key === 'z' && !event.shiftKey) { event.preventDefault(); undo(); return }
+    if (mod && (key === 'y' || (key === 'z' && event.shiftKey))) { event.preventDefault(); redo(); return }
+    if (event.key === '?' ) { event.preventDefault(); toggleHelp(); return }
     if (!selected) return
+    if (mod && event.altKey && key === 'c') { event.preventDefault(); act('copyStyle'); return }
+    if (mod && event.altKey && key === 'v') { event.preventDefault(); act('pasteStyle'); return }
     if (event.key === 'Escape') select(null)
     else if (event.key === 'Delete') { event.preventDefault(); act('remove') }
     else if (mod && event.key.toLowerCase() === 'd') { event.preventDefault(); act('copy') }
@@ -560,6 +610,204 @@
     }
   })
 
+  // ---- Adding parts that match the site ---------------------------------------------------------------------
+  // A new part copies the look of one the page already has (its first heading, paragraph or button), so it fits
+  // the site at once. Without one to copy, it gets a plain look in the site's own colours.
+  const visible = (element) => { const box = element.getBoundingClientRect(); return box.width > 20 && box.height > 8 && getComputedStyle(element).visibility !== 'hidden' }
+  const sample = (selector, test = () => true) => [...document.querySelectorAll(selector)].find((element) => !ours(element) && visible(element) && test(element))
+  const looksLikeButton = (element) => {
+    const look = getComputedStyle(element)
+    return look.backgroundColor !== 'rgba(0, 0, 0, 0)' && parseFloat(look.paddingLeft) >= 8 && flat(element.textContent || '').length < 40
+  }
+  // Many sites style a part by where it sits (its id, or the boxes around it). A new part is put somewhere else,
+  // so it takes the look it showed, written on itself.
+  const bakedKeys = ['display', 'color', 'background-color', 'background-image', 'font-family', 'font-size', 'font-weight', 'font-style', 'text-decoration-line', 'text-transform', 'text-align', 'letter-spacing', 'line-height', 'border-top', 'border-right', 'border-bottom', 'border-left', 'border-radius', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left', 'box-shadow', 'justify-content', 'align-items', 'gap']
+  const bake = (model, copy) => {
+    const models = [model, ...model.querySelectorAll('*')].slice(0, 60)
+    const copies = [copy, ...copy.querySelectorAll('*')].slice(0, 60)
+    models.forEach((from, index) => {
+      const to = copies[index]
+      if (!to || !(to instanceof HTMLElement || to instanceof SVGElement)) return
+      const look = getComputedStyle(from)
+      for (const key of bakedKeys) {
+        let value = look.getPropertyValue(key)
+        if (key === 'display' && value === 'inline' && index === 0) value = 'inline-block'
+        if (value) to.style.setProperty(key, value)
+      }
+      to.style.setProperty('position', 'static')
+      to.style.removeProperty('translate')
+    })
+  }
+  const fresh = (element, words) => {
+    const copy = element.cloneNode(true)
+    if (element.isConnected) {
+      bake(element, copy)
+      // Its look is now written on it, so the site's rules for the original (sizes, places) are let go.
+      for (const node of [copy, ...copy.querySelectorAll('[class]')]) node.removeAttribute('class')
+    }
+    copy.removeAttribute('id')
+    copy.removeAttribute('data-we-selected')
+    copy.style.translate = ''
+    copy.querySelectorAll('[id]').forEach((node) => node.removeAttribute('id'))
+    if (words !== undefined) {
+      // The words go into the innermost element that held words, so the copied styling stays.
+      const holder = [copy, ...copy.querySelectorAll('*')].reverse().find((node) => hasWords(node)) ?? copy
+      holder.textContent = words
+      if (holder !== copy) [...copy.querySelectorAll('*')].filter((node) => node !== holder && !node.contains(holder) && hasWords(node)).forEach((node) => node.remove())
+    }
+    return copy
+  }
+  const placeholder = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="500"><rect width="800" height="500" fill="#e8ecea"/><path d="M300 330l80-100 60 70 40-45 80 75z" fill="#b9c4be"/><circle cx="330" cy="200" r="28" fill="#b9c4be"/></svg>')}`
+  const parts = {
+    heading: () => fresh(sample('h2') ?? sample('h3') ?? sample('h1') ?? make('h2', { style: 'font-size:32px;margin:16px 0' }), say.newHeading),
+    paragraph: () => fresh(sample('p', (element) => flat(element.textContent || '').length > 20) ?? make('p', { style: 'font-size:16px;line-height:1.6;margin:12px 0' }), say.newText),
+    buttonPart: () => {
+      const model = sample('a, button', looksLikeButton)
+      const made = model ? fresh(model, say.newButton) : make('a', { style: `display:inline-block;padding:12px 22px;border-radius:999px;background:${palette[0] ?? '#16201b'};color:#fff;text-decoration:none;font-weight:700` })
+      if (!model) made.textContent = say.newButton
+      if (made.tagName === 'A') made.setAttribute('href', '#')
+      if (model) {
+        // As wide as its words, with the colour its words had.
+        const words = [model, ...model.querySelectorAll('*')].reverse().find(hasWords) ?? model
+        const ink = getComputedStyle(words).color
+        made.style.setProperty('color', ink)
+        made.querySelectorAll('*').forEach((node) => node.style?.setProperty('color', ink))
+        if (/^(block|flex|grid)$/.test(made.style.display)) made.style.display = made.style.display === 'block' ? 'inline-block' : `inline-${made.style.display}`
+        made.style.width = 'fit-content'
+        made.style.textDecoration = 'none'
+      }
+      return made
+    },
+    image: () => make('img', { src: placeholder, alt: '', style: 'display:block;width:100%;max-width:640px;height:auto;border-radius:12px;margin:16px 0' }),
+    divider: () => make('hr', { style: 'border:0;border-top:1px solid currentColor;opacity:.2;margin:28px 0;width:100%' }),
+    spacer: () => make('div', { style: 'height:56px' }),
+    boxPart: () => {
+      const box = make('div', { style: `padding:28px;border-radius:16px;background:${palette.find((hex) => hex !== '#000000' && hex !== '#ffffff') ?? '#f3f4f4'};margin:16px 0` })
+      box.append(parts.heading(), parts.paragraph())
+      return box
+    },
+  }
+  const addMenu = make('div', { id: 'we-add', hidden: '' })
+  const icons = { heading: 'H', paragraph: '¶', buttonPart: '▭', image: '🖼', divider: '—', spacer: '↕', boxPart: '▢' }
+  addMenu.append(
+    make('h2', { text: say.addTitle }),
+    make('p', { text: say.addHint }),
+    make('div', { class: 'we-add-grid' }, ...Object.keys(parts).map((name) => make('button', { type: 'button', 'data-part': name }, make('span', { class: 'we-add-icon', text: icons[name] }), make('span', { text: say[name] })))),
+  )
+  document.body.append(addMenu)
+  // Where a new part goes: after the selected part, or after the part in the middle of the window.
+  const anchor = () => {
+    if (selected && selected !== document.body) return selected
+    const middle = document.elementFromPoint(innerWidth / 2, innerHeight / 2)
+    return middle && !ours(middle) && middle !== document.body ? pick(middle) : null
+  }
+  addMenu.addEventListener('click', (event) => {
+    const name = event.target.closest('button')?.dataset.part
+    if (!name) return
+    addMenu.hidden = true
+    remember()
+    const made = parts[name]()
+    const after = anchor()
+    if (after && after.parentElement) after.after(made)
+    else (document.querySelector('main') ?? document.body).prepend(made)
+    changed()
+    select(made)
+    made.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    if (name === 'image') file.click()
+  })
+
+  const help = make('div', { id: 'we-help', hidden: '' })
+  const shortcuts = th
+    ? [['คลิก', 'เลือก'], ['ลาก', 'ย้าย (เส้นชมพูช่วยจัดแนว, กด Alt ค้างเพื่อไม่ให้ดูด)'], ['ลากจุดที่มุม', 'ย่อขยาย'], ['ดับเบิลคลิก หรือ Enter', 'พิมพ์แก้ข้อความ'], ['ลูกศร / Shift+ลูกศร', 'ขยับทีละ 1 / 10'], ['Ctrl+Z', 'เลิกทำ'], ['Ctrl+Y', 'ทำซ้ำ'], ['Ctrl+D', 'ทำซ้ำชิ้นนี้'], ['Ctrl+Alt+C / V', 'คัดลอก / วางสไตล์'], ['Delete', 'ลบ'], ['Esc', 'เลิกเลือก'], ['?', 'เปิดหน้านี้']]
+    : [['Click', 'Select'], ['Drag', 'Move (pink guides line it up; hold Alt to stop snapping)'], ['Drag a corner dot', 'Resize'], ['Double-click or Enter', 'Type'], ['Arrows / Shift+arrows', 'Nudge by 1 / 10'], ['Ctrl+Z', 'Undo'], ['Ctrl+Y', 'Redo'], ['Ctrl+D', 'Repeat this part'], ['Ctrl+Alt+C / V', 'Copy / paste style'], ['Delete', 'Remove'], ['Esc', 'Let go'], ['?', 'Show this']]
+  help.append(make('h2', { text: say.helpTitle }), make('dl', {}, ...shortcuts.flatMap(([keys, what]) => [make('dt', { text: keys }), make('dd', { text: what })])), make('button', { type: 'button', text: say.close, onclick: () => { help.hidden = true } }))
+  document.body.append(help)
+  function toggleHelp() { help.hidden = !help.hidden }
+
+  // ---- ✨ AI on the selected part --------------------------------------------------------------------------
+  // The editor sits in a frame of tktf.at's "Edit with AI" page. It sends the selected part and the owner's wish
+  // up to that page, which asks its AI (counting one message) and sends the changed part back. Only the page
+  // that holds this frame is asked, and only its answer is taken.
+  const parentOrigin = (() => {
+    if (window.parent === window) return ''
+    try {
+      const origin = location.ancestorOrigins?.[0] ?? new URL(document.referrer).origin
+      return /^https:\/\//.test(origin) || /^http:\/\/localhost(:\d+)?$/.test(origin) ? origin : ''
+    } catch {
+      return ''
+    }
+  })()
+  const aiBox = make('div', { id: 'we-ai', hidden: '' })
+  const aiInput = make('textarea', { rows: '2', maxlength: '500', placeholder: say.aiPlaceholder })
+  const aiSend = make('button', { type: 'button', class: 'we-ai-send', text: `✨ ${say.aiSend}` })
+  aiBox.append(
+    make('h2', { text: say.aiTitle }),
+    make('div', { class: 'we-ai-chips' }, ...say.chips.map((chip) => make('button', { type: 'button', text: chip, onclick: () => { aiInput.value = chip; askAi() } }))),
+    aiInput,
+    make('div', { class: 'we-ai-foot' }, make('span', { text: say.aiNote }), aiSend),
+  )
+  document.body.append(aiBox)
+  function openAi() {
+    if (!parentOrigin) { status(say.aiOnlyHere); return }
+    aiBox.hidden = false
+    const box = tools.getBoundingClientRect()
+    aiBox.style.top = `${scrollY + box.bottom + 6}px`
+    aiBox.style.left = `${Math.max(scrollX + 8, Math.min(scrollX + document.documentElement.clientWidth - aiBox.offsetWidth - 8, scrollX + box.left))}px`
+    aiInput.focus()
+  }
+  const waiting = new Map()
+  addEventListener('message', (event) => {
+    const reply = event.data
+    if (event.source !== window.parent || event.origin !== parentOrigin || reply?.type !== 'we-ai-result') return
+    waiting.get(reply.id)?.(reply)
+  })
+  const lookOfPage = () => {
+    const look = getComputedStyle(document.body)
+    const heading = document.querySelector('h1, h2')
+    return `fonts: ${look.fontFamily}${heading ? `; headings: ${getComputedStyle(heading).fontFamily}` : ''}; colours: ${palette.slice(0, 6).join(', ')}; language: ${document.documentElement.lang || 'unknown'}`
+  }
+  async function askAi() {
+    const wish = aiInput.value.trim()
+    if (!wish || !selected) return
+    const part = selected.cloneNode(true)
+    for (const node of [part, ...part.querySelectorAll('*')]) { node.removeAttribute?.('data-we-selected'); node.removeAttribute?.('contenteditable') }
+    const html = part.outerHTML
+    if (html.length > 30_000) { status(say.aiTooBig); return }
+    const target = selected
+    aiSend.disabled = true
+    status(say.aiWorking)
+    document.documentElement.classList.add('we-ai-busy')
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const reply = await new Promise((resolve) => {
+      const timer = setTimeout(() => resolve({ error: say.aiSlow }), 150_000)
+      waiting.set(id, (answer) => { clearTimeout(timer); resolve(answer) })
+      window.parent.postMessage({ type: 'we-ai', id, html, wish, look: lookOfPage() }, parentOrigin)
+    })
+    waiting.delete(id)
+    aiSend.disabled = false
+    document.documentElement.classList.remove('we-ai-busy')
+    if (reply.error || typeof reply.html !== 'string') { status(`${say.failed}: ${reply.error ?? ''}`); return }
+    // Read as inert HTML: nothing in it runs here, and the server cleans the page again on saving.
+    const holder = document.createElement('template')
+    holder.innerHTML = reply.html
+    holder.content.querySelectorAll('script, iframe, object, embed, form, link, meta, style, base').forEach((node) => node.remove())
+    for (const node of holder.content.querySelectorAll('*')) for (const name of node.getAttributeNames()) if (/^on/i.test(name)) node.removeAttribute(name)
+    const made = holder.content.firstElementChild
+    if (!made || !target.isConnected) { status(say.failed); return }
+    remember()
+    target.replaceWith(made)
+    aiBox.hidden = true
+    aiInput.value = ''
+    changed()
+    select(made)
+    status(say.aiDone)
+  }
+  aiSend.addEventListener('click', askAi)
+  aiInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); askAi() }
+    if (event.key === 'Escape') aiBox.hidden = true
+  })
+
   // ---- The bar: undo, save and publish --------------------------------------------------------------------
   const replaceContent = (html) => {
     const keep = [...document.body.children].filter((node) => ours(node) || node.id === 'copy-edit-data' || node.tagName === 'SCRIPT' || node.tagName === 'LINK')
@@ -567,11 +815,21 @@
     document.body.append(...keep)
   }
   function undo() {
-    if (!history.length) return
+    stopEditing()
+    if (!history.length) { status(say.nothingUndo); return }
     select(null)
-    editing = null
+    future.push(content())
     replaceContent(history.pop())
-    document.getElementById('we-edit-undo').disabled = !history.length
+    historyButtons()
+    changed()
+  }
+  function redo() {
+    stopEditing()
+    if (!future.length) { status(say.nothingRedo); return }
+    select(null)
+    history.push(content())
+    replaceContent(future.pop())
+    historyButtons()
     changed()
   }
   const save = async () => {
@@ -592,6 +850,9 @@
     if (!id) return
     try {
       if (id === 'we-edit-undo') undo()
+      else if (id === 'we-edit-redo') redo()
+      else if (id === 'we-edit-add') { addMenu.hidden = !addMenu.hidden; help.hidden = true }
+      else if (id === 'we-edit-help') { toggleHelp(); addMenu.hidden = true }
       else if (id === 'we-edit-save') await save()
       else if (id === 'we-edit-publish') {
         if (dirty) await save()

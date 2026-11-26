@@ -61,3 +61,36 @@ html.we-dragging #we-tools{opacity:.5}
 #we-panel .we-close{padding:5px 10px;font-size:12px}
 #we-panel-open{position:fixed;top:12px;right:12px;z-index:2147483646;border:0;border-radius:999px;padding:9px 16px;background:#16201b;color:#fff;font:700 14px/1.2 system-ui,-apple-system,"Segoe UI",sans-serif;cursor:pointer;box-shadow:0 6px 24px rgba(0,0,0,.25)}
 #we-panel-open[hidden]{display:none!important}
+/* The add menu and the shortcut help. */
+#we-add,#we-help{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);z-index:2147483647;width:min(420px,calc(100vw - 24px));padding:16px;border-radius:16px;background:#fff;color:#16201b;box-shadow:0 14px 48px rgba(0,0,0,.28);font:500 14px/1.4 system-ui,-apple-system,"Segoe UI","Noto Sans Thai",sans-serif;text-align:left}
+#we-add[hidden],#we-help[hidden]{display:none!important}
+#we-add *,#we-help *{box-sizing:border-box;font:inherit;letter-spacing:normal;text-transform:none}
+#we-add h2,#we-help h2{margin:0 0 4px;font-size:16px;font-weight:800}
+#we-add p{margin:0 0 12px;color:#5b6b62;font-size:13px}
+#we-add .we-add-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+#we-add .we-add-grid button{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 4px;border:1px solid #d8dfdb;border-radius:12px;background:#fff;color:#16201b;cursor:pointer;font-weight:700;font-size:12px}
+#we-add .we-add-grid button:hover{border-color:#2f80ed;background:#f2f7ff}
+#we-add .we-add-icon{font-size:20px;line-height:1}
+#we-help dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:10px 0 14px}
+#we-help dt{font-weight:800;white-space:nowrap}
+#we-help dd{margin:0;color:#3b4a42}
+#we-help button{border:0;border-radius:999px;padding:8px 18px;background:#16201b;color:#fff;font-weight:700;cursor:pointer}
+#we-edit-bar #we-edit-add{background:#ffd84d;color:#16201b}
+#we-edit-bar #we-edit-help{width:34px;padding:8px 0}
+/* In the editor, parts hidden on this screen size stay visible but faded, so they can still be found. */
+html .we-hide-desktop,html .we-hide-phone{display:revert!important;opacity:.35}
+/* ✨ AI on the selected part. */
+#we-ai{position:absolute;z-index:2147483647;width:min(380px,calc(100vw - 16px));padding:14px;border-radius:14px;background:#fff;color:#16201b;box-shadow:0 14px 48px rgba(0,0,0,.28);font:500 14px/1.4 system-ui,-apple-system,"Segoe UI","Noto Sans Thai",sans-serif;text-align:left}
+#we-ai[hidden]{display:none!important}
+#we-ai *{box-sizing:border-box;font:inherit;letter-spacing:normal;text-transform:none}
+#we-ai h2{margin:0 0 10px;font-size:15px;font-weight:800}
+#we-ai .we-ai-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+#we-ai .we-ai-chips button{border:1px solid #d9c8ff;border-radius:999px;padding:6px 11px;background:#f6f1ff;color:#4b2a9b;cursor:pointer;font-weight:600;font-size:13px}
+#we-ai .we-ai-chips button:hover{background:#ece2ff}
+#we-ai textarea{width:100%;resize:vertical;min-height:56px;padding:9px 11px;border:1px solid #c9d2cd;border-radius:10px;color:#16201b;background:#fff}
+#we-ai .we-ai-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;color:#5b6b62;font-size:12px}
+#we-ai .we-ai-send{border:0;border-radius:999px;padding:9px 16px;background:linear-gradient(135deg,#7b3fe4,#2f80ed);color:#fff;font-weight:800;cursor:pointer;white-space:nowrap}
+#we-ai .we-ai-send:disabled{opacity:.5;cursor:wait}
+#we-tools [data-action="ai"]{background:linear-gradient(135deg,#7b3fe4,#2f80ed)}
+html.we-ai-busy [data-we-selected]{animation:we-ai-glow 1.2s ease-in-out infinite}
+@keyframes we-ai-glow{50%{outline-color:#b48cff;box-shadow:0 0 0 6px rgba(123,63,228,.18)}}

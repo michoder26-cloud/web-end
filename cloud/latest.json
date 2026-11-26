@@ -1,4 +1,4 @@
 {
-  "version": "0.34.0",
-  "notes": "A new, easier editor for pages moved with their own look. Press any part and drag it: pink lines line it up with the parts around it. Drag a corner to resize. Double-click words to type. A style panel changes text size, bold, alignment, colours (from your site's own colours), background, corners, spacing, shadow and opacity. Arrow keys nudge, Delete removes, Ctrl+Z undoes and Ctrl+D repeats."
+  "version": "0.36.0",
+  "notes": "✨ AI in the editor: select any part of a page moved with its own look and tell the AI what you want, or tap a ready choice such as More premium, More persuasive, Shorter or Translate. The part changes in place, in your site's own look, and Ctrl+Z undoes it (on tktf.at, one AI message each). Also new: Ctrl+Z and Ctrl+Y work inside the tktf.at panel, an Add button for headings, text, buttons, photos and more that already match your site, copy and paste style, show or hide a part on phones or computers, centre in one click, and ? for every shortcut."
 }
