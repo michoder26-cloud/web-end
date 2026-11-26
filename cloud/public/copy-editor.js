@@ -1,22 +1,42 @@
-// The editor for a page moved with its own look. Click any part of the page to select it: move it up or down,
-// repeat it, remove it, or pick the bigger frame around it. Click words to type over them, and change photos.
+// The editor for a page moved with its own look, made to be easy:
+// - click a part to select it, drag it to move it (pink guides line it up with other parts), drag its corner to resize it
+// - double-click words to type over them
+// - the panel on the right changes text size, bold, colours, background, corners, spacing, shadow and fading
+// - arrow keys nudge, Delete removes, Ctrl+Z undoes, Ctrl+D repeats
 // Saving sends the page as arranged; the server cleans it again, so nothing in it can run.
 ;(() => {
   const data = JSON.parse(document.getElementById('copy-edit-data').textContent)
   const th = data.lang === 'th'
   const say = th
-    ? { saving: 'กำลังบันทึก…', saved: 'บันทึกแล้ว กดเผยแพร่เมื่อพร้อม', failed: 'ทำไม่สำเร็จ', changed: 'มีการแก้ไขที่ยังไม่บันทึก', photoUrl: 'หรือวางที่อยู่รูป (https://…):', leave: 'มีการแก้ไขที่ยังไม่บันทึก', publishing: 'กำลังเผยแพร่…', published: 'เผยแพร่แล้ว เว็บจริงเป็นแบบนี้แล้ว', uploading: 'กำลังอัปโหลดรูป…', up: 'ขึ้น', down: 'ลง', bigger: 'กรอบใหญ่ขึ้น', copy: 'ทำซ้ำ', remove: 'ลบ', photo: 'เปลี่ยนรูป', link: 'ลิงก์', linkAsk: 'ลิงก์ไปที่ไหน (เช่น /contact หรือ https://…):', top: 'ส่วนนี้อยู่บนสุดแล้ว', bottom: 'ส่วนนี้อยู่ล่างสุดแล้ว', drag: 'ลาก', back: 'คืนที่เดิม', front: 'ไว้หน้าสุด' }
-    : { saving: 'Saving…', saved: 'Saved. Publish when you are ready.', failed: 'That did not work', changed: 'Unsaved changes', photoUrl: 'Or paste a photo address (https://…):', leave: 'You have unsaved changes', publishing: 'Publishing…', published: 'Published. The live site looks like this now.', uploading: 'Uploading the photo…', up: 'Up', down: 'Down', bigger: 'Bigger frame', copy: 'Repeat', remove: 'Remove', photo: 'Change photo', link: 'Link', linkAsk: 'Where should it link to (such as /contact or https://…):', top: 'This part is already at the top', bottom: 'This part is already at the bottom', drag: 'Drag', back: 'Put back', front: 'Bring to front' }
+    ? {
+        saving: 'กำลังบันทึก…', saved: 'บันทึกแล้ว กดเผยแพร่เมื่อพร้อม', failed: 'ทำไม่สำเร็จ', changed: 'มีการแก้ไขที่ยังไม่บันทึก', leave: 'มีการแก้ไขที่ยังไม่บันทึก',
+        publishing: 'กำลังเผยแพร่…', published: 'เผยแพร่แล้ว เว็บจริงเป็นแบบนี้แล้ว', uploading: 'กำลังอัปโหลดรูป…', photoUrl: 'หรือวางที่อยู่รูป (https://…):',
+        bigger: 'กรอบใหญ่ขึ้น', copy: 'ทำซ้ำ', remove: 'ลบ', photo: 'เปลี่ยนรูป', link: 'ลิงก์', linkAsk: 'ลิงก์ไปที่ไหน (เช่น /contact หรือ https://…):', back: 'คืนที่เดิม', front: 'ไว้หน้าสุด', type: 'พิมพ์แก้',
+        hint: 'คลิกเพื่อเลือก ลากเพื่อย้าย ดับเบิลคลิกเพื่อพิมพ์', typing: 'กำลังพิมพ์ กด Enter หรือคลิกที่อื่นเมื่อเสร็จ',
+        panel: 'แต่งหน้าตา', text: 'ตัวอักษร', size: 'ขนาด', bold: 'หนา', italic: 'เอียง', underline: 'ขีดเส้นใต้', align: 'จัดวาง', left: 'ซ้าย', center: 'กลาง', right: 'ขวา', color: 'สีตัวอักษร',
+        box: 'กล่อง', fill: 'สีพื้นหลัง', none: 'ไม่มี', corners: 'มุมโค้ง', space: 'ระยะขอบใน', shadow: 'เงา', soft: 'อ่อน', strong: 'เข้ม', fade: 'ความชัด', width: 'กว้าง', reset: 'ล้างการแต่งของชิ้นนี้', more: 'สีอื่น', hide: 'ซ่อน',
+      }
+    : {
+        saving: 'Saving…', saved: 'Saved. Publish when you are ready.', failed: 'That did not work', changed: 'Unsaved changes', leave: 'You have unsaved changes',
+        publishing: 'Publishing…', published: 'Published. The live site looks like this now.', uploading: 'Uploading the photo…', photoUrl: 'Or paste a photo address (https://…):',
+        bigger: 'Bigger frame', copy: 'Repeat', remove: 'Remove', photo: 'Change photo', link: 'Link', linkAsk: 'Where should it link to (such as /contact or https://…):', back: 'Put back', front: 'Bring to front', type: 'Type',
+        hint: 'Click to select, drag to move, double-click to type', typing: 'Typing. Press Enter or click elsewhere when done.',
+        panel: 'Style', text: 'Text', size: 'Size', bold: 'Bold', italic: 'Italic', underline: 'Underline', align: 'Align', left: 'Left', center: 'Centre', right: 'Right', color: 'Text colour',
+        box: 'Box', fill: 'Background', none: 'None', corners: 'Corners', space: 'Inner space', shadow: 'Shadow', soft: 'Soft', strong: 'Strong', fade: 'Opacity', width: 'Width', reset: 'Clear this part’s styling', more: 'More colours', hide: 'Hide',
+      }
 
-  const ui = '#we-edit-bar, #we-tools, .we-copy-menu, #we-file, #we-drop-line'
+  const ui = '#we-edit-bar, #we-tools, #we-panel, #we-panel-open, .we-copy-menu, #we-file, #we-drop-line, .we-guide, .we-handle, #we-size'
   const ours = (element) => Boolean(element?.closest?.(ui))
   const status = (text) => { document.getElementById('we-edit-status').textContent = text }
   const flat = (value) => value.replace(/\s+/g, ' ').trim()
+  const hasWords = (element) => [...element.childNodes].some((child) => child.nodeType === 3 && flat(child.data))
+  const insertMode = () => document.getElementById('we-edit-free')?.checked
   let dirty = false
   let selected = null
+  let editing = null
   const history = []
 
-  // The page's own parts, without the editor's buttons.
+  // The page's own parts, without the editor's buttons and marks.
   const content = () => {
     const copy = document.body.cloneNode(true)
     copy.querySelectorAll(`${ui}, script, link, #copy-edit-data`).forEach((node) => node.remove())
@@ -26,7 +46,7 @@
   }
   const remember = () => {
     history.push(content())
-    if (history.length > 40) history.shift()
+    if (history.length > 60) history.shift()
     document.getElementById('we-edit-undo').disabled = false
   }
   const changed = () => {
@@ -35,175 +55,210 @@
     status(say.changed)
   }
 
-  // The floating buttons for the selected part.
-  const tools = document.createElement('div')
-  tools.id = 'we-tools'
-  tools.hidden = true
-  const button = (label, action) => {
-    const b = document.createElement('button')
-    b.type = 'button'
-    b.textContent = label
-    b.dataset.action = action
-    return b
+  const make = (tag, props = {}, ...children) => {
+    const element = document.createElement(tag)
+    for (const [key, value] of Object.entries(props)) {
+      if (key === 'class') element.className = value
+      else if (key === 'text') element.textContent = value
+      else if (key.startsWith('on')) element.addEventListener(key.slice(2), value)
+      else if (key === 'style') element.style.cssText = value
+      else element.setAttribute(key, value)
+    }
+    element.append(...children.filter(Boolean))
+    return element
   }
-  const file = document.createElement('input')
-  file.type = 'file'
-  file.accept = 'image/png,image/jpeg,image/webp,image/gif'
-  file.id = 'we-file'
-  file.hidden = true
-  document.body.append(tools, file)
+
+  // ---- What the editor draws on top of the page ----------------------------------------------------------
+  const tools = make('div', { id: 'we-tools', hidden: '' })
+  const panel = make('div', { id: 'we-panel', hidden: '' })
+  let panelOpen = true
+  const reopen = make('button', { type: 'button', id: 'we-panel-open', hidden: '', text: `🎨 ${say.panel}`, onclick: () => { panelOpen = true; buildPanel() } })
+  const file = make('input', { id: 'we-file', type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif', hidden: '' })
+  const line = make('div', { id: 'we-drop-line', hidden: '' })
+  const guideX = make('div', { class: 'we-guide we-guide-x', hidden: '' })
+  const guideY = make('div', { class: 'we-guide we-guide-y', hidden: '' })
+  const sizeTip = make('div', { id: 'we-size', hidden: '' })
+  const handles = ['e', 's', 'se'].map((side) => make('div', { class: `we-handle we-handle-${side}`, 'data-side': side, hidden: '' }))
+  document.body.append(tools, panel, reopen, file, line, guideX, guideY, sizeTip, ...handles)
+  status(say.hint)
 
   const place = () => {
-    if (!selected || !selected.isConnected) { tools.hidden = true; return }
+    if (!selected || !selected.isConnected) {
+      tools.hidden = true
+      handles.forEach((handle) => { handle.hidden = true })
+      return
+    }
     const box = selected.getBoundingClientRect()
     tools.hidden = false
-    const top = Math.max(window.scrollY + 4, window.scrollY + box.top - tools.offsetHeight - 6)
-    const left = Math.min(window.scrollX + document.documentElement.clientWidth - tools.offsetWidth - 8, Math.max(window.scrollX + 4, window.scrollX + box.left))
+    const top = Math.max(scrollY + 4, scrollY + box.top - tools.offsetHeight - 8)
+    const left = Math.min(scrollX + document.documentElement.clientWidth - tools.offsetWidth - 8, Math.max(scrollX + 4, scrollX + box.left))
     tools.style.top = `${top}px`
     tools.style.left = `${left}px`
-  }
-  const select = (element) => {
-    if (selected) selected.removeAttribute('data-we-selected')
-    selected = element
-    if (!element) { tools.hidden = true; return }
-    element.setAttribute('data-we-selected', '')
-    const handle = button(`✥ ${say.drag}`, 'drag')
-    handle.classList.add('we-drag')
-    tools.replaceChildren(
-      handle,
-      ...(element.parentElement && element.parentElement !== document.body ? [button(`⬚ ${say.bigger}`, 'bigger')] : []),
-      button(`↑ ${say.up}`, 'up'),
-      button(`↓ ${say.down}`, 'down'),
-      button(`⧉ ${say.copy}`, 'copy'),
-      ...(element instanceof HTMLImageElement ? [button(`🖼 ${say.photo}`, 'photo')] : []),
-      ...(element.closest('a') ? [button(`🔗 ${say.link}`, 'link')] : []),
-      ...(element.style.translate ? [button(`▲ ${say.front}`, 'front'), button(`↺ ${say.back}`, 'back')] : []),
-      button(`✕ ${say.remove}`, 'remove'),
-    )
-    place()
-  }
-  const sibling = (element, direction) => {
-    let next = direction < 0 ? element.previousElementSibling : element.nextElementSibling
-    while (next && (ours(next) || ['SCRIPT', 'STYLE', 'LINK'].includes(next.tagName))) next = direction < 0 ? next.previousElementSibling : next.nextElementSibling
-    return next
+    const spots = { e: [box.right, box.top + box.height / 2], s: [box.left + box.width / 2, box.bottom], se: [box.right, box.bottom] }
+    for (const handle of handles) {
+      const [x, y] = spots[handle.dataset.side]
+      handle.hidden = Boolean(editing)
+      handle.style.left = `${scrollX + x - 6}px`
+      handle.style.top = `${scrollY + y - 6}px`
+    }
   }
 
-  // Dragging: by default the part goes between other parts wherever it is dropped, shown by a blue line.
-  // With free placing on, it is moved by exactly as far as it was dragged, anywhere on the page.
-  const line = document.createElement('div')
-  line.id = 'we-drop-line'
-  line.hidden = true
-  document.body.append(line)
-  const freeMode = () => document.getElementById('we-edit-free')?.checked
-  let drag = null
-  let justDragged = false
-  const rowLike = (element) => {
-    const style = getComputedStyle(element)
-    return (style.display.includes('flex') && !style.flexDirection.startsWith('column')) || style.display.includes('grid') || style.display.startsWith('inline')
+  const button = (label, action, title) => make('button', { type: 'button', 'data-action': action, text: label, ...(title ? { title } : {}) })
+  const stopEditing = () => {
+    if (!editing) return
+    editing.removeAttribute('contenteditable')
+    editing = null
+    status(say.hint)
+    place()
   }
-  const dropAt = (x, y) => {
-    let target = document.elementFromPoint(x, y)
-    if (!target || ours(target) || target === document.body || target === document.documentElement) return null
-    if (drag.element.contains(target)) return null
-    const box = target.getBoundingClientRect()
-    // An empty box takes the part inside it; anything else gets it before or after, by which half is nearer.
-    const empty = !target.children.length && !flat(target.textContent || '') && !['IMG', 'INPUT', 'HR', 'BR', 'SVG', 'VIDEO'].includes(target.tagName.toUpperCase())
-    if (empty && box.width > 40 && box.height > 20) return { target, where: 'inside', box }
-    const across = target.parentElement && rowLike(target.parentElement)
-    const after = across ? x > box.left + box.width / 2 : y > box.top + box.height / 2
-    return { target, where: after ? 'after' : 'before', box, across }
-  }
-  const showLine = (spot) => {
-    if (!spot) { line.hidden = true; return }
-    const { box, where, across } = spot
-    line.hidden = false
-    if (where === 'inside') Object.assign(line.style, { left: `${box.left + scrollX}px`, top: `${box.top + scrollY}px`, width: `${box.width}px`, height: `${box.height}px` })
-    else if (across) Object.assign(line.style, { left: `${(where === 'after' ? box.right : box.left) + scrollX - 2}px`, top: `${box.top + scrollY}px`, width: '4px', height: `${box.height}px` })
-    else Object.assign(line.style, { left: `${box.left + scrollX}px`, top: `${(where === 'after' ? box.bottom : box.top) + scrollY - 2}px`, width: `${box.width}px`, height: '4px' })
-    line.classList.toggle('we-drop-inside', where === 'inside')
-  }
-  const startDrag = (event) => {
-    if (!selected || drag) return
-    event.preventDefault()
-    // Where a part already sits after earlier free placing ("none" or "12px 30px").
-    const [x = 0, y = 0] = (getComputedStyle(selected).translate || '').split(' ').map((value) => parseFloat(value) || 0)
-    drag = { element: selected, free: freeMode(), x: event.clientX, y: event.clientY, from: [x, y], before: content(), spot: null, moved: false }
-    document.documentElement.classList.add('we-dragging')
-    getSelection()?.removeAllRanges()
-  }
-  // Mouse and touch both drag; whichever arrives first starts it.
-  for (const kind of ['pointerdown', 'mousedown']) {
-    tools.addEventListener(kind, (event) => {
-      if (event.target.closest('button')?.dataset.action === 'drag') startDrag(event)
-    })
-  }
-  const moveDrag = (event) => {
-    if (!drag) return
-    const dx = event.clientX - drag.x
-    const dy = event.clientY - drag.y
-    if (!drag.moved && Math.hypot(dx, dy) < 4) return
-    drag.moved = true
-    if (drag.free) {
-      drag.element.style.translate = `${Math.round(drag.from[0] + dx)}px ${Math.round(drag.from[1] + dy)}px`
+  const select = (element) => {
+    if (element !== editing) stopEditing()
+    if (selected) selected.removeAttribute('data-we-selected')
+    selected = element
+    if (!element) {
+      tools.hidden = true
+      panel.hidden = true
+      reopen.hidden = true
       place()
       return
     }
-    drag.element.classList.add('we-ghost')
-    drag.spot = dropAt(event.clientX, event.clientY)
-    showLine(drag.spot)
-    // Near the top or bottom of the window, the page scrolls along.
-    if (event.clientY < 60) scrollBy(0, -20)
-    else if (event.clientY > innerHeight - 60) scrollBy(0, 20)
+    element.setAttribute('data-we-selected', '')
+    tools.replaceChildren(
+      ...(element.parentElement && element.parentElement !== document.body ? [button(`⬚ ${say.bigger}`, 'bigger')] : []),
+      ...(hasWords(element) ? [button(`✎ ${say.type}`, 'type')] : []),
+      ...(element instanceof HTMLImageElement ? [button(`🖼 ${say.photo}`, 'photo')] : []),
+      ...(element.closest('a') ? [button(`🔗 ${say.link}`, 'link')] : []),
+      button(`⧉ ${say.copy}`, 'copy', 'Ctrl+D'),
+      ...(element.style.translate ? [button(`▲ ${say.front}`, 'front'), button(`↺ ${say.back}`, 'back')] : []),
+      button(`✕ ${say.remove}`, 'remove', 'Delete'),
+    )
+    buildPanel()
+    place()
   }
-  document.addEventListener('pointermove', moveDrag)
-  document.addEventListener('mousemove', moveDrag)
-  const endDrag = () => {
-    if (!drag) return
-    const { element, spot, moved, before } = drag
-    element.classList.remove('we-ghost')
-    if (!element.classList.length) element.removeAttribute('class')
-    document.documentElement.classList.remove('we-dragging')
-    line.hidden = true
-    drag = null
-    if (!moved) return
-    // The click that ends a drag must not select something else.
-    justDragged = true
-    setTimeout(() => { justDragged = false }, 300)
-    if (!freeMode() && !spot) return
-    history.push(before)
-    if (history.length > 40) history.shift()
-    document.getElementById('we-edit-undo').disabled = false
-    if (spot && !freeMode()) {
-      if (spot.where === 'inside') spot.target.append(element)
-      else spot.target[spot.where](element)
-    }
-    changed()
+  const startEditing = (element, x, y) => {
     select(element)
+    editing = element
+    element.contentEditable = 'true'
+    remember()
+    element.focus()
+    // The caret goes where the owner double-clicked.
+    const range = x !== undefined && document.caretRangeFromPoint?.(x, y)
+    if (range && element.contains(range.startContainer)) {
+      const selection = getSelection()
+      selection.removeAllRanges()
+      selection.addRange(range)
+    }
+    status(say.typing)
+    place()
   }
-  document.addEventListener('pointerup', endDrag)
-  document.addEventListener('mouseup', endDrag)
-  document.addEventListener('pointercancel', endDrag)
 
-  tools.addEventListener('click', (event) => {
-    const action = event.target.closest('button')?.dataset.action
-    if (!action || !selected || action === 'drag') return
-    event.preventDefault()
-    event.stopPropagation()
-    if (action === 'bigger') return select(selected.parentElement)
-    if (action === 'photo') return file.click()
-    if (action === 'up' || action === 'down') {
-      const other = sibling(selected, action === 'up' ? -1 : 1)
-      if (!other) return status(action === 'up' ? say.top : say.bottom)
+  // ---- The style panel ----------------------------------------------------------------------------------
+  // The page's own colours come first, so choices fit the look the site already has.
+  const palette = (() => {
+    const counts = new Map()
+    const add = (value) => {
+      const match = /rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/.exec(value)
+      if (!match || (match[4] !== undefined && Number(match[4]) < 0.5)) return
+      const hex = `#${[match[1], match[2], match[3]].map((part) => Number(part).toString(16).padStart(2, '0')).join('')}`
+      counts.set(hex, (counts.get(hex) ?? 0) + 1)
+    }
+    for (const element of [...document.body.querySelectorAll('*')].slice(0, 1500)) {
+      if (ours(element)) continue
+      const style = getComputedStyle(element)
+      add(style.color)
+      add(style.backgroundColor)
+    }
+    const found = [...counts].sort((a, b) => b[1] - a[1]).map(([hex]) => hex)
+    return [...new Set([...found.slice(0, 10), '#000000', '#ffffff'])].slice(0, 12)
+  })()
+
+  // Each change made in the panel can be undone; one undo step per control, however long it is dragged.
+  let touching = null
+  const styleChange = (key, apply) => {
+    if (!selected) return
+    if (touching !== key) {
       remember()
-      if (action === 'up') other.before(selected)
-      else other.after(selected)
-      selected.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-    } else if (action === 'copy') {
+      touching = key
+    }
+    apply(selected.style)
+    changed()
+    place()
+  }
+  panel.addEventListener('pointerup', () => { touching = null })
+  panel.addEventListener('change', () => { touching = null })
+
+  const px = (value) => Math.round(parseFloat(value) || 0)
+  const row = (label, ...controls) => make('div', { class: 'we-row' }, make('span', { class: 'we-label', text: label }), make('div', { class: 'we-controls' }, ...controls))
+  const swatches = (key, property, current, withNone) =>
+    make(
+      'div',
+      { class: 'we-swatches' },
+      ...(withNone ? [make('button', { type: 'button', class: 'we-swatch we-swatch-none', title: say.none, onclick: () => styleChange(key, (style) => { style[property] = 'transparent' }) })] : []),
+      ...palette.map((hex) => make('button', { type: 'button', class: `we-swatch${current === hex ? ' we-on' : ''}`, title: hex, style: `background:${hex}`, onclick: () => styleChange(key, (style) => { style[property] = hex }) })),
+      make('label', { class: 'we-swatch we-swatch-more', title: say.more }, make('input', { type: 'color', value: current || '#000000', oninput: (event) => styleChange(key, (style) => { style[property] = event.target.value }) })),
+    )
+  const slider = (key, min, max, value, apply, unit = 'px') => {
+    const out = make('output', { text: `${value}${unit}` })
+    const input = make('input', { type: 'range', min: String(min), max: String(max), value: String(value), oninput: (event) => { out.textContent = `${event.target.value}${unit}`; styleChange(key, (style) => apply(style, Number(event.target.value))) } })
+    return make('div', { class: 'we-slider' }, input, out)
+  }
+  const toggle = (label, on, apply, key) => make('button', { type: 'button', class: `we-toggle${on ? ' we-on' : ''}`, text: label, onclick: () => { styleChange(key, apply); buildPanel() } })
+  const hexOf = (value) => {
+    const match = /rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/.exec(value)
+    if (!match || (match[4] !== undefined && Number(match[4]) === 0)) return ''
+    return `#${[match[1], match[2], match[3]].map((part) => Number(part).toString(16).padStart(2, '0')).join('')}`
+  }
+
+  function buildPanel() {
+    if (!selected) { panel.hidden = true; reopen.hidden = true; return }
+    reopen.hidden = panelOpen
+    if (!panelOpen) { panel.hidden = true; return }
+    const look = getComputedStyle(selected)
+    const words = Boolean(flat(selected.textContent || ''))
+    const size = px(look.fontSize)
+    const bold = Number(look.fontWeight) >= 600
+    const sections = [make('div', { class: 'we-panel-head' }, make('h2', { text: say.panel }), make('button', { type: 'button', class: 'we-close', text: say.hide, onclick: () => { panelOpen = false; buildPanel() } }))]
+    if (words) {
+      sections.push(
+        make('h3', { text: say.text }),
+        row(say.size, make('div', { class: 'we-stepper' },
+          make('button', { type: 'button', text: 'A−', onclick: () => { styleChange('size', (style) => { style.fontSize = `${Math.max(8, px(getComputedStyle(selected).fontSize) - 2)}px` }); buildPanel() } }),
+          make('span', { text: `${size}px` }),
+          make('button', { type: 'button', text: 'A+', onclick: () => { styleChange('size', (style) => { style.fontSize = `${Math.min(160, px(getComputedStyle(selected).fontSize) + 2)}px` }); buildPanel() } }))),
+        row('', toggle(`B ${say.bold}`, bold, (style) => { style.fontWeight = bold ? '400' : '700' }, 'bold'), toggle(`I ${say.italic}`, look.fontStyle === 'italic', (style) => { style.fontStyle = look.fontStyle === 'italic' ? 'normal' : 'italic' }, 'italic'), toggle(`U ${say.underline}`, look.textDecorationLine.includes('underline'), (style) => { style.textDecoration = look.textDecorationLine.includes('underline') ? 'none' : 'underline' }, 'underline')),
+        row(say.align, ...['left', 'center', 'right'].map((side) => toggle(say[side], look.textAlign === side || (side === 'left' && look.textAlign === 'start'), (style) => { style.textAlign = side }, 'align'))),
+        row(say.color, swatches('color', 'color', hexOf(look.color), false)),
+      )
+    }
+    const radius = px(look.borderTopLeftRadius)
+    const padding = px(look.paddingTop)
+    const shadow = look.boxShadow && look.boxShadow !== 'none'
+    sections.push(
+      make('h3', { text: say.box }),
+      row(say.fill, swatches('fill', 'backgroundColor', hexOf(look.backgroundColor), true)),
+      row(say.corners, slider('corners', 0, 60, Math.min(60, radius), (style, value) => { style.borderRadius = `${value}px` })),
+      row(say.space, slider('space', 0, 120, Math.min(120, padding), (style, value) => { style.padding = `${value}px` })),
+      row(say.shadow, toggle(say.none, !shadow, (style) => { style.boxShadow = 'none' }, 'shadow'), toggle(say.soft, shadow && look.boxShadow.includes('24px'), (style) => { style.boxShadow = '0 6px 24px rgba(0,0,0,.12)' }, 'shadow'), toggle(say.strong, shadow && look.boxShadow.includes('40px'), (style) => { style.boxShadow = '0 14px 40px rgba(0,0,0,.28)' }, 'shadow')),
+      row(say.fade, slider('fade', 10, 100, Math.round(Number(look.opacity) * 100), (style, value) => { style.opacity = String(value / 100) }, '%')),
+      make('button', { type: 'button', class: 'we-reset', text: say.reset, onclick: () => { styleChange('reset', () => { selected.removeAttribute('style') }); buildPanel() } }),
+    )
+    panel.replaceChildren(...sections)
+    panel.hidden = false
+  }
+
+  // ---- Toolbar actions ------------------------------------------------------------------------------------
+  const act = (action) => {
+    if (!selected) return
+    if (action === 'bigger') return select(selected.parentElement)
+    if (action === 'type') return startEditing(selected)
+    if (action === 'photo') return file.click()
+    if (action === 'copy') {
       remember()
       const twin = selected.cloneNode(true)
       twin.removeAttribute('data-we-selected')
       twin.removeAttribute('id')
       selected.after(twin)
+      select(twin)
     } else if (action === 'link') {
       const anchor = selected.closest('a')
       const next = prompt(say.linkAsk, anchor.getAttribute('href') ?? '')
@@ -231,9 +286,27 @@
     }
     changed()
     place()
+  }
+  tools.addEventListener('pointerdown', (event) => event.stopPropagation())
+  tools.addEventListener('click', (event) => {
+    const action = event.target.closest('button')?.dataset.action
+    if (!action) return
+    event.preventDefault()
+    event.stopPropagation()
+    act(action)
+  })
+  tools.addEventListener('contextmenu', (event) => {
+    // A right click on the photo button asks for an address instead of a file.
+    if (event.target.closest('button')?.dataset.action !== 'photo' || !(selected instanceof HTMLImageElement)) return
+    event.preventDefault()
+    const next = prompt(say.photoUrl, selected.getAttribute('src') ?? '')
+    if (!next || !/^(https:\/\/|\/media\/\d+$)/.test(next.trim())) return
+    remember()
+    selected.setAttribute('src', next.trim())
+    changed()
   })
 
-  // A photo from the computer goes into the site's own storage; an address can be pasted instead.
+  // A photo from the computer goes into the site's own storage.
   file.addEventListener('change', async () => {
     const chosen = file.files?.[0]
     file.value = ''
@@ -253,66 +326,256 @@
       status(`${say.failed}: ${error.message}`)
     }
   })
-  tools.addEventListener('dblclick', (event) => event.stopPropagation())
-  tools.addEventListener('contextmenu', (event) => {
-    // A right click on the photo button asks for an address instead of a file.
-    if (event.target.closest('button')?.dataset.action !== 'photo' || !(selected instanceof HTMLImageElement)) return
-    event.preventDefault()
-    const next = prompt(say.photoUrl, selected.getAttribute('src') ?? '')
-    if (!next || !/^(https:\/\/|\/media\/\d+$)/.test(next.trim())) return
-    remember()
-    selected.setAttribute('src', next.trim())
-    changed()
+
+  // ---- Moving: press on a part and drag it ----------------------------------------------------------------
+  // It moves by exactly as far as it is dragged, and snaps to the edges and middles of the parts around it and
+  // of the page, shown by pink lines. With "between parts" on, it goes between other parts instead (blue line).
+  let drag = null
+  let justDragged = false
+  const snapDistance = 6
+  const rowLike = (element) => {
+    const style = getComputedStyle(element)
+    return (style.display.includes('flex') && !style.flexDirection.startsWith('column')) || style.display.includes('grid')
+  }
+  const dropAt = (x, y) => {
+    const target = document.elementFromPoint(x, y)
+    if (!target || ours(target) || target === document.body || target === document.documentElement || drag.element.contains(target)) return null
+    const box = target.getBoundingClientRect()
+    const empty = !target.children.length && !flat(target.textContent || '') && !['IMG', 'INPUT', 'HR', 'BR', 'VIDEO'].includes(target.tagName) && !(target instanceof SVGElement)
+    if (empty && box.width > 40 && box.height > 20) return { target, where: 'inside', box }
+    const across = target.parentElement && rowLike(target.parentElement)
+    const after = across ? x > box.left + box.width / 2 : y > box.top + box.height / 2
+    return { target, where: after ? 'after' : 'before', box, across }
+  }
+  const showLine = (spot) => {
+    if (!spot) { line.hidden = true; return }
+    const { box, where, across } = spot
+    line.hidden = false
+    line.classList.toggle('we-drop-inside', where === 'inside')
+    if (where === 'inside') Object.assign(line.style, { left: `${box.left + scrollX}px`, top: `${box.top + scrollY}px`, width: `${box.width}px`, height: `${box.height}px` })
+    else if (across) Object.assign(line.style, { left: `${(where === 'after' ? box.right : box.left) + scrollX - 2}px`, top: `${box.top + scrollY}px`, width: '4px', height: `${box.height}px` })
+    else Object.assign(line.style, { left: `${box.left + scrollX}px`, top: `${(where === 'after' ? box.bottom : box.top) + scrollY - 2}px`, width: `${box.width}px`, height: '4px' })
+  }
+  // Lines to snap to: the page's middle, and the edges and middles of the parts near the one being moved.
+  const snapLines = (element) => {
+    const xs = [document.documentElement.clientWidth / 2]
+    const ys = []
+    const near = new Set()
+    for (let level = element.parentElement, depth = 0; level && level !== document.body && depth < 3; level = level.parentElement, depth++) {
+      near.add(level)
+      for (const child of level.children) near.add(child)
+    }
+    for (const other of near) {
+      if (other === element || element.contains(other) || other.contains(element) || ours(other)) continue
+      const box = other.getBoundingClientRect()
+      if (!box.width || !box.height) continue
+      xs.push(box.left, box.left + box.width / 2, box.right)
+      ys.push(box.top, box.top + box.height / 2, box.bottom)
+    }
+    const parent = element.parentElement?.getBoundingClientRect()
+    if (parent) { xs.push(parent.left, parent.left + parent.width / 2, parent.right); ys.push(parent.top, parent.top + parent.height / 2, parent.bottom) }
+    return { xs, ys }
+  }
+  const nearest = (values, targets) => {
+    let best = null
+    for (const value of values) for (const target of targets) {
+      const gap = target - value
+      if (Math.abs(gap) <= snapDistance && (!best || Math.abs(gap) < Math.abs(best.gap))) best = { gap, at: target }
+    }
+    return best
+  }
+
+  const translateOf = (element) => {
+    // "none" or "12px 30px": where a part already sits after earlier moves.
+    const [x = 0, y = 0] = (getComputedStyle(element).translate || '').split(' ').map((value) => parseFloat(value) || 0)
+    return [x, y]
+  }
+  // What a press picks: a whole button or link rather than the words inside it, a whole drawing rather than one
+  // of its lines, and a block rather than a run of text inside it.
+  const pick = (target) => {
+    let element = target instanceof SVGElement && !(target instanceof SVGSVGElement) ? target.closest('svg') ?? target : target
+    const clickable = element.closest('a, button, label')
+    if (clickable && !ours(clickable) && clickable.getBoundingClientRect().width < innerWidth * 0.6) return clickable
+    while (element.parentElement && element.parentElement !== document.body && !(element instanceof HTMLImageElement) && getComputedStyle(element).display === 'inline') element = element.parentElement
+    return element
+  }
+  const beginPress = (event, element, kind, side) => {
+    if (event.button !== 0 && event.pointerType === 'mouse') return
+    const box = element.getBoundingClientRect()
+    drag = { kind, side, element, pressed: event.target, x: event.clientX, y: event.clientY, from: translateOf(element), box, before: content(), moved: false, spot: null, lines: kind === 'move' ? snapLines(element) : null, width: box.width, height: box.height }
+  }
+  document.addEventListener('pointerdown', (event) => {
+    const target = event.target
+    if (!(target instanceof Element)) return
+    const handle = target.closest('.we-handle')
+    if (handle && selected) {
+      event.preventDefault()
+      beginPress(event, selected, 'resize', handle.dataset.side)
+      return
+    }
+    if (ours(target) || (editing && editing.contains(target))) return
+    // A press on the page selects that part at once, so it can be dragged straight away.
+    if (target !== document.body && target !== document.documentElement) {
+      event.preventDefault()
+      if (!selected || !selected.contains(target) || selected === document.body) select(pick(target))
+      beginPress(event, selected, 'move')
+    }
+  }, true)
+
+  document.addEventListener('pointermove', (event) => {
+    if (!drag) return
+    let dx = event.clientX - drag.x
+    let dy = event.clientY - drag.y
+    if (!drag.moved && Math.hypot(dx, dy) < 4) return
+    if (!drag.moved) {
+      drag.moved = true
+      // The site's own animations would make the part slide behind the pointer.
+      drag.transition = drag.element.style.getPropertyValue('transition')
+      drag.element.style.setProperty('transition', 'none', 'important')
+      document.documentElement.classList.add('we-dragging')
+      getSelection()?.removeAllRanges()
+    }
+    const { element, box } = drag
+    if (drag.kind === 'resize') {
+      if (getComputedStyle(element).display === 'inline') element.style.display = 'inline-block'
+      const width = Math.max(16, Math.round(drag.width + (drag.side === 's' ? 0 : dx)))
+      const height = Math.max(12, Math.round(drag.height + (drag.side === 'e' ? 0 : dy)))
+      if (drag.side !== 's') { element.style.width = `${width}px`; element.style.maxWidth = 'none' }
+      if (drag.side !== 'e') element.style.height = `${height}px`
+      if (element instanceof HTMLImageElement) element.style.objectFit = 'cover'
+      sizeTip.hidden = false
+      sizeTip.textContent = `${Math.round(element.getBoundingClientRect().width)} × ${Math.round(element.getBoundingClientRect().height)}`
+      Object.assign(sizeTip.style, { left: `${event.clientX + scrollX + 14}px`, top: `${event.clientY + scrollY + 14}px` })
+      place()
+      return
+    }
+    if (insertMode()) {
+      element.classList.add('we-ghost')
+      drag.spot = dropAt(event.clientX, event.clientY)
+      showLine(drag.spot)
+      if (event.clientY < 60) scrollBy(0, -20)
+      else if (event.clientY > innerHeight - 60) scrollBy(0, 20)
+      return
+    }
+    // Snap to the nearest guide, unless Alt is held.
+    guideX.hidden = true
+    guideY.hidden = true
+    if (!event.altKey) {
+      const snapX = nearest([box.left + dx, box.left + box.width / 2 + dx, box.right + dx], drag.lines.xs)
+      const snapY = nearest([box.top + dy, box.top + box.height / 2 + dy, box.bottom + dy], drag.lines.ys)
+      if (snapX) { dx += snapX.gap; guideX.hidden = false; guideX.style.left = `${snapX.at}px` }
+      if (snapY) { dy += snapY.gap; guideY.hidden = false; guideY.style.top = `${snapY.at}px` }
+    }
+    element.style.translate = `${Math.round(drag.from[0] + dx)}px ${Math.round(drag.from[1] + dy)}px`
+    place()
   })
 
-  document.addEventListener(
-    'click',
-    (event) => {
-      const target = event.target
-      if (justDragged) {
-        event.preventDefault()
-        event.stopPropagation()
-        return
-      }
-      if (!(target instanceof Element) || ours(target)) return
-      // Links and buttons stay put while editing.
-      event.preventDefault()
-      if (target !== selected) select(target)
-      const holder = [...target.childNodes].some((child) => child.nodeType === 3 && flat(child.data)) ? target : null
-      if (!holder || holder.isContentEditable) return
-      holder.contentEditable = 'true'
-      holder.addEventListener('focus', remember, { once: true })
-      holder.focus()
-    },
-    true,
-  )
-  document.addEventListener('input', (event) => { if (!ours(event.target)) { changed(); place() } })
-  // A new line would split the words in two; Enter finishes the edit instead.
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && event.target instanceof HTMLElement && event.target.isContentEditable) {
-      event.preventDefault()
-      event.target.blur()
+  const endPress = () => {
+    if (!drag) return
+    const { element, spot, moved, before, kind, pressed, transition } = drag
+    drag = null
+    if (moved) {
+      element.style.removeProperty('transition')
+      if (transition) element.style.setProperty('transition', transition)
     }
-    if (event.key === 'Escape') select(null)
-  })
+    element.classList.remove('we-ghost')
+    if (!element.classList.length) element.removeAttribute('class')
+    document.documentElement.classList.remove('we-dragging')
+    line.hidden = true
+    guideX.hidden = true
+    guideY.hidden = true
+    sizeTip.hidden = true
+    // A click without dragging, inside the selected frame, picks the smaller part that was clicked.
+    if (!moved) {
+      if (kind === 'move' && pressed !== element && element.contains(pressed) && !ours(pressed) && pick(pressed) !== element) select(pick(pressed))
+      return
+    }
+    // The click that ends a drag must not select something else.
+    justDragged = true
+    setTimeout(() => { justDragged = false }, 300)
+    if (kind === 'move' && insertMode()) {
+      if (!spot) return
+      if (spot.where === 'inside') spot.target.append(element)
+      else spot.target[spot.where](element)
+    }
+    history.push(before)
+    if (history.length > 60) history.shift()
+    document.getElementById('we-edit-undo').disabled = false
+    changed()
+    select(element)
+  }
+  document.addEventListener('pointerup', endPress)
+  document.addEventListener('pointercancel', endPress)
+
+  // Clicks never follow the page's links or send its forms while editing.
+  document.addEventListener('click', (event) => {
+    if (ours(event.target) || (editing && editing.contains(event.target))) return
+    event.preventDefault()
+    if (justDragged) event.stopPropagation()
+  }, true)
+  document.addEventListener('dblclick', (event) => {
+    const target = event.target
+    if (!(target instanceof Element) || ours(target)) return
+    event.preventDefault()
+    const holder = hasWords(target) ? target : [target, ...target.querySelectorAll('*')].find(hasWords)
+    if (holder && holder !== editing) startEditing(holder, event.clientX, event.clientY)
+  }, true)
   document.addEventListener('submit', (event) => event.preventDefault(), true)
-  window.addEventListener('scroll', place, { passive: true })
-  window.addEventListener('resize', place)
-  window.addEventListener('beforeunload', (event) => {
+  document.addEventListener('dragstart', (event) => { if (!ours(event.target)) event.preventDefault() }, true)
+  document.addEventListener('input', (event) => { if (!ours(event.target)) { changed(); place() } })
+  document.addEventListener('focusout', (event) => { if (event.target === editing) setTimeout(() => { if (document.activeElement !== editing) stopEditing() }, 0) })
+
+  // Keys: Enter finishes typing, Escape lets go, arrows nudge, Delete removes, Ctrl+Z undoes, Ctrl+D repeats.
+  document.addEventListener('keydown', (event) => {
+    if (ours(event.target) && event.target.tagName === 'INPUT') return
+    if (editing) {
+      if (event.key === 'Enter' || event.key === 'Escape') { event.preventDefault(); editing.blur(); stopEditing() }
+      return
+    }
+    const mod = event.ctrlKey || event.metaKey
+    if (mod && event.key.toLowerCase() === 'z') { event.preventDefault(); undo(); return }
+    if (!selected) return
+    if (event.key === 'Escape') select(null)
+    else if (event.key === 'Delete') { event.preventDefault(); act('remove') }
+    else if (mod && event.key.toLowerCase() === 'd') { event.preventDefault(); act('copy') }
+    else if (event.key === 'Enter' && hasWords(selected)) { event.preventDefault(); startEditing(selected) }
+    else if (event.key.startsWith('Arrow')) {
+      event.preventDefault()
+      const step = event.shiftKey ? 10 : 1
+      const [x, y] = translateOf(selected)
+      const move = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[event.key]
+      if (!event.repeat) remember()
+      selected.style.translate = `${x + move[0]}px ${y + move[1]}px`
+      changed()
+      place()
+    }
+  })
+  document.addEventListener('transitionend', () => place())
+  addEventListener('scroll', place, { passive: true })
+  addEventListener('resize', place)
+  addEventListener('beforeunload', (event) => {
     if (dirty) {
       event.preventDefault()
       event.returnValue = say.leave
     }
   })
 
-  // The editor's own bar: undo, save and publish.
-  const bar = document.getElementById('we-edit-bar')
+  // ---- The bar: undo, save and publish --------------------------------------------------------------------
   const replaceContent = (html) => {
     const keep = [...document.body.children].filter((node) => ours(node) || node.id === 'copy-edit-data' || node.tagName === 'SCRIPT' || node.tagName === 'LINK')
     document.body.innerHTML = html
     document.body.append(...keep)
   }
+  function undo() {
+    if (!history.length) return
+    select(null)
+    editing = null
+    replaceContent(history.pop())
+    document.getElementById('we-edit-undo').disabled = !history.length
+    changed()
+  }
   const save = async () => {
+    stopEditing()
     status(say.saving)
     document.getElementById('we-edit-save').disabled = true
     const response = await fetch(`${data.base}/editor/${data.slug}/copy`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ html: content() }) })
@@ -324,16 +587,12 @@
     dirty = false
     status(say.saved)
   }
-  bar.addEventListener('click', async (event) => {
+  document.getElementById('we-edit-bar').addEventListener('click', async (event) => {
     const id = event.target.closest('button')?.id
     if (!id) return
     try {
-      if (id === 'we-edit-undo' && history.length) {
-        select(null)
-        replaceContent(history.pop())
-        document.getElementById('we-edit-undo').disabled = !history.length
-        changed()
-      } else if (id === 'we-edit-save') await save()
+      if (id === 'we-edit-undo') undo()
+      else if (id === 'we-edit-save') await save()
       else if (id === 'we-edit-publish') {
         if (dirty) await save()
         status(say.publishing)

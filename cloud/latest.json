@@ -1,4 +1,4 @@
 {
-  "version": "0.33.2",
-  "notes": "On a page moved with its own look, any part can now be dragged and dropped anywhere on the page: a blue line shows where it will go. Turn on free placing to put a part exactly where you let go, bring it to the front, or put it back."
+  "version": "0.34.0",
+  "notes": "A new, easier editor for pages moved with their own look. Press any part and drag it: pink lines line it up with the parts around it. Drag a corner to resize. Double-click words to type. A style panel changes text size, bold, alignment, colours (from your site's own colours), background, corners, spacing, shadow and opacity. Arrow keys nudge, Delete removes, Ctrl+Z undoes and Ctrl+D repeats."
 }
