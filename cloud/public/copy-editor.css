@@ -1,10 +1,16 @@
-#we-edit-bar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:2147483647;display:flex;align-items:center;gap:12px;flex-wrap:wrap;max-width:calc(100vw - 24px);padding:10px 14px;border-radius:14px;background:#16201b;color:#fff;font:500 14px/1.35 system-ui,-apple-system,"Segoe UI",sans-serif;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+#we-edit-bar{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:2147483647;display:flex;align-items:center;gap:10px;flex-wrap:wrap;max-width:calc(100vw - 24px);padding:10px 14px;border-radius:14px;background:#16201b;color:#fff;font:500 14px/1.35 system-ui,-apple-system,"Segoe UI",sans-serif;box-shadow:0 10px 40px rgba(0,0,0,.3)}
 #we-edit-bar a{color:#fff;text-decoration:underline;text-underline-offset:3px}
-#we-edit-bar button{font:inherit;font-weight:700;border:0;border-radius:999px;padding:8px 18px;background:#fff;color:#16201b;cursor:pointer}
+#we-edit-bar button{font:inherit;font-weight:700;border:0;border-radius:999px;padding:8px 16px;background:#fff;color:#16201b;cursor:pointer}
+#we-edit-bar #we-edit-publish{background:#2f80ed;color:#fff}
 #we-edit-bar button:disabled{opacity:.45;cursor:default}
-#we-edit-status{opacity:.9}
+#we-edit-status{opacity:.9;max-width:42ch}
+#we-tools{position:absolute;z-index:2147483646;display:flex;gap:4px;flex-wrap:wrap;padding:4px;border-radius:10px;background:#16201b;box-shadow:0 6px 24px rgba(0,0,0,.3);font:600 13px/1.2 system-ui,-apple-system,"Segoe UI",sans-serif}
+#we-tools[hidden]{display:none}
+#we-tools button{font:inherit;border:0;border-radius:7px;padding:6px 10px;background:transparent;color:#fff;cursor:pointer;white-space:nowrap}
+#we-tools button:hover{background:rgba(255,255,255,.16)}
+[data-we-selected]{outline:2px solid #2f80ed!important;outline-offset:2px}
 [contenteditable="true"]{outline:2px dashed #2f80ed!important;outline-offset:3px;cursor:text}
-body :is(h1,h2,h3,h4,h5,h6,p,span,a,li,button,img,label):hover{outline:1px dashed rgba(47,128,237,.6);outline-offset:2px}
-.we-copy-menu{bottom:84px}
+body :is(h1,h2,h3,h4,h5,h6,p,span,a,li,button,img,label,section,article):hover{outline:1px dashed rgba(47,128,237,.6);outline-offset:2px}
 /* Some sites hide empty elements: one being typed into stays, even while it is empty for a moment. */
 [contenteditable="true"]:empty{display:block!important;min-height:1em;min-width:2ch}
+.we-copy-menu{bottom:84px}

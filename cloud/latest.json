@@ -1,4 +1,4 @@
 {
-  "version": "0.33.0",
-  "notes": "Moving a site now keeps its own look: each page comes across as it was, with its fonts, colours, layout, style sheets and photos copied into this site, and none of the old site's code. Owners can click words and photos on a moved page to change them, and Claude can change them too. Phones get a simple menu button. Rebuilding a page as this site's own blocks is still there for owners who want a fresh design."
+  "version": "0.33.1",
+  "notes": "A page moved with its own look can now be arranged freely in the editor: click any part to move it up or down, repeat it, remove it or pick the bigger frame around it, change photos from your computer, and undo. Publish works from the editor itself. Cookie notices from the old site are left out when moving."
 }

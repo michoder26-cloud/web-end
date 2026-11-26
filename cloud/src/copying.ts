@@ -211,7 +211,68 @@ export async function cleanPage(html: string, pageUrl: string, homeUrl = '') {
     .map((item) => ({ href: item.href, label: decodeEntities(item.label).replace(/\s+/g, ' ').trim() }))
     .filter((item) => item.label && item.label.length <= 40 && item.href && item.href !== '#' && !seen.has(item.href) && seen.add(item.href))
     .slice(0, 12)
-  return { body, bodyAttrs, htmlAttrs, images: [...new Set(images)], inlineStyles: inlineStyles.join(' '), menu: links, sheets, title: decodeEntities(title).trim(), used }
+  return { body: withoutConsentBoxes(body), bodyAttrs, htmlAttrs, images: [...new Set(images)], inlineStyles: inlineStyles.join(' '), menu: links, sheets, title: decodeEntities(title).trim(), used }
+}
+
+const voidTags = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr', 'param'])
+const consentWords = /cookie|คุกกี้|consent|gdpr/i
+const consentButtons = /<(button|a)\b[^>]*>(?:(?!<\/\1>)[\s\S]){0,300}?(\b(accept|allow|agree|reject|decline|got it|deny)\b|ยอมรับ|ปฏิเสธ)/i
+
+/**
+ * Cookie notices that the old site's code would have closed, found by what they say: a small box about cookies
+ * with buttons to accept or refuse. Without that code they would cover the page for good. The largest such box
+ * is taken, so its frame goes too.
+ */
+export function withoutConsentBoxes(html: string) {
+  if (!consentWords.test(html)) return html
+  const cut: [number, number][] = []
+  const open: { name: string; start: number }[] = []
+  for (const match of html.matchAll(/<(\/?)([a-zA-Z][\w:-]*)\b[^>]*?(\/?)>/g)) {
+    const [tag, closing, raw, selfClosing] = match
+    const name = raw.toLowerCase()
+    if (!closing) {
+      if (!voidTags.has(name) && !selfClosing) open.push({ name, start: match.index })
+      continue
+    }
+    let at = open.length - 1
+    while (at >= 0 && open[at].name !== name) at--
+    if (at < 0) continue
+    const { start } = open[at]
+    open.length = at
+    if (!['div', 'section', 'aside', 'dialog'].includes(name)) continue
+    const end = match.index + tag.length
+    if (end - start > 40_000) continue
+    const inner = html.slice(start, end)
+    const words = decodeEntities(inner.replace(/<(style|svg)\b[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim()
+    if (words.length > 1200 || !consentWords.test(words) || !consentButtons.test(inner)) continue
+    // A bigger box around one already found replaces it.
+    while (cut.length && cut.at(-1)![0] >= start) cut.pop()
+    cut.push([start, end])
+  }
+  let out = html
+  for (const [start, end] of cut.reverse()) out = out.slice(0, start) + out.slice(end)
+  return out
+}
+
+/** A copied page's body as the owner arranged it in the editor, cleaned again: nothing in it may run. */
+export async function cleanEditedBody(html: string) {
+  const out = await new HTMLRewriter()
+    .on('*', {
+      element(element) {
+        const tag = element.tagName.toLowerCase()
+        if (['script', 'noscript', 'iframe', 'object', 'embed', 'applet', 'base', 'frame', 'frameset', 'template', 'portal', 'meta', 'link', 'style', 'title'].includes(tag)) { element.remove(); return }
+        const id = element.getAttribute('id') ?? ''
+        if (id === 'we-edit-bar' || id === 'we-tools' || id === 'copy-edit-data' || /(^|\s)we-copy-menu(\s|$)/.test(element.getAttribute('class') ?? '')) { element.remove(); return }
+        for (const [rawName, value] of [...element.attributes]) {
+          const name = rawName.toLowerCase()
+          if (name.startsWith('on') || name.startsWith('data-we-') || ['contenteditable', 'srcdoc', 'formaction', 'nonce', 'spellcheck'].includes(name)) element.removeAttribute(rawName)
+          else if (['href', 'src', 'xlink:href', 'action', 'poster', 'background'].includes(name) && /^\s*(javascript|vbscript|data:text)/i.test(value)) element.setAttribute(rawName, '#')
+        }
+      },
+    })
+    .transform(new Response(`<body>${html}</body>`, { headers: { 'Content-Type': 'text/html; charset=utf-8' } }))
+    .text()
+  return out.replace(/^[\s\S]*?<body[^>]*>/i, '').replace(/<\/body>[\s\S]*$/i, '').trim()
 }
 
 /** A worker that copies files until its share of outside requests is used up. */

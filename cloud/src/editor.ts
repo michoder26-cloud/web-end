@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-import { editCopy, isCopyPage, maxCopyBytes, renderCopy } from './copying'
+import { cleanEditedBody, editCopy, isCopyPage, maxCopyBytes, renderCopy, withoutConsentBoxes } from './copying'
 
 import { allows, catalog, firstProblem, writeItem } from './cms'
 import type { Desk } from './cms'
@@ -133,12 +133,14 @@ function copyEditor(site: SiteRow, desk: Desk, slug: string, title: string, bloc
   const th = t.lang === 'th'
   const page = renderCopy(site, { description: '', slug, title }, block, '/')
   const data = JSON.stringify({ base: desk.base, lang: th ? 'th' : 'en', slug }).replace(/</g, '\\u003c')
-  const bar = `<div id="we-edit-bar" role="toolbar"><a href="${escapeHtml(desk.base)}/dashboard">${th ? '← แดชบอร์ด' : '← Dashboard'}</a><span id="we-edit-status">${th ? 'คลิกข้อความเพื่อพิมพ์แก้ คลิกรูปเพื่อเปลี่ยนรูป' : 'Click any words to type over them. Click a photo to change it.'}</span><button id="we-edit-save" type="button" disabled>${th ? 'บันทึก' : 'Save'}</button><a href="${escapeHtml(desk.base)}/publish">${th ? 'เผยแพร่' : 'Publish'}</a></div>`
+  const canPublish = allows(desk, 'publish')
+  const bar = `<div id="we-edit-bar" role="toolbar"><a href="${escapeHtml(desk.base)}/dashboard" target="_top">${th ? '← แดชบอร์ด' : '← Dashboard'}</a><span id="we-edit-status">${th ? 'คลิกส่วนไหนก็ได้เพื่อเลือก ย้าย ทำซ้ำ หรือลบ คลิกข้อความเพื่อพิมพ์แก้' : 'Click any part to select, move, repeat or remove it. Click words to type over them.'}</span><button id="we-edit-undo" type="button" disabled>${th ? 'เลิกทำ' : 'Undo'}</button><button id="we-edit-save" type="button" disabled>${th ? 'บันทึก' : 'Save'}</button>${canPublish ? `<button id="we-edit-publish" type="button">${th ? 'เผยแพร่' : 'Publish'}</button>` : ''}</div>`
   const tools = `${bar}<script id="copy-edit-data" type="application/json">${data}</script><link rel="stylesheet" href="/copy-editor.css"><script src="/copy-editor.js"></script>`
   return html(page.replace(/<\/body>\s*<\/html>\s*$/, `${tools}</body></html>`).replace('<head>', '<head><meta name="robots" content="noindex">'), 200, copyEditorHeaders)
 }
 
 const copyEditSchema = z.object({
+  html: z.string().min(1).max(maxCopyBytes).optional(),
   texts: z.array(z.object({ from: z.string().min(1).max(4000), nth: z.number().int().min(0).max(100_000), to: z.string().max(4000) })).max(500).optional(),
   images: z.array(z.object({ from: z.string().min(1).max(2000), to: z.string().trim().max(1000).refine((value) => value.startsWith('https://') || /^\/media\/\d+$/.test(value)) })).max(100).optional(),
 })
@@ -150,7 +152,9 @@ async function saveCopy(request: Request, env: Env, site: SiteRow, slug: string)
   const current = await env.DB.prepare('SELECT blocks FROM pages WHERE site_id = ? AND slug = ?').bind(site.id, slug).first<{ blocks: string }>()
   const blocks = current ? (JSON.parse(current.blocks) as Block[]) : []
   if (!isCopyPage(blocks)) return json({ error: 'not found' }, 404)
-  const edited = editCopy(blocks[0], parsed.data)
+  // The editor sends the whole page as the owner arranged it; it is cleaned again here, so nothing in it can run.
+  const edited = parsed.data.html ? { block: { ...blocks[0], html: withoutConsentBoxes(await cleanEditedBody(parsed.data.html)) }, notFound: [] as string[] } : editCopy(blocks[0], parsed.data)
+  if (parsed.data.html && !edited.block.html.trim()) return json({ error: t.notSaved('the page would be empty') }, 400)
   const stored = JSON.stringify([edited.block])
   if (stored.length > maxCopyBytes) return json({ error: t.notSaved(t.pageTooLarge) }, 400)
   await rememberPage(env, site.id, slug)
