@@ -14,3 +14,11 @@ body :is(h1,h2,h3,h4,h5,h6,p,span,a,li,button,img,label,section,article):hover{o
 /* Some sites hide empty elements: one being typed into stays, even while it is empty for a moment. */
 [contenteditable="true"]:empty{display:block!important;min-height:1em;min-width:2ch}
 .we-copy-menu{bottom:84px}
+#we-tools .we-drag{cursor:grab;touch-action:none;background:#2f80ed}
+html.we-dragging,html.we-dragging *{cursor:grabbing!important;user-select:none!important}
+html.we-dragging #we-tools{pointer-events:none;opacity:.6}
+.we-ghost{opacity:.35!important}
+#we-drop-line{position:absolute;z-index:2147483645;pointer-events:none;background:#2f80ed;border-radius:2px;box-shadow:0 0 0 2px rgba(47,128,237,.25)}
+#we-drop-line[hidden]{display:none}
+#we-drop-line.we-drop-inside{background:rgba(47,128,237,.15);outline:2px dashed #2f80ed}
+#we-edit-free-label{display:flex;align-items:center;gap:6px;cursor:pointer}

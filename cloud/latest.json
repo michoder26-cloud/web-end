@@ -1,4 +1,4 @@
 {
-  "version": "0.33.1",
-  "notes": "A page moved with its own look can now be arranged freely in the editor: click any part to move it up or down, repeat it, remove it or pick the bigger frame around it, change photos from your computer, and undo. Publish works from the editor itself. Cookie notices from the old site are left out when moving."
+  "version": "0.33.2",
+  "notes": "On a page moved with its own look, any part can now be dragged and dropped anywhere on the page: a blue line shows where it will go. Turn on free placing to put a part exactly where you let go, bring it to the front, or put it back."
 }
