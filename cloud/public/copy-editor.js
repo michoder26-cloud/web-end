@@ -906,7 +906,14 @@
       for (const [, node] of rows) if (node.contains(up)) open.add(node)
     }
     drawLayers()
-    for (const [row, node] of rows) if (node === element) row.scrollIntoView({ block: 'nearest' })
+    // Only the list scrolls: scrollIntoView would also move the page, and the page around the editor frame.
+    for (const [row, node] of rows) {
+      if (node !== element) continue
+      const box = layerList.getBoundingClientRect()
+      const at = row.getBoundingClientRect()
+      if (at.top < box.top) layerList.scrollTop -= box.top - at.top
+      else if (at.bottom > box.bottom) layerList.scrollTop += at.bottom - box.bottom
+    }
   }
   layerList.addEventListener('click', (event) => {
     const row = event.target.closest('.we-layer')
@@ -1280,4 +1287,54 @@
       status(`${say.failed}: ${error.message}`)
     }
   })
+
+  // ---- Inside tktf.at: the toolbar moves into its stage bar, so nothing covers the site ----------------------
+  // The editor tells the page that holds it how its buttons stand; that page draws them and sends back which was
+  // pressed. Only that page is told and heard. If it does not answer (an older tktf.at), the toolbar stays here.
+  if (parentOrigin) {
+    const bar = document.getElementById('we-edit-bar')
+    const ids = { undo: 'we-edit-undo', redo: 'we-edit-redo', add: 'we-edit-add', layers: 'we-edit-layers', doctor: 'we-edit-doctor', help: 'we-edit-help', save: 'we-edit-save', publish: 'we-edit-publish' }
+    const byId = (key) => document.getElementById(ids[key])
+    const state = () => ({
+      undo: !byId('undo').disabled,
+      redo: !byId('redo').disabled,
+      save: !byId('save').disabled,
+      publish: Boolean(byId('publish')),
+      free: document.getElementById('we-edit-free').checked,
+      status: document.getElementById('we-edit-status').textContent,
+      add: !addMenu.hidden,
+      layers: !layers.hidden,
+      doctor: !doctor.hidden,
+      help: !help.hidden,
+    })
+    let timer
+    const send = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => window.parent.postMessage({ type: 'we-bar', state: state() }, parentOrigin), 40)
+    }
+    const watch = new MutationObserver(send)
+    watch.observe(bar, { subtree: true, attributes: true, attributeFilter: ['disabled'], childList: true, characterData: true })
+    for (const part of [addMenu, layers, doctor, help]) watch.observe(part, { attributes: true, attributeFilter: ['hidden'] })
+    addEventListener('message', (event) => {
+      if (event.source !== window.parent || event.origin !== parentOrigin) return
+      const ask = event.data
+      if (ask?.type === 'we-bar-ready') {
+        bar.hidden = true
+        document.documentElement.classList.add('we-embedded')
+        return
+      }
+      if (ask?.type !== 'we-bar-do' || typeof ask.action !== 'string') return
+      if (ask.action === 'free') {
+        const box = document.getElementById('we-edit-free')
+        box.checked = !box.checked
+        send()
+        return
+      }
+      const target = ids[ask.action] && byId(ask.action)
+      if (target && !target.disabled) target.click()
+    })
+    send()
+    // In case the page was not listening yet when the editor first spoke.
+    for (const wait of [800, 2500]) setTimeout(() => { if (!bar.hidden) send() }, wait)
+  }
 })()

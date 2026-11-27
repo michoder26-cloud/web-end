@@ -1,4 +1,4 @@
 {
-  "version": "0.38.1",
-  "notes": "A cleaner, more professional look for the editor of pages moved with their own look: a white toolbar with clear line icons and tooltips, a compact bar over the selected part, and the style panel, layers, site doctor, AI box and Add menu all in one consistent design."
+  "version": "0.38.2",
+  "notes": "Inside Edit with AI on tktf.at, the editor's toolbar now sits in the bar above the site instead of floating over it, so nothing covers the page you are editing. The editor and the block editor also get a calmer, more professional look: one flat bar, a side panel split by hairlines, plain lists and smaller controls."
 }

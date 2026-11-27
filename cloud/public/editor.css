@@ -244,3 +244,53 @@ textarea.ed-input { resize: vertical; }
 .ed-fields div { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 6px; }
 .ed-fields dt { color: var(--ed-ink-3); overflow-wrap: anywhere; }
 .ed-fields dd { margin: 0; overflow-wrap: anywhere; white-space: pre-line; }
+
+/* App frame, the same as the Edit with AI page: one flush bar on top, a side panel and a canvas split by hairlines,
+   compact controls, lists instead of boxes in boxes. Later rules here win over the ones above. */
+.ed-body { --ed-brand: #2457e6; --ed-brand-soft: #edf2fe; --ed-line: #e7e4de; --ed-hover: #f6f5f2; --ed-ink-2: #55534e; --ed-ink-3: #807c75; }
+@media (prefers-color-scheme: dark) { .ed-body { --ed-brand: #7aa2ff; --ed-brand-soft: #1d2a45; --ed-line: #34353a; --ed-hover: #2a2b2f; --ed-ink-2: #bdbcb7; --ed-ink-3: #8f8e8a; } }
+#editor { gap: 0; padding: 0; }
+.ed-bar { gap: 8px 12px; min-height: 52px; padding: 8px max(14px, env(safe-area-inset-right, 0px)) 8px max(14px, env(safe-area-inset-left, 0px)); border: 0; border-bottom: 1px solid var(--ed-line); border-radius: 0; }
+.ed-mark { width: 28px; height: 28px; border-radius: 7px; font-size: 11.5px; }
+.ed-bar__site strong { font-size: 13px; }
+.ed-bar__acts { gap: 4px; }
+.ed-btn { height: 30px; padding: 0 12px; border-radius: 6px; font-size: 13px; }
+.ed-btn:hover { border-color: var(--ed-line); background: var(--ed-hover); }
+.ed-btn--primary:hover { background: var(--ed-brand); filter: brightness(0.94); }
+.ed-work { gap: 0; }
+.ed-lib { border: 0; border-right: 1px solid var(--ed-line); border-radius: 0; }
+.ed-stage { padding: 16px 16px 90px; border: 0; border-radius: 0; }
+.ed-site { border-radius: 6px; box-shadow: 0 0 0 1px rgba(26, 26, 25, 0.06), 0 10px 30px -12px var(--ed-shadow); }
+.ed-hint { padding: 7px 10px; border: 1px solid var(--ed-line); border-radius: 8px; background: var(--ed-panel); color: var(--ed-ink-2); font-size: 12.5px; }
+.ed-keep { padding: 8px 12px; border: 1px solid color-mix(in srgb, #1f7a4d 30%, transparent); border-radius: 8px; background: color-mix(in srgb, #1f7a4d 8%, var(--ed-panel)); color: var(--ed-ink); font-size: 13px; }
+.ed-add-end { padding: 10px; border: 1px dashed var(--ed-ink-3); border-radius: 8px; font-size: 13px; }
+
+/* Side panel: a segmented switch, then plain lists. */
+.ed-tabs { margin: 10px 10px 0; padding: 2px; gap: 2px; border: 0; border-radius: 7px; background: var(--ed-bg); }
+.ed-tab { padding: 6px 2px; border-radius: 5px; color: var(--ed-ink-2); font-weight: 500; }
+.ed-tab:hover { background: transparent; color: var(--ed-ink); }
+.ed-tab[aria-pressed='true'] { background: var(--ed-panel); color: var(--ed-ink); box-shadow: 0 1px 2px rgba(26, 26, 25, 0.1); }
+.ed-panel-body { padding: 14px 10px; }
+.ed-panel h2, .ed-lib h2 { padding: 0 4px; font-size: 13px; }
+.ed-panel > p, .ed-lib > p { padding: 0 4px; font-size: 12px; }
+.ed-lib ul, .ed-panel ul { gap: 1px; }
+.ed-card, .ed-list__row { padding: 7px 8px; border-color: transparent; border-radius: 6px; background: transparent; }
+.ed-card:hover, .ed-list__row:hover { border-color: transparent; background: var(--ed-hover); }
+.ed-list__row.is-here { border-color: transparent; background: var(--ed-brand-soft); }
+.ed-card b, .ed-list__row b { font-size: 13px; font-weight: 500; }
+.ed-cards .ed-card { border-color: var(--ed-line); }
+.ed-method, .ed-order, .ed-photo-picker { border-radius: 8px; }
+
+/* Section tools and sheets: smaller corners, softer shadows. */
+.ed-blk.is-sel { outline-width: 1.5px; }
+.ed-tools { border-radius: 8px; box-shadow: 0 0 0 1px rgba(26, 26, 25, 0.04), 0 8px 24px -8px var(--ed-shadow); }
+.ed-tools button { width: 28px; height: 28px; border-radius: 6px; }
+.ed-tools .ed-grip { background: transparent; color: var(--ed-ink-2); }
+.ed-add-between { border-radius: 6px; font-size: 12px; }
+.ed-sheet { border-radius: 12px; }
+.ed-x { width: 28px; height: 28px; border-radius: 6px; background: transparent; }
+.ed-x:hover { background: var(--ed-hover); }
+.ed-input { padding: 7px 10px; border-color: var(--ed-line); border-radius: 6px; font-size: 13.5px; }
+.ed-input:focus { outline: none; border-color: var(--ed-brand); box-shadow: 0 0 0 3px var(--ed-brand-soft); }
+.ed-toast { border-radius: 8px; font-size: 13px; }
+.ed-body .ed-select { font-size: 12.5px; color: var(--ed-ink-3); }
