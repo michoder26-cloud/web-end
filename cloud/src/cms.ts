@@ -32,7 +32,7 @@ import type { StaffArea, StaffMember } from './staff'
 import { words } from './text'
 import { isNewer, latestRelease, repoPattern, updatesBody } from './updates'
 import { version } from './version'
-import { liveSite } from './versions'
+import { liveSite, unpublishedChanges } from './versions'
 import { siteFontNames, siteStyles } from './theme'
 import type { Block, Env, FormField, Item, Order, Settings, SiteRow, Variant } from './types'
 
@@ -94,6 +94,31 @@ export const catalog: Record<string, { label: string; fields: Spec[]; start: Blo
 /** Marks something made in test mode. */
 export const testBadge = (t: OfficeWords) => `<span class="test-badge">${t.test.badge}</span>`
 
+// A small line icon for each place in the back office's side menu.
+const navIcons: Record<string, string> = {
+  '/dashboard': '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>',
+  '/pages': '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/>',
+  '/items': '<path d="M4 7l8-4 8 4-8 4z"/><path d="M4 7v10l8 4 8-4V7"/>',
+  '/data': '<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
+  '/media': '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-9 9"/>',
+  '/news': '<path d="M4 5h13v14H6a2 2 0 0 1-2-2z"/><path d="M17 9h3v8a2 2 0 0 1-2 2"/><path d="M8 9h5M8 13h5"/>',
+  '/changes': '<path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/>',
+  '/stats': '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  '/orders': '<path d="M6 7h12l-1 13H7z"/><path d="M9 7a3 3 0 0 1 6 0"/>',
+  '/customers': '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-4-6"/>',
+  '/approvals': '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  '/automations': '<path d="M13 3L5 14h6l-1 7 8-11h-6z"/>',
+  '/publish': '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 20h14"/>',
+  '/access': '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  '/settings': '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  '/connect': '<path d="M9 7V3M15 7V3"/><path d="M6 7h12v4a6 6 0 0 1-12 0z"/><path d="M12 17v4"/>',
+  '/move': '<path d="M12 4v10"/><path d="M8 10l4 4 4-4"/><path d="M4 19h16"/>',
+  '/wordpress': '<circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M3.5 15h17M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  '/system': '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  '/updates': '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>',
+}
+export const navIcon = (path: string) => (navIcons[path] ? `<svg class="cms-i" viewBox="0 0 24 24" aria-hidden="true">${navIcons[path]}</svg>` : '')
+
 /** One back office page. Owner-only pages may pass the owner's code instead of a desk. */
 export const office = (site: SiteRow, at: Desk | string, title: string, body: string, notice?: Notice, status = 200, script = '') => {
   const desk = typeof at === 'string' ? ownerDesk(at) : at
@@ -113,7 +138,7 @@ export const office = (site: SiteRow, at: Desk | string, title: string, body: st
   const navLink = (path: string, label?: string) => {
     const text = label ?? item.get(path)
     if (!text || !isAvailable(path)) return ''
-    return `<a${path === activePath ? ' aria-current="page"' : ''} href="${base}${path}">${escapeHtml(text)}</a>`
+    return `<a${path === activePath ? ' aria-current="page"' : ''} href="${base}${path}">${navIcon(path)}<span>${escapeHtml(text)}</span></a>`
   }
   const group = (label: string, paths: string[]) => {
     const items = paths.map((path) => navLink(path)).join('')
@@ -124,7 +149,8 @@ export const office = (site: SiteRow, at: Desk | string, title: string, body: st
     const items = paths.map((path) => navLink(path)).join('')
     return items ? `<details class="cms-nav-group cms-nav-more"${paths.includes(activePath) ? ' open' : ''}><summary>${escapeHtml(label)}</summary><div class="cms-nav-more__links">${items}</div></details>` : ''
   }
-  const keepKey = desk.code && !site.owner_customer_id ? `<p class="cms-notice cms-keep-key" role="note"><b>${t.admin.bannerTitle}.</b> ${t.admin.banner} ${t.admin.bannerLink(`${base}/dashboard#owner-account`)}</p>` : ''
+  // The overview asks for a sign-in in its own list; other pages keep the reminder at the top.
+  const keepKey = desk.code && !site.owner_customer_id && title !== t.nav.overview ? `<p class="cms-notice cms-keep-key" role="note"><b>${t.admin.bannerTitle}.</b> ${t.admin.banner} ${t.admin.bannerLink(`${base}/dashboard#owner-account`)}</p>` : ''
   const previewHref = desk.staff && !allows(desk, 'pages') ? '/' : `${base}/preview`
   // Edit site is the back office's front door: the visual editor on the home page. The form editor stays under Pages.
   const editHref = isAvailable('/pages') ? base : `${base}/dashboard`
@@ -158,7 +184,7 @@ ${keepKey}<div class="cms-console">
     ${who}
   </aside>
   <section class="cms-content">
-    <div class="cms-page-heading"><p>${escapeHtml(copy.workspace)}</p><h1>${escapeHtml(title)}</h1></div>
+    <div class="cms-page-heading"><h1>${escapeHtml(title)}</h1></div>
     ${notice?.error ? `<p class="cms-notice cms-notice--error" role="alert">${escapeHtml(t.problem(notice.error))}</p>` : ''}${notice?.saved ? `<p class="cms-notice" role="status">${escapeHtml(notice.saved)}</p>` : ''}${body}
   </section>
 </div>
@@ -366,13 +392,31 @@ async function overview(env: Env, url: URL, site: SiteRow, desk: Desk) {
   const buildChoice = !steps?.build
     ? `<section class="cms-build-choice"><div><p>${escapeHtml(dashboard.ready)}</p><h2>${escapeHtml(settings.name)}</h2><span>${escapeHtml(dashboard.readyHelp)}</span></div><div class="cms-build-choice__actions"><a class="button" href="${escapeHtml(desk.base)}/starters">${escapeHtml(dashboard.example)}</a><details><summary>${escapeHtml(dashboard.claude)}</summary><div class="contact-form cms-build-choice__details"><p>${escapeHtml(dashboard.claudeHelp)}</p>${claudeSetup}</div></details></div></section>`
     : ''
-  const commandCenter = `<section class="cms-command-center" aria-label="${escapeHtml(t.nav.overview)}"><div class="cms-command-intro"><p>${escapeHtml(dashboard.publish)}</p><h2>${escapeHtml(settings.name)}</h2></div><div class="cms-command-grid">
-<a class="cms-command-card" href="${escapeHtml(desk.base)}/pages"><small>${escapeHtml(dashboard.content)}</small><strong>${escapeHtml(dashboard.draft)} →</strong></a>
-<a class="cms-command-card" href="${escapeHtml(desk.base)}/data"><small>${escapeHtml(dashboard.content)}</small><strong>${escapeHtml(dashboard.data)} →</strong></a>
-<a class="cms-command-card" href="${escapeHtml(desk.base)}/customers"><small>${escapeHtml(dashboard.people)}</small><strong>${escapeHtml(dashboard.customers)} →</strong></a>
-<a class="cms-command-card" href="${escapeHtml(desk.base)}/automations"><small>${escapeHtml(dashboard.operate)}</small><strong>${escapeHtml(dashboard.automation)} →</strong></a>
-<a class="cms-command-card" href="${escapeHtml(desk.base)}/connect"><small>${escapeHtml(dashboard.connect)}</small><strong>${escapeHtml(dashboard.integrations)} →</strong></a>
-<a class="cms-command-card cms-command-card--accent" href="${escapeHtml(desk.base)}/publish"><small>${escapeHtml(dashboard.publish)}</small><strong>${escapeHtml(dashboard.release)} →</strong></a>
+  const b = escapeHtml(desk.base)
+  const waiting = site.live_version ? await unpublishedChanges(env, site) : null
+  const waitingCount = waiting ? waiting.pages.length + (waiting.settings ? 1 : 0) : 0
+  const att = isThai
+    ? { heading: 'ต้องดูแล', allGood: 'ทุกอย่างเรียบร้อย ไม่มีอะไรต้องทำตอนนี้', openSite: 'เปิดเว็บ', live: 'ออนไลน์อยู่', notLive: 'ยังไม่ออนไลน์', publishT: 'เผยแพร่เว็บของคุณ', publishD: 'คนทั่วไปจะยังไม่เห็นเว็บ จนกว่าจะกดเผยแพร่ครั้งแรก', publishB: 'เผยแพร่', waitingT: `มีการแก้ ${waitingCount} อย่างรอขึ้นเว็บ`, waitingD: 'สิ่งที่แก้ไว้จะขึ้นเว็บจริงเมื่อกดเผยแพร่', waitingB: 'ดูและเผยแพร่', keyT: 'สร้างการเข้าสู่ระบบ', keyD: 'ตอนนี้ลิงก์นี้เป็นทางเดียวที่เข้าหลังบ้านได้ ตั้งอีเมลและรหัสผ่านไว้กันหลุด', keyB: 'สร้างเลย', testT: 'โหมดทดสอบเปิดอยู่', testD: 'คำสั่งซื้อและข้อมูลตอนนี้เป็นของทดสอบ ปิดเมื่อพร้อมรับของจริง', testB: 'ดูโหมดทดสอบ', claudeT: 'เชื่อมต่อ Claude', claudeD: 'ให้ Claude ช่วยสร้างและดูแลเว็บผ่านภาษาปกติ', claudeB: 'เชื่อมต่อ', doctorT: 'ตรวจเว็บก่อนเผยแพร่', doctorD: 'หมอเว็บดูรูปที่ไม่มีคำอธิบาย ลิงก์เสีย และหน้าที่ล้นจอมือถือ แล้วแก้ให้', doctorB: 'เปิดหมอเว็บ', shortcuts: 'ทางลัด' }
+    : { heading: 'Needs your attention', allGood: 'All good. Nothing needs you right now.', openSite: 'Open site', live: 'Live', notLive: 'Not live yet', publishT: 'Publish your site', publishD: 'Visitors see nothing until you publish for the first time.', publishB: 'Publish', waitingT: `${waitingCount} ${waitingCount === 1 ? 'change waits' : 'changes wait'} to go live`, waitingD: 'What you changed shows on the live site when you publish.', waitingB: 'Review and publish', keyT: 'Create a sign-in', keyD: 'Right now this link is the only way into your back office. Add an email and password so you never get locked out.', keyB: 'Create it', testT: 'Test mode is on', testD: 'Orders and data are test ones for now. Turn it off when you are ready for real ones.', testB: 'See test mode', claudeT: 'Connect Claude', claudeD: 'Let Claude build and look after the site in ordinary words.', claudeB: 'Connect', doctorT: 'Check the site before publishing', doctorD: 'The site doctor finds photos without a description, broken links and pages too wide for phones, and fixes them.', doctorB: 'Open the site doctor', shortcuts: 'Shortcuts' }
+  const attention: [string, string, string, string, boolean][] = [
+    ...(!site.live_version && allows(desk, 'publish') ? [[att.publishT, att.publishD, `${b}/publish`, att.publishB, true] as [string, string, string, string, boolean]] : []),
+    ...(waitingCount && allows(desk, 'publish') ? [[att.waitingT, att.waitingD, `${b}/publish`, att.waitingB, true] as [string, string, string, string, boolean]] : []),
+    ...(desk.code && !site.owner_customer_id ? [[att.keyT, att.keyD, '#owner-account', att.keyB, false] as [string, string, string, string, boolean]] : []),
+    ...(tests.active ? [[att.testT, att.testD, '#test-mode', att.testB, false] as [string, string, string, string, boolean]] : []),
+    ...(steps && !steps.claude && desk.code ? [[att.claudeT, att.claudeD, `${b}/connect`, att.claudeB, false] as [string, string, string, string, boolean]] : []),
+    [att.doctorT, att.doctorD, b, att.doctorB, false],
+  ]
+  const host = new URL(url.origin).host
+  const siteHead = `<section class="cms-site-head"><span class="cms-site-icon" aria-hidden="true">${escapeHtml(settings.name.trim().charAt(0).toUpperCase() || 'W')}</span><div class="cms-site-head__text"><h2>${escapeHtml(settings.name)}</h2><p><span class="cms-live-dot${site.live_version ? ' is-live' : ''}"></span>${escapeHtml(site.live_version ? att.live : att.notLive)} · <a href="/" target="_blank" rel="noopener">${escapeHtml(host)}</a></p></div><div class="cms-site-head__acts"><a class="button button--small button--ghost" href="/" target="_blank" rel="noopener">${escapeHtml(att.openSite)} ↗</a></div></section>
+<h2 class="cms-attention-title">${escapeHtml(att.heading)}</h2>
+<ul class="cms-attention">${attention.map(([title, text, href, action, main]) => `<li><div><strong>${escapeHtml(title)}</strong><p>${escapeHtml(text)}</p></div><a class="button button--small${main ? '' : ' button--ghost'}" href="${escapeHtml(href)}">${escapeHtml(action)}</a></li>`).join('')}</ul>`
+  const commandCenter = `<section class="cms-command-center" aria-label="${escapeHtml(t.nav.overview)}"><div class="cms-command-intro"><h2>${escapeHtml(att.shortcuts)}</h2></div><div class="cms-command-grid">
+<a class="cms-command-card" href="${escapeHtml(desk.base)}/pages">${navIcon('/pages')}<small>${escapeHtml(dashboard.content)}</small><strong>${escapeHtml(dashboard.draft)} →</strong></a>
+<a class="cms-command-card" href="${escapeHtml(desk.base)}/data">${navIcon('/data')}<small>${escapeHtml(dashboard.content)}</small><strong>${escapeHtml(dashboard.data)} →</strong></a>
+<a class="cms-command-card" href="${escapeHtml(desk.base)}/customers">${navIcon('/customers')}<small>${escapeHtml(dashboard.people)}</small><strong>${escapeHtml(dashboard.customers)} →</strong></a>
+<a class="cms-command-card" href="${escapeHtml(desk.base)}/automations">${navIcon('/automations')}<small>${escapeHtml(dashboard.operate)}</small><strong>${escapeHtml(dashboard.automation)} →</strong></a>
+<a class="cms-command-card" href="${escapeHtml(desk.base)}/connect">${navIcon('/connect')}<small>${escapeHtml(dashboard.connect)}</small><strong>${escapeHtml(dashboard.integrations)} →</strong></a>
+<a class="cms-command-card" href="${escapeHtml(desk.base)}/publish">${navIcon('/publish')}<small>${escapeHtml(dashboard.publish)}</small><strong>${escapeHtml(dashboard.release)} →</strong></a>
 </div></section>`
   // Until the owner has an email sign-in, the private link is their only way back in, so the overview offers one.
   const account = desk.code && !site.owner_customer_id ? `<section class="owner-account-card" id="owner-account"><h2>${t.admin.accountHeading}</h2><p>${t.admin.accountHelp}</p>${ownerAccountForm(desk.code, t)}</section>` : ''
@@ -380,7 +424,7 @@ async function overview(env: Env, url: URL, site: SiteRow, desk: Desk) {
     site,
     desk,
     t.nav.overview,
-    `${started}${changed}${newer}${buildChoice}${firstTime}${commandCenter}${account}${testCard}<h2>${t.messagesHeading}</h2>${await messageList(env, site, desk)}
+    `${siteHead}${started}${changed}${newer}${buildChoice}${firstTime}${commandCenter}${account}${testCard}<h2>${t.messagesHeading}</h2>${await messageList(env, site, desk)}
 ${site.live_version ? `<p>${t.seeWaiting(`${escapeHtml(desk.base)}/publish`)}</p>` : ''}
 ${steps?.build ? `<details class="cms-claude-help"><summary>${escapeHtml(t.claudeHeading)}</summary><div class="contact-form"><p>${escapeHtml(dashboard.claudeHelp)}</p>${claudeSetup}</div></details>` : ''}`,
   )

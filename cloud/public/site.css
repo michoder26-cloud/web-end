@@ -3066,3 +3066,87 @@ body[data-style] .cms-content .card {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
+
+/* Back office as a calm work tool, the same look as the editors and Edit with AI on tktf.at: one flush bar on top,
+   a light side menu with icons, the page on a warm canvas, hairline borders and small controls. Later rules win. */
+body:has(.cms-workspace) { background: #f6f5f2; }
+body:has(.cms-workspace) main > .block { padding: 0; }
+body:has(.cms-workspace) .wrap.cms { width: 100%; max-width: none; margin: 0; padding: 0; }
+.cms-workspace {
+  --cms-canvas: #f6f5f2; --cms-panel: #ffffff; --cms-panel-raised: #f6f5f2; --cms-line: #e7e4de;
+  --cms-text: #1a1a19; --cms-muted: #807c75; --cms-focus: #2457e6;
+  min-height: 100vh; border: 0; border-radius: 0; box-shadow: none; background: var(--cms-canvas); color: var(--cms-text);
+  font-family: 'Inter', 'Segoe UI', 'Noto Sans Thai', system-ui, sans-serif; font-size: 14px;
+}
+.cms-workspace .button { min-height: 32px; padding: 6px 12px; border: 1px solid var(--cms-line); border-radius: 7px; background: #fff; color: var(--cms-text); font-size: 13px; font-weight: 600; box-shadow: none; }
+.cms-workspace .button:hover { background: #f6f5f2; }
+.cms-workspace .button--small { min-height: 30px; padding: 4px 11px; }
+.cms-workspace .button:not(.button--ghost):not(.button--small) { border-color: #2457e6; background: #2457e6; color: #fff; }
+.cms-workspace .button:not(.button--ghost):not(.button--small):hover { background: #1c47c2; }
+.cms-workspace input, .cms-workspace textarea, .cms-workspace select { border: 1px solid #d9d5cc; border-radius: 7px; background: #fff; color: var(--cms-text); }
+.cms-workspace input:focus, .cms-workspace textarea:focus, .cms-workspace select:focus { outline: none; border-color: #2457e6; box-shadow: 0 0 0 3px #edf2fe; }
+.cms-topbar { position: sticky; top: 0; z-index: 5; min-height: 52px; padding: 8px 14px; border-bottom: 1px solid var(--cms-line); background: #fff; }
+.cms-mark { width: 28px; height: 28px; border-radius: 7px; background: #2457e6; color: #fff !important; font-size: 11px; }
+.cms-mode-tabs { padding: 2px; border: 0; border-radius: 7px; background: #f6f5f2; }
+.cms-mode-tabs a { padding: 5px 10px; border-radius: 5px; color: #55534e; font-size: 13px; font-weight: 500; }
+.cms-mode-tabs a[aria-current='page'] { background: #fff; color: var(--cms-text); box-shadow: 0 1px 2px rgb(26 26 25 / 10%); }
+.cms-site-name { color: var(--cms-text); font-size: 13px; font-weight: 600; }
+.cms-open-site { color: #55534e !important; font-size: 13px; font-weight: 500; }
+.cms-publish { padding: 6px 14px; border-radius: 7px; background: #2457e6; color: #fff !important; font-size: 13px; font-weight: 600; }
+.cms-publish:hover { background: #1c47c2; }
+.cms-console { min-height: calc(100vh - 52px); }
+.cms-sidebar { padding: 12px 10px; border-right: 1px solid var(--cms-line); background: #fff; }
+.cms-sidebar-label { display: none; }
+.cms-nav { gap: 14px; margin-top: 0; }
+.cms-nav-group { gap: 1px; }
+.cms-nav-group h2 { margin: 0 10px 4px; color: var(--cms-muted); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
+.cms-nav-group a, .cms-nav-more summary { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 6px; color: #3d3b37; font-size: 13.5px; font-weight: 500; }
+.cms-nav-group a:hover, .cms-nav-more summary:hover { background: #f6f5f2; color: var(--cms-text); }
+.cms-nav-group a[aria-current='page'] { background: #f0efeb; color: var(--cms-text); font-weight: 600; }
+.cms-i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; color: #807c75; }
+.cms-nav-group a[aria-current='page'] .cms-i { color: var(--cms-text); }
+.cms-user { color: var(--cms-muted); font-size: 12px; }
+.cms-content { padding: 24px clamp(16px, 3vw, 40px) 48px; background: var(--cms-canvas); }
+.cms-content > * { max-width: 1040px; }
+.cms-page-heading { margin-bottom: 18px; }
+.cms-page-heading h1 { margin: 0; font-family: inherit; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+.cms-content h2 { font-family: inherit; font-size: 15px; font-weight: 600; letter-spacing: 0; }
+.cms-notice, .cms-keep-key { padding: 10px 14px; border: 1px solid #e7e4de; border-radius: 8px; background: #fff; color: #3d3b37; font-size: 13px; }
+.cms-keep-key { margin: 12px 16px 0; border-color: color-mix(in srgb, #1f7a4d 30%, transparent); background: color-mix(in srgb, #1f7a4d 6%, #fff); }
+.cms-notice--error { border-color: #f3c7c2; background: #fdecea; color: #7a1a14; }
+.cms-workspace .card, .owner-account-card, .cms-project-checklist, .cms-claude-help, .cms-build-choice { border: 1px solid var(--cms-line) !important; border-radius: 10px !important; background: #fff !important; color: var(--cms-text) !important; box-shadow: none !important; }
+.owner-account-card h2 { margin-top: 0; }
+
+/* Overview: the site at the top, what needs the owner, then shortcuts. */
+.cms-site-head { display: flex; align-items: center; gap: 14px; margin: 0 0 22px; }
+.cms-site-icon { display: grid; place-items: center; width: 52px; height: 52px; flex: none; border-radius: 12px; background: #2457e6; color: #fff; font-size: 22px; font-weight: 700; }
+.cms-site-head__text { flex: 1; min-width: 0; }
+.cms-site-head__text h2 { margin: 0; font-size: 22px !important; font-weight: 650 !important; }
+.cms-site-head__text p { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; color: var(--cms-muted); font-size: 13px; }
+.cms-site-head__text a { color: #55534e; }
+.cms-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #f79009; }
+.cms-live-dot.is-live { background: #1f7a4d; }
+.cms-attention-title { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
+.cms-attention-title::before { content: '!'; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: #fbf1dc; color: #9a5b00; font-size: 12px; font-weight: 700; }
+.cms-attention { display: grid; gap: 10px; margin: 0 0 28px; padding: 0; list-style: none; }
+.cms-attention li { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; border: 1px solid var(--cms-line); border-radius: 10px; background: #fff; }
+.cms-attention strong { font-size: 14px; font-weight: 600; }
+.cms-attention p { margin: 2px 0 0; color: var(--cms-muted); font-size: 13px; }
+.cms-attention .button { flex: none; }
+.cms-command-center { margin: 0 0 28px; padding: 0 !important; border: 0 !important; background: none !important; box-shadow: none !important; }
+.cms-command-intro h2 { margin: 0 0 10px; }
+.cms-command-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.cms-command-card { display: grid; gap: 4px; min-height: 0 !important; padding: 14px 16px !important; border: 1px solid var(--cms-line) !important; border-radius: 10px !important; background: #fff !important; color: var(--cms-text) !important; text-decoration: none; box-shadow: none !important; }
+.cms-command-card:hover { border-color: #d9d5cc !important; background: #fbfaf8 !important; }
+.cms-command-card .cms-i { width: 18px; height: 18px; margin-bottom: 6px; }
+.cms-command-card small { color: var(--cms-muted) !important; font-size: 12px; }
+.cms-command-card strong { font-size: 14px; font-weight: 600; }
+@media (max-width: 640px) { .cms-attention li { flex-direction: column; align-items: flex-start; } }
+.cms-attention .button:not(.button--ghost) { border-color: #2457e6; background: #2457e6; color: #fff; }
+.cms-attention .button:not(.button--ghost):hover { background: #1c47c2; }
+.cms-content:has(> .cms-site-head) > .cms-page-heading { display: none; }
+.cms-project-checklist { margin-bottom: 22px; padding: 12px 16px; }
+.cms-workspace .cms-content h2 { font-family: inherit !important; font-size: 16px !important; font-weight: 600 !important; letter-spacing: 0 !important; line-height: 1.35; }
+.cms-workspace .cms-content h3 { font-family: inherit !important; font-size: 14px !important; font-weight: 600 !important; letter-spacing: 0 !important; }
+.cms-workspace .cms-content blockquote, .cms-workspace .cms-content [role='alert'] { border-left-color: #f79009; }
+.cms-workspace .cms-content .cms-site-head__text h2 { font-size: 22px !important; }

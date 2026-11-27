@@ -1,4 +1,4 @@
 {
-  "version": "0.39.1",
-  "notes": "Clearer editor bar: the drag switch says in words whether dragging is free or inserts in order, and the bar shows only whether the page is saved, with a coloured dot. Other messages appear as a short note that goes away by itself, and how to use the editor shows once as a tip and stays under the ? button."
+  "version": "0.40.0",
+  "notes": "A calmer back office: a light, full-screen layout with icons in the side menu, and an overview that starts with your site, then lists what needs your attention with one button each (publish, waiting changes, sign-in, test mode, Claude, site doctor), then shortcuts."
 }

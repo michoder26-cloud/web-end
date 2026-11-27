@@ -2698,7 +2698,7 @@ const officePage = async (area = '/dashboard') => (await fetch(`${owner}${area}`
 const languageBefore = (await call('get_site')).data.settings.language
 await call('update_site', { language: 'th' })
 const thaiOverview = await officePage()
-check(thaiOverview.includes('<html lang="th">') && thaiOverview.includes('>ภาพรวม</h1>') && thaiOverview.includes('>คำสั่งซื้อ</a>') && thaiOverview.includes('แก้ไขเว็บด้วย Claude') && !thaiOverview.includes('>Overview<'), 'a Thai site gets a Thai back office')
+check(thaiOverview.includes('<html lang="th">') && thaiOverview.includes('>ภาพรวม</h1>') && thaiOverview.includes('>คำสั่งซื้อ</span></a>') && thaiOverview.includes('แก้ไขเว็บด้วย Claude') && !thaiOverview.includes('>Overview<'), 'a Thai site gets a Thai back office')
 const thaiEditor = await officePage('/page/home')
 check(thaiEditor.includes('แก้ไขหน้า:') && thaiEditor.includes('บันทึกหน้า') && thaiEditor.includes('แบนเนอร์ด้านบน') && thaiEditor.includes('>หัวข้อ<') && !thaiEditor.includes('Move up'), 'the page editor and its fields are in Thai')
 const thaiEditorValues = formValues(thaiEditor)
@@ -2723,7 +2723,7 @@ const thaiWordpress = await officePage('/wordpress')
 check(thaiWordpress.includes('รหัสผ่านของลูกค้าย้ายไประบบอื่นไม่ได้') && !thaiWordpress.includes("Customer passwords can't move"), 'what needs attention before WordPress is in Thai')
 for (const area of ['/items', '/data', '/media', '/customers', '/publish', '/connect', '/move', '/wordpress', '/updates']) {
   const body = await officePage(area)
-  check(body.includes('<html lang="th">') && body.includes('aria-label="หลังบ้าน"') && body.includes('>ภาพรวม</a>') && !body.includes('>Open website<'), `the back office is in Thai: ${area}`)
+  check(body.includes('<html lang="th">') && body.includes('aria-label="หลังบ้าน"') && body.includes('>ภาพรวม</span></a>') && !body.includes('>Open website<'), `the back office is in Thai: ${area}`)
 }
 check((await (await fetch(`${owner}/pages`, { body: new URLSearchParams({ slug: 'Bad Slug', title: 'x' }), method: 'POST' })).text()).includes('ใส่ชื่อหน้า'), 'back office errors are in Thai')
 check((await (await fetch(`${owner}/data/classes`, { body: new URLSearchParams({ op: 'add' }), method: 'POST' })).text()).includes('ต้องกรอก &quot;Title&quot;'), 'errors from shared code are shown in Thai')
