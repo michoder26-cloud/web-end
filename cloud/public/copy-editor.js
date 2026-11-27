@@ -26,6 +26,9 @@
       }
 
   Object.assign(say, th
+    ? { phoneLabel: 'จัดหน้ามือถือ', phoneTitle: 'จัดหน้าสำหรับมือถือ', phoneHint: 'ตรวจหน้านี้ที่ความกว้างมือถือ แล้วเลือกได้ว่าจะจัดแค่ไหน ดูผลจริงในจอมือถือทางซ้ายก่อนใช้', phoneLoading: 'กำลังตรวจหน้านี้บนจอมือถือ…', phoneUse: 'ใช้แบบนี้', phoneCancel: 'ยกเลิก', phoneFits: 'พอดีจอ ไม่ต้องเลื่อนซ้ายขวา', phoneStill: 'ยังมีบางส่วนล้นจอ', phoneChanges: 'แก้ {n} จุด', phoneNone: 'ไม่ต้องแก้อะไร', phoneDone: 'จัดหน้ามือถือแล้ว ไม่ชอบกด Ctrl+Z ได้', phoneOnly: 'มีผลเฉพาะบนมือถือ หน้าบนคอมไม่เปลี่ยน', phoneOptions: { original: ['แบบที่ย้ายมา', 'ไม่จัดอะไรเพิ่ม'], light: ['จัดเบาๆ', 'แก้เฉพาะส่วนที่ล้นจอ'], tidy: ['จัดให้เรียบร้อย', 'ล้นจอ + คอลัมน์ที่เบียดกันเรียงลงมา + หัวข้อใหญ่เกินไป'], easy: ['อ่านง่ายที่สุด', 'ทั้งหมด + ตัวหนังสือใหญ่ขึ้น + ปุ่มกดง่ายขึ้น + มีระยะห่าง'] }, recommended: 'แนะนำ' }
+    : { phoneLabel: 'Phone layout', phoneTitle: 'Lay this page out for phones', phoneHint: 'This page is checked at phone width. Choose how much to change, and see it on the phone screen before you use it.', phoneLoading: 'Checking this page on a phone screen…', phoneUse: 'Use this layout', phoneCancel: 'Cancel', phoneFits: 'Fits the screen, no sideways scrolling', phoneStill: 'Some parts still stick out', phoneChanges: '{n} changes', phoneNone: 'Nothing to change', phoneDone: 'Laid out for phones. Not right? Press Ctrl+Z.', phoneOnly: 'Only phones see this. The page on computers stays the same.', phoneOptions: { original: ['As moved', 'No extra changes'], light: ['Light', 'Only parts that stick out'], tidy: ['Tidy', 'Parts that stick out, cramped columns stacked, headings that are too big'], easy: ['Easiest to read', 'All of that, plus larger text, easier buttons and more space'] }, recommended: 'Recommended' })
+  Object.assign(say, th
     ? { stateSaved: 'บันทึกแล้ว', stateUnsaved: 'ยังไม่บันทึก', stateSaving: 'กำลังบันทึก…', howTo: 'วิธีใช้', tipTitle: 'เริ่มแก้ได้เลย', gotIt: 'เข้าใจแล้ว' }
     : { stateSaved: 'Saved', stateUnsaved: 'Not saved', stateSaving: 'Saving…', howTo: 'How it works', tipTitle: 'Start editing', gotIt: 'Got it' })
   Object.assign(say, th
@@ -34,7 +37,7 @@
   Object.assign(say, th
     ? { historyLabel: 'ประวัติ', historyHint: 'ทุกครั้งที่บันทึกจะเก็บไว้ คลิกเพื่อดู แล้วกู้คืนได้ในคลิกเดียว', historyPage: 'หน้านี้', historySite: 'ทั้งเว็บ · ที่เคยเผยแพร่', historyNow: 'ตอนนี้', historyLive: 'ออนไลน์อยู่', historyHidden: 'ซ่อนอยู่', historyUnsaved: 'ยังไม่บันทึก', historyEmpty: 'ยังไม่มีประวัติ บันทึกครั้งแรกแล้วจะเริ่มเก็บ', historyLoading: 'กำลังโหลดประวัติ…', historyRestore: 'กู้คืนแบบนี้', historyBack: 'กลับไปแก้ต่อ', historySaved: 'บันทึกเมื่อ {when}', historyRestoring: 'กำลังกู้คืน…', historySiteAsk: 'ย้อนทั้งเว็บกลับไปเป็นแบบที่เผยแพร่เมื่อ {when}?\nคนที่เข้าเว็บจะเห็นแบบนั้นทันที ส่วนหน้าตอนนี้จะเก็บไว้ในประวัติของแต่ละหน้า', historyKept: 'หน้าตอนนี้จะเก็บไว้ในประวัติ ย้อนกลับได้เสมอ', justNow: 'เมื่อสักครู่', minutesAgo: '{n} นาทีที่แล้ว', today: 'วันนี้ {time}', yesterday: 'เมื่อวาน {time}' }
     : { historyLabel: 'History', historyHint: 'Every save is kept. Click one to see it, and put it back in one click.', historyPage: 'This page', historySite: 'Whole site · published versions', historyNow: 'Now', historyLive: 'Live', historyHidden: 'Hidden', historyUnsaved: 'Not saved', historyEmpty: 'No history yet. It starts with your first save.', historyLoading: 'Loading the history…', historyRestore: 'Restore this version', historyBack: 'Back to editing', historySaved: 'Saved {when}', historyRestoring: 'Restoring…', historySiteAsk: 'Put the whole site back to the version published {when}?\nVisitors see it at once. The pages as they are now are kept in each page’s history.', historyKept: 'The page as it is now stays in the history, so you can always go back.', justNow: 'just now', minutesAgo: '{n} min ago', today: 'Today {time}', yesterday: 'Yesterday {time}' })
-  const ui = '#we-edit-bar, #we-tools, #we-panel, #we-panel-open, #we-add, #we-help, #we-ai, #we-layers, #we-stack, #we-doctor, #we-history, #we-history-view, #we-note, #we-tip, #we-phone-frame, .we-copy-menu, #we-file, #we-drop-line, .we-guide, .we-handle, #we-size'
+  const ui = '#we-edit-bar, #we-tools, #we-panel, #we-panel-open, #we-add, #we-help, #we-ai, #we-layers, #we-stack, #we-doctor, #we-history, #we-history-view, #we-note, #we-tip, #we-phone-view, #we-phone-frame, .we-copy-menu, #we-file, #we-drop-line, .we-guide, .we-handle, #we-size'
   const ours = (element) => Boolean(element?.closest?.(ui))
   // The bar shows only how saving stands. Anything else is a short note over the page that goes away by itself;
   // a note for work still going on stays until the next one.
@@ -182,6 +185,7 @@
         iconButton('we-edit-layers', 'layers', say.layers),
         iconButton('we-edit-doctor', 'doctor', say.doctor),
         iconButton('we-edit-history', 'history', say.historyLabel),
+        iconButton('we-edit-phone', 'phone', say.phoneLabel),
         make('label', { class: 'we-btn we-mode-btn', 'data-tip': say.modeTip }, make('input', { type: 'checkbox', id: 'we-edit-free', 'aria-label': say.modeTip.split('\n')[0] }), make('span', { id: 'we-edit-mode' })),
       ),
       gap(),
@@ -1372,6 +1376,113 @@
   const restoreSite = (version) => { if (confirm(fmt(say.historySiteAsk, { when: when(version.created_at) }))) putBack({ id: version.id, site: true }) }
   addEventListener('keydown', (event) => { if (event.key === 'Escape' && !historyView.hidden) closeCopy() })
 
+  // ---- Phone layout: the page checked at phone width, and fixed by as much as the owner chooses ---------------
+  // The saved page is opened in a phone-sized frame. What is found there is fixed with classes that only take
+  // effect on phones (their rules come with every moved page), first in the frame to look at, then on the page.
+  const phoneClasses = ['we-phone-fit', 'we-phone-stack', 'we-phone-roomy', 'we-phone-text', 'we-phone-tap', 'we-phone-head']
+  const phoneView = make('div', { id: 'we-phone-view', hidden: '' })
+  document.body.append(phoneView)
+  const clearPhone = (root) => { for (const node of root.querySelectorAll(phoneClasses.map((name) => `.${name}`).join(','))) node.classList.remove(...phoneClasses) }
+  function phoneFindings(frame) {
+    const doc = frame.contentDocument
+    const win = frame.contentWindow
+    const width = doc.documentElement.clientWidth
+    const found = { fit: [], stack: [], text: [], tap: [], head: [] }
+    const skip = '.preview-banner, .we-copy-menu, script, style, noscript, template'
+    const sticksOut = (box) => box.width > 0 && (box.right > width + 2 || box.left < -2)
+    for (const node of doc.body.querySelectorAll('*')) {
+      if (node.closest(skip) || node instanceof win.SVGElement && node.tagName.toLowerCase() !== 'svg') continue
+      const box = node.getBoundingClientRect()
+      if (!box.width || !box.height) continue
+      const look = win.getComputedStyle(node)
+      if (look.position === 'fixed' || look.visibility === 'hidden' || look.display === 'none') continue
+      // Only the outermost part that sticks out.
+      if (sticksOut(box) && !(node.parentElement && node.parentElement !== doc.body && sticksOut(node.parentElement.getBoundingClientRect()))) found.fit.push(node)
+      // Columns side by side that are too narrow for their words or photos.
+      const kids = [...node.children].filter((kid) => { const b = kid.getBoundingClientRect(); return b.width > 0 && b.height > 0 })
+      const rowish = (look.display.includes('flex') && !look.flexDirection.startsWith('column')) || look.display.includes('grid')
+      if (kids.length >= 2 && rowish) {
+        const boxes = kids.map((kid) => kid.getBoundingClientRect())
+        const sideBySide = boxes.some((b, index) => index && Math.abs(b.top - boxes[0].top) < 6 && b.left >= boxes[0].right - 4)
+        const narrow = boxes.some((b) => b.width < width * 0.48)
+        const wordy = kids.some((kid) => flat(kid.textContent || '').length > 40 || kid.querySelector('img, picture, video'))
+        if (sideBySide && narrow && wordy) found.stack.push(node)
+      }
+      if (hasWords(node)) {
+        const size = parseFloat(look.fontSize)
+        if (size > 44) found.head.push(node)
+        else if (size < 13 && flat(node.textContent || '').length > 12) found.text.push(node)
+      }
+      const tag = node.tagName.toLowerCase()
+      if ((tag === 'a' || tag === 'button') && box.height < 36 && !node.closest('p') && flat(node.textContent || '')) found.tap.push(node)
+    }
+    return found
+  }
+  const phonePlans = (found) => ({
+    original: {},
+    light: { 'we-phone-fit': found.fit },
+    tidy: { 'we-phone-fit': found.fit, 'we-phone-stack': found.stack, 'we-phone-head': found.head },
+    easy: { 'we-phone-fit': found.fit, 'we-phone-stack': found.stack, 'we-phone-roomy': found.stack, 'we-phone-head': found.head, 'we-phone-text': found.text, 'we-phone-tap': found.tap },
+  })
+  const planSize = (plan) => new Set(Object.values(plan).flat()).size
+  async function openPhone() {
+    try { if (dirty) await save() } catch (error) { status(`${say.failed}: ${error.message}`); return }
+    const frame = make('iframe', { src: `${data.base}/preview/${data.slug}`, title: say.phoneTitle })
+    const side = make('div', { class: 'we-phone-side' },
+      make('div', { class: 'we-panel-head' }, make('h2', { text: say.phoneTitle }), make('button', { type: 'button', class: 'we-close', 'aria-label': say.close, 'data-tip': say.close, onclick: closePhone }, icon('close'))),
+      make('p', { class: 'we-phone-hint', text: say.phoneHint }),
+      make('p', { class: 'we-all-good', text: say.phoneLoading }))
+    phoneView.replaceChildren(make('div', { class: 'we-phone-stage' }, make('div', { class: 'we-phone-device' }, frame)), side)
+    phoneView.hidden = false
+    frame.addEventListener('load', () => setTimeout(() => {
+      let doc
+      try { doc = frame.contentDocument } catch { status(say.failed); return }
+      // What the page is like as moved: earlier phone fixes come off before it is measured.
+      clearPhone(doc.body)
+      const found = phoneFindings(frame)
+      const plans = phonePlans(found)
+      let chosen = planSize(plans.tidy) ? 'tidy' : 'original'
+      const fits = make('p', { class: 'we-phone-fits' })
+      const show = () => {
+        clearPhone(doc.body)
+        for (const [name, nodes] of Object.entries(plans[chosen])) for (const node of nodes) node.classList.add(name)
+        // Sites often hide what sticks out instead of scrolling, so parts past the edge count even when nothing scrolls.
+        const ok = doc.documentElement.scrollWidth <= doc.documentElement.clientWidth + 2 && (!found.fit.length || Boolean(plans[chosen]['we-phone-fit']))
+        fits.className = `we-phone-fits ${ok ? 'ok' : 'bad'}`
+        fits.textContent = ok ? say.phoneFits : say.phoneStill
+        for (const card of side.querySelectorAll('.we-phone-option')) card.setAttribute('aria-pressed', String(card.dataset.plan === chosen))
+      }
+      side.replaceChildren(
+        side.firstChild, side.children[1],
+        make('div', { class: 'we-phone-options', role: 'group' }, ...['original', 'light', 'tidy', 'easy'].map((key) => {
+          const size = planSize(plans[key])
+          return make('button', { type: 'button', class: 'we-phone-option', 'data-plan': key, onclick: () => { chosen = key; show() } },
+            make('span', { class: 'we-phone-option__top' }, make('b', { text: say.phoneOptions[key][0] }), key === 'tidy' ? make('span', { class: 'we-tag live', text: say.recommended }) : null),
+            make('small', { text: say.phoneOptions[key][1] }),
+            key === 'original' ? null : make('small', { class: 'we-phone-count', text: size ? fmt(say.phoneChanges, { n: size }) : say.phoneNone }))
+        })),
+        fits,
+        make('p', { class: 'we-phone-hint', text: say.phoneOnly }),
+        make('div', { class: 'we-phone-acts' },
+          make('button', { type: 'button', class: 'we-btn', text: say.phoneCancel, onclick: closePhone }),
+          make('button', { type: 'button', class: 'we-btn we-btn-primary', text: say.phoneUse, onclick: () => usePhone(plans[chosen], doc) })),
+      )
+      show()
+    }, 500))
+  }
+  function usePhone(plan, doc) {
+    // The same parts on the page being edited, found by where they sit in the page.
+    const marks = Object.entries(plan).map(([name, nodes]) => [name, nodes.map((node) => pathTo(node, doc))])
+    remember()
+    clearPhone(document.body)
+    for (const [name, paths] of marks) for (const steps of paths) { const node = byPath(steps); if (node && !ours(node)) node.classList.add(name) }
+    changed()
+    closePhone()
+    save().then(() => status(say.phoneDone)).catch((error) => status(`${say.failed}: ${error.message}`))
+  }
+  function closePhone() { phoneView.hidden = true; phoneView.replaceChildren() }
+  addEventListener('keydown', (event) => { if (event.key === 'Escape' && !phoneView.hidden) closePhone() })
+
   // ---- The bar: undo, save and publish --------------------------------------------------------------------
   const replaceContent = (html) => {
     const keep = [...document.body.children].filter((node) => ours(node) || node.id === 'copy-edit-data' || node.tagName === 'SCRIPT' || node.tagName === 'LINK')
@@ -1418,6 +1529,7 @@
       else if (id === 'we-edit-add') { addMenu.hidden = !addMenu.hidden; help.hidden = true }
       else if (id === 'we-edit-layers') toggleLayers()
       else if (id === 'we-edit-doctor') { historyPanel.hidden = true; await runDoctor() }
+      else if (id === 'we-edit-phone') await openPhone()
       else if (id === 'we-edit-history') { if (historyPanel.hidden) await openHistory(); else historyPanel.hidden = true }
       else if (id === 'we-edit-help') { toggleHelp(); addMenu.hidden = true }
       else if (id === 'we-edit-save') await save()
@@ -1442,7 +1554,7 @@
   // pressed. Only that page is told and heard. If it does not answer (an older tktf.at), the toolbar stays here.
   if (parentOrigin) {
     const bar = document.getElementById('we-edit-bar')
-    const ids = { undo: 'we-edit-undo', redo: 'we-edit-redo', add: 'we-edit-add', layers: 'we-edit-layers', doctor: 'we-edit-doctor', history: 'we-edit-history', help: 'we-edit-help', save: 'we-edit-save', publish: 'we-edit-publish' }
+    const ids = { undo: 'we-edit-undo', redo: 'we-edit-redo', add: 'we-edit-add', layers: 'we-edit-layers', doctor: 'we-edit-doctor', history: 'we-edit-history', phone: 'we-edit-phone', help: 'we-edit-help', save: 'we-edit-save', publish: 'we-edit-publish' }
     const byId = (key) => document.getElementById(ids[key])
     const state = () => ({
       undo: !byId('undo').disabled,
@@ -1456,6 +1568,7 @@
       layers: !layers.hidden,
       doctor: !doctor.hidden,
       history: !historyPanel.hidden,
+      phone: !phoneView.hidden,
       help: !help.hidden,
     })
     let timer
@@ -1465,7 +1578,7 @@
     }
     const watch = new MutationObserver(send)
     watch.observe(bar, { subtree: true, attributes: true, attributeFilter: ['disabled'], childList: true, characterData: true })
-    for (const part of [addMenu, layers, doctor, historyPanel, help]) watch.observe(part, { attributes: true, attributeFilter: ['hidden'] })
+    for (const part of [addMenu, layers, doctor, historyPanel, phoneView, help]) watch.observe(part, { attributes: true, attributeFilter: ['hidden'] })
     addEventListener('message', (event) => {
       if (event.source !== window.parent || event.origin !== parentOrigin) return
       const ask = event.data

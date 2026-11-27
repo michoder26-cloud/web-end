@@ -1,4 +1,4 @@
 {
-  "version": "0.40.0",
-  "notes": "A calmer back office: a light, full-screen layout with icons in the side menu, and an overview that starts with your site, then lists what needs your attention with one button each (publish, waiting changes, sign-in, test mode, Claude, site doctor), then shortcuts."
+  "version": "0.41.0",
+  "notes": "Phone layout for moved pages: the page is checked on a phone-sized screen, and you choose how much to fix (parts that stick out, cramped columns, headings too big, small text and buttons), seeing each choice on the phone screen first. Only phones see the change."
 }
