@@ -26,11 +26,42 @@
       }
 
   Object.assign(say, th
+    ? { stateSaved: 'บันทึกแล้ว', stateUnsaved: 'ยังไม่บันทึก', stateSaving: 'กำลังบันทึก…', howTo: 'วิธีใช้', tipTitle: 'เริ่มแก้ได้เลย', gotIt: 'เข้าใจแล้ว' }
+    : { stateSaved: 'Saved', stateUnsaved: 'Not saved', stateSaving: 'Saving…', howTo: 'How it works', tipTitle: 'Start editing', gotIt: 'Got it' })
+  Object.assign(say, th
+    ? { modeFree: 'ลากอิสระ', modeInsert: 'แทรกในลำดับ', modeTip: 'กดเพื่อสลับวิธีลาก\nลากอิสระ: วางตรงไหนก็ได้\nแทรกในลำดับ: แทรกระหว่างส่วน ส่วนอื่นเลื่อนหลบ' }
+    : { modeFree: 'Free drag', modeInsert: 'Insert in order', modeTip: 'Click to switch how dragging works\nFree drag: put it anywhere\nInsert in order: slot it between parts, the rest moves aside' })
+  Object.assign(say, th
     ? { historyLabel: 'ประวัติ', historyHint: 'ทุกครั้งที่บันทึกจะเก็บไว้ คลิกเพื่อดู แล้วกู้คืนได้ในคลิกเดียว', historyPage: 'หน้านี้', historySite: 'ทั้งเว็บ · ที่เคยเผยแพร่', historyNow: 'ตอนนี้', historyLive: 'ออนไลน์อยู่', historyHidden: 'ซ่อนอยู่', historyUnsaved: 'ยังไม่บันทึก', historyEmpty: 'ยังไม่มีประวัติ บันทึกครั้งแรกแล้วจะเริ่มเก็บ', historyLoading: 'กำลังโหลดประวัติ…', historyRestore: 'กู้คืนแบบนี้', historyBack: 'กลับไปแก้ต่อ', historySaved: 'บันทึกเมื่อ {when}', historyRestoring: 'กำลังกู้คืน…', historySiteAsk: 'ย้อนทั้งเว็บกลับไปเป็นแบบที่เผยแพร่เมื่อ {when}?\nคนที่เข้าเว็บจะเห็นแบบนั้นทันที ส่วนหน้าตอนนี้จะเก็บไว้ในประวัติของแต่ละหน้า', historyKept: 'หน้าตอนนี้จะเก็บไว้ในประวัติ ย้อนกลับได้เสมอ', justNow: 'เมื่อสักครู่', minutesAgo: '{n} นาทีที่แล้ว', today: 'วันนี้ {time}', yesterday: 'เมื่อวาน {time}' }
     : { historyLabel: 'History', historyHint: 'Every save is kept. Click one to see it, and put it back in one click.', historyPage: 'This page', historySite: 'Whole site · published versions', historyNow: 'Now', historyLive: 'Live', historyHidden: 'Hidden', historyUnsaved: 'Not saved', historyEmpty: 'No history yet. It starts with your first save.', historyLoading: 'Loading the history…', historyRestore: 'Restore this version', historyBack: 'Back to editing', historySaved: 'Saved {when}', historyRestoring: 'Restoring…', historySiteAsk: 'Put the whole site back to the version published {when}?\nVisitors see it at once. The pages as they are now are kept in each page’s history.', historyKept: 'The page as it is now stays in the history, so you can always go back.', justNow: 'just now', minutesAgo: '{n} min ago', today: 'Today {time}', yesterday: 'Yesterday {time}' })
-  const ui = '#we-edit-bar, #we-tools, #we-panel, #we-panel-open, #we-add, #we-help, #we-ai, #we-layers, #we-stack, #we-doctor, #we-history, #we-history-view, #we-phone-frame, .we-copy-menu, #we-file, #we-drop-line, .we-guide, .we-handle, #we-size'
+  const ui = '#we-edit-bar, #we-tools, #we-panel, #we-panel-open, #we-add, #we-help, #we-ai, #we-layers, #we-stack, #we-doctor, #we-history, #we-history-view, #we-note, #we-tip, #we-phone-frame, .we-copy-menu, #we-file, #we-drop-line, .we-guide, .we-handle, #we-size'
   const ours = (element) => Boolean(element?.closest?.(ui))
-  const status = (text) => { document.getElementById('we-edit-status').textContent = text }
+  // The bar shows only how saving stands. Anything else is a short note over the page that goes away by itself;
+  // a note for work still going on stays until the next one.
+  let saveState = 'saved'
+  let noteTimer
+  const drawSaveState = () => {
+    const place = document.getElementById('we-edit-status')
+    if (!place) return
+    place.dataset.state = saveState
+    place.textContent = saveState === 'saving' ? say.stateSaving : saveState === 'unsaved' ? say.stateUnsaved : say.stateSaved
+  }
+  const note = (text, stay) => {
+    const box = document.getElementById('we-note')
+    if (!box) return
+    clearTimeout(noteTimer)
+    box.textContent = text
+    box.hidden = !text
+    if (text && !stay) noteTimer = setTimeout(() => { box.hidden = true }, 4000)
+  }
+  const status = (text) => {
+    if (text === say.hint) return note('')
+    if (text === say.changed) { saveState = 'unsaved'; return drawSaveState() }
+    if (text === say.saving) { saveState = 'saving'; return drawSaveState() }
+    if (text === say.saved) { saveState = 'saved'; drawSaveState(); return note('') }
+    if (saveState === 'saving' && String(text).startsWith(say.failed)) { saveState = 'unsaved'; drawSaveState() }
+    note(text, [say.typing, say.uploading, say.aiWorking, say.doctorChecking, say.publishing, say.historyRestoring].includes(text))
+  }
   const flat = (value) => value.replace(/\s+/g, ' ').trim()
   const hasWords = (element) => [...element.childNodes].some((child) => child.nodeType === 3 && flat(child.data))
   const insertMode = () => document.getElementById('we-edit-free')?.checked
@@ -114,6 +145,8 @@
     drop: '<path d="M12 4v10"/><path d="M8 10l4 4 4-4"/><path d="M4 19h16"/>',
     check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
     pen: '<path d="M4 20l4-1L19 8l-3-3L5 16z"/>',
+    insert: '<path d="M4 6h16M4 18h16"/><path d="M8 12h12"/><path d="M4 9l3 3-3 3"/>',
+    freeMove: '<path d="M12 3v18M3 12h18"/><path d="M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/>',
     history: '<path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/>',
   }
   const icon = (name) => {
@@ -149,13 +182,35 @@
         iconButton('we-edit-layers', 'layers', say.layers),
         iconButton('we-edit-doctor', 'doctor', say.doctor),
         iconButton('we-edit-history', 'history', say.historyLabel),
-        make('label', { class: 'we-icon-btn we-toggle-btn', 'data-tip': say.dropBetween }, make('input', { type: 'checkbox', id: 'we-edit-free', 'aria-label': say.dropBetween }), icon('drop')),
+        make('label', { class: 'we-btn we-mode-btn', 'data-tip': say.modeTip }, make('input', { type: 'checkbox', id: 'we-edit-free', 'aria-label': say.modeTip.split('\n')[0] }), make('span', { id: 'we-edit-mode' })),
       ),
       gap(),
       make('span', { id: 'we-edit-status', class: 'we-status', role: 'status' }),
       group(iconButton('we-edit-help', 'help', say.shortcuts, '?')),
       group(saveButton, ...(canPublish ? [make('button', { type: 'button', id: 'we-edit-publish', class: 'we-btn we-btn-primary' }, make('span', { text: say.publishLabel }))] : [])),
     )
+  }
+
+  // The drag switch says which way dragging works now, in words, with its own icon.
+  const showMode = () => {
+    const on = document.getElementById('we-edit-free').checked
+    document.getElementById('we-edit-mode').replaceChildren(icon(on ? 'insert' : 'freeMove'), make('span', { text: on ? say.modeInsert : say.modeFree }))
+  }
+  showMode()
+  document.getElementById('we-edit-free').addEventListener('change', showMode)
+  drawSaveState()
+  document.body.append(make('div', { id: 'we-note', role: 'status', hidden: '' }))
+  // The first time, how the editor works; afterwards it is under "?".
+  {
+    let seen = false
+    try { seen = localStorage.getItem('we-copy-tip') === '1' } catch {}
+    if (!seen) {
+      const tip = make('div', { id: 'we-tip', role: 'note' },
+        make('b', { text: say.tipTitle }),
+        make('p', { text: say.hint }),
+        make('button', { type: 'button', class: 'we-btn we-btn-primary', text: say.gotIt, onclick: () => { tip.remove(); try { localStorage.setItem('we-copy-tip', '1') } catch {} } }))
+      document.body.append(tip)
+    }
   }
 
   // ---- What the editor draws on top of the page ----------------------------------------------------------
@@ -830,7 +885,7 @@
   const shortcuts = th
     ? [['คลิก', 'เลือก'], ['ลาก', 'ย้าย (เส้นชมพูช่วยจัดแนว, กด Alt ค้างเพื่อไม่ให้ดูด)'], ['ลากจุดที่มุม', 'ย่อขยาย'], ['ดับเบิลคลิก หรือ Enter', 'พิมพ์แก้ข้อความ'], ['ลูกศร / Shift+ลูกศร', 'ขยับทีละ 1 / 10'], ['Ctrl+Z', 'เลิกทำ'], ['Ctrl+Y', 'ทำซ้ำ'], ['Ctrl+D', 'ทำซ้ำชิ้นนี้'], ['Ctrl+Alt+C / V', 'คัดลอก / วางสไตล์'], ['Delete', 'ลบ'], ['Esc', 'เลิกเลือก'], ['?', 'เปิดหน้านี้']]
     : [['Click', 'Select'], ['Drag', 'Move (pink guides line it up; hold Alt to stop snapping)'], ['Drag a corner dot', 'Resize'], ['Double-click or Enter', 'Type'], ['Arrows / Shift+arrows', 'Nudge by 1 / 10'], ['Ctrl+Z', 'Undo'], ['Ctrl+Y', 'Redo'], ['Ctrl+D', 'Repeat this part'], ['Ctrl+Alt+C / V', 'Copy / paste style'], ['Delete', 'Remove'], ['Esc', 'Let go'], ['?', 'Show this']]
-  help.append(make('h2', { text: say.helpTitle }), make('dl', {}, ...shortcuts.flatMap(([keys, what]) => [make('dt', { text: keys }), make('dd', { text: what })])), make('button', { type: 'button', text: say.close, onclick: () => { help.hidden = true } }))
+  help.append(make('h2', { text: say.howTo }), make('p', { class: 'we-help-how', text: say.hint }), make('h2', { text: say.helpTitle }), make('dl', {}, ...shortcuts.flatMap(([keys, what]) => [make('dt', { text: keys }), make('dd', { text: what })])), make('button', { type: 'button', text: say.close, onclick: () => { help.hidden = true } }))
   document.body.append(help)
   function toggleHelp() { help.hidden = !help.hidden }
 
@@ -1396,6 +1451,7 @@
       publish: Boolean(byId('publish')),
       free: document.getElementById('we-edit-free').checked,
       status: document.getElementById('we-edit-status').textContent,
+      saveState,
       add: !addMenu.hidden,
       layers: !layers.hidden,
       doctor: !doctor.hidden,
@@ -1422,6 +1478,7 @@
       if (ask.action === 'free') {
         const box = document.getElementById('we-edit-free')
         box.checked = !box.checked
+        showMode()
         send()
         return
       }

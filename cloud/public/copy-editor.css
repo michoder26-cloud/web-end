@@ -14,7 +14,7 @@
 }
 :is(#we-edit-bar,#we-tools,#we-panel,#we-panel-open,#we-layers,#we-stack,#we-doctor,#we-history,#we-history-view,#we-ai,#we-add,#we-help) *{box-sizing:border-box;font:inherit;letter-spacing:inherit;text-transform:none;text-shadow:none}
 :is(#we-edit-bar,#we-tools,#we-panel,#we-panel-open,#we-layers,#we-stack,#we-doctor,#we-history,#we-history-view,#we-ai,#we-add,#we-help) :is(button,label,a){margin:0;cursor:pointer;-webkit-appearance:none;appearance:none;text-decoration:none}
-:is(#we-tools,#we-panel,#we-layers,#we-stack,#we-doctor,#we-history,#we-history-view,#we-ai,#we-add,#we-help,#we-edit-bar,#we-panel-open,#we-size)[hidden]{display:none!important}
+:is(#we-note,#we-tip,#we-tools,#we-panel,#we-layers,#we-stack,#we-doctor,#we-history,#we-history-view,#we-ai,#we-add,#we-help,#we-edit-bar,#we-panel-open,#we-size)[hidden]{display:none!important}
 svg.we-i{width:16px!important;height:16px!important;flex:none;fill:none!important;stroke:currentColor!important;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;display:block}
 
 /* Shared controls. */
@@ -220,3 +220,25 @@ html.we-embedded .we-copy-menu{bottom:14px}
 #we-history-view .we-history-what small{color:var(--we-ink-3);font-size:12px!important;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 #we-history-view iframe{flex:1;width:calc(100% - 32px);margin:16px auto;border:0;border-radius:6px;background:#fff;box-shadow:0 0 0 1px rgba(26,26,25,.06),0 10px 30px -12px rgba(26,26,25,.35)}
 html.we-embedded #we-history{bottom:12px}
+
+/* The drag switch: says in words which way dragging works now. */
+#we-edit-bar .we-mode-btn{position:relative;padding:0 10px 0 8px}
+#we-edit-bar .we-mode-btn input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+#we-edit-bar .we-mode-btn #we-edit-mode{display:inline-flex;align-items:center;gap:6px}
+#we-edit-bar .we-mode-btn:has(input:checked){border-color:transparent;background:var(--we-accent-soft);color:var(--we-accent)}
+
+/* How saving stands, in the bar: a dot and a word. */
+#we-edit-bar .we-status{display:inline-flex;align-items:center;gap:6px;max-width:none;padding:0 8px;color:var(--we-ink-2)}
+#we-edit-bar .we-status::before{content:"";flex:none;width:7px;height:7px;border-radius:50%;background:var(--we-ok)}
+#we-edit-bar .we-status[data-state="unsaved"]::before{background:#f79009}
+#we-edit-bar .we-status[data-state="saving"]::before{background:var(--we-ink-3)}
+/* Short notes over the page, and the first-time tip. */
+:is(#we-note,#we-tip){font:500 13px/1.45 var(--we-font);letter-spacing:0;text-transform:none;text-align:left;box-sizing:border-box;-webkit-font-smoothing:antialiased}
+#we-note{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);z-index:2147483647;max-width:min(520px,calc(100vw - 24px));padding:9px 14px;border-radius:8px;background:#1a1a19;color:#fff;box-shadow:var(--we-shadow);pointer-events:none}
+#we-tip{position:fixed;left:16px;bottom:78px;z-index:2147483646;display:grid;gap:6px;width:min(300px,calc(100vw - 32px));padding:14px;border:1px solid var(--we-line);border-radius:12px;background:var(--we-surface);color:var(--we-ink);box-shadow:var(--we-shadow)}
+#we-tip b{font-weight:600}
+#we-tip p{margin:0;color:var(--we-ink-2)}
+#we-tip button{justify-self:start;margin-top:4px}
+#we-help .we-help-how{margin:0 0 12px;color:var(--we-ink-2)}
+html.we-embedded #we-note{bottom:20px}
+html.we-embedded #we-tip{bottom:16px}
