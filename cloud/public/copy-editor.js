@@ -25,7 +25,10 @@
         box: 'Box', fill: 'Background', none: 'None', corners: 'Corners', space: 'Inner space', shadow: 'Shadow', soft: 'Soft', strong: 'Strong', fade: 'Opacity', width: 'Width', reset: 'Clear this part’s styling', more: 'More colours', hide: 'Hide', dashboard: 'Back to the dashboard', undoLabel: 'Undo', redoLabel: 'Redo', addLabel: 'Add', dropBetween: 'Drop between parts', shortcuts: 'Shortcuts', saveLabel: 'Save', publishLabel: 'Publish', styleLabel: 'Style', copyStyle: 'Copy style', pasteStyle: 'Paste style', styleCopied: 'Style copied. Select another part and press Paste style.', show: 'Show on', desktop: 'Computer', phone: 'Phone', position: 'Position', middle: 'Centre it', addTitle: 'Add to the page', addHint: 'New parts take your site’s own look, and go after the part you selected.', heading: 'Heading', paragraph: 'Text', buttonPart: 'Button', image: 'Photo', divider: 'Divider', spacer: 'Space', boxPart: 'Box', newHeading: 'New heading', newText: 'Type your words here', newButton: 'New button', nothingUndo: 'Nothing left to undo', nothingRedo: 'Nothing left to redo', helpTitle: 'Shortcuts', close: 'Close', ai: 'AI', aiTitle: 'Tell the AI how this part should be', aiPlaceholder: 'Such as: make it look more premium, in gold', aiSend: 'Ask the AI', aiThree: 'Ask for 3 designs', aiPick: 'Design {n} of {total}', aiKeep: 'Use this one', aiCancel: 'None of these', aiThreeHint: 'Press ◀ ▶ to see each one on the page', aiWorking: 'The AI is working…', aiDone: 'Changed by the AI. Not right? Press Ctrl+Z.', aiOnlyHere: 'The AI works when you edit in Edit with AI on tktf.at', aiTooBig: 'This part is too big. Try a smaller one.', aiSlow: 'The AI took too long. Please try again.', aiNote: 'Uses 1 AI message each time', doctor: 'Site doctor', doctorChecking: 'The doctor is checking the whole site…', doctorScore: 'Site score', doctorAllGood: 'Nothing found. The site is ready to publish.', doctorFix: 'Fix it', doctorFixAll: 'Fix everything', doctorFixed: 'Fixed {n}', doctorPage: 'Page', doctorPublishAsk: 'The site doctor found {n} important problems.\nPress OK to publish anyway, or Cancel to look at them first.', doctorItems: { files: '{count} fonts and photos still load from the old site. They disappear when it closes.', alt: '{count} photos have no description, so Google and screen readers cannot tell what they show.', links: '{count} links lead to pages that do not exist yet: {sample}', description: 'No description for Google search results yet.', phone: 'On phones, {count} parts stick out past the screen, so the page scrolls sideways.' }, doctorFixes: { files: 'Copy them here', alt: 'Describe them', links: 'Lead them home for now', description: 'Write it from the page', phone: 'Fit them to phones' }, levels: { high: 'Important', medium: 'Should fix', low: 'Small' }, layers: 'Layers', layersHint: 'Click a name to select it, even when it is covered', stacked: 'Parts stacked here', kinds: { heading: 'Heading', text: 'Text', link: 'Link', button: 'Button', image: 'Photo', drawing: 'Drawing', list: 'List', item: 'List item', band: 'Section', header: 'Header', footer: 'Footer', menu: 'Menu', box: 'Box', field: 'Field', page: 'Page' }, chips: ['More premium', 'More persuasive', 'Stand out more', 'Shorter', 'Friendlier', 'Translate to English', 'Translate to Thai'],
       }
 
-  const ui = '#we-edit-bar, #we-tools, #we-panel, #we-panel-open, #we-add, #we-help, #we-ai, #we-layers, #we-stack, #we-doctor, #we-phone-frame, .we-copy-menu, #we-file, #we-drop-line, .we-guide, .we-handle, #we-size'
+  Object.assign(say, th
+    ? { historyLabel: 'ประวัติ', historyHint: 'ทุกครั้งที่บันทึกจะเก็บไว้ คลิกเพื่อดู แล้วกู้คืนได้ในคลิกเดียว', historyPage: 'หน้านี้', historySite: 'ทั้งเว็บ · ที่เคยเผยแพร่', historyNow: 'ตอนนี้', historyLive: 'ออนไลน์อยู่', historyHidden: 'ซ่อนอยู่', historyUnsaved: 'ยังไม่บันทึก', historyEmpty: 'ยังไม่มีประวัติ บันทึกครั้งแรกแล้วจะเริ่มเก็บ', historyLoading: 'กำลังโหลดประวัติ…', historyRestore: 'กู้คืนแบบนี้', historyBack: 'กลับไปแก้ต่อ', historySaved: 'บันทึกเมื่อ {when}', historyRestoring: 'กำลังกู้คืน…', historySiteAsk: 'ย้อนทั้งเว็บกลับไปเป็นแบบที่เผยแพร่เมื่อ {when}?\nคนที่เข้าเว็บจะเห็นแบบนั้นทันที ส่วนหน้าตอนนี้จะเก็บไว้ในประวัติของแต่ละหน้า', historyKept: 'หน้าตอนนี้จะเก็บไว้ในประวัติ ย้อนกลับได้เสมอ', justNow: 'เมื่อสักครู่', minutesAgo: '{n} นาทีที่แล้ว', today: 'วันนี้ {time}', yesterday: 'เมื่อวาน {time}' }
+    : { historyLabel: 'History', historyHint: 'Every save is kept. Click one to see it, and put it back in one click.', historyPage: 'This page', historySite: 'Whole site · published versions', historyNow: 'Now', historyLive: 'Live', historyHidden: 'Hidden', historyUnsaved: 'Not saved', historyEmpty: 'No history yet. It starts with your first save.', historyLoading: 'Loading the history…', historyRestore: 'Restore this version', historyBack: 'Back to editing', historySaved: 'Saved {when}', historyRestoring: 'Restoring…', historySiteAsk: 'Put the whole site back to the version published {when}?\nVisitors see it at once. The pages as they are now are kept in each page’s history.', historyKept: 'The page as it is now stays in the history, so you can always go back.', justNow: 'just now', minutesAgo: '{n} min ago', today: 'Today {time}', yesterday: 'Yesterday {time}' })
+  const ui = '#we-edit-bar, #we-tools, #we-panel, #we-panel-open, #we-add, #we-help, #we-ai, #we-layers, #we-stack, #we-doctor, #we-history, #we-history-view, #we-phone-frame, .we-copy-menu, #we-file, #we-drop-line, .we-guide, .we-handle, #we-size'
   const ours = (element) => Boolean(element?.closest?.(ui))
   const status = (text) => { document.getElementById('we-edit-status').textContent = text }
   const flat = (value) => value.replace(/\s+/g, ' ').trim()
@@ -111,6 +114,7 @@
     drop: '<path d="M12 4v10"/><path d="M8 10l4 4 4-4"/><path d="M4 19h16"/>',
     check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
     pen: '<path d="M4 20l4-1L19 8l-3-3L5 16z"/>',
+    history: '<path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/>',
   }
   const icon = (name) => {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
@@ -144,6 +148,7 @@
         make('button', { type: 'button', id: 'we-edit-add', class: 'we-btn we-btn-soft' }, icon('plus'), make('span', { text: say.addLabel })),
         iconButton('we-edit-layers', 'layers', say.layers),
         iconButton('we-edit-doctor', 'doctor', say.doctor),
+        iconButton('we-edit-history', 'history', say.historyLabel),
         make('label', { class: 'we-icon-btn we-toggle-btn', 'data-tip': say.dropBetween }, make('input', { type: 'checkbox', id: 'we-edit-free', 'aria-label': say.dropBetween }), icon('drop')),
       ),
       gap(),
@@ -1224,6 +1229,94 @@
     }
   }
 
+  // ---- History: every saved copy of this page, and the site's published versions -------------------------------
+  // A copy is shown in a frame as visitors would see it; putting it back keeps the page as it is now in the history.
+  const historyPanel = make('div', { id: 'we-history', hidden: '' })
+  const historyView = make('div', { id: 'we-history-view', hidden: '' })
+  document.body.append(historyPanel, historyView)
+  const when = (at) => {
+    const date = new Date(at)
+    if (Number.isNaN(date.getTime())) return ''
+    const minutes = Math.round((Date.now() - date.getTime()) / 60000)
+    const time = date.toLocaleTimeString(th ? 'th-TH' : 'en-GB', { hour: '2-digit', minute: '2-digit' })
+    if (minutes < 1) return say.justNow
+    if (minutes < 60) return fmt(say.minutesAgo, { n: minutes })
+    const day = (value) => new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime()
+    const days = Math.round((day(new Date()) - day(date)) / 86400000)
+    if (days === 0) return fmt(say.today, { time })
+    if (days === 1) return fmt(say.yesterday, { time })
+    return `${date.toLocaleDateString(th ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'short', ...(days > 300 ? { year: 'numeric' } : {}) })} ${time}`
+  }
+  const historyTag = (text, kind) => make('span', { class: `we-tag ${kind}`, text })
+  const closeButton = (onclick) => make('button', { type: 'button', class: 'we-close', 'aria-label': say.close, 'data-tip': say.close, onclick }, icon('close'))
+  async function openHistory() {
+    historyPanel.replaceChildren(make('div', { class: 'we-panel-head' }, make('h2', { text: say.historyLabel }), closeButton(() => { historyPanel.hidden = true })), make('p', { class: 'we-all-good', text: say.historyLoading }))
+    historyPanel.hidden = false
+    doctor.hidden = true
+    try {
+      const response = await fetch(`${data.base}/editor/${data.slug}/history`)
+      const list = await response.json()
+      if (!response.ok) throw new Error(list.error || say.failed)
+      drawHistory(list)
+    } catch (error) {
+      status(`${say.failed}: ${error.message}`)
+    }
+  }
+  function drawHistory(list) {
+    const rows = list.pages.map((copy) => make('li', {},
+      make('button', { type: 'button', class: 'we-history-row', onclick: () => showCopy(copy) },
+        make('span', { class: 'we-history-when', text: when(copy.at) }),
+        copy.live ? historyTag(say.historyLive, 'live') : null,
+        copy.published ? null : historyTag(say.historyHidden, 'quiet'))))
+    const versions = list.site?.versions ?? []
+    historyPanel.replaceChildren(
+      make('div', { class: 'we-panel-head' }, make('h2', { text: say.historyLabel }), closeButton(() => { historyPanel.hidden = true })),
+      make('p', { class: 'we-history-hint', text: say.historyHint }),
+      make('h3', { text: say.historyPage }),
+      make('ul', { class: 'we-history-list' },
+        make('li', {}, make('div', { class: 'we-history-row now' }, make('span', { class: 'we-history-when', text: say.historyNow }), list.current?.live ? historyTag(say.historyLive, 'live') : null, dirty ? historyTag(say.historyUnsaved, 'quiet') : null)),
+        ...rows),
+      ...(rows.length ? [] : [make('p', { class: 'we-all-good', text: say.historyEmpty })]),
+      ...(versions.length ? [
+        make('h3', { text: say.historySite }),
+        make('ul', { class: 'we-history-list' }, ...versions.map((version) => make('li', {},
+          make('button', { type: 'button', class: 'we-history-row', onclick: () => restoreSite(version) },
+            make('span', { class: 'we-history-when', text: when(version.created_at) }),
+            version.id === list.site.live ? historyTag(say.historyLive, 'live') : null,
+            version.note ? make('small', { text: version.note }) : null)))),
+      ] : []),
+    )
+    historyPanel.hidden = false
+  }
+  function showCopy(copy) {
+    const frame = make('iframe', { src: `${data.base}/editor/${data.slug}/history?show=${copy.id}`, title: say.historyLabel })
+    historyView.replaceChildren(
+      make('div', { class: 'we-history-bar' },
+        make('button', { type: 'button', class: 'we-btn', onclick: closeCopy }, icon('left'), make('span', { text: say.historyBack })),
+        make('span', { class: 'we-history-what' }, make('b', { text: fmt(say.historySaved, { when: when(copy.at) }) }), make('small', { text: say.historyKept })),
+        make('button', { type: 'button', class: 'we-btn we-btn-primary', onclick: () => restoreCopy(copy) }, icon('reset'), make('span', { text: say.historyRestore }))),
+      frame)
+    historyView.hidden = false
+  }
+  function closeCopy() { historyView.hidden = true; historyView.replaceChildren() }
+  async function putBack(body) {
+    try {
+      // Unsaved changes are saved first, so they land in the history too and nothing is lost.
+      if (dirty) await save()
+      status(say.historyRestoring)
+      const response = await fetch(`${data.base}/editor/${data.slug}/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const answer = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(answer.error || say.failed)
+      dirty = false
+      location.reload()
+    } catch (error) {
+      status(`${say.failed}: ${error.message}`)
+    }
+  }
+  const restoreCopy = (copy) => putBack({ id: copy.id })
+  const restoreSite = (version) => { if (confirm(fmt(say.historySiteAsk, { when: when(version.created_at) }))) putBack({ id: version.id, site: true }) }
+  addEventListener('keydown', (event) => { if (event.key === 'Escape' && !historyView.hidden) closeCopy() })
+
   // ---- The bar: undo, save and publish --------------------------------------------------------------------
   const replaceContent = (html) => {
     const keep = [...document.body.children].filter((node) => ours(node) || node.id === 'copy-edit-data' || node.tagName === 'SCRIPT' || node.tagName === 'LINK')
@@ -1269,7 +1362,8 @@
       else if (id === 'we-edit-redo') redo()
       else if (id === 'we-edit-add') { addMenu.hidden = !addMenu.hidden; help.hidden = true }
       else if (id === 'we-edit-layers') toggleLayers()
-      else if (id === 'we-edit-doctor') await runDoctor()
+      else if (id === 'we-edit-doctor') { historyPanel.hidden = true; await runDoctor() }
+      else if (id === 'we-edit-history') { if (historyPanel.hidden) await openHistory(); else historyPanel.hidden = true }
       else if (id === 'we-edit-help') { toggleHelp(); addMenu.hidden = true }
       else if (id === 'we-edit-save') await save()
       else if (id === 'we-edit-publish') {
@@ -1293,7 +1387,7 @@
   // pressed. Only that page is told and heard. If it does not answer (an older tktf.at), the toolbar stays here.
   if (parentOrigin) {
     const bar = document.getElementById('we-edit-bar')
-    const ids = { undo: 'we-edit-undo', redo: 'we-edit-redo', add: 'we-edit-add', layers: 'we-edit-layers', doctor: 'we-edit-doctor', help: 'we-edit-help', save: 'we-edit-save', publish: 'we-edit-publish' }
+    const ids = { undo: 'we-edit-undo', redo: 'we-edit-redo', add: 'we-edit-add', layers: 'we-edit-layers', doctor: 'we-edit-doctor', history: 'we-edit-history', help: 'we-edit-help', save: 'we-edit-save', publish: 'we-edit-publish' }
     const byId = (key) => document.getElementById(ids[key])
     const state = () => ({
       undo: !byId('undo').disabled,
@@ -1305,6 +1399,7 @@
       add: !addMenu.hidden,
       layers: !layers.hidden,
       doctor: !doctor.hidden,
+      history: !historyPanel.hidden,
       help: !help.hidden,
     })
     let timer
@@ -1314,7 +1409,7 @@
     }
     const watch = new MutationObserver(send)
     watch.observe(bar, { subtree: true, attributes: true, attributeFilter: ['disabled'], childList: true, characterData: true })
-    for (const part of [addMenu, layers, doctor, help]) watch.observe(part, { attributes: true, attributeFilter: ['hidden'] })
+    for (const part of [addMenu, layers, doctor, historyPanel, help]) watch.observe(part, { attributes: true, attributeFilter: ['hidden'] })
     addEventListener('message', (event) => {
       if (event.source !== window.parent || event.origin !== parentOrigin) return
       const ask = event.data

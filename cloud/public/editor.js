@@ -303,6 +303,10 @@
     els.stage.scrollTop = scroll
   }
 
+  Object.assign(W, TH
+    ? { history: 'ประวัติ', hHint: 'ทุกครั้งที่บันทึกจะเก็บไว้ คลิกเพื่อดู แล้วกู้คืนได้ในคลิกเดียว', hPage: 'หน้านี้', hSite: 'ทั้งเว็บ · ที่เคยเผยแพร่', hNow: 'ตอนนี้', hLive: 'ออนไลน์อยู่', hEmpty: 'ยังไม่มีประวัติ แก้หน้าแล้วจะเริ่มเก็บ', hRestore: 'กู้คืนแบบนี้', hBack: 'กลับไปแก้ต่อ', hSaved: 'บันทึกเมื่อ {when}', hKept: 'หน้าตอนนี้จะเก็บไว้ในประวัติ ย้อนกลับได้เสมอ', hSiteAsk: 'ย้อนทั้งเว็บกลับไปเป็นแบบที่เผยแพร่เมื่อ {when}?\nคนที่เข้าเว็บจะเห็นแบบนั้นทันที ส่วนหน้าตอนนี้จะเก็บไว้ในประวัติของแต่ละหน้า', hRestoring: 'กำลังกู้คืน…', justNow: 'เมื่อสักครู่', minutesAgo: '{n} นาทีที่แล้ว', today: 'วันนี้ {time}', yesterday: 'เมื่อวาน {time}' }
+    : { history: 'History', hHint: 'Every save is kept. Click one to see it, and put it back in one click.', hPage: 'This page', hSite: 'Whole site · published versions', hNow: 'Now', hLive: 'Live', hEmpty: 'No history yet. It starts with your first change.', hRestore: 'Restore this version', hBack: 'Back to editing', hSaved: 'Saved {when}', hKept: 'The page as it is now stays in the history, so you can always go back.', hSiteAsk: 'Put the whole site back to the version published {when}?\nVisitors see it at once. The pages as they are now are kept in each page’s history.', hRestoring: 'Restoring…', justNow: 'just now', minutesAgo: '{n} min ago', today: 'Today {time}', yesterday: 'Yesterday {time}' })
+
   // ---- the frame: top bar, library, stage --------------------------------------------------------
   const els = {}
   function frame() {
@@ -316,6 +320,7 @@
       h('div', { class: 'ed-bar__site' }, h('strong', { text: data.siteName }), h('span', { class: 'ed-bar__page' }, pagePick, data.published ? null : h('em', { text: W.hidden }))),
       els.status,
       h('div', { class: 'ed-bar__acts' }, h('a', { class: 'ed-btn', href: data.dashboard || data.base, text: W.more }), els.undo,
+        h('button', { type: 'button', class: 'ed-btn', onclick: openHistory, text: W.history }),
         h('a', { class: 'ed-btn', href: `${data.base}/preview${data.slug === 'home' ? '' : `/${data.slug}`}`, target: '_blank', rel: 'noopener', text: W.view }),
         h('a', { class: 'ed-btn ed-btn--wide', href: `${data.base}/starters`, text: W.templates }), els.publish))
     els.addPanel = h('div', { class: 'ed-panel', 'data-panel': 'add' }, h('h2', { text: W.library }), h('p', { text: W.libraryHelp }),
@@ -337,6 +342,78 @@
     const desc = (TH ? DESC_TH : DESC_EN)[type] || ''
     return h(asButton ? 'button' : 'div', { class: 'ed-card', 'data-new': type, ...(asButton ? { type: 'button' } : { role: 'button', tabindex: '0' }) }, h('b', { text: nameOf(type) }), h('small', { text: desc }))
   }
+
+  // ---- history: the page's saved copies and the site's published versions ---------------------------
+  // A copy opens full screen as visitors would see it; putting it back keeps the page as it is now in the history.
+  const fill = (text, values) => String(text).replace(/\{(\w+)\}/g, (_, key) => values[key] ?? '')
+  const ago = (at) => {
+    const date = new Date(at)
+    if (Number.isNaN(date.getTime())) return ''
+    const minutes = Math.round((Date.now() - date.getTime()) / 60000)
+    const time = date.toLocaleTimeString(TH ? 'th-TH' : 'en-GB', { hour: '2-digit', minute: '2-digit' })
+    if (minutes < 1) return W.justNow
+    if (minutes < 60) return fill(W.minutesAgo, { n: minutes })
+    const day = (value) => new Date(value.getFullYear(), value.getMonth(), value.getDate()).getTime()
+    const days = Math.round((day(new Date()) - day(date)) / 86400000)
+    if (days === 0) return fill(W.today, { time })
+    if (days === 1) return fill(W.yesterday, { time })
+    return `${date.toLocaleDateString(TH ? 'th-TH' : 'en-GB', { day: 'numeric', month: 'short', ...(days > 300 ? { year: 'numeric' } : {}) })} ${time}`
+  }
+  const histTag = (text) => (text ? h('span', { class: 'ed-tag', text }) : null)
+  async function openHistory() {
+    let list
+    try {
+      if (!(await save())) return
+      const response = await fetch(`${data.base}/editor/${data.slug}/history`)
+      list = await response.json()
+      if (!response.ok) throw new Error(list.error || response.statusText)
+    } catch (error) {
+      toast(error.message)
+      return
+    }
+    const row = (label, tags, onclick, note) => h('li', {}, h(onclick ? 'button' : 'div', { class: `ed-list__row ed-hist${onclick ? '' : ' is-here'}`, ...(onclick ? { type: 'button', onclick } : {}) },
+      h('span', { class: 'ed-hist__top' }, h('b', { text: label }), ...tags), note ? h('small', { text: note }) : null))
+    const versions = list.site?.versions ?? []
+    openSheet(W.history, [
+      h('p', { class: 'ed-note', text: W.hHint }),
+      h('h3', { class: 'ed-hist__head', text: W.hPage }),
+      h('ul', { class: 'ed-hist__list' },
+        row(W.hNow, [histTag(list.current?.live ? W.hLive : '')]),
+        list.pages.map((copy) => row(ago(copy.at), [histTag(copy.live ? W.hLive : ''), histTag(copy.published ? '' : W.hidden)], () => showCopy(copy)))),
+      list.pages.length ? null : h('p', { class: 'ed-note', text: W.hEmpty }),
+      versions.length ? h('h3', { class: 'ed-hist__head', text: W.hSite }) : null,
+      versions.length ? h('ul', { class: 'ed-hist__list' }, versions.map((version) => row(ago(version.created_at), [histTag(version.id === list.site.live ? W.hLive : '')], () => restoreSite(version), version.note))) : null,
+    ])
+  }
+  let historyView = null
+  function showCopy(copy) {
+    closeSheet()
+    closeCopy()
+    historyView = h('div', { class: 'ed-hview', role: 'dialog', 'aria-modal': 'true', 'aria-label': W.history },
+      h('div', { class: 'ed-hview__bar' },
+        h('button', { type: 'button', class: 'ed-btn', onclick: closeCopy, text: `← ${W.hBack}` }),
+        h('span', { class: 'ed-hview__what' }, h('b', { text: fill(W.hSaved, { when: ago(copy.at) }) }), h('small', { text: W.hKept })),
+        h('button', { type: 'button', class: 'ed-btn ed-btn--primary', onclick: () => putBack({ id: copy.id }), text: W.hRestore })),
+      h('iframe', { src: `${data.base}/editor/${data.slug}/history?show=${copy.id}`, title: W.history }))
+    document.body.append(historyView)
+  }
+  function closeCopy() { historyView?.remove(); historyView = null }
+  async function putBack(body) {
+    try {
+      if (!(await save())) return
+      toast(W.hRestoring)
+      const response = await fetch(`${data.base}/editor/${data.slug}/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const answer = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(answer.error || response.statusText)
+      location.reload()
+    } catch (error) {
+      toast(error.message)
+    }
+  }
+  function restoreSite(version) {
+    if (confirm(fill(W.hSiteAsk, { when: ago(version.created_at) }))) { closeSheet(); putBack({ id: version.id, site: true }) }
+  }
+  addEventListener('keydown', (event) => { if (event.key === 'Escape' && historyView) closeCopy() })
 
   // ---- toast ----------------------------------------------------------------------------------------
   let toastTimer

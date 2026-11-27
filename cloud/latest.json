@@ -1,4 +1,4 @@
 {
-  "version": "0.38.2",
-  "notes": "Inside Edit with AI on tktf.at, the editor's toolbar now sits in the bar above the site instead of floating over it, so nothing covers the page you are editing. The editor and the block editor also get a calmer, more professional look: one flat bar, a side panel split by hairlines, plain lists and smaller controls."
+  "version": "0.39.0",
+  "notes": "History in the editors: every save of a page is listed, each can be seen full screen as visitors saw it and put back in one click, and the page as it was is kept so a restore can be undone too. Owners who may publish can also take the whole site back to an earlier published version. The block editor keeps one copy per few minutes of work, so its history reaches back hours."
 }

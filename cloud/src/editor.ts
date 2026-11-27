@@ -7,13 +7,13 @@ import { allows, catalog, firstProblem, writeItem } from './cms'
 import type { Desk } from './cms'
 import { releaseSummary } from './cms-platform'
 import { escapeHtml, html, notFound, privateHeaders } from './http'
-import { saveImage, showImage } from './items'
+import { loadItems, saveImage, showImage } from './items'
 import { blockSchema, findProblems, itemSchema, maxBlocksBytes, maxPagesPerSite, pageSlugSchema, settingsShape } from './mcp'
 import { officeText } from './office-words'
-import { rememberPage } from './page-history'
-import { siteLook } from './render'
+import { pageHistoryList, pageRevision, rememberPage, restorePageRevision } from './page-history'
+import { renderPage, siteLook } from './render'
 import { siteFontNames, siteStyles } from './theme'
-import { publishVersion, unpublishedChanges } from './versions'
+import { findLivePage, listVersions, publishVersion, restoreVersion, unpublishedChanges } from './versions'
 import { formatMoney } from './money'
 import { orderStatuses, setOrderStatus } from './shop'
 import type { Block, Env, Settings, SiteRow } from './types'
@@ -120,7 +120,8 @@ async function savePage(request: Request, env: Env, site: SiteRow, slug: string)
   }
   if (!current) return json({ error: 'not found' }, 404)
   if (current.blocks === stored) return json({ ok: true, unchanged: true })
-  await rememberPage(env, site.id, slug)
+  // The block editor saves a second after each change; one copy per few minutes of work is kept.
+  await rememberPage(env, site.id, slug, { minutes: 3 })
   await env.DB.prepare("UPDATE pages SET blocks = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE site_id = ? AND slug = ?").bind(stored, site.id, slug).run()
   return json({ ok: true })
 }
@@ -307,6 +308,50 @@ async function publishNow(env: Env, site: SiteRow, desk: Desk) {
   return published.error ? json({ error: published.error }, 409) : json({ ok: true, version: published.id })
 }
 
+// ---- History: the page's saved copies and the site's published versions, shown and put back from the editors --
+
+async function pageHistory(env: Env, site: SiteRow, desk: Desk, slug: string) {
+  const live = await findLivePage(env, site, slug)
+  const current = await env.DB.prepare('SELECT blocks, updated_at FROM pages WHERE site_id = ? AND slug = ?').bind(site.id, slug).first<{ blocks: string; updated_at: string }>()
+  const liveBlocks = live?.blocks ?? null
+  const canPublish = allows(desk, 'publish')
+  return {
+    canPublish,
+    current: { at: current?.updated_at ?? null, live: Boolean(current && liveBlocks !== null && current.blocks === liveBlocks) },
+    pages: await pageHistoryList(env, site.id, slug, liveBlocks, current?.blocks ?? null),
+    site: canPublish ? { live: site.live_version ?? null, versions: await listVersions(env, site.id) } : null,
+  }
+}
+
+// A saved copy drawn as visitors would see it, inside the History panel's frame. Nothing in it runs or can be used:
+// the page allows no scripts, and links and forms are switched off.
+async function showRevision(env: Env, site: SiteRow, slug: string, id: number) {
+  const revision = await pageRevision(env, site.id, slug, id)
+  if (!revision) return notFound()
+  const blocks = JSON.parse(revision.blocks) as Block[]
+  const items = isCopyPage(blocks) ? new Map() : await loadItems(env, site.id, blocks, null)
+  const page = { blocks, description: revision.description, slug, title: revision.title }
+  const still = '<style>a,button,input,select,textarea,label,form,summary{pointer-events:none!important}</style>'
+  const body = renderPage(site, page, { canonical: '/', customer: null, items })
+    .replace(/<iframe class="custom-html"[^>]*><\/iframe>/g, '')
+    .replace('</head>', `<meta name="robots" content="noindex">${still}</head>`)
+  const headers = isCopyPage(blocks) ? { ...privateHeaders, 'Content-Security-Policy': copyEditorHeaders['Content-Security-Policy'].replace("script-src 'self'", "script-src 'none'") } : privateHeaders
+  return html(body, 200, { ...headers, 'Cache-Control': 'no-store' })
+}
+
+async function restoreFromHistory(request: Request, env: Env, site: SiteRow, desk: Desk, slug: string) {
+  const body = (await request.json().catch((): null => null)) as { id?: unknown; site?: unknown } | null
+  const id = typeof body?.id === 'number' && Number.isInteger(body.id) && body.id > 0 ? body.id : null
+  if (!id) return json({ error: 'Choose a version.' }, 400)
+  if (body?.site === true) {
+    // The whole site back to a published version: the live site changes at once, so only those who may publish.
+    if (!allows(desk, 'publish')) return json({ error: 'You may not publish.' }, 403)
+    return (await restoreVersion(env, site, id)) ? json({ ok: true }) : json({ error: officeText(site).lang === 'th' ? 'ย้อนกลับไม่ได้ ลองโหลดหน้าใหม่แล้วลองอีกครั้ง' : 'That version could not be restored. Reload and try again.' }, 409)
+  }
+  // One page back to a saved copy. The page as it is now is kept first, so this can be undone the same way.
+  return (await restorePageRevision(env, site.id, slug, id)) ? json({ ok: true }) : notFound()
+}
+
 async function uploadImage(request: Request, env: Env, site: SiteRow) {
   const file = (await request.formData().catch((): null => null))?.get('file')
   if (!(file instanceof File) || !file.size) return json({ error: officeText(site).chooseImage }, 400)
@@ -332,6 +377,11 @@ export async function handleEditor(request: Request, env: Env, site: SiteRow, de
   if (extra) return notFound()
   if (request.method === 'GET' && !action) return editorPage(env, site, desk, page)
   // The site doctor: what it finds (GET), and its fixes (POST with an optional code and page).
+  if (action === 'history' && request.method === 'GET') {
+    const shown = new URL(request.url).searchParams.get('show') ?? ''
+    if (/^\d{1,12}$/.test(shown)) return showRevision(env, site, page, Number(shown))
+    return json(await pageHistory(env, site, desk, page))
+  }
   if (action === 'doctor' && request.method === 'GET') return json(await examineSite(env, site, await findProblems(env, site)))
   if (action === 'doctor' && request.method === 'POST') {
     const body = (await request.json().catch((): null => null)) as { code?: unknown; page?: unknown } | null
@@ -350,5 +400,6 @@ export async function handleEditor(request: Request, env: Env, site: SiteRow, de
   if (action === 'new-page') return newPage(request, env, site, desk)
   if (action === 'publish') return publishNow(env, site, desk)
   if (action === 'order') return changeOrder(request, env, site, desk)
+  if (action === 'restore') return restoreFromHistory(request, env, site, desk, page)
   return notFound()
 }
