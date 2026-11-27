@@ -1,4 +1,4 @@
 {
-  "version": "0.38.0",
-  "notes": "Three new things to leave Wix behind. Move a whole website in one go: every page from the old site's sitemap, old addresses that lead to the new pages, and every font and photo copied here (with tktf.at). The site doctor checks the whole site with a score, finds photos without descriptions, links to pages that are missing, files still on the old site, a missing search description and parts that stick out on phones, and fixes them in one click; Publish asks it first. And ✨ AI can now make three designs of any part to flip through on the page and choose from. Also: layers, a right-click list of stacked parts, Alt+click and Tab, and redirects that only ever answer for their own site."
+  "version": "0.38.1",
+  "notes": "A cleaner, more professional look for the editor of pages moved with their own look: a white toolbar with clear line icons and tooltips, a compact bar over the selected part, and the style panel, layers, site doctor, AI box and Add menu all in one consistent design."
 }

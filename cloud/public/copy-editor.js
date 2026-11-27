@@ -14,7 +14,7 @@
         bigger: 'กรอบใหญ่ขึ้น', copy: 'ทำซ้ำ', remove: 'ลบ', photo: 'เปลี่ยนรูป', link: 'ลิงก์', linkAsk: 'ลิงก์ไปที่ไหน (เช่น /contact หรือ https://…):', back: 'คืนที่เดิม', front: 'ไว้หน้าสุด', type: 'พิมพ์แก้',
         hint: 'คลิกเพื่อเลือก ลากเพื่อย้าย ดับเบิลคลิกเพื่อพิมพ์', typing: 'กำลังพิมพ์ กด Enter หรือคลิกที่อื่นเมื่อเสร็จ',
         panel: 'แต่งหน้าตา', text: 'ตัวอักษร', size: 'ขนาด', bold: 'หนา', italic: 'เอียง', underline: 'ขีดเส้นใต้', align: 'จัดวาง', left: 'ซ้าย', center: 'กลาง', right: 'ขวา', color: 'สีตัวอักษร',
-        box: 'กล่อง', fill: 'สีพื้นหลัง', none: 'ไม่มี', corners: 'มุมโค้ง', space: 'ระยะขอบใน', shadow: 'เงา', soft: 'อ่อน', strong: 'เข้ม', fade: 'ความชัด', width: 'กว้าง', reset: 'ล้างการแต่งของชิ้นนี้', more: 'สีอื่น', hide: 'ซ่อน', copyStyle: 'คัดลอกสไตล์', pasteStyle: 'วางสไตล์', styleCopied: 'คัดลอกสไตล์แล้ว เลือกชิ้นอื่นแล้วกด วางสไตล์', show: 'แสดงบน', desktop: 'คอม', phone: 'มือถือ', position: 'ตำแหน่ง', middle: 'จัดกึ่งกลาง', addTitle: 'เพิ่มลงในหน้า', addHint: 'ชิ้นใหม่ใช้หน้าตาเดียวกับเว็บของคุณ และวางต่อจากชิ้นที่เลือกไว้', heading: 'หัวข้อ', paragraph: 'ข้อความ', buttonPart: 'ปุ่ม', image: 'รูป', divider: 'เส้นคั่น', spacer: 'ช่องว่าง', boxPart: 'กล่อง', newHeading: 'หัวข้อใหม่', newText: 'พิมพ์ข้อความของคุณตรงนี้', newButton: 'ปุ่มใหม่', nothingUndo: 'ไม่มีอะไรให้เลิกทำแล้ว', nothingRedo: 'ไม่มีอะไรให้ทำซ้ำแล้ว', helpTitle: 'คีย์ลัด', close: 'ปิด', ai: 'AI', aiTitle: 'บอก AI ว่าอยากให้ชิ้นนี้เป็นแบบไหน', aiPlaceholder: 'เช่น ทำให้ดูหรูขึ้น ใช้สีทอง', aiSend: 'ให้ AI ทำ', aiThree: '🎨 ขอ 3 แบบให้เลือก', aiPick: 'แบบที่ {n} จาก {total}', aiKeep: '✓ ใช้แบบนี้', aiCancel: '✕ ไม่เอา', aiThreeHint: 'กด ◀ ▶ เพื่อดูทีละแบบบนหน้าจริง', aiWorking: 'AI กำลังทำ…', aiDone: 'AI แก้แล้ว ไม่ชอบกด Ctrl+Z ได้', aiOnlyHere: 'AI ใช้ได้เมื่อแก้เว็บในหน้า Edit with AI ของ tktf.at', aiTooBig: 'ชิ้นนี้ใหญ่เกินไป ลองเลือกชิ้นที่เล็กลง', aiSlow: 'AI ตอบช้าเกินไป ลองใหม่อีกครั้ง', aiNote: 'ใช้ 1 ข้อความ AI ต่อครั้ง', doctor: 'หมอเว็บ', doctorChecking: 'หมอกำลังตรวจทั้งเว็บ…', doctorScore: 'คะแนนเว็บ', doctorAllGood: 'ไม่พบปัญหา เว็บพร้อมเผยแพร่', doctorFix: 'แก้ให้', doctorFixAll: 'แก้ให้หมด', doctorFixed: 'แก้แล้ว {n} เรื่อง', doctorPage: 'หน้า', doctorPublishAsk: 'หมอเว็บพบปัญหาสำคัญ {n} เรื่อง\nกด OK เพื่อเผยแพร่เลย หรือ Cancel เพื่อดูและแก้ก่อน', doctorItems: { files: 'ฟอนต์และรูป {count} ไฟล์ยังโหลดจากเว็บเก่า ถ้าปิดเว็บเก่าจะหายไป', alt: 'รูป {count} รูปไม่มีคำอธิบาย Google และคนที่ใช้โปรแกรมอ่านหน้าจอจะไม่รู้ว่าเป็นรูปอะไร', links: 'ลิงก์ {count} อันพาไปหน้าที่ยังไม่มี: {sample}', description: 'ยังไม่มีคำอธิบายที่จะขึ้นในผลค้นหา Google', phone: 'บนมือถือมี {count} ชิ้นล้นจอหรือหลุดขอบ ต้องเลื่อนซ้ายขวา' }, doctorFixes: { files: 'คัดลอกมาไว้ที่นี่', alt: 'ใส่คำอธิบายให้', links: 'พาไปหน้าแรกก่อน', description: 'เขียนจากเนื้อหาในหน้า', phone: 'ปรับให้พอดีจอมือถือ' }, levels: { high: 'สำคัญ', medium: 'ควรแก้', low: 'เล็กน้อย' }, layers: 'เลเยอร์', layersHint: 'คลิกชื่อเพื่อเลือก แม้ชิ้นนั้นจะถูกทับอยู่', stacked: 'ชิ้นที่ซ้อนกันตรงนี้', kinds: { heading: 'หัวข้อ', text: 'ข้อความ', link: 'ลิงก์', button: 'ปุ่ม', image: 'รูป', drawing: 'รูปวาด', list: 'รายการ', item: 'ข้อในรายการ', band: 'แถบ', header: 'ส่วนหัว', footer: 'ส่วนท้าย', menu: 'เมนู', box: 'กล่อง', field: 'ช่องกรอก', page: 'หน้าเว็บ' }, chips: ['ดูหรูขึ้น', 'เขียนให้น่าซื้อขึ้น', 'ทำให้เด่นขึ้น', 'สั้นลง', 'เป็นกันเองขึ้น', 'แปลเป็นภาษาอังกฤษ', 'แปลเป็นภาษาไทย'],
+        box: 'กล่อง', fill: 'สีพื้นหลัง', none: 'ไม่มี', corners: 'มุมโค้ง', space: 'ระยะขอบใน', shadow: 'เงา', soft: 'อ่อน', strong: 'เข้ม', fade: 'ความชัด', width: 'กว้าง', reset: 'ล้างการแต่งของชิ้นนี้', more: 'สีอื่น', hide: 'ซ่อน', dashboard: 'กลับแดชบอร์ด', undoLabel: 'เลิกทำ', redoLabel: 'ทำซ้ำ', addLabel: 'เพิ่ม', dropBetween: 'วางแทรกระหว่างส่วน', shortcuts: 'คีย์ลัด', saveLabel: 'บันทึก', publishLabel: 'เผยแพร่', styleLabel: 'แต่งหน้าตา', copyStyle: 'คัดลอกสไตล์', pasteStyle: 'วางสไตล์', styleCopied: 'คัดลอกสไตล์แล้ว เลือกชิ้นอื่นแล้วกด วางสไตล์', show: 'แสดงบน', desktop: 'คอม', phone: 'มือถือ', position: 'ตำแหน่ง', middle: 'จัดกึ่งกลาง', addTitle: 'เพิ่มลงในหน้า', addHint: 'ชิ้นใหม่ใช้หน้าตาเดียวกับเว็บของคุณ และวางต่อจากชิ้นที่เลือกไว้', heading: 'หัวข้อ', paragraph: 'ข้อความ', buttonPart: 'ปุ่ม', image: 'รูป', divider: 'เส้นคั่น', spacer: 'ช่องว่าง', boxPart: 'กล่อง', newHeading: 'หัวข้อใหม่', newText: 'พิมพ์ข้อความของคุณตรงนี้', newButton: 'ปุ่มใหม่', nothingUndo: 'ไม่มีอะไรให้เลิกทำแล้ว', nothingRedo: 'ไม่มีอะไรให้ทำซ้ำแล้ว', helpTitle: 'คีย์ลัด', close: 'ปิด', ai: 'AI', aiTitle: 'บอก AI ว่าอยากให้ชิ้นนี้เป็นแบบไหน', aiPlaceholder: 'เช่น ทำให้ดูหรูขึ้น ใช้สีทอง', aiSend: 'ให้ AI ทำ', aiThree: 'ขอ 3 แบบให้เลือก', aiPick: 'แบบที่ {n} จาก {total}', aiKeep: 'ใช้แบบนี้', aiCancel: 'ไม่เอา', aiThreeHint: 'กด ◀ ▶ เพื่อดูทีละแบบบนหน้าจริง', aiWorking: 'AI กำลังทำ…', aiDone: 'AI แก้แล้ว ไม่ชอบกด Ctrl+Z ได้', aiOnlyHere: 'AI ใช้ได้เมื่อแก้เว็บในหน้า Edit with AI ของ tktf.at', aiTooBig: 'ชิ้นนี้ใหญ่เกินไป ลองเลือกชิ้นที่เล็กลง', aiSlow: 'AI ตอบช้าเกินไป ลองใหม่อีกครั้ง', aiNote: 'ใช้ 1 ข้อความ AI ต่อครั้ง', doctor: 'หมอเว็บ', doctorChecking: 'หมอกำลังตรวจทั้งเว็บ…', doctorScore: 'คะแนนเว็บ', doctorAllGood: 'ไม่พบปัญหา เว็บพร้อมเผยแพร่', doctorFix: 'แก้ให้', doctorFixAll: 'แก้ให้หมด', doctorFixed: 'แก้แล้ว {n} เรื่อง', doctorPage: 'หน้า', doctorPublishAsk: 'หมอเว็บพบปัญหาสำคัญ {n} เรื่อง\nกด OK เพื่อเผยแพร่เลย หรือ Cancel เพื่อดูและแก้ก่อน', doctorItems: { files: 'ฟอนต์และรูป {count} ไฟล์ยังโหลดจากเว็บเก่า ถ้าปิดเว็บเก่าจะหายไป', alt: 'รูป {count} รูปไม่มีคำอธิบาย Google และคนที่ใช้โปรแกรมอ่านหน้าจอจะไม่รู้ว่าเป็นรูปอะไร', links: 'ลิงก์ {count} อันพาไปหน้าที่ยังไม่มี: {sample}', description: 'ยังไม่มีคำอธิบายที่จะขึ้นในผลค้นหา Google', phone: 'บนมือถือมี {count} ชิ้นล้นจอหรือหลุดขอบ ต้องเลื่อนซ้ายขวา' }, doctorFixes: { files: 'คัดลอกมาไว้ที่นี่', alt: 'ใส่คำอธิบายให้', links: 'พาไปหน้าแรกก่อน', description: 'เขียนจากเนื้อหาในหน้า', phone: 'ปรับให้พอดีจอมือถือ' }, levels: { high: 'สำคัญ', medium: 'ควรแก้', low: 'เล็กน้อย' }, layers: 'เลเยอร์', layersHint: 'คลิกชื่อเพื่อเลือก แม้ชิ้นนั้นจะถูกทับอยู่', stacked: 'ชิ้นที่ซ้อนกันตรงนี้', kinds: { heading: 'หัวข้อ', text: 'ข้อความ', link: 'ลิงก์', button: 'ปุ่ม', image: 'รูป', drawing: 'รูปวาด', list: 'รายการ', item: 'ข้อในรายการ', band: 'แถบ', header: 'ส่วนหัว', footer: 'ส่วนท้าย', menu: 'เมนู', box: 'กล่อง', field: 'ช่องกรอก', page: 'หน้าเว็บ' }, chips: ['ดูหรูขึ้น', 'เขียนให้น่าซื้อขึ้น', 'ทำให้เด่นขึ้น', 'สั้นลง', 'เป็นกันเองขึ้น', 'แปลเป็นภาษาอังกฤษ', 'แปลเป็นภาษาไทย'],
       }
     : {
         saving: 'Saving…', saved: 'Saved. Publish when you are ready.', failed: 'That did not work', changed: 'Unsaved changes', leave: 'You have unsaved changes',
@@ -22,7 +22,7 @@
         bigger: 'Bigger frame', copy: 'Repeat', remove: 'Remove', photo: 'Change photo', link: 'Link', linkAsk: 'Where should it link to (such as /contact or https://…):', back: 'Put back', front: 'Bring to front', type: 'Type',
         hint: 'Click to select, drag to move, double-click to type', typing: 'Typing. Press Enter or click elsewhere when done.',
         panel: 'Style', text: 'Text', size: 'Size', bold: 'Bold', italic: 'Italic', underline: 'Underline', align: 'Align', left: 'Left', center: 'Centre', right: 'Right', color: 'Text colour',
-        box: 'Box', fill: 'Background', none: 'None', corners: 'Corners', space: 'Inner space', shadow: 'Shadow', soft: 'Soft', strong: 'Strong', fade: 'Opacity', width: 'Width', reset: 'Clear this part’s styling', more: 'More colours', hide: 'Hide', copyStyle: 'Copy style', pasteStyle: 'Paste style', styleCopied: 'Style copied. Select another part and press Paste style.', show: 'Show on', desktop: 'Computer', phone: 'Phone', position: 'Position', middle: 'Centre it', addTitle: 'Add to the page', addHint: 'New parts take your site’s own look, and go after the part you selected.', heading: 'Heading', paragraph: 'Text', buttonPart: 'Button', image: 'Photo', divider: 'Divider', spacer: 'Space', boxPart: 'Box', newHeading: 'New heading', newText: 'Type your words here', newButton: 'New button', nothingUndo: 'Nothing left to undo', nothingRedo: 'Nothing left to redo', helpTitle: 'Shortcuts', close: 'Close', ai: 'AI', aiTitle: 'Tell the AI how this part should be', aiPlaceholder: 'Such as: make it look more premium, in gold', aiSend: 'Ask the AI', aiThree: '🎨 Ask for 3 designs', aiPick: 'Design {n} of {total}', aiKeep: '✓ Use this one', aiCancel: '✕ None of these', aiThreeHint: 'Press ◀ ▶ to see each one on the page', aiWorking: 'The AI is working…', aiDone: 'Changed by the AI. Not right? Press Ctrl+Z.', aiOnlyHere: 'The AI works when you edit in Edit with AI on tktf.at', aiTooBig: 'This part is too big. Try a smaller one.', aiSlow: 'The AI took too long. Please try again.', aiNote: 'Uses 1 AI message each time', doctor: 'Site doctor', doctorChecking: 'The doctor is checking the whole site…', doctorScore: 'Site score', doctorAllGood: 'Nothing found. The site is ready to publish.', doctorFix: 'Fix it', doctorFixAll: 'Fix everything', doctorFixed: 'Fixed {n}', doctorPage: 'Page', doctorPublishAsk: 'The site doctor found {n} important problems.\nPress OK to publish anyway, or Cancel to look at them first.', doctorItems: { files: '{count} fonts and photos still load from the old site. They disappear when it closes.', alt: '{count} photos have no description, so Google and screen readers cannot tell what they show.', links: '{count} links lead to pages that do not exist yet: {sample}', description: 'No description for Google search results yet.', phone: 'On phones, {count} parts stick out past the screen, so the page scrolls sideways.' }, doctorFixes: { files: 'Copy them here', alt: 'Describe them', links: 'Lead them home for now', description: 'Write it from the page', phone: 'Fit them to phones' }, levels: { high: 'Important', medium: 'Should fix', low: 'Small' }, layers: 'Layers', layersHint: 'Click a name to select it, even when it is covered', stacked: 'Parts stacked here', kinds: { heading: 'Heading', text: 'Text', link: 'Link', button: 'Button', image: 'Photo', drawing: 'Drawing', list: 'List', item: 'List item', band: 'Section', header: 'Header', footer: 'Footer', menu: 'Menu', box: 'Box', field: 'Field', page: 'Page' }, chips: ['More premium', 'More persuasive', 'Stand out more', 'Shorter', 'Friendlier', 'Translate to English', 'Translate to Thai'],
+        box: 'Box', fill: 'Background', none: 'None', corners: 'Corners', space: 'Inner space', shadow: 'Shadow', soft: 'Soft', strong: 'Strong', fade: 'Opacity', width: 'Width', reset: 'Clear this part’s styling', more: 'More colours', hide: 'Hide', dashboard: 'Back to the dashboard', undoLabel: 'Undo', redoLabel: 'Redo', addLabel: 'Add', dropBetween: 'Drop between parts', shortcuts: 'Shortcuts', saveLabel: 'Save', publishLabel: 'Publish', styleLabel: 'Style', copyStyle: 'Copy style', pasteStyle: 'Paste style', styleCopied: 'Style copied. Select another part and press Paste style.', show: 'Show on', desktop: 'Computer', phone: 'Phone', position: 'Position', middle: 'Centre it', addTitle: 'Add to the page', addHint: 'New parts take your site’s own look, and go after the part you selected.', heading: 'Heading', paragraph: 'Text', buttonPart: 'Button', image: 'Photo', divider: 'Divider', spacer: 'Space', boxPart: 'Box', newHeading: 'New heading', newText: 'Type your words here', newButton: 'New button', nothingUndo: 'Nothing left to undo', nothingRedo: 'Nothing left to redo', helpTitle: 'Shortcuts', close: 'Close', ai: 'AI', aiTitle: 'Tell the AI how this part should be', aiPlaceholder: 'Such as: make it look more premium, in gold', aiSend: 'Ask the AI', aiThree: 'Ask for 3 designs', aiPick: 'Design {n} of {total}', aiKeep: 'Use this one', aiCancel: 'None of these', aiThreeHint: 'Press ◀ ▶ to see each one on the page', aiWorking: 'The AI is working…', aiDone: 'Changed by the AI. Not right? Press Ctrl+Z.', aiOnlyHere: 'The AI works when you edit in Edit with AI on tktf.at', aiTooBig: 'This part is too big. Try a smaller one.', aiSlow: 'The AI took too long. Please try again.', aiNote: 'Uses 1 AI message each time', doctor: 'Site doctor', doctorChecking: 'The doctor is checking the whole site…', doctorScore: 'Site score', doctorAllGood: 'Nothing found. The site is ready to publish.', doctorFix: 'Fix it', doctorFixAll: 'Fix everything', doctorFixed: 'Fixed {n}', doctorPage: 'Page', doctorPublishAsk: 'The site doctor found {n} important problems.\nPress OK to publish anyway, or Cancel to look at them first.', doctorItems: { files: '{count} fonts and photos still load from the old site. They disappear when it closes.', alt: '{count} photos have no description, so Google and screen readers cannot tell what they show.', links: '{count} links lead to pages that do not exist yet: {sample}', description: 'No description for Google search results yet.', phone: 'On phones, {count} parts stick out past the screen, so the page scrolls sideways.' }, doctorFixes: { files: 'Copy them here', alt: 'Describe them', links: 'Lead them home for now', description: 'Write it from the page', phone: 'Fit them to phones' }, levels: { high: 'Important', medium: 'Should fix', low: 'Small' }, layers: 'Layers', layersHint: 'Click a name to select it, even when it is covered', stacked: 'Parts stacked here', kinds: { heading: 'Heading', text: 'Text', link: 'Link', button: 'Button', image: 'Photo', drawing: 'Drawing', list: 'List', item: 'List item', band: 'Section', header: 'Header', footer: 'Footer', menu: 'Menu', box: 'Box', field: 'Field', page: 'Page' }, chips: ['More premium', 'More persuasive', 'Stand out more', 'Shorter', 'Friendlier', 'Translate to English', 'Translate to Thai'],
       }
 
   const ui = '#we-edit-bar, #we-tools, #we-panel, #we-panel-open, #we-add, #we-help, #we-ai, #we-layers, #we-stack, #we-doctor, #we-phone-frame, .we-copy-menu, #we-file, #we-drop-line, .we-guide, .we-handle, #we-size'
@@ -75,11 +75,90 @@
     return element
   }
 
+  const iconPaths = {
+    back: '<path d="M15 18l-6-6 6-6"/>',
+    undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+    redo: '<path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    layers: '<path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/>',
+    doctor: '<path d="M3 12h4l2.5-5 4 10 2.5-5H21"/>',
+    help: '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.2a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.5"/><path d="M12 17h.01"/>',
+    sparkles: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.7 1.8 1.8.7-1.8.7L19 20l-.7-1.8-1.8-.7 1.8-.7z"/>',
+    frame: '<rect x="3" y="3" width="18" height="18" rx="2"/><rect x="8" y="8" width="8" height="8" rx="1"/>',
+    type: '<path d="M5 7V5h14v2"/><path d="M12 5v14"/><path d="M9 19h6"/>',
+    duplicate: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/>',
+    brush: '<path d="M14.5 4.5l5 5L11 18H6v-5z"/><path d="M12 7l5 5"/>',
+    paste: '<rect x="8" y="3" width="8" height="4" rx="1"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/>',
+    link: '<path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1"/><path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1"/>',
+    image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-9 9"/>',
+    front: '<rect x="8" y="3" width="13" height="13" rx="2"/><path d="M5 8H4.5A1.5 1.5 0 0 0 3 9.5v10A1.5 1.5 0 0 0 4.5 21h10a1.5 1.5 0 0 0 1.5-1.5V19"/>',
+    reset: '<path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 4v5h5"/>',
+    trash: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>',
+    close: '<path d="M6 6l12 12M18 6L6 18"/>',
+    left: '<path d="M15 18l-6-6 6-6"/>',
+    right: '<path d="M9 6l6 6-6 6"/>',
+    down: '<path d="M6 9l6 6 6-6"/>',
+    heading: '<path d="M6 4v16M18 4v16M6 12h12"/>',
+    text: '<path d="M4 6h16M4 12h16M4 18h10"/>',
+    button: '<rect x="3" y="7" width="18" height="10" rx="5"/><path d="M9 12h6"/>',
+    divider: '<path d="M3 12h18"/><path d="M8 7h8M8 17h8" opacity=".4"/>',
+    spacer: '<path d="M12 4v16"/><path d="M8 8l4-4 4 4M8 16l4 4 4-4"/>',
+    box: '<rect x="4" y="4" width="16" height="16" rx="3"/>',
+    monitor: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+    phone: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>',
+    center: '<path d="M12 3v18"/><path d="M6 8h12M8 16h8"/>',
+    palette: '<path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.8 1.6-1.6 0-.9-.8-1.4-.8-2.3 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4c0-4.5-4-8.3-9-8.3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10.5" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/>',
+    drop: '<path d="M12 4v10"/><path d="M8 10l4 4 4-4"/><path d="M4 19h16"/>',
+    check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    pen: '<path d="M4 20l4-1L19 8l-3-3L5 16z"/>',
+  }
+  const icon = (name) => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    svg.setAttribute('viewBox', '0 0 24 24')
+    svg.setAttribute('class', 'we-i')
+    svg.setAttribute('aria-hidden', 'true')
+    svg.innerHTML = iconPaths[name] ?? ''
+    return svg
+  }
+
+  // The toolbar along the bottom, rebuilt here in the same order the server wrote it: back, undo and redo,
+  // adding and the side panels, how saving stands, and Save and Publish.
+  {
+    const bar = document.getElementById('we-edit-bar')
+    const canPublish = Boolean(document.getElementById('we-edit-publish'))
+    const iconButton = (id, name, label, keys) => make('button', { type: 'button', id, class: 'we-icon-btn', 'aria-label': label, 'data-tip': keys ? `${label}  ${keys}` : label }, icon(name))
+    const group = (...items) => make('div', { class: 'we-bar-group' }, ...items)
+    const gap = () => make('span', { class: 'we-bar-sep', 'aria-hidden': 'true' })
+    const undoButton = iconButton('we-edit-undo', 'undo', say.undoLabel, 'Ctrl+Z')
+    const redoButton = iconButton('we-edit-redo', 'redo', say.redoLabel, 'Ctrl+Y')
+    undoButton.disabled = true
+    redoButton.disabled = true
+    const saveButton = make('button', { type: 'button', id: 'we-edit-save', class: 'we-btn' }, make('span', { text: say.saveLabel }))
+    saveButton.disabled = true
+    bar.replaceChildren(
+      group(make('a', { href: `${data.base}/dashboard`, target: '_top', class: 'we-icon-btn', 'aria-label': say.dashboard, 'data-tip': say.dashboard }, icon('back'))),
+      gap(),
+      group(undoButton, redoButton),
+      gap(),
+      group(
+        make('button', { type: 'button', id: 'we-edit-add', class: 'we-btn we-btn-soft' }, icon('plus'), make('span', { text: say.addLabel })),
+        iconButton('we-edit-layers', 'layers', say.layers),
+        iconButton('we-edit-doctor', 'doctor', say.doctor),
+        make('label', { class: 'we-icon-btn we-toggle-btn', 'data-tip': say.dropBetween }, make('input', { type: 'checkbox', id: 'we-edit-free', 'aria-label': say.dropBetween }), icon('drop')),
+      ),
+      gap(),
+      make('span', { id: 'we-edit-status', class: 'we-status', role: 'status' }),
+      group(iconButton('we-edit-help', 'help', say.shortcuts, '?')),
+      group(saveButton, ...(canPublish ? [make('button', { type: 'button', id: 'we-edit-publish', class: 'we-btn we-btn-primary' }, make('span', { text: say.publishLabel }))] : [])),
+    )
+  }
+
   // ---- What the editor draws on top of the page ----------------------------------------------------------
   const tools = make('div', { id: 'we-tools', hidden: '' })
+  const doctorPanel = () => document.getElementById('we-doctor')
   const panel = make('div', { id: 'we-panel', hidden: '' })
   let panelOpen = true
-  const reopen = make('button', { type: 'button', id: 'we-panel-open', hidden: '', text: `🎨 ${say.panel}`, onclick: () => { panelOpen = true; buildPanel() } })
+  const reopen = make('button', { type: 'button', id: 'we-panel-open', hidden: '', onclick: () => { panelOpen = true; buildPanel() } }, icon('palette'), make('span', { text: say.styleLabel }))
   const file = make('input', { id: 'we-file', type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif', hidden: '' })
   const line = make('div', { id: 'we-drop-line', hidden: '' })
   const guideX = make('div', { class: 'we-guide we-guide-x', hidden: '' })
@@ -98,7 +177,10 @@
     const box = selected.getBoundingClientRect()
     tools.hidden = false
     const top = Math.max(scrollY + 4, scrollY + box.top - tools.offsetHeight - 8)
-    const left = Math.min(scrollX + document.documentElement.clientWidth - tools.offsetWidth - 8, Math.max(scrollX + 4, scrollX + box.left))
+    // The bar stays clear of an open side panel, so none of its buttons hide behind it.
+    const sidePanel = [panel, doctorPanel()].find((one) => one && !one.hidden)
+    const rightEdge = sidePanel ? sidePanel.getBoundingClientRect().left - 8 : document.documentElement.clientWidth - 8
+    const left = Math.min(scrollX + rightEdge - tools.offsetWidth, Math.max(scrollX + 4, scrollX + box.left))
     tools.style.top = `${top}px`
     tools.style.left = `${left}px`
     const spots = { e: [box.right, box.top + box.height / 2], s: [box.left + box.width / 2, box.bottom], se: [box.right, box.bottom] }
@@ -110,7 +192,7 @@
     }
   }
 
-  const button = (label, action, title) => make('button', { type: 'button', 'data-action': action, text: label, ...(title ? { title } : {}) })
+  const button = (name, label, action, keys, withWord) => make('button', { type: 'button', 'data-action': action, 'aria-label': label, 'data-tip': keys ? `${label}  ${keys}` : label, ...(withWord ? { class: 'we-with-word' } : {}) }, icon(name), withWord ? make('span', { text: label }) : null)
   const stopEditing = () => {
     if (!editing) return
     editing.removeAttribute('contenteditable')
@@ -132,16 +214,18 @@
     element.setAttribute('data-we-selected', '')
     if (aiChooser.hidden) aiBox.hidden = true
     tools.replaceChildren(
-      button(`✨ ${say.ai}`, 'ai'),
-      ...(element.parentElement && element.parentElement !== document.body ? [button(`⬚ ${say.bigger}`, 'bigger')] : []),
-      ...(hasWords(element) ? [button(`✎ ${say.type}`, 'type')] : []),
-      ...(element instanceof HTMLImageElement ? [button(`🖼 ${say.photo}`, 'photo')] : []),
-      ...(element.closest('a') ? [button(`🔗 ${say.link}`, 'link')] : []),
-      button(`⧉ ${say.copy}`, 'copy', 'Ctrl+D'),
-      button(`🖌 ${say.copyStyle}`, 'copyStyle', 'Ctrl+Alt+C'),
-      ...(copiedStyle ? [button(`🖌 ${say.pasteStyle}`, 'pasteStyle', 'Ctrl+Alt+V')] : []),
-      ...(element.style.translate ? [button(`▲ ${say.front}`, 'front'), button(`↺ ${say.back}`, 'back')] : []),
-      button(`✕ ${say.remove}`, 'remove', 'Delete'),
+      button('sparkles', say.ai, 'ai', '', true),
+      make('span', { class: 'we-tools-sep', 'aria-hidden': 'true' }),
+      ...(element.parentElement && element.parentElement !== document.body ? [button('frame', say.bigger, 'bigger')] : []),
+      ...(hasWords(element) ? [button('type', say.type, 'type', 'Enter')] : []),
+      ...(element instanceof HTMLImageElement ? [button('image', say.photo, 'photo')] : []),
+      ...(element.closest('a') ? [button('link', say.link, 'link')] : []),
+      button('duplicate', say.copy, 'copy', 'Ctrl+D'),
+      button('brush', say.copyStyle, 'copyStyle', 'Ctrl+Alt+C'),
+      ...(copiedStyle ? [button('paste', say.pasteStyle, 'pasteStyle', 'Ctrl+Alt+V')] : []),
+      ...(element.style.translate ? [button('front', say.front, 'front'), button('reset', say.back, 'back')] : []),
+      make('span', { class: 'we-tools-sep', 'aria-hidden': 'true' }),
+      button('trash', say.remove, 'remove', 'Delete'),
     )
     buildPanel()
     place()
@@ -230,7 +314,7 @@
     const words = Boolean(flat(selected.textContent || ''))
     const size = px(look.fontSize)
     const bold = Number(look.fontWeight) >= 600
-    const sections = [make('div', { class: 'we-panel-head' }, make('h2', { text: say.panel }), make('button', { type: 'button', class: 'we-close', text: say.hide, onclick: () => { panelOpen = false; buildPanel() } }))]
+    const sections = [make('div', { class: 'we-panel-head' }, make('h2', { text: say.panel }), make('button', { type: 'button', class: 'we-close', 'aria-label': say.close, 'data-tip': say.close, onclick: () => { panelOpen = false; buildPanel() } }, icon('close')))]
     if (words) {
       sections.push(
         make('h3', { text: say.text }),
@@ -254,8 +338,8 @@
       row(say.shadow, toggle(say.none, !shadow, (style) => { style.boxShadow = 'none' }, 'shadow'), toggle(say.soft, shadow && look.boxShadow.includes('24px'), (style) => { style.boxShadow = '0 6px 24px rgba(0,0,0,.12)' }, 'shadow'), toggle(say.strong, shadow && look.boxShadow.includes('40px'), (style) => { style.boxShadow = '0 14px 40px rgba(0,0,0,.28)' }, 'shadow')),
       row(say.fade, slider('fade', 10, 100, Math.round(Number(look.opacity) * 100), (style, value) => { style.opacity = String(value / 100) }, '%')),
       make('h3', { text: say.position }),
-      row(say.show, toggle(`🖥 ${say.desktop}`, !selected.classList.contains('we-hide-desktop'), () => { selected.classList.toggle('we-hide-desktop') }, 'show'), toggle(`📱 ${say.phone}`, !selected.classList.contains('we-hide-phone'), () => { selected.classList.toggle('we-hide-phone') }, 'show')),
-      row('', make('button', { type: 'button', text: `↔ ${say.middle}`, onclick: () => {
+      row(say.show, toggle(say.desktop, !selected.classList.contains('we-hide-desktop'), () => { selected.classList.toggle('we-hide-desktop') }, 'show'), toggle(say.phone, !selected.classList.contains('we-hide-phone'), () => { selected.classList.toggle('we-hide-phone') }, 'show')),
+      row('', make('button', { type: 'button', text: say.middle, onclick: () => {
         // Moves the part so its middle meets the middle of the box it sits in.
         const box = selected.getBoundingClientRect()
         const outer = (selected.parentElement ?? document.body).getBoundingClientRect()
@@ -709,11 +793,11 @@
     },
   }
   const addMenu = make('div', { id: 'we-add', hidden: '' })
-  const icons = { heading: 'H', paragraph: '¶', buttonPart: '▭', image: '🖼', divider: '—', spacer: '↕', boxPart: '▢' }
+  const icons = { heading: 'heading', paragraph: 'text', buttonPart: 'button', image: 'image', divider: 'divider', spacer: 'spacer', boxPart: 'box' }
   addMenu.append(
     make('h2', { text: say.addTitle }),
     make('p', { text: say.addHint }),
-    make('div', { class: 'we-add-grid' }, ...Object.keys(parts).map((name) => make('button', { type: 'button', 'data-part': name }, make('span', { class: 'we-add-icon', text: icons[name] }), make('span', { text: say[name] })))),
+    make('div', { class: 'we-add-grid' }, ...Object.keys(parts).map((name) => make('button', { type: 'button', 'data-part': name }, make('span', { class: 'we-add-icon' }, icon(icons[name])), make('span', { text: say[name] })))),
   )
   document.body.append(addMenu)
   // Where a new part goes: after the selected part, or after the part in the middle of the window.
@@ -763,7 +847,7 @@
     if (['p', 'span', 'strong', 'em', 'b', 'i', 'small', 'label', 'blockquote'].includes(tag)) return 'text'
     return 'box'
   }
-  const kindIcons = { heading: 'H', text: '¶', link: '🔗', button: '▭', image: '🖼', drawing: '✎', list: '☰', item: '•', band: '▤', header: '⬒', footer: '⬓', menu: '☰', box: '▢', field: '⌨', page: '📄' }
+  const kindIcons = { heading: 'heading', text: 'text', link: 'link', button: 'button', image: 'image', drawing: 'pen', list: 'text', item: 'text', band: 'frame', header: 'frame', footer: 'frame', menu: 'text', box: 'box', field: 'button', page: 'frame' }
   const nameOf = (element) => {
     // innerText keeps the gaps between words that sit in separate boxes.
     const all = flat(element.innerText ?? element.textContent ?? '')
@@ -796,7 +880,7 @@
 
   const layers = make('div', { id: 'we-layers', hidden: '' })
   const layerList = make('div', { class: 'we-layer-list', role: 'tree' })
-  layers.append(make('div', { class: 'we-panel-head' }, make('h2', { text: `🗂 ${say.layers}` }), make('button', { type: 'button', class: 'we-close', text: say.hide, onclick: () => { layers.hidden = true } })), make('p', { text: say.layersHint }), layerList)
+  layers.append(make('div', { class: 'we-panel-head' }, make('h2', { text: say.layers }), make('button', { type: 'button', class: 'we-close', 'aria-label': say.close, 'data-tip': say.close, onclick: () => { layers.hidden = true } }, icon('close'))), make('p', { text: say.layersHint }), layerList)
   document.body.append(layers)
   const open = new Set([document.body])
   const rows = new Map()
@@ -806,8 +890,8 @@
     const add = (element, depth) => {
       const children = partsOf(element)
       const row = make('div', { class: `we-layer${element === selected ? ' we-on' : ''}`, role: 'treeitem', style: `padding-left:${8 + depth * 12}px` },
-        children.length ? make('button', { type: 'button', class: 'we-twist', text: open.has(element) ? '▾' : '▸', 'data-twist': '' }) : make('span', { class: 'we-twist' }),
-        make('span', { class: 'we-kind', text: kindIcons[kindOf(element)] }),
+        children.length ? make('button', { type: 'button', class: 'we-twist', 'aria-label': open.has(element) ? '−' : '+', 'data-twist': '' }, icon(open.has(element) ? 'down' : 'right')) : make('span', { class: 'we-twist' }),
+        make('span', { class: 'we-kind' }, icon(kindIcons[kindOf(element)])),
         make('span', { class: 'we-name', text: nameOf(element) }))
       rows.set(row, element)
       layerList.append(row)
@@ -860,7 +944,7 @@
     const stack = stackAt(event.clientX, event.clientY).filter((element, index) => index < 2 || kindOf(element) !== 'box' || nameOf(element).includes(':')).slice(0, 8)
     if (!stack.length) return
     stackMenu.replaceChildren(make('h2', { text: say.stacked }), ...stack.map((element) => {
-      const choice = make('button', { type: 'button' }, make('span', { class: 'we-kind', text: kindIcons[kindOf(element)] }), make('span', { text: nameOf(element) }))
+      const choice = make('button', { type: 'button' }, make('span', { class: 'we-kind' }, icon(kindIcons[kindOf(element)])), make('span', { text: nameOf(element) }))
       choice.addEventListener('click', () => { stackMenu.hidden = true; select(element) })
       choice.addEventListener('pointerenter', () => element.setAttribute('data-we-hover', ''))
       choice.addEventListener('pointerleave', () => element.removeAttribute('data-we-hover'))
@@ -887,7 +971,7 @@
   })()
   const aiBox = make('div', { id: 'we-ai', hidden: '' })
   const aiInput = make('textarea', { rows: '2', maxlength: '500', placeholder: say.aiPlaceholder })
-  const aiSend = make('button', { type: 'button', class: 'we-ai-send', text: `✨ ${say.aiSend}` })
+  const aiSend = make('button', { type: 'button', class: 'we-ai-send' }, icon('sparkles'), make('span', { text: say.aiSend }))
   const aiThree = make('button', { type: 'button', class: 'we-ai-three', text: say.aiThree })
   const aiChooser = make('div', { class: 'we-ai-chooser', hidden: '' })
   aiBox.append(
@@ -989,9 +1073,9 @@
     aiChooser.replaceChildren(
       make('p', { text: say.aiThreeHint }),
       make('div', { class: 'we-ai-pick' },
-        make('button', { type: 'button', text: '◀', onclick: () => show((at + versions.length - 1) % versions.length) }),
+        make('button', { type: 'button', 'aria-label': '◀', onclick: () => show((at + versions.length - 1) % versions.length) }, icon('left')),
         label,
-        make('button', { type: 'button', text: '▶', onclick: () => show((at + 1) % versions.length) })),
+        make('button', { type: 'button', 'aria-label': '▶', onclick: () => show((at + 1) % versions.length) }, icon('right'))),
       make('div', { class: 'we-ai-buttons' },
         make('button', { type: 'button', class: 'we-ai-send', text: say.aiKeep, onclick: () => { aiChooser.hidden = true; aiBox.classList.remove('we-choosing'); aiBox.hidden = true; select(versions[at]); status(say.aiDone) } }),
         make('button', { type: 'button', class: 'we-ai-three', text: say.aiCancel, onclick: () => { versions[at].replaceWith(original); aiChooser.hidden = true; aiBox.classList.remove('we-choosing'); aiBox.hidden = true; select(original); status(say.hint) } })),
@@ -1067,7 +1151,7 @@
     if (phoneParts.length) items.unshift({ code: 'phone', level: 'high', count: phoneParts.length, page: data.slug, fix: true })
     const shownScore = Math.max(0, score - (phoneParts.length ? 12 : 0))
     doctor.replaceChildren(
-      make('div', { class: 'we-panel-head' }, make('h2', { text: `🩺 ${say.doctor}` }), make('button', { type: 'button', class: 'we-close', text: say.close, onclick: () => { doctor.hidden = true } })),
+      make('div', { class: 'we-panel-head' }, make('h2', { text: say.doctor }), make('button', { type: 'button', class: 'we-close', 'aria-label': say.close, 'data-tip': say.close, onclick: () => { doctor.hidden = true } }, icon('close'))),
       make('div', { class: `we-score ${shownScore >= 85 ? 'good' : shownScore >= 60 ? 'fair' : 'poor'}` }, make('b', { text: String(shownScore) }), make('span', { text: say.doctorScore })),
       items.length
         ? make('ul', { class: 'we-findings' }, ...items.map((finding) => make('li', { class: finding.level },
@@ -1076,9 +1160,10 @@
             finding.page && finding.code !== 'general' ? make('small', { text: `${say.doctorPage}: ${finding.page}` }) : null,
             finding.fix ? make('button', { type: 'button', text: `${say.doctorFix}: ${say.doctorFixes[finding.code]}`, onclick: () => fixFinding(finding) }) : null)))
         : make('p', { class: 'we-all-good', text: say.doctorAllGood }),
-      items.some((finding) => finding.fix) ? make('button', { type: 'button', class: 'we-fix-all', text: `✨ ${say.doctorFixAll}`, onclick: () => fixFinding(null) }) : null,
+      ...(items.some((finding) => finding.fix) ? [make('button', { type: 'button', class: 'we-fix-all', text: say.doctorFixAll, onclick: () => fixFinding(null) })] : []),
     )
     doctor.hidden = false
+    place()
   }
   const fitPhone = () => {
     if (!phoneParts.length) return 0
