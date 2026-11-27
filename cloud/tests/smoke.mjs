@@ -80,7 +80,7 @@ check((await rpc('/mcp/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd')).status === 404, 'M
 check((await fetch(`${base}/owner/aaaaaaaa-bbbbbbbb-cccccccc-dddddddd`)).status === 404, 'the back office with a wrong link is refused')
 
 const { tools } = await client.listTools()
-check(tools.length === 66 && tools.some((tool) => tool.name === 'import_page') && tools.some((tool) => tool.name === 'edit_copied_page') && tools.some((tool) => tool.name === 'copy_page_files') && tools.some((tool) => tool.name === 'get_move_report') && tools.some((tool) => tool.name === 'get_wordpress_report') && tools.some((tool) => tool.name === 'duplicate_page') && tools.some((tool) => tool.name === 'restore_page_revision') && tools.some((tool) => tool.name === 'save_app_plan') && tools.some((tool) => tool.name === 'check_app_plan'), 'lists the tools', tools.map((tool) => tool.name).join(','))
+check(tools.length === 68 && tools.some((tool) => tool.name === 'import_page') && tools.some((tool) => tool.name === 'edit_copied_page') && tools.some((tool) => tool.name === 'copy_page_files') && tools.some((tool) => tool.name === 'get_move_report') && tools.some((tool) => tool.name === 'get_wordpress_report') && tools.some((tool) => tool.name === 'duplicate_page') && tools.some((tool) => tool.name === 'restore_page_revision') && tools.some((tool) => tool.name === 'save_app_plan') && tools.some((tool) => tool.name === 'check_app_plan'), 'lists the tools', tools.map((tool) => tool.name).join(','))
 check(stepDone(await (await fetch(`${base}/owner/${code}/dashboard`)).text(), 'claude') === '1', 'connecting Claude ticks its step')
 check(client.getInstructions()?.includes('apply_starter') && tools.find((tool) => tool.name === 'apply_starter')?.description.includes('replacePages'), 'Claude knows about starters and when it may replace pages')
 check(client.getInstructions()?.includes('web team'), 'gives Claude its working method')
@@ -1388,7 +1388,7 @@ const visualData = JSON.parse(visualHtml.match(/<script id="editor-data" type="a
 check(visualPage.status === 200 && visualPage.headers.get('content-security-policy')?.includes("script-src 'self'") && visualPage.headers.get('referrer-policy') === 'no-referrer' && visualHtml.includes('src="/editor.js"') && visualData?.blocks?.[0]?.heading === 'Draft heading' && visualData.catalog.hero.fields.some((field) => field.key === 'buttonHref'), 'the visual editor opens the working copy of a page with its own script only')
 const frontDoorResponse = await fetch(owner)
 const frontDoor = await frontDoorResponse.text()
-check((frontDoorResponse.headers.get('content-security-policy') ?? '').includes('frame-ancestors https://tktf.at'), "the owner's editor may be shown next to the AI assistant on tktf.at")
+check((frontDoorResponse.headers.get('content-security-policy') ?? '').includes("frame-ancestors 'self' https://tktf.at"), "the owner's editor may be shown next to the AI assistant on tktf.at, and in the owner's own pages (the phone check), nowhere else")
 check(frontDoor.includes('id="editor-data"') && frontDoor.includes(`"dashboard":"/owner/${code}/dashboard"`) && ownerDashboard.includes(`href="/owner/${code}">`), 'the back office opens in the drag-and-drop editor, and Edit site leads there', frontDoor.slice(0, 300))
 const visualSave = (blocks, origin = base) => fetch(`${owner}/editor/draft-only`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin }, body: JSON.stringify({ blocks }) })
 const visualOrder = [visualData.blocks[1], { ...visualData.blocks[0], heading: 'Typed in the editor' }]
@@ -1743,7 +1743,7 @@ check(!reading.text.includes('SCRIPT-TEXT') && !reading.text.includes('color:red
   check(!keptEdit.isError && keptEdited.includes('Roasted in the new style') && keptEdited.includes('href="/contact"') && keptEdit.data.notFound?.length === 1, 'edit_copied_page changes words and links in place and says what it could not find', keptEdit.text)
   check((await call('edit_copied_page', { slug: 'moved-cafe', texts: [{ from: 'a', to: 'b' }] })).isError, 'pages made of blocks are not changed by edit_copied_page')
   const keptEditor = await (await fetch(`${owner}/editor/kept`)).text()
-  check(keptEditor.includes('id="we-edit-bar"') && keptEditor.includes('/copy-editor.js') && keptEditor.includes('color:rgb(1,2,3)') && keptEditor.includes('id="we-edit-publish"') && keptEditor.includes('id="we-edit-undo"') && keptEditor.includes('id="we-edit-free"') && keptEditor.includes('id="we-edit-redo"') && keptEditor.includes('id="we-edit-add"') && keptEditor.includes('id="we-edit-help"') && keptEditor.includes('/copy-editor.js'), 'the editor shows a copied page as it looks, with adding, undo, redo, save, publish and help')
+  check(keptEditor.includes('id="we-edit-bar"') && keptEditor.includes('/copy-editor.js') && keptEditor.includes('color:rgb(1,2,3)') && keptEditor.includes('id="we-edit-publish"') && keptEditor.includes('id="we-edit-undo"') && keptEditor.includes('id="we-edit-free"') && keptEditor.includes('id="we-edit-redo"') && keptEditor.includes('id="we-edit-add"') && keptEditor.includes('id="we-edit-help"') && keptEditor.includes('id="we-edit-layers"') && keptEditor.includes('/copy-editor.js'), 'the editor shows a copied page as it looks, with adding, undo, redo, save, publish and help')
   check(keptHtml.includes('.we-hide-phone{display:none!important}') && keptHtml.includes('.we-hide-desktop{display:none!important}'), 'copied pages can hide parts on phones or on computers')
   const keptSave = await fetch(`${owner}/editor/kept/copy`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base }, body: JSON.stringify({ texts: [{ from: 'Same coffee, same corner.', nth: 1, to: 'Fresh beans every week.' }] }) })
   const keptSaved = await (await fetch(`${owner}/preview/kept`)).text()
@@ -1752,6 +1752,12 @@ check(!reading.text.includes('SCRIPT-TEXT') && !reading.text.includes('color:red
   const arrangedHtml = await (await fetch(`${owner}/preview/kept`)).text()
   check(arranged.ok && arrangedHtml.indexOf('Second part') < arrangedHtml.indexOf('First part') && arrangedHtml.includes('Moved heading') && arrangedHtml.includes('color:rgb(1,2,3)'), 'the editor saves the page as the owner arranged it, keeping its look')
   check(!arrangedHtml.includes('alert(') && !arrangedHtml.includes('<iframe') && !arrangedHtml.includes('contenteditable') && !arrangedHtml.includes('data-we-selected') && !arrangedHtml.includes('we-tools'), "a page saved from the editor is cleaned again: no code, frames or editor buttons")
+  const doctorBefore = (await call('site_doctor')).data
+  check(typeof doctorBefore.score === 'number' && Array.isArray(doctorBefore.findings) && doctorBefore.findings.some((finding) => finding.code === 'description' && finding.page === 'kept'), 'the site doctor scores the site and finds a moved page without a description', JSON.stringify(doctorBefore).slice(0, 400))
+  const doctorFix = (await call('fix_site_problems', { code: 'description', page: 'kept' })).data
+  check(doctorFix.fixed === 1 && !doctorFix.findings.some((finding) => finding.code === 'description' && finding.page === 'kept'), 'the site doctor writes the missing description from the page itself', JSON.stringify(doctorFix).slice(0, 300))
+  const editorDoctor = await fetch(`${owner}/editor/kept/doctor`)
+  check(editorDoctor.ok && typeof (await editorDoctor.json()).score === 'number', 'the editor can ask the site doctor too')
   const keptBlocks = await call('import_page', { url: 'http://localhost:8795/styled', ownerConfirmed: true, slug: 'kept-blocks', keepLook: false })
   check(!keptBlocks.isError && !JSON.stringify(keptBlocks.data.blocks).includes('copy'), 'keepLook false still rebuilds the page as blocks')
   await call('delete_page', { slug: 'kept-blocks' })
@@ -3658,7 +3664,10 @@ if (loadCount) {
 {
   await call('save_table', { name: 'private_notes', label: 'Private notes', readAccess: 'own', writeAccess: 'members', fields: [{ name: 'note', label: 'Note', type: 'text' }] })
   await call('save_table', { name: 'shared_board', label: 'Shared board', readAccess: 'members', writeAccess: 'members', fields: [{ name: 'note', label: 'Note', type: 'text' }] })
-  const [ann, ben] = [await signUp('ann-access'), await signUp('ben-access')]
+  // Each signs up from an address of their own: sign-ups are limited to 10 an hour from one address, and earlier tests used that up.
+  const accessUser = (name, ip) => apiJson('/auth/signup', { body: asJson({ email: `${name}@example.test`, name, password: 'a-good-password' }), headers: { 'CF-Connecting-IP': ip }, method: 'POST' })
+  const [ann, ben] = [await accessUser('ann-access', '198.51.100.31'), await accessUser('ben-access', '198.51.100.32')]
+  check(ann.status === 201 && ben.status === 201, 'two customers sign up for the access test', `${ann.status} ${ben.status}`)
   for (const [token, text] of [[ann.body.token, 'from Ann'], [ann.body.token, 'again from Ann'], [ben.body.token, 'from Ben']]) {
     await apiJson('/data/private_notes', { body: asJson({ note: text }), method: 'POST', token })
     await apiJson('/data/shared_board', { body: asJson({ note: text }), method: 'POST', token })

@@ -330,7 +330,8 @@ function previewable(request: Request, path: string, response: Response) {
   const policy = response.headers.get('content-security-policy') ?? ''
   if (!policy.includes("frame-ancestors 'none'")) return response
   const shown = new Response(response.body, response)
-  shown.headers.set('content-security-policy', policy.replace("frame-ancestors 'none'", `frame-ancestors ${PREVIEW_HOST}`))
+  // The owner's own pages may also show inside each other (the editor checks the preview at phone width).
+  shown.headers.set('content-security-policy', policy.replace("frame-ancestors 'none'", OWNER_PAGE.test(path) ? `frame-ancestors 'self' ${PREVIEW_HOST}` : `frame-ancestors ${PREVIEW_HOST}`))
   return shown
 }
 

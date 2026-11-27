@@ -1,4 +1,4 @@
 {
-  "version": "0.36.0",
-  "notes": "✨ AI in the editor: select any part of a page moved with its own look and tell the AI what you want, or tap a ready choice such as More premium, More persuasive, Shorter or Translate. The part changes in place, in your site's own look, and Ctrl+Z undoes it (on tktf.at, one AI message each). Also new: Ctrl+Z and Ctrl+Y work inside the tktf.at panel, an Add button for headings, text, buttons, photos and more that already match your site, copy and paste style, show or hide a part on phones or computers, centre in one click, and ? for every shortcut."
+  "version": "0.38.0",
+  "notes": "Three new things to leave Wix behind. Move a whole website in one go: every page from the old site's sitemap, old addresses that lead to the new pages, and every font and photo copied here (with tktf.at). The site doctor checks the whole site with a score, finds photos without descriptions, links to pages that are missing, files still on the old site, a missing search description and parts that stick out on phones, and fixes them in one click; Publish asks it first. And ✨ AI can now make three designs of any part to flip through on the page and choose from. Also: layers, a right-click list of stacked parts, Alt+click and Tab, and redirects that only ever answer for their own site."
 }

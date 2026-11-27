@@ -1,13 +1,14 @@
 import { z } from 'zod'
 
 import { cleanEditedBody, editCopy, isCopyPage, maxCopyBytes, renderCopy, withoutConsentBoxes } from './copying'
+import { examineSite, fixSite } from './doctor'
 
 import { allows, catalog, firstProblem, writeItem } from './cms'
 import type { Desk } from './cms'
 import { releaseSummary } from './cms-platform'
 import { escapeHtml, html, notFound, privateHeaders } from './http'
 import { saveImage, showImage } from './items'
-import { blockSchema, itemSchema, maxBlocksBytes, maxPagesPerSite, pageSlugSchema, settingsShape } from './mcp'
+import { blockSchema, findProblems, itemSchema, maxBlocksBytes, maxPagesPerSite, pageSlugSchema, settingsShape } from './mcp'
 import { officeText } from './office-words'
 import { rememberPage } from './page-history'
 import { siteLook } from './render'
@@ -134,7 +135,7 @@ function copyEditor(site: SiteRow, desk: Desk, slug: string, title: string, bloc
   const page = renderCopy(site, { description: '', slug, title }, block, '/')
   const data = JSON.stringify({ base: desk.base, lang: th ? 'th' : 'en', slug }).replace(/</g, '\\u003c')
   const canPublish = allows(desk, 'publish')
-  const bar = `<div id="we-edit-bar" role="toolbar"><a href="${escapeHtml(desk.base)}/dashboard" target="_top">${th ? '← แดชบอร์ด' : '← Dashboard'}</a><span id="we-edit-status">${th ? 'คลิกเพื่อเลือก ลากเพื่อย้าย ดับเบิลคลิกเพื่อพิมพ์' : 'Click to select, drag to move, double-click to type'}</span><label id="we-edit-free-label"><input id="we-edit-free" type="checkbox">${th ? 'วางแทรกระหว่างส่วน' : 'Drop between parts'}</label><button id="we-edit-add" type="button">${th ? '➕ เพิ่ม' : '➕ Add'}</button><button id="we-edit-undo" type="button" disabled title="Ctrl+Z">${th ? '↶ เลิกทำ' : '↶ Undo'}</button><button id="we-edit-redo" type="button" disabled title="Ctrl+Y">${th ? '↷ ทำซ้ำ' : '↷ Redo'}</button><button id="we-edit-help" type="button" title="?">?</button><button id="we-edit-save" type="button" disabled>${th ? 'บันทึก' : 'Save'}</button>${canPublish ? `<button id="we-edit-publish" type="button">${th ? 'เผยแพร่' : 'Publish'}</button>` : ''}</div>`
+  const bar = `<div id="we-edit-bar" role="toolbar"><a href="${escapeHtml(desk.base)}/dashboard" target="_top">${th ? '← แดชบอร์ด' : '← Dashboard'}</a><span id="we-edit-status">${th ? 'คลิกเพื่อเลือก ลากเพื่อย้าย ดับเบิลคลิกเพื่อพิมพ์' : 'Click to select, drag to move, double-click to type'}</span><label id="we-edit-free-label"><input id="we-edit-free" type="checkbox">${th ? 'วางแทรกระหว่างส่วน' : 'Drop between parts'}</label><button id="we-edit-doctor" type="button">${th ? '🩺 หมอเว็บ' : '🩺 Site doctor'}</button><button id="we-edit-layers" type="button">${th ? '🗂 เลเยอร์' : '🗂 Layers'}</button><button id="we-edit-add" type="button">${th ? '➕ เพิ่ม' : '➕ Add'}</button><button id="we-edit-undo" type="button" disabled title="Ctrl+Z">${th ? '↶ เลิกทำ' : '↶ Undo'}</button><button id="we-edit-redo" type="button" disabled title="Ctrl+Y">${th ? '↷ ทำซ้ำ' : '↷ Redo'}</button><button id="we-edit-help" type="button" title="?">?</button><button id="we-edit-save" type="button" disabled>${th ? 'บันทึก' : 'Save'}</button>${canPublish ? `<button id="we-edit-publish" type="button">${th ? 'เผยแพร่' : 'Publish'}</button>` : ''}</div>`
   const tools = `${bar}<script id="copy-edit-data" type="application/json">${data}</script><link rel="stylesheet" href="/copy-editor.css"><script src="/copy-editor.js"></script>`
   return html(page.replace(/<\/body>\s*<\/html>\s*$/, `${tools}</body></html>`).replace('<head>', '<head><meta name="robots" content="noindex">'), 200, copyEditorHeaders)
 }
@@ -330,6 +331,15 @@ export async function handleEditor(request: Request, env: Env, site: SiteRow, de
   }
   if (extra) return notFound()
   if (request.method === 'GET' && !action) return editorPage(env, site, desk, page)
+  // The site doctor: what it finds (GET), and its fixes (POST with an optional code and page).
+  if (action === 'doctor' && request.method === 'GET') return json(await examineSite(env, site, await findProblems(env, site)))
+  if (action === 'doctor' && request.method === 'POST') {
+    const body = (await request.json().catch((): null => null)) as { code?: unknown; page?: unknown } | null
+    const code = typeof body?.code === 'string' && ['files', 'alt', 'links', 'description'].includes(body.code) ? body.code : undefined
+    const target = typeof body?.page === 'string' && /^[a-z0-9-]{1,60}$/.test(body.page) ? body.page : undefined
+    const done = await fixSite(env, site, { code, page: target })
+    return json({ ...done, ...(await examineSite(env, site, await findProblems(env, site))) })
+  }
   if (request.method !== 'POST') return notFound()
   if (!action) return savePage(request, env, site, page)
   if (action === 'image') return uploadImage(request, env, site)

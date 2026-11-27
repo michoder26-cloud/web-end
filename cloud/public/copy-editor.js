@@ -14,7 +14,7 @@
         bigger: 'กรอบใหญ่ขึ้น', copy: 'ทำซ้ำ', remove: 'ลบ', photo: 'เปลี่ยนรูป', link: 'ลิงก์', linkAsk: 'ลิงก์ไปที่ไหน (เช่น /contact หรือ https://…):', back: 'คืนที่เดิม', front: 'ไว้หน้าสุด', type: 'พิมพ์แก้',
         hint: 'คลิกเพื่อเลือก ลากเพื่อย้าย ดับเบิลคลิกเพื่อพิมพ์', typing: 'กำลังพิมพ์ กด Enter หรือคลิกที่อื่นเมื่อเสร็จ',
         panel: 'แต่งหน้าตา', text: 'ตัวอักษร', size: 'ขนาด', bold: 'หนา', italic: 'เอียง', underline: 'ขีดเส้นใต้', align: 'จัดวาง', left: 'ซ้าย', center: 'กลาง', right: 'ขวา', color: 'สีตัวอักษร',
-        box: 'กล่อง', fill: 'สีพื้นหลัง', none: 'ไม่มี', corners: 'มุมโค้ง', space: 'ระยะขอบใน', shadow: 'เงา', soft: 'อ่อน', strong: 'เข้ม', fade: 'ความชัด', width: 'กว้าง', reset: 'ล้างการแต่งของชิ้นนี้', more: 'สีอื่น', hide: 'ซ่อน', copyStyle: 'คัดลอกสไตล์', pasteStyle: 'วางสไตล์', styleCopied: 'คัดลอกสไตล์แล้ว เลือกชิ้นอื่นแล้วกด วางสไตล์', show: 'แสดงบน', desktop: 'คอม', phone: 'มือถือ', position: 'ตำแหน่ง', middle: 'จัดกึ่งกลาง', addTitle: 'เพิ่มลงในหน้า', addHint: 'ชิ้นใหม่ใช้หน้าตาเดียวกับเว็บของคุณ และวางต่อจากชิ้นที่เลือกไว้', heading: 'หัวข้อ', paragraph: 'ข้อความ', buttonPart: 'ปุ่ม', image: 'รูป', divider: 'เส้นคั่น', spacer: 'ช่องว่าง', boxPart: 'กล่อง', newHeading: 'หัวข้อใหม่', newText: 'พิมพ์ข้อความของคุณตรงนี้', newButton: 'ปุ่มใหม่', nothingUndo: 'ไม่มีอะไรให้เลิกทำแล้ว', nothingRedo: 'ไม่มีอะไรให้ทำซ้ำแล้ว', helpTitle: 'คีย์ลัด', close: 'ปิด', ai: 'AI', aiTitle: 'บอก AI ว่าอยากให้ชิ้นนี้เป็นแบบไหน', aiPlaceholder: 'เช่น ทำให้ดูหรูขึ้น ใช้สีทอง', aiSend: 'ให้ AI ทำ', aiWorking: 'AI กำลังทำ…', aiDone: 'AI แก้แล้ว ไม่ชอบกด Ctrl+Z ได้', aiOnlyHere: 'AI ใช้ได้เมื่อแก้เว็บในหน้า Edit with AI ของ tktf.at', aiTooBig: 'ชิ้นนี้ใหญ่เกินไป ลองเลือกชิ้นที่เล็กลง', aiSlow: 'AI ตอบช้าเกินไป ลองใหม่อีกครั้ง', aiNote: 'ใช้ 1 ข้อความ AI ต่อครั้ง', chips: ['ดูหรูขึ้น', 'เขียนให้น่าซื้อขึ้น', 'ทำให้เด่นขึ้น', 'สั้นลง', 'เป็นกันเองขึ้น', 'แปลเป็นภาษาอังกฤษ', 'แปลเป็นภาษาไทย'],
+        box: 'กล่อง', fill: 'สีพื้นหลัง', none: 'ไม่มี', corners: 'มุมโค้ง', space: 'ระยะขอบใน', shadow: 'เงา', soft: 'อ่อน', strong: 'เข้ม', fade: 'ความชัด', width: 'กว้าง', reset: 'ล้างการแต่งของชิ้นนี้', more: 'สีอื่น', hide: 'ซ่อน', copyStyle: 'คัดลอกสไตล์', pasteStyle: 'วางสไตล์', styleCopied: 'คัดลอกสไตล์แล้ว เลือกชิ้นอื่นแล้วกด วางสไตล์', show: 'แสดงบน', desktop: 'คอม', phone: 'มือถือ', position: 'ตำแหน่ง', middle: 'จัดกึ่งกลาง', addTitle: 'เพิ่มลงในหน้า', addHint: 'ชิ้นใหม่ใช้หน้าตาเดียวกับเว็บของคุณ และวางต่อจากชิ้นที่เลือกไว้', heading: 'หัวข้อ', paragraph: 'ข้อความ', buttonPart: 'ปุ่ม', image: 'รูป', divider: 'เส้นคั่น', spacer: 'ช่องว่าง', boxPart: 'กล่อง', newHeading: 'หัวข้อใหม่', newText: 'พิมพ์ข้อความของคุณตรงนี้', newButton: 'ปุ่มใหม่', nothingUndo: 'ไม่มีอะไรให้เลิกทำแล้ว', nothingRedo: 'ไม่มีอะไรให้ทำซ้ำแล้ว', helpTitle: 'คีย์ลัด', close: 'ปิด', ai: 'AI', aiTitle: 'บอก AI ว่าอยากให้ชิ้นนี้เป็นแบบไหน', aiPlaceholder: 'เช่น ทำให้ดูหรูขึ้น ใช้สีทอง', aiSend: 'ให้ AI ทำ', aiThree: '🎨 ขอ 3 แบบให้เลือก', aiPick: 'แบบที่ {n} จาก {total}', aiKeep: '✓ ใช้แบบนี้', aiCancel: '✕ ไม่เอา', aiThreeHint: 'กด ◀ ▶ เพื่อดูทีละแบบบนหน้าจริง', aiWorking: 'AI กำลังทำ…', aiDone: 'AI แก้แล้ว ไม่ชอบกด Ctrl+Z ได้', aiOnlyHere: 'AI ใช้ได้เมื่อแก้เว็บในหน้า Edit with AI ของ tktf.at', aiTooBig: 'ชิ้นนี้ใหญ่เกินไป ลองเลือกชิ้นที่เล็กลง', aiSlow: 'AI ตอบช้าเกินไป ลองใหม่อีกครั้ง', aiNote: 'ใช้ 1 ข้อความ AI ต่อครั้ง', doctor: 'หมอเว็บ', doctorChecking: 'หมอกำลังตรวจทั้งเว็บ…', doctorScore: 'คะแนนเว็บ', doctorAllGood: 'ไม่พบปัญหา เว็บพร้อมเผยแพร่', doctorFix: 'แก้ให้', doctorFixAll: 'แก้ให้หมด', doctorFixed: 'แก้แล้ว {n} เรื่อง', doctorPage: 'หน้า', doctorPublishAsk: 'หมอเว็บพบปัญหาสำคัญ {n} เรื่อง\nกด OK เพื่อเผยแพร่เลย หรือ Cancel เพื่อดูและแก้ก่อน', doctorItems: { files: 'ฟอนต์และรูป {count} ไฟล์ยังโหลดจากเว็บเก่า ถ้าปิดเว็บเก่าจะหายไป', alt: 'รูป {count} รูปไม่มีคำอธิบาย Google และคนที่ใช้โปรแกรมอ่านหน้าจอจะไม่รู้ว่าเป็นรูปอะไร', links: 'ลิงก์ {count} อันพาไปหน้าที่ยังไม่มี: {sample}', description: 'ยังไม่มีคำอธิบายที่จะขึ้นในผลค้นหา Google', phone: 'บนมือถือมี {count} ชิ้นล้นจอหรือหลุดขอบ ต้องเลื่อนซ้ายขวา' }, doctorFixes: { files: 'คัดลอกมาไว้ที่นี่', alt: 'ใส่คำอธิบายให้', links: 'พาไปหน้าแรกก่อน', description: 'เขียนจากเนื้อหาในหน้า', phone: 'ปรับให้พอดีจอมือถือ' }, levels: { high: 'สำคัญ', medium: 'ควรแก้', low: 'เล็กน้อย' }, layers: 'เลเยอร์', layersHint: 'คลิกชื่อเพื่อเลือก แม้ชิ้นนั้นจะถูกทับอยู่', stacked: 'ชิ้นที่ซ้อนกันตรงนี้', kinds: { heading: 'หัวข้อ', text: 'ข้อความ', link: 'ลิงก์', button: 'ปุ่ม', image: 'รูป', drawing: 'รูปวาด', list: 'รายการ', item: 'ข้อในรายการ', band: 'แถบ', header: 'ส่วนหัว', footer: 'ส่วนท้าย', menu: 'เมนู', box: 'กล่อง', field: 'ช่องกรอก', page: 'หน้าเว็บ' }, chips: ['ดูหรูขึ้น', 'เขียนให้น่าซื้อขึ้น', 'ทำให้เด่นขึ้น', 'สั้นลง', 'เป็นกันเองขึ้น', 'แปลเป็นภาษาอังกฤษ', 'แปลเป็นภาษาไทย'],
       }
     : {
         saving: 'Saving…', saved: 'Saved. Publish when you are ready.', failed: 'That did not work', changed: 'Unsaved changes', leave: 'You have unsaved changes',
@@ -22,10 +22,10 @@
         bigger: 'Bigger frame', copy: 'Repeat', remove: 'Remove', photo: 'Change photo', link: 'Link', linkAsk: 'Where should it link to (such as /contact or https://…):', back: 'Put back', front: 'Bring to front', type: 'Type',
         hint: 'Click to select, drag to move, double-click to type', typing: 'Typing. Press Enter or click elsewhere when done.',
         panel: 'Style', text: 'Text', size: 'Size', bold: 'Bold', italic: 'Italic', underline: 'Underline', align: 'Align', left: 'Left', center: 'Centre', right: 'Right', color: 'Text colour',
-        box: 'Box', fill: 'Background', none: 'None', corners: 'Corners', space: 'Inner space', shadow: 'Shadow', soft: 'Soft', strong: 'Strong', fade: 'Opacity', width: 'Width', reset: 'Clear this part’s styling', more: 'More colours', hide: 'Hide', copyStyle: 'Copy style', pasteStyle: 'Paste style', styleCopied: 'Style copied. Select another part and press Paste style.', show: 'Show on', desktop: 'Computer', phone: 'Phone', position: 'Position', middle: 'Centre it', addTitle: 'Add to the page', addHint: 'New parts take your site’s own look, and go after the part you selected.', heading: 'Heading', paragraph: 'Text', buttonPart: 'Button', image: 'Photo', divider: 'Divider', spacer: 'Space', boxPart: 'Box', newHeading: 'New heading', newText: 'Type your words here', newButton: 'New button', nothingUndo: 'Nothing left to undo', nothingRedo: 'Nothing left to redo', helpTitle: 'Shortcuts', close: 'Close', ai: 'AI', aiTitle: 'Tell the AI how this part should be', aiPlaceholder: 'Such as: make it look more premium, in gold', aiSend: 'Ask the AI', aiWorking: 'The AI is working…', aiDone: 'Changed by the AI. Not right? Press Ctrl+Z.', aiOnlyHere: 'The AI works when you edit in Edit with AI on tktf.at', aiTooBig: 'This part is too big. Try a smaller one.', aiSlow: 'The AI took too long. Please try again.', aiNote: 'Uses 1 AI message each time', chips: ['More premium', 'More persuasive', 'Stand out more', 'Shorter', 'Friendlier', 'Translate to English', 'Translate to Thai'],
+        box: 'Box', fill: 'Background', none: 'None', corners: 'Corners', space: 'Inner space', shadow: 'Shadow', soft: 'Soft', strong: 'Strong', fade: 'Opacity', width: 'Width', reset: 'Clear this part’s styling', more: 'More colours', hide: 'Hide', copyStyle: 'Copy style', pasteStyle: 'Paste style', styleCopied: 'Style copied. Select another part and press Paste style.', show: 'Show on', desktop: 'Computer', phone: 'Phone', position: 'Position', middle: 'Centre it', addTitle: 'Add to the page', addHint: 'New parts take your site’s own look, and go after the part you selected.', heading: 'Heading', paragraph: 'Text', buttonPart: 'Button', image: 'Photo', divider: 'Divider', spacer: 'Space', boxPart: 'Box', newHeading: 'New heading', newText: 'Type your words here', newButton: 'New button', nothingUndo: 'Nothing left to undo', nothingRedo: 'Nothing left to redo', helpTitle: 'Shortcuts', close: 'Close', ai: 'AI', aiTitle: 'Tell the AI how this part should be', aiPlaceholder: 'Such as: make it look more premium, in gold', aiSend: 'Ask the AI', aiThree: '🎨 Ask for 3 designs', aiPick: 'Design {n} of {total}', aiKeep: '✓ Use this one', aiCancel: '✕ None of these', aiThreeHint: 'Press ◀ ▶ to see each one on the page', aiWorking: 'The AI is working…', aiDone: 'Changed by the AI. Not right? Press Ctrl+Z.', aiOnlyHere: 'The AI works when you edit in Edit with AI on tktf.at', aiTooBig: 'This part is too big. Try a smaller one.', aiSlow: 'The AI took too long. Please try again.', aiNote: 'Uses 1 AI message each time', doctor: 'Site doctor', doctorChecking: 'The doctor is checking the whole site…', doctorScore: 'Site score', doctorAllGood: 'Nothing found. The site is ready to publish.', doctorFix: 'Fix it', doctorFixAll: 'Fix everything', doctorFixed: 'Fixed {n}', doctorPage: 'Page', doctorPublishAsk: 'The site doctor found {n} important problems.\nPress OK to publish anyway, or Cancel to look at them first.', doctorItems: { files: '{count} fonts and photos still load from the old site. They disappear when it closes.', alt: '{count} photos have no description, so Google and screen readers cannot tell what they show.', links: '{count} links lead to pages that do not exist yet: {sample}', description: 'No description for Google search results yet.', phone: 'On phones, {count} parts stick out past the screen, so the page scrolls sideways.' }, doctorFixes: { files: 'Copy them here', alt: 'Describe them', links: 'Lead them home for now', description: 'Write it from the page', phone: 'Fit them to phones' }, levels: { high: 'Important', medium: 'Should fix', low: 'Small' }, layers: 'Layers', layersHint: 'Click a name to select it, even when it is covered', stacked: 'Parts stacked here', kinds: { heading: 'Heading', text: 'Text', link: 'Link', button: 'Button', image: 'Photo', drawing: 'Drawing', list: 'List', item: 'List item', band: 'Section', header: 'Header', footer: 'Footer', menu: 'Menu', box: 'Box', field: 'Field', page: 'Page' }, chips: ['More premium', 'More persuasive', 'Stand out more', 'Shorter', 'Friendlier', 'Translate to English', 'Translate to Thai'],
       }
 
-  const ui = '#we-edit-bar, #we-tools, #we-panel, #we-panel-open, #we-add, #we-help, #we-ai, .we-copy-menu, #we-file, #we-drop-line, .we-guide, .we-handle, #we-size'
+  const ui = '#we-edit-bar, #we-tools, #we-panel, #we-panel-open, #we-add, #we-help, #we-ai, #we-layers, #we-stack, #we-doctor, #we-phone-frame, .we-copy-menu, #we-file, #we-drop-line, .we-guide, .we-handle, #we-size'
   const ours = (element) => Boolean(element?.closest?.(ui))
   const status = (text) => { document.getElementById('we-edit-status').textContent = text }
   const flat = (value) => value.replace(/\s+/g, ' ').trim()
@@ -45,7 +45,7 @@
   const content = () => {
     const copy = document.body.cloneNode(true)
     copy.querySelectorAll(`${ui}, script, link, #copy-edit-data`).forEach((node) => node.remove())
-    copy.querySelectorAll('[contenteditable], [data-we-selected]').forEach((node) => { node.removeAttribute('contenteditable'); node.removeAttribute('data-we-selected') })
+    copy.querySelectorAll('[contenteditable], [data-we-selected], [data-we-hover]').forEach((node) => { node.removeAttribute('contenteditable'); node.removeAttribute('data-we-selected'); node.removeAttribute('data-we-hover') })
     copy.querySelectorAll('.we-ghost').forEach((node) => { node.classList.remove('we-ghost'); if (!node.classList.length) node.removeAttribute('class') })
     return copy.innerHTML
   }
@@ -56,6 +56,7 @@
     historyButtons()
   }
   const changed = () => {
+    if (typeof layersChanged === 'function') layersChanged()
     dirty = true
     document.getElementById('we-edit-save').disabled = false
     status(say.changed)
@@ -129,7 +130,7 @@
       return
     }
     element.setAttribute('data-we-selected', '')
-    aiBox.hidden = true
+    if (aiChooser.hidden) aiBox.hidden = true
     tools.replaceChildren(
       button(`✨ ${say.ai}`, 'ai'),
       ...(element.parentElement && element.parentElement !== document.body ? [button(`⬚ ${say.bigger}`, 'bigger')] : []),
@@ -144,6 +145,7 @@
     )
     buildPanel()
     place()
+    if (!layers.hidden) showInLayers(element)
   }
   const startEditing = (element, x, y) => {
     select(element)
@@ -220,7 +222,8 @@
   }
 
   function buildPanel() {
-    if (!selected) { panel.hidden = true; reopen.hidden = true; return }
+    // While the owner chooses between AI designs, the panel steps aside so the design can be seen whole.
+    if (!selected || aiBox?.classList.contains('we-choosing')) { panel.hidden = true; reopen.hidden = true; return }
     reopen.hidden = panelOpen
     if (!panelOpen) { panel.hidden = true; return }
     const look = getComputedStyle(selected)
@@ -453,6 +456,15 @@
       return
     }
     if (ours(target) || (editing && editing.contains(target))) return
+    if (event.button === 2) return
+    // Alt+click: the part underneath the selected one at this spot, one layer deeper each time.
+    if (event.altKey && target !== document.body) {
+      event.preventDefault()
+      const stack = stackAt(event.clientX, event.clientY)
+      const at = stack.indexOf(selected)
+      select(stack[(at + 1) % stack.length] ?? pick(target))
+      return
+    }
     // A press on the page selects that part at once, so it can be dragged straight away.
     if (target !== document.body && target !== document.documentElement) {
       event.preventDefault()
@@ -589,6 +601,15 @@
     else if (event.key === 'Delete') { event.preventDefault(); act('remove') }
     else if (mod && event.key.toLowerCase() === 'd') { event.preventDefault(); act('copy') }
     else if (event.key === 'Enter' && hasWords(selected)) { event.preventDefault(); startEditing(selected) }
+    else if (event.key === 'Tab') {
+      // Tab and Shift+Tab: the next or previous part beside this one.
+      event.preventDefault()
+      const next = event.shiftKey ? selected.previousElementSibling : selected.nextElementSibling
+      const usable = (node) => node && !ours(node) && !['SCRIPT', 'STYLE', 'LINK'].includes(node.tagName)
+      let step = next
+      while (step && !usable(step)) step = event.shiftKey ? step.previousElementSibling : step.nextElementSibling
+      if (step) { select(step); step.scrollIntoView({ block: 'nearest', behavior: 'smooth' }) }
+    }
     else if (event.key.startsWith('Arrow')) {
       event.preventDefault()
       const step = event.shiftKey ? 10 : 1
@@ -724,6 +745,133 @@
   document.body.append(help)
   function toggleHelp() { help.hidden = !help.hidden }
 
+  // ---- Layers: every part of the page as a list, and the parts stacked under the pointer --------------------
+  const kindOf = (element) => {
+    const tag = element.tagName.toLowerCase()
+    if (/^h[1-6]$/.test(tag)) return 'heading'
+    if (tag === 'img' || tag === 'picture') return 'image'
+    if (tag === 'svg' || element instanceof SVGElement) return 'drawing'
+    if (tag === 'button' || (tag === 'a' && looksLikeButton(element))) return 'button'
+    if (tag === 'a') return 'link'
+    if (tag === 'ul' || tag === 'ol') return 'list'
+    if (tag === 'li') return 'item'
+    if (tag === 'header') return 'header'
+    if (tag === 'footer') return 'footer'
+    if (tag === 'nav') return 'menu'
+    if (tag === 'section' || tag === 'main' || tag === 'article') return 'band'
+    if (['input', 'textarea', 'select'].includes(tag)) return 'field'
+    if (['p', 'span', 'strong', 'em', 'b', 'i', 'small', 'label', 'blockquote'].includes(tag)) return 'text'
+    return 'box'
+  }
+  const kindIcons = { heading: 'H', text: '¶', link: '🔗', button: '▭', image: '🖼', drawing: '✎', list: '☰', item: '•', band: '▤', header: '⬒', footer: '⬓', menu: '☰', box: '▢', field: '⌨', page: '📄' }
+  const nameOf = (element) => {
+    // innerText keeps the gaps between words that sit in separate boxes.
+    const all = flat(element.innerText ?? element.textContent ?? '')
+    const words = all.slice(0, 28)
+    const alt = element.getAttribute?.('alt')
+    return `${say.kinds[kindOf(element)]}${words ? `: ${words}${all.length > 28 ? '…' : ''}` : alt ? `: ${alt.slice(0, 28)}` : ''}`
+  }
+  const shown = (element) => {
+    if (ours(element) || ['SCRIPT', 'STYLE', 'LINK', 'META', 'TEMPLATE', 'BR'].includes(element.tagName)) return false
+    const box = element.getBoundingClientRect()
+    if (box.width > 0 && box.height > 0) return true
+    // A wrapper can measure nothing while what it holds shows (display: contents, or parts placed outside it).
+    return element.children.length > 0 && getComputedStyle(element).display !== 'none'
+  }
+  // A box that only wraps one other part, with nothing of its own, is looked through in the list.
+  const partsOf = (element) => {
+    let parts = [...element.children].filter(shown)
+    for (let depth = 0; parts.length === 1 && depth < 12 && kindOf(parts[0]) === 'box' && !hasWords(parts[0]) && parts[0].children.length; depth++) {
+      const inner = [...parts[0].children].filter(shown)
+      if (!inner.length) break
+      parts = inner
+    }
+    return parts
+  }
+  // All the parts at one spot on the page, the top one first.
+  const stackAt = (x, y) => {
+    const seen = new Set()
+    return document.elementsFromPoint(x, y).filter((node) => node !== document.body && node !== document.documentElement && !ours(node)).map(pick).filter((node) => !seen.has(node) && seen.add(node)).slice(0, 12)
+  }
+
+  const layers = make('div', { id: 'we-layers', hidden: '' })
+  const layerList = make('div', { class: 'we-layer-list', role: 'tree' })
+  layers.append(make('div', { class: 'we-panel-head' }, make('h2', { text: `🗂 ${say.layers}` }), make('button', { type: 'button', class: 'we-close', text: say.hide, onclick: () => { layers.hidden = true } })), make('p', { text: say.layersHint }), layerList)
+  document.body.append(layers)
+  const open = new Set([document.body])
+  const rows = new Map()
+  function drawLayers() {
+    layerList.replaceChildren()
+    rows.clear()
+    const add = (element, depth) => {
+      const children = partsOf(element)
+      const row = make('div', { class: `we-layer${element === selected ? ' we-on' : ''}`, role: 'treeitem', style: `padding-left:${8 + depth * 12}px` },
+        children.length ? make('button', { type: 'button', class: 'we-twist', text: open.has(element) ? '▾' : '▸', 'data-twist': '' }) : make('span', { class: 'we-twist' }),
+        make('span', { class: 'we-kind', text: kindIcons[kindOf(element)] }),
+        make('span', { class: 'we-name', text: nameOf(element) }))
+      rows.set(row, element)
+      layerList.append(row)
+      if (open.has(element)) for (const child of children.slice(0, 200)) add(child, depth + 1)
+    }
+    for (const child of partsOf(document.body).slice(0, 200)) add(child, 0)
+  }
+  function showInLayers(element) {
+    for (let up = element.parentElement; up; up = up.parentElement) {
+      open.add(up)
+      // A looked-through wrapper opens the row that stands for it.
+      for (const [, node] of rows) if (node.contains(up)) open.add(node)
+    }
+    drawLayers()
+    for (const [row, node] of rows) if (node === element) row.scrollIntoView({ block: 'nearest' })
+  }
+  layerList.addEventListener('click', (event) => {
+    const row = event.target.closest('.we-layer')
+    const element = row && rows.get(row)
+    if (!element) return
+    if (event.target.closest('[data-twist]')) {
+      if (open.has(element)) open.delete(element)
+      else open.add(element)
+      drawLayers()
+      return
+    }
+    select(element)
+    element.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  })
+  // Pointing at a name shows that part on the page.
+  layerList.addEventListener('pointerover', (event) => {
+    const element = rows.get(event.target.closest('.we-layer'))
+    document.querySelectorAll('[data-we-hover]').forEach((node) => node.removeAttribute('data-we-hover'))
+    if (element) element.setAttribute('data-we-hover', '')
+  })
+  layerList.addEventListener('pointerleave', () => document.querySelectorAll('[data-we-hover]').forEach((node) => node.removeAttribute('data-we-hover')))
+  var layersChanged = () => { if (!layers.hidden) drawLayers() }
+  const toggleLayers = () => {
+    layers.hidden = !layers.hidden
+    if (!layers.hidden) (selected ? showInLayers(selected) : drawLayers())
+  }
+
+  // Right click: every part stacked at that spot, to pick the one that is covered.
+  const stackMenu = make('div', { id: 'we-stack', hidden: '' })
+  document.body.append(stackMenu)
+  document.addEventListener('contextmenu', (event) => {
+    if (ours(event.target) || (editing && editing.contains(event.target))) return
+    event.preventDefault()
+    // Plain boxes with nothing in them to name are left out, unless they are near the top.
+    const stack = stackAt(event.clientX, event.clientY).filter((element, index) => index < 2 || kindOf(element) !== 'box' || nameOf(element).includes(':')).slice(0, 8)
+    if (!stack.length) return
+    stackMenu.replaceChildren(make('h2', { text: say.stacked }), ...stack.map((element) => {
+      const choice = make('button', { type: 'button' }, make('span', { class: 'we-kind', text: kindIcons[kindOf(element)] }), make('span', { text: nameOf(element) }))
+      choice.addEventListener('click', () => { stackMenu.hidden = true; select(element) })
+      choice.addEventListener('pointerenter', () => element.setAttribute('data-we-hover', ''))
+      choice.addEventListener('pointerleave', () => element.removeAttribute('data-we-hover'))
+      return choice
+    }))
+    stackMenu.hidden = false
+    stackMenu.style.left = `${scrollX + Math.min(event.clientX, document.documentElement.clientWidth - stackMenu.offsetWidth - 8)}px`
+    stackMenu.style.top = `${scrollY + Math.min(event.clientY, innerHeight - stackMenu.offsetHeight - 8)}px`
+  }, true)
+  document.addEventListener('pointerdown', (event) => { if (!stackMenu.hidden && !stackMenu.contains(event.target)) stackMenu.hidden = true }, true)
+
   // ---- ✨ AI on the selected part --------------------------------------------------------------------------
   // The editor sits in a frame of tktf.at's "Edit with AI" page. It sends the selected part and the owner's wish
   // up to that page, which asks its AI (counting one message) and sends the changed part back. Only the page
@@ -740,20 +888,38 @@
   const aiBox = make('div', { id: 'we-ai', hidden: '' })
   const aiInput = make('textarea', { rows: '2', maxlength: '500', placeholder: say.aiPlaceholder })
   const aiSend = make('button', { type: 'button', class: 'we-ai-send', text: `✨ ${say.aiSend}` })
+  const aiThree = make('button', { type: 'button', class: 'we-ai-three', text: say.aiThree })
+  const aiChooser = make('div', { class: 'we-ai-chooser', hidden: '' })
   aiBox.append(
     make('h2', { text: say.aiTitle }),
-    make('div', { class: 'we-ai-chips' }, ...say.chips.map((chip) => make('button', { type: 'button', text: chip, onclick: () => { aiInput.value = chip; askAi() } }))),
+    make('div', { class: 'we-ai-chips' }, ...say.chips.map((chip) => make('button', { type: 'button', text: chip, onclick: () => { aiInput.value = chip; askAi(1) } }))),
     aiInput,
-    make('div', { class: 'we-ai-foot' }, make('span', { text: say.aiNote }), aiSend),
+    make('div', { class: 'we-ai-foot' }, make('span', { text: say.aiNote }), make('div', { class: 'we-ai-buttons' }, aiThree, aiSend)),
+    aiChooser,
   )
   document.body.append(aiBox)
   function openAi() {
     if (!parentOrigin) { status(say.aiOnlyHere); return }
     aiBox.hidden = false
-    const box = tools.getBoundingClientRect()
-    aiBox.style.top = `${scrollY + box.bottom + 6}px`
-    aiBox.style.left = `${Math.max(scrollX + 8, Math.min(scrollX + document.documentElement.clientWidth - aiBox.offsetWidth - 8, scrollX + box.left))}px`
-    aiInput.focus()
+    placeAi()
+    aiInput.focus({ preventScroll: true })
+  }
+  // The box sits below the selected part, or above it when there is no room below, so the part stays in sight.
+  function placeAi() {
+    if (aiBox.hidden || !selected) return
+    let part = selected.getBoundingClientRect()
+    const height = aiBox.offsetHeight
+    // Without room above or below, the page scrolls so the part sits near the top, with the box under it.
+    if (part.bottom + 10 + height > innerHeight && part.top - height - 10 - tools.offsetHeight < 8) {
+      // A quarter of the way down: clear of the site's own sticky header.
+      scrollBy(0, part.top - Math.round(innerHeight * 0.25))
+      part = selected.getBoundingClientRect()
+      place()
+    }
+    const below = part.bottom + 10 + height <= innerHeight
+    const top = below ? part.bottom + 10 : Math.max(8, part.top - height - 10 - tools.offsetHeight)
+    aiBox.style.top = `${scrollY + top}px`
+    aiBox.style.left = `${Math.max(scrollX + 8, Math.min(scrollX + document.documentElement.clientWidth - aiBox.offsetWidth - 8, scrollX + part.left))}px`
   }
   const waiting = new Map()
   addEventListener('message', (event) => {
@@ -766,8 +932,8 @@
     const heading = document.querySelector('h1, h2')
     return `fonts: ${look.fontFamily}${heading ? `; headings: ${getComputedStyle(heading).fontFamily}` : ''}; colours: ${palette.slice(0, 6).join(', ')}; language: ${document.documentElement.lang || 'unknown'}`
   }
-  async function askAi() {
-    const wish = aiInput.value.trim()
+  async function askAi(count = 1) {
+    const wish = aiInput.value.trim() || (count === 3 ? say.chips[0] : '')
     if (!wish || !selected) return
     const part = selected.cloneNode(true)
     for (const node of [part, ...part.querySelectorAll('*')]) { node.removeAttribute?.('data-we-selected'); node.removeAttribute?.('contenteditable') }
@@ -775,38 +941,196 @@
     if (html.length > 30_000) { status(say.aiTooBig); return }
     const target = selected
     aiSend.disabled = true
+    aiThree.disabled = true
     status(say.aiWorking)
     document.documentElement.classList.add('we-ai-busy')
     const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`
     const reply = await new Promise((resolve) => {
       const timer = setTimeout(() => resolve({ error: say.aiSlow }), 150_000)
       waiting.set(id, (answer) => { clearTimeout(timer); resolve(answer) })
-      window.parent.postMessage({ type: 'we-ai', id, html, wish, look: lookOfPage() }, parentOrigin)
+      window.parent.postMessage({ type: 'we-ai', id, html, wish, look: lookOfPage(), ...(count === 3 ? { variants: 3 } : {}) }, parentOrigin)
     })
     waiting.delete(id)
     aiSend.disabled = false
+    aiThree.disabled = false
     document.documentElement.classList.remove('we-ai-busy')
     if (reply.error || typeof reply.html !== 'string') { status(`${say.failed}: ${reply.error ?? ''}`); return }
-    // Read as inert HTML: nothing in it runs here, and the server cleans the page again on saving.
-    const holder = document.createElement('template')
-    holder.innerHTML = reply.html
-    holder.content.querySelectorAll('script, iframe, object, embed, form, link, meta, style, base').forEach((node) => node.remove())
-    for (const node of holder.content.querySelectorAll('*')) for (const name of node.getAttributeNames()) if (/^on/i.test(name)) node.removeAttribute(name)
-    const made = holder.content.firstElementChild
-    if (!made || !target.isConnected) { status(say.failed); return }
+    const versions = (Array.isArray(reply.variants) ? reply.variants : [reply.html]).map(inert).filter(Boolean)
+    if (!versions.length || !target.isConnected) { status(say.failed); return }
     remember()
-    target.replaceWith(made)
-    aiBox.hidden = true
+    target.replaceWith(versions[0])
     aiInput.value = ''
     changed()
-    select(made)
+    if (versions.length > 1) { choose(versions, target); return }
+    aiBox.hidden = true
+    select(versions[0])
     status(say.aiDone)
   }
-  aiSend.addEventListener('click', askAi)
+  // Read as inert HTML: nothing in it runs here, and the server cleans the page again on saving.
+  function inert(html) {
+    const holder = document.createElement('template')
+    holder.innerHTML = String(html ?? '')
+    holder.content.querySelectorAll('script, iframe, object, embed, form, link, meta, style, base').forEach((node) => node.remove())
+    for (const node of holder.content.querySelectorAll('*')) for (const name of node.getAttributeNames()) if (/^on/i.test(name)) node.removeAttribute(name)
+    return holder.content.firstElementChild
+  }
+  // Several designs: each is shown on the page itself in turn, and the owner keeps one, or none.
+  function choose(versions, original) {
+    let at = 0
+    const show = (next) => {
+      versions[at].replaceWith(versions[next])
+      at = next
+      select(versions[at])
+      aiBox.hidden = false
+      label.textContent = fmt(say.aiPick, { n: at + 1, total: versions.length })
+      placeAi()
+    }
+    const label = make('b', { text: fmt(say.aiPick, { n: 1, total: versions.length }) })
+    aiChooser.replaceChildren(
+      make('p', { text: say.aiThreeHint }),
+      make('div', { class: 'we-ai-pick' },
+        make('button', { type: 'button', text: '◀', onclick: () => show((at + versions.length - 1) % versions.length) }),
+        label,
+        make('button', { type: 'button', text: '▶', onclick: () => show((at + 1) % versions.length) })),
+      make('div', { class: 'we-ai-buttons' },
+        make('button', { type: 'button', class: 'we-ai-send', text: say.aiKeep, onclick: () => { aiChooser.hidden = true; aiBox.classList.remove('we-choosing'); aiBox.hidden = true; select(versions[at]); status(say.aiDone) } }),
+        make('button', { type: 'button', class: 'we-ai-three', text: say.aiCancel, onclick: () => { versions[at].replaceWith(original); aiChooser.hidden = true; aiBox.classList.remove('we-choosing'); aiBox.hidden = true; select(original); status(say.hint) } })),
+    )
+    aiChooser.hidden = false
+    aiBox.classList.add('we-choosing')
+    select(versions[0])
+    aiBox.hidden = false
+    placeAi()
+  }
+  aiSend.addEventListener('click', () => askAi(1))
+  aiThree.addEventListener('click', () => askAi(3))
   aiInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); askAi() }
+    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); askAi(1) }
     if (event.key === 'Escape') aiBox.hidden = true
   })
+
+  // ---- The site doctor ----------------------------------------------------------------------------------------
+  // The server checks the whole site; this page checks how the saved page looks on a phone, in a hidden frame.
+  const doctor = make('div', { id: 'we-doctor', hidden: '' })
+  document.body.append(doctor)
+  const pathTo = (element, root) => {
+    const steps = []
+    // The owner's preview adds a banner at the top of the page; the editor has none, so it is not counted.
+    for (let node = element; node && node !== root.body; node = node.parentElement) steps.unshift([...node.parentElement.children].filter((child) => !child.classList.contains('preview-banner')).indexOf(node))
+    return steps
+  }
+  const byPath = (steps) => steps.reduce((node, index) => node?.children[index], document.body)
+  // Parts of the saved page that stick out past a 390 px wide phone screen.
+  const phoneCheck = () => new Promise((resolve) => {
+    const frame = make('iframe', { id: 'we-phone-frame', src: `${data.base}/preview/${data.slug}`, style: 'position:fixed;left:-10000px;top:0;width:390px;height:844px;border:0;visibility:hidden', 'aria-hidden': 'true', tabindex: '-1' })
+    const done = (found) => { frame.remove(); resolve(found) }
+    const timer = setTimeout(() => done([]), 15000)
+    frame.addEventListener('load', () => setTimeout(() => {
+      clearTimeout(timer)
+      try {
+        const doc = frame.contentDocument
+        const width = doc.documentElement.clientWidth + 2
+        const out = []
+        // Parts placed freely in the editor that end up past the screen's edge, even where the site cuts them off.
+        for (const node of doc.body.querySelectorAll('[style*="translate"]')) {
+          const box = node.getBoundingClientRect()
+          if (box.width && (box.right > width || box.left < -2)) out.push(pathTo(node, doc))
+        }
+        if (doc.documentElement.scrollWidth <= width) return done(out)
+        for (const node of doc.body.querySelectorAll('*')) {
+          if (out.length >= 40) break
+          const box = node.getBoundingClientRect()
+          if (!box.width || !box.height || box.right <= width || box.left >= width) continue
+          const look = frame.contentWindow.getComputedStyle(node)
+          if (look.position === 'fixed' || look.visibility === 'hidden') continue
+          // Only the outermost part that sticks out: its box does not.
+          const parent = node.parentElement?.getBoundingClientRect()
+          if (parent && parent.right > width && node.parentElement !== doc.body) continue
+          out.push(pathTo(node, doc))
+        }
+        done(out)
+      } catch {
+        done([])
+      }
+    }, 600))
+    document.body.append(frame)
+  })
+  let lastFindings = []
+  let phoneParts = []
+  const describe = (finding) => {
+    if (finding.code === 'general') return finding.text
+    return fmt(say.doctorItems[finding.code], { count: finding.count ?? '', sample: (finding.sample ?? []).join(', ') })
+  }
+  const fmt = (text, values) => String(text).replace(/\{(\w+)\}/g, (_, key) => values[key] ?? '')
+  function drawDoctor(score) {
+    const items = [...lastFindings]
+    if (phoneParts.length) items.unshift({ code: 'phone', level: 'high', count: phoneParts.length, page: data.slug, fix: true })
+    const shownScore = Math.max(0, score - (phoneParts.length ? 12 : 0))
+    doctor.replaceChildren(
+      make('div', { class: 'we-panel-head' }, make('h2', { text: `🩺 ${say.doctor}` }), make('button', { type: 'button', class: 'we-close', text: say.close, onclick: () => { doctor.hidden = true } })),
+      make('div', { class: `we-score ${shownScore >= 85 ? 'good' : shownScore >= 60 ? 'fair' : 'poor'}` }, make('b', { text: String(shownScore) }), make('span', { text: say.doctorScore })),
+      items.length
+        ? make('ul', { class: 'we-findings' }, ...items.map((finding) => make('li', { class: finding.level },
+            make('span', { class: 'we-level', text: say.levels[finding.level] }),
+            make('p', { text: describe(finding) }),
+            finding.page && finding.code !== 'general' ? make('small', { text: `${say.doctorPage}: ${finding.page}` }) : null,
+            finding.fix ? make('button', { type: 'button', text: `${say.doctorFix}: ${say.doctorFixes[finding.code]}`, onclick: () => fixFinding(finding) }) : null)))
+        : make('p', { class: 'we-all-good', text: say.doctorAllGood }),
+      items.some((finding) => finding.fix) ? make('button', { type: 'button', class: 'we-fix-all', text: `✨ ${say.doctorFixAll}`, onclick: () => fixFinding(null) }) : null,
+    )
+    doctor.hidden = false
+  }
+  const fitPhone = () => {
+    if (!phoneParts.length) return 0
+    remember()
+    let fitted = 0
+    for (const steps of phoneParts) {
+      const node = byPath(steps)
+      if (node && !ours(node)) { node.classList.add('we-phone-fit'); fitted++ }
+    }
+    phoneParts = []
+    changed()
+    return fitted
+  }
+  async function runDoctor() {
+    status(say.doctorChecking)
+    doctor.replaceChildren(make('p', { class: 'we-all-good', text: say.doctorChecking }))
+    doctor.hidden = false
+    try {
+      if (dirty) await save()
+      const [report, phone] = await Promise.all([fetch(`${data.base}/editor/${data.slug}/doctor`).then((response) => response.json()), phoneCheck()])
+      lastFindings = report.findings ?? []
+      phoneParts = phone
+      drawDoctor(report.score ?? 100)
+      status(say.hint)
+      return lastFindings.filter((finding) => finding.level === 'high').length + (phoneParts.length ? 1 : 0)
+    } catch (error) {
+      status(`${say.failed}: ${error.message}`)
+      return 0
+    }
+  }
+  async function fixFinding(finding) {
+    try {
+      let fixed = 0
+      if (!finding || finding.code === 'phone') {
+        fixed += fitPhone() ? 1 : 0
+        if (fixed) await save()
+      }
+      if (!finding || finding.code !== 'phone') {
+        if (dirty) await save()
+        const response = await fetch(`${data.base}/editor/${data.slug}/doctor`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(finding ? { code: finding.code, page: finding.page } : {}) })
+        const answer = await response.json()
+        if (!response.ok) throw new Error(answer.error || say.failed)
+        fixed += answer.fixed ?? 0
+        // This page's own changes (photo descriptions, files) show once it is read again.
+        if (!finding || finding.page === data.slug) { dirty = false; location.reload(); return }
+      }
+      status(fmt(say.doctorFixed, { n: fixed }))
+      await runDoctor()
+    } catch (error) {
+      status(`${say.failed}: ${error.message}`)
+    }
+  }
 
   // ---- The bar: undo, save and publish --------------------------------------------------------------------
   const replaceContent = (html) => {
@@ -852,10 +1176,15 @@
       if (id === 'we-edit-undo') undo()
       else if (id === 'we-edit-redo') redo()
       else if (id === 'we-edit-add') { addMenu.hidden = !addMenu.hidden; help.hidden = true }
+      else if (id === 'we-edit-layers') toggleLayers()
+      else if (id === 'we-edit-doctor') await runDoctor()
       else if (id === 'we-edit-help') { toggleHelp(); addMenu.hidden = true }
       else if (id === 'we-edit-save') await save()
       else if (id === 'we-edit-publish') {
         if (dirty) await save()
+        const important = await runDoctor()
+        if (important && !confirm(fmt(say.doctorPublishAsk, { n: important }))) return
+        doctor.hidden = true
         status(say.publishing)
         const response = await fetch(`${data.base}/editor/${data.slug}/publish`, { method: 'POST' })
         const answer = await response.json().catch(() => ({}))

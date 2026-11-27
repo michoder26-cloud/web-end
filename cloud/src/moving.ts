@@ -984,7 +984,8 @@ export async function saveRedirects(env: Env, siteId: number, pairs: { from: str
 export async function followRedirect(env: Env, url: URL) {
   const from = cleanPath(url.pathname)
   if (!from || from === '/') return null
-  const row = await env.DB.prepare('SELECT to_path FROM redirects WHERE from_path = ?').bind(from).first<{ to_path: string }>()
+  // Only this site's own redirects: the same old address may be saved by another site in a shared database.
+  const row = await env.DB.prepare('SELECT to_path FROM redirects WHERE from_path = ? AND site_id = (SELECT id FROM sites LIMIT 1)').bind(from).first<{ to_path: string }>()
   if (!row) return null
   return new Response(null, { headers: { 'Cache-Control': 'public, max-age=3600', Location: `${url.origin}${row.to_path}${row.to_path.includes('?') ? '' : url.search}` }, status: 301 })
 }

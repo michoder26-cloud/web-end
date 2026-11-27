@@ -20,7 +20,8 @@ import { maxDailyLimit } from './news'
 import { registerNewsTools } from './news-tools'
 import { parsePrice } from './money'
 import { validPromptPayId } from './promptpay'
-import { copyMoreFiles, copyPage, copyTexts, copyWaiting, editCopy, isCopyPage, maxCopyBytes } from './copying'
+import { copyMoreFiles, copyPage, copyTexts, copyWaiting, editCopy, isCopyPage, maxCopyBytes, type CopyBlock } from './copying'
+import { examineSite, fixSite } from './doctor'
 import { checkMove, checkMoveWith, cleanPath, copyImage, importProducts, moveGate, moveReport, moveStatus, readWebPage, rememberReading, saveRedirects, scanWebsite } from './moving'
 import { blocksFromReading, chromeOf, lookCss, photosOf, priceOf, productDetailsFrom, slugFor, type FoundProduct } from './importer'
 import { officeWords } from './office-words'
@@ -278,7 +279,8 @@ export async function findProblems(env: Env, site: SiteRow) {
     if (page.description.length < 50 || page.description.length > 165) problems.push(`${where} needs a description of about 50 to 165 characters.`)
     if (blocks.filter((block) => block.type === 'hero').length > 1) problems.push(`${where} has more than one hero.`)
     if (page.slug === 'home' && blocks[0]?.type !== 'hero') problems.push(`${where} should start with a hero.`)
-    if (/lorem ipsum|placeholder|TODO/i.test(page.blocks)) problems.push(`${where} still contains placeholder text.`)
+    // A copied page's own form fields have placeholder attributes; only words count there.
+    if (/lorem ipsum|placeholder|TODO/i.test(page.blocks.includes('"type":"copy"') ? copyTexts((JSON.parse(page.blocks) as CopyBlock[])[0].html).join(' ') : page.blocks)) problems.push(`${where} still contains placeholder text.`)
     blocks.forEach((block, index) => {
       if (block.type === 'records' || block.type === 'record-form' || block.type === 'record' || block.type === 'table') {
           const table = tables.get(block.table)
@@ -1616,6 +1618,33 @@ export function createMcpServer(env: Env, origin: string, code: string) {
         next: 'Run check_site. Tell the owner every word, price and time is a sample. Then ask for their real business name, details, prices and photos, replace the samples with save_item, save_page and update_site, and remove the sample labels as you go.',
         ...waiting(site),
       })
+    }),
+  )
+
+  server.registerTool(
+    'site_doctor',
+    {
+      title: 'Check the whole site like a doctor',
+      description: 'A score out of 100 and every finding, most important first: what check_site finds, plus on pages moved with their own look the fonts and photos still on the old site, photos without a description, links to pages that do not exist here, and pages without a description for search results. Findings with fix true can be fixed with fix_site_problems.',
+      annotations: { readOnlyHint: true },
+    },
+    safely(async () => {
+      const site = await getSite()
+      return reply(await examineSite(env, site, await findProblems(env, site)))
+    }),
+  )
+
+  server.registerTool(
+    'fix_site_problems',
+    {
+      title: 'Fix what the site doctor found',
+      description: 'Fixes site_doctor findings that need no new words from the owner: copies files still on the old site, describes photos from their file names or the heading above them, leads links to pages that do not exist to the home page, and writes missing page descriptions from the first words of the page. Leave out code and page to fix everything. Tell the owner what changed.',
+      inputSchema: { code: z.enum(['files', 'alt', 'links', 'description']).optional(), page: pageSlugSchema.optional() },
+    },
+    safely(async ({ code, page }) => {
+      const site = await getSite()
+      const done = await fixSite(env, site, { code, page })
+      return reply({ ...done, ...(await examineSite(env, site, await findProblems(env, site))), ...waiting(site) })
     }),
   )
 
