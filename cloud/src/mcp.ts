@@ -93,7 +93,7 @@ Limits to explain honestly:
 const text = (limit: number) => z.string().trim().min(1).max(limit)
 const optional = (limit: number) => z.string().trim().max(limit).optional()
 const href = z.string().trim().max(500).refine(isSafeHref, 'Use a path like /about, a #section, or a full https:, mailto: or tel: link.')
-const imageUrl = z.string().trim().max(1000).refine((value) => value.startsWith('https://') || /^\/media\/\d+$/.test(value), 'Use a public https image link, or /media/1 for an uploaded image.').describe('A public https image link, or /media/1 for an image uploaded in the back office')
+const imageUrl = z.string().trim().max(1000).refine((value) => value.startsWith('https://') || /^\/media\/\d+$/.test(value) || /^\/templates\/[a-z0-9-]+\.jpg$/.test(value), 'Use a public https image link, or /media/1 for an uploaded image.').describe('A public https image link, or /media/1 for an image uploaded in the back office')
 const color = z.string().refine(isHexColor, 'Use a colour like #1f4d3a.')
 const tone = z.enum(['plain', 'tint', 'dark']).optional()
 const heading = optional(160)
@@ -121,23 +121,26 @@ export const itemSchema = z.object({
   published: z.boolean().optional(),
 })
 
+// Any section can carry an anchor, so a menu link such as /#services jumps to it.
+const sectionId = z.string().regex(/^[a-z0-9-]{1,40}$/).optional().describe('Lets links jump here, such as /#services')
 export const blockSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('hero'), eyebrow: optional(80), heading: text(160), text: optional(600), ...button, secondLabel: optional(60).describe('A second, quieter button'), secondHref: href.optional(), figures: z.array(z.object({ value: text(24), label: text(120) })).max(4).optional().describe('Small real figures under the buttons, such as 7 days / returns'), imageUrl: imageUrl.optional(), imageAlt: optional(200), layout: z.enum(['split', 'centered', 'cover']).optional(), tone }),
-  z.object({ type: z.literal('text'), heading, body: text(8000), tone }),
-  z.object({ type: z.literal('split'), heading, body: text(3000), imageUrl, imageAlt: text(200), imageSide: z.enum(['left', 'right']).optional(), ...button, tone }),
-  z.object({ type: z.literal('features'), heading, intro, items: titled.min(1).max(12), tone }),
-  z.object({ type: z.literal('steps'), heading, intro, items: titled.min(1).max(8), tone }),
-  z.object({ type: z.literal('stats'), heading, items: z.array(z.object({ value: text(24), label: text(120) })).min(1).max(6), tone }).describe('Only real figures the owner gave you'),
-  z.object({ type: z.literal('pricing'), heading, intro, plans: z.array(z.object({ name: text(80), price: text(40), note: optional(120), features: optional(1000).describe('One per line'), ...button, highlighted: z.boolean().optional() })).min(1).max(6), tone }),
-  z.object({ type: z.literal('testimonials'), heading, items: z.array(z.object({ quote: text(600), name: text(80), role: optional(120) })).min(1).max(9), tone }).describe('Only real quotes the owner gave you'),
-  z.object({ type: z.literal('team'), heading, intro, members: z.array(z.object({ name: text(80), role: optional(120), text: optional(500), imageUrl: imageUrl.optional() })).min(1).max(24), tone }),
-  z.object({ type: z.literal('gallery'), heading, images: z.array(z.object({ imageUrl, imageAlt: text(200), caption: optional(200) })).min(1).max(24), tone }),
+  z.object({ type: z.literal('hero'), id: sectionId, eyebrow: optional(80), heading: text(160), text: optional(600), ...button, secondLabel: optional(60).describe('A second, quieter button'), secondHref: href.optional(), figures: z.array(z.object({ value: text(24), label: text(120) })).max(4).optional().describe('Small real figures under the buttons, such as 7 days / returns'), imageUrl: imageUrl.optional(), imageAlt: optional(200), layout: z.enum(['split', 'centered', 'cover']).optional(), tone }),
+  z.object({ type: z.literal('text'), id: sectionId, heading, body: text(8000), tone }),
+  z.object({ type: z.literal('split'), id: sectionId, heading, body: text(3000), imageUrl, imageAlt: text(200), imageSide: z.enum(['left', 'right']).optional(), ...button, tone }),
+  z.object({ type: z.literal('features'), id: sectionId, heading, intro, items: titled.min(1).max(12), tone }),
+  z.object({ type: z.literal('steps'), id: sectionId, heading, intro, items: titled.min(1).max(8), tone }),
+  z.object({ type: z.literal('stats'), id: sectionId, heading, items: z.array(z.object({ value: text(24), label: text(120) })).min(1).max(6), tone }).describe('Only real figures the owner gave you'),
+  z.object({ type: z.literal('pricing'), id: sectionId, heading, intro, plans: z.array(z.object({ name: text(80), price: text(40), note: optional(120), features: optional(1000).describe('One per line'), ...button, highlighted: z.boolean().optional() })).min(1).max(6), tone }),
+  z.object({ type: z.literal('testimonials'), id: sectionId, heading, items: z.array(z.object({ quote: text(600), name: text(80), role: optional(120) })).min(1).max(9), tone }).describe('Only real quotes the owner gave you'),
+  z.object({ type: z.literal('team'), id: sectionId, heading, intro, members: z.array(z.object({ name: text(80), role: optional(120), text: optional(500), imageUrl: imageUrl.optional() })).min(1).max(24), tone }),
+  z.object({ type: z.literal('gallery'), id: sectionId, heading, images: z.array(z.object({ imageUrl, imageAlt: text(200), caption: optional(200) })).min(1).max(24), tone }),
   z.object({ type: z.literal('info'), id: z.string().regex(/^[a-z0-9-]{1,40}$/).optional().describe('Lets links jump here, such as /#hours'), heading, items: z.array(z.object({ label: text(80), value: text(400) })).min(1).max(12), ...button, tone }),
-  z.object({ type: z.literal('faq'), heading, items: z.array(z.object({ question: text(240), answer: text(2000) })).min(1).max(30), tone }),
-  z.object({ type: z.literal('links'), heading, intro, items: z.array(z.object({ label: text(80), href, text: optional(300) })).min(1).max(24), tone }).describe('A list of links, such as a sub-menu, a footer row, resources or downloads. With text on an item it shows as cards, otherwise as one row of links.'),
-  z.object({ type: z.literal('cta'), heading: text(160), text: optional(600), ...button, tone }),
+  z.object({ type: z.literal('faq'), id: sectionId, heading, items: z.array(z.object({ question: text(240), answer: text(2000) })).min(1).max(30), tone }),
+  z.object({ type: z.literal('links'), id: sectionId, heading, intro, items: z.array(z.object({ label: text(80), href, text: optional(300) })).min(1).max(24), tone }).describe('A list of links, such as a sub-menu, a footer row, resources or downloads. With text on an item it shows as cards, otherwise as one row of links.'),
+  z.object({ type: z.literal('cta'), id: sectionId, heading: text(160), text: optional(600), ...button, tone }),
   z.object({
     type: z.literal('form'),
+    id: sectionId,
     name: z.string().regex(/^[a-z0-9-]{1,40}$/).describe('Short name for this form, such as bookings'),
     heading,
     intro: optional(600),

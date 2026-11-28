@@ -1,4 +1,4 @@
 {
-  "version": "0.41.1",
-  "notes": "Phone layout leaves a site's own design alone: top bars, menus, logo rows, sliding strips and collages keep their look. It brings back words cut off at the screen's edge, stacks only columns where long text is squeezed, and checks even very large pages in a moment."
+  "version": "0.42.0",
+  "notes": "Ten new starter sites with a professional look, each laid out after the patterns of a well-made kind of site: business services, app launch, appointments, online shop, events, creator, classes, agency, portfolio and magazine. Each comes in English and Thai with CC0 photos, and the shop, booking, class and event features keep working. Any section can now carry an anchor for menu links, and a starter's own colours and fonts are kept."
 }

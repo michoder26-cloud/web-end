@@ -3150,3 +3150,16 @@ body:has(.cms-workspace) .wrap.cms { width: 100%; max-width: none; margin: 0; pa
 .cms-workspace .cms-content h3 { font-family: inherit !important; font-size: 14px !important; font-weight: 600 !important; letter-spacing: 0 !important; }
 .cms-workspace .cms-content blockquote, .cms-workspace .cms-content [role='alert'] { border-left-color: #f79009; }
 .cms-workspace .cms-content .cms-site-head__text h2 { font-size: 22px !important; }
+
+/* On a cover photo the quieter button is light, whatever the site's own colours, so it reads on the photo. */
+.hero--cover .hero__actions .button--ghost {
+  background: transparent;
+  color: #fff;
+  box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 70%);
+}
+
+/* The editorial style draws buttons as underlined words in the text colour. On a cover photo they are white. */
+body[data-style='editorial'] .hero--cover .button {
+  color: #fff;
+  border-bottom-color: #fff;
+}

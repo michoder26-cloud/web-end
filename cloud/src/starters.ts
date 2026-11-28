@@ -3,19 +3,22 @@ import type { z } from 'zod'
 import type { Automation } from './automations'
 import type { tableBase } from './data'
 import type { Block, Settings } from './types'
+import { appointmentPages, landing, services } from './starter-looks'
+import { agency, classesLook, clubsLook, creator, magazine, portfolioLook, shopLook } from './starter-looks-2'
+import type { Look } from './starter-looks-2'
 
 // Ready-made sample sites an owner can start from in one click, in English and Thai.
 // Every word, price and time here is a sample and says so. Nothing imitates a real business:
 // no reviews, no awards, no figures, no addresses, no phone numbers and no people's names.
 // Each one must pass check_site with no problems, which the smoke tests prove.
 
-export const starterIds = ['cafe', 'shop', 'classes', 'appointments', 'trades', 'clubs', 'property', 'services', 'portfolio'] as const
+export const starterIds = ['services', 'landing', 'appointments', 'shop', 'clubs', 'creator', 'classes', 'agency', 'portfolio', 'magazine'] as const
 export type StarterId = (typeof starterIds)[number]
 export const starterLanguages = ['en', 'th'] as const
 export type StarterLanguage = (typeof starterLanguages)[number]
 
 export type StarterPage = { blocks: Block[]; description: string; slug: string; title: string }
-export type StarterItem = { body: string; category?: string; collection: string; price?: string; sort: number; stock?: number; title: string; variants?: { name: string; stock: number }[] }
+export type StarterItem = { body: string; category?: string; collection: string; imageAlt?: string; imageUrl?: string; price?: string; sort: number; stock?: number; title: string; variants?: { name: string; stock: number }[] }
 export type StarterTable = z.input<typeof tableBase>
 export type StarterContent = {
   automations: Omit<Automation, 'enabled'>[]
@@ -35,108 +38,30 @@ const samples = (collection: string, rows: [string, string, string, string][]): 
 
 const footer = { en: 'This is a sample site. Its words, prices and times are examples.', th: 'นี่คือเว็บตัวอย่าง ข้อความ ราคา และเวลาในเว็บนี้เป็นเพียงตัวอย่าง' }
 
-const cafe: Record<StarterLanguage, StarterContent> = {
-  en: {
-    label: 'Café or restaurant',
-    description: 'A menu with prices and categories, opening hours and a contact form.',
-    includes: ['Home page with menu and opening hours', 'Contact page with a working form', '6 sample menu items'],
-    settings: { name: 'Sample Café', tagline: 'Coffee, tea and simple food', style: 'warm', accent: '#b4532a', cart: false, nav: [{ label: 'Menu', href: '/#menu' }, { label: 'Hours', href: '/#hours' }, { label: 'Contact', href: '/contact' }], headerButtonLabel: 'Contact us', headerButtonHref: '/contact', footerText: footer.en },
-    pages: [
-      {
-        slug: 'home',
-        title: 'Sample Café',
-        description: 'A sample café website with a menu, opening hours and a contact form, ready for your own café details.',
-        blocks: [
-          { type: 'hero', layout: 'centered', eyebrow: 'Sample café', heading: 'Good coffee and simple food, every day', text: 'A friendly neighbourhood café. Everything on this site is a sample, ready for your own words, prices and photos.', buttonLabel: 'See the menu', buttonHref: '#menu' },
-          { type: 'collection', id: 'menu', collection: 'menu', heading: 'Menu', intro: 'Sample dishes and prices.', filters: true, tone: 'tint' },
-          { type: 'info', id: 'hours', heading: 'Opening hours (sample)', items: [{ label: 'Monday to Friday', value: '7:30 to 17:00' }, { label: 'Saturday and Sunday', value: '8:00 to 15:00' }, { label: 'Public holidays', value: 'Please check before you come' }], buttonLabel: 'Send us a message', buttonHref: '/contact' },
-          { type: 'cta', heading: 'Coming with a group?', text: "Send us a message and we'll reply as soon as we can.", buttonLabel: 'Contact us', buttonHref: '/contact' },
-        ],
-      },
-      {
-        slug: 'contact',
-        title: 'Contact us',
-        description: 'Send the sample café a message about a visit, a group, an order in advance or anything else. We reply by email.',
-        blocks: [
-          { type: 'hero', heading: 'Contact us', text: "Questions, group visits or orders in advance: send a message and we'll reply by email." },
-          { type: 'form', name: 'contact', heading: 'Send a message', intro: 'We reply by email.', buttonLabel: 'Send message', sentMessage: 'Thank you. Your message has been sent.', tone: 'tint', fields: [{ name: 'name', label: 'Your name', type: 'text', required: true }, { name: 'email', label: 'Email', type: 'email', required: true }, { name: 'message', label: 'Message', type: 'textarea', required: true }] },
-        ],
-      },
-    ],
-    items: samples('menu', [
-      ['Espresso', '3.00', 'Coffee', 'Sample item. A short, strong coffee.'],
-      ['Flat white', '4.50', 'Coffee', 'Sample item. Espresso with smooth steamed milk.'],
-      ['Iced latte', '5.00', 'Coffee', 'Sample item. Espresso, cold milk and ice.'],
-      ['Jasmine tea', '3.50', 'Tea', 'Sample item. A pot of hot jasmine tea.'],
-      ['Banana bread', '4.00', 'Food', 'Sample item. A thick slice, served warm.'],
-      ['Toast and jam', '6.00', 'Food', 'Sample item. Thick toast with butter and jam.'],
-    ]),
-    tables: [],
-    records: {},
-    automations: [],
-  },
-  th: {
-    label: 'ร้านกาแฟหรือร้านอาหาร',
-    description: 'เมนูพร้อมราคาและหมวดหมู่ เวลาเปิดร้าน และแบบฟอร์มติดต่อ',
-    includes: ['หน้าแรกพร้อมเมนูและเวลาเปิดร้าน', 'หน้าติดต่อพร้อมแบบฟอร์มที่ใช้งานได้จริง', 'เมนูตัวอย่าง 6 รายการ'],
-    settings: { name: 'ร้านกาแฟตัวอย่าง', tagline: 'กาแฟ ชา และอาหารง่าย ๆ', style: 'warm', accent: '#b4532a', cart: false, nav: [{ label: 'เมนู', href: '/#menu' }, { label: 'เวลาเปิด', href: '/#hours' }, { label: 'ติดต่อ', href: '/contact' }], headerButtonLabel: 'ติดต่อเรา', headerButtonHref: '/contact', footerText: footer.th },
-    pages: [
-      {
-        slug: 'home',
-        title: 'ร้านกาแฟตัวอย่าง',
-        description: 'เว็บไซต์ร้านกาแฟตัวอย่าง มีเมนู เวลาเปิดร้าน และแบบฟอร์มติดต่อ พร้อมให้เปลี่ยนเป็นข้อมูลร้านของคุณเอง',
-        blocks: [
-          { type: 'hero', layout: 'centered', eyebrow: 'ร้านกาแฟตัวอย่าง', heading: 'กาแฟดี อาหารง่าย ๆ ทุกวัน', text: 'ร้านกาแฟเล็ก ๆ ใกล้บ้าน ทุกอย่างในเว็บนี้เป็นตัวอย่าง พร้อมให้ใส่ข้อความ ราคา และรูปของคุณเอง', buttonLabel: 'ดูเมนู', buttonHref: '#menu' },
-          { type: 'collection', id: 'menu', collection: 'menu', heading: 'เมนู', intro: 'เมนูและราคาตัวอย่าง', filters: true, tone: 'tint' },
-          { type: 'info', id: 'hours', heading: 'เวลาเปิดร้าน (ตัวอย่าง)', items: [{ label: 'จันทร์ ถึง ศุกร์', value: '07:30 ถึง 17:00 น.' }, { label: 'เสาร์ และ อาทิตย์', value: '08:00 ถึง 15:00 น.' }, { label: 'วันหยุดนักขัตฤกษ์', value: 'โปรดสอบถามก่อนมา' }], buttonLabel: 'ส่งข้อความถึงเรา', buttonHref: '/contact' },
-          { type: 'cta', heading: 'มากันเป็นกลุ่มใช่ไหม', text: 'ส่งข้อความถึงเรา แล้วเราจะตอบกลับโดยเร็ว', buttonLabel: 'ติดต่อเรา', buttonHref: '/contact' },
-        ],
-      },
-      {
-        slug: 'contact',
-        title: 'ติดต่อเรา',
-        description: 'ส่งข้อความถึงร้านกาแฟตัวอย่าง เรื่องการมาเป็นกลุ่ม การสั่งล่วงหน้า หรือเรื่องอื่น ๆ แล้วเราจะตอบกลับทางอีเมล',
-        blocks: [
-          { type: 'hero', heading: 'ติดต่อเรา', text: 'มีคำถาม มากันเป็นกลุ่ม หรืออยากสั่งล่วงหน้า ส่งข้อความมาได้เลย เราจะตอบกลับทางอีเมล' },
-          { type: 'form', name: 'contact', heading: 'ส่งข้อความ', intro: 'เราจะตอบกลับทางอีเมล', buttonLabel: 'ส่งข้อความ', sentMessage: 'ขอบคุณ ส่งข้อความเรียบร้อยแล้ว', tone: 'tint', fields: [{ name: 'name', label: 'ชื่อของคุณ', type: 'text', required: true }, { name: 'email', label: 'อีเมล', type: 'email', required: true }, { name: 'message', label: 'ข้อความ', type: 'textarea', required: true }] },
-        ],
-      },
-    ],
-    items: samples('menu', [
-      ['เอสเพรสโซ', '฿55', 'กาแฟ', 'ตัวอย่าง กาแฟเข้มข้นแก้วเล็ก'],
-      ['แฟลตไวท์', '฿70', 'กาแฟ', 'ตัวอย่าง เอสเพรสโซกับนมสตีมเนื้อเนียน'],
-      ['ลาเต้เย็น', '฿75', 'กาแฟ', 'ตัวอย่าง เอสเพรสโซ นมสด และน้ำแข็ง'],
-      ['ชามะลิ', '฿60', 'ชา', 'ตัวอย่าง ชามะลิร้อนหนึ่งกา'],
-      ['ขนมปังกล้วยหอม', '฿65', 'ของกิน', 'ตัวอย่าง ชิ้นหนา เสิร์ฟอุ่น ๆ'],
-      ['ขนมปังปิ้งกับแยม', '฿80', 'ของกิน', 'ตัวอย่าง ขนมปังปิ้งหนานุ่ม เนย และแยม'],
-    ]),
-    tables: [],
-    records: {},
-    automations: [],
-  },
-}
-
 const shopItems = (language: StarterLanguage): StarterItem[] => {
   const en = language === 'en'
   const body = en ? 'Sample product. Replace the photo, price and stock with your own.' : 'สินค้าตัวอย่าง เปลี่ยนรูป ราคา และจำนวนในสต็อกเป็นของคุณเอง'
-  const rows: [string, string, string, string, number][] = en
+  // Each sample has the photo of what it says, so the shop reads true at a glance.
+  const rows: [string, string, string, string, number, string][] = en
     ? [
-        ['Canvas tote bag (sample)', '24.00', 'Bags', 'A sturdy everyday bag.', 20],
-        ['Small pouch (sample)', '12.00', 'Bags', 'For keys, cards and coins.', 30],
-        ['Ceramic mug (sample)', '18.00', 'Home', 'A simple mug for coffee or tea.', 15],
-        ['Linen tea towel (sample)', '14.00', 'Home', 'Soft, quick to dry, and gets better with washing.', 25],
-        ['Greeting card (sample)', '4.00', 'Gifts', 'A blank card with an envelope.', 50],
+        ['Stoneware mug (sample)', '18.00', 'Home', 'A simple mug for coffee or tea.', 15, 'shop-mug'],
+        ['Espresso cup and saucer (sample)', '16.00', 'Home', 'A small cup with a matching saucer.', 20, 'shop-cup'],
+        ['Over-ear headphones (sample)', '89.00', 'Audio', 'Soft cushions and a long battery life.', 8, 'shop-hero'],
+        ['Classic watch (sample)', '120.00', 'Accessories', 'A clean face that is easy to read.', 6, 'shop-watch'],
+        ['Stone bangle (sample)', '32.00', 'Accessories', 'Polished by hand, each one a little different.', 10, 'shop-ring'],
       ]
     : [
-        ['กระเป๋าผ้าแคนวาส (ตัวอย่าง)', '฿390', 'กระเป๋า', 'กระเป๋าทนทาน ใช้ได้ทุกวัน', 20],
-        ['กระเป๋าใบเล็ก (ตัวอย่าง)', '฿190', 'กระเป๋า', 'ใส่กุญแจ บัตร และเหรียญ', 30],
-        ['แก้วเซรามิก (ตัวอย่าง)', '฿290', 'ของใช้ในบ้าน', 'แก้วเรียบ ๆ สำหรับกาแฟหรือชา', 15],
-        ['ผ้าเช็ดมือลินิน (ตัวอย่าง)', '฿220', 'ของใช้ในบ้าน', 'นุ่ม แห้งเร็ว ยิ่งซักยิ่งนุ่ม', 25],
-        ['การ์ดอวยพร (ตัวอย่าง)', '฿59', 'ของขวัญ', 'การ์ดเปล่าพร้อมซอง', 50],
+        ['แก้วสโตนแวร์ (ตัวอย่าง)', '฿290', 'ของใช้ในบ้าน', 'แก้วเรียบ ๆ สำหรับกาแฟหรือชา', 15, 'shop-mug'],
+        ['ถ้วยเอสเพรสโซพร้อมจานรอง (ตัวอย่าง)', '฿250', 'ของใช้ในบ้าน', 'ถ้วยเล็กพร้อมจานรองเข้าชุด', 20, 'shop-cup'],
+        ['หูฟังแบบครอบหู (ตัวอย่าง)', '฿2,490', 'เครื่องเสียง', 'ฟองน้ำนุ่ม แบตเตอรี่ใช้ได้นาน', 8, 'shop-hero'],
+        ['นาฬิกาคลาสสิก (ตัวอย่าง)', '฿3,900', 'เครื่องประดับ', 'หน้าปัดเรียบ อ่านง่าย', 6, 'shop-watch'],
+        ['กำไลหิน (ตัวอย่าง)', '฿890', 'เครื่องประดับ', 'ขัดด้วยมือ แต่ละวงไม่เหมือนกัน', 10, 'shop-ring'],
       ]
-  const items: StarterItem[] = rows.map(([title, price, category, text, stock], index) => ({ body: `${text} ${body}`, category, collection: 'products', price, sort: index + 1, stock, title }))
+  const photo = (file: string, title: string) => ({ imageUrl: `/templates/${file}.jpg`, imageAlt: title })
+  const items: StarterItem[] = rows.map(([title, price, category, text, stock, file], index) => ({ body: `${text} ${body}`, category, collection: 'products', price, sort: index + 1, stock, title, ...photo(file, title) }))
   // One product with sizes, so the owner sees how options work.
-  items.splice(4, 0, { body: `${en ? 'Soft cotton, in three sizes.' : 'ผ้าฝ้ายนุ่ม มีสามขนาด'} ${body}`, category: en ? 'Clothing' : 'เสื้อผ้า', collection: 'products', price: en ? '22.00' : '฿350', sort: 5, title: en ? 'Cotton T-shirt (sample)' : 'เสื้อยืดผ้าฝ้าย (ตัวอย่าง)', variants: ['S', 'M', 'L'].map((name) => ({ name, stock: 5 })) })
+  const shirt = en ? 'Cotton T-shirt (sample)' : 'เสื้อยืดผ้าฝ้าย (ตัวอย่าง)'
+  items.splice(4, 0, { body: `${en ? 'Soft cotton, in three sizes.' : 'ผ้าฝ้ายนุ่ม มีสามขนาด'} ${body}`, category: en ? 'Clothing' : 'เสื้อผ้า', collection: 'products', price: en ? '22.00' : '฿350', sort: 5, title: shirt, variants: ['S', 'M', 'L'].map((name) => ({ name, stock: 5 })), ...photo('shop-tee', shirt) })
   return items.map((item, index) => ({ ...item, sort: index + 1 }))
 }
 
@@ -370,107 +295,18 @@ const appointments: Record<StarterLanguage, StarterContent> = {
   en: {
     label: 'Service appointments',
     description: 'Customers choose an available time and send a booking request. One place per slot prevents double booking.',
-    includes: ['Home page with available sample times', 'Booking form without customer sign-up', 'Three sample slots and an owner booking list', 'Before publishing, replace sample slots under Data → Available appointments'],
-    settings: { name: 'Sample Appointments', tagline: 'Choose a time that works for you', style: 'calm', accent: '#176c69', cart: false, nav: [{ label: 'Appointments', href: '/#slots' }, { label: 'Book', href: '/book' }], headerButtonLabel: 'Book a time', headerButtonHref: '/book', footerText: footer.en },
-    pages: [
-      { slug: 'home', title: 'Sample Appointments', description: 'A sample local service website with available appointments and online booking.', blocks: [
-        { type: 'hero', layout: 'centered', eyebrow: 'Sample service', heading: 'Book a time in a minute', text: 'See the available sample times below. Replace them with your real services and opening hours before publishing.', buttonLabel: 'See available times', buttonHref: '#slots' },
-        { type: 'records', id: 'slots', table: 'appointment_slots', heading: 'Available appointments', intro: 'These are sample times. A time disappears from the booking choices when it is full.', fields: ['title', 'date', 'time'], newestFirst: false, tone: 'tint' },
-        { type: 'steps', heading: 'How it works', items: [{ title: 'Choose a time', text: 'Pick one of the open appointments.' }, { title: 'Send your request', text: 'Leave your name and email. No account is needed.' }, { title: 'Wait for confirmation', text: 'The business reviews your request and contacts you.' }] },
-        { type: 'cta', heading: 'Ready to book?', buttonLabel: 'Book a time', buttonHref: '/book' },
-      ] },
-      { slug: 'book', title: 'Book an appointment', description: 'Sample booking page. Choose an available appointment and send a booking request.', blocks: [
-        { type: 'hero', heading: 'Book an appointment', text: 'Choose an open time. The business will contact you to confirm your request.' },
-        { type: 'record-form', table: 'appointment_bookings', heading: 'Your booking request', intro: 'A full time cannot be chosen.', fields: ['slot', 'name', 'email', 'phone', 'note'], buttonLabel: 'Send booking request', sentMessage: 'Your booking request was saved. The business will contact you to confirm it.', tone: 'tint' },
-      ] },
-    ],
+    includes: ['Home page with open sample times, steps, a photo and questions', 'Booking form without customer sign-up', 'Three sample slots and an owner booking list', 'Before publishing, replace sample slots under Data → Available appointments'],
+    ...appointmentPages('en'),
     items: [], tables: appointmentTables('en'), records: { appointment_slots: () => appointmentSamples('en') },
     automations: [{ name: 'Appointment number', trigger: { on: 'record_added', table: 'appointment_bookings' }, actions: [{ do: 'set_fields', values: { ref: 'AP-{{number}}' } }] }],
   },
   th: {
     label: 'จองคิวบริการ',
     description: 'ลูกค้าเลือกเวลาที่ว่างแล้วส่งคำขอจอง หนึ่งช่วงเวลารับหนึ่งคน จึงไม่จองชนกัน',
-    includes: ['หน้าแรกแสดงเวลาตัวอย่างที่ว่าง', 'หน้าจองโดยไม่ต้องสมัครสมาชิก', 'ช่วงเวลาตัวอย่าง 3 ช่วงและรายการจองในหลังบ้าน', 'ก่อนเผยแพร่ ให้เปลี่ยนช่วงเวลาตัวอย่างที่ ข้อมูล → ช่วงเวลาที่เปิดให้จอง'],
-    settings: { name: 'ร้านบริการตัวอย่าง', tagline: 'เลือกเวลาที่สะดวก', style: 'calm', accent: '#176c69', cart: false, nav: [{ label: 'เวลาที่ว่าง', href: '/#slots' }, { label: 'จองคิว', href: '/book' }], headerButtonLabel: 'จองคิว', headerButtonHref: '/book', footerText: footer.th },
-    pages: [
-      { slug: 'home', title: 'ร้านบริการตัวอย่าง', description: 'เว็บบริการตัวอย่างที่มีเวลาว่างและแบบฟอร์มจองคิวออนไลน์', blocks: [
-        { type: 'hero', layout: 'centered', eyebrow: 'บริการตัวอย่าง', heading: 'จองเวลาที่สะดวกได้ในหนึ่งนาที', text: 'ดูเวลาตัวอย่างที่ว่างด้านล่าง เปลี่ยนเป็นบริการและเวลาเปิดจริงของคุณก่อนเผยแพร่', buttonLabel: 'ดูเวลาที่ว่าง', buttonHref: '#slots' },
-        { type: 'records', id: 'slots', table: 'appointment_slots', heading: 'เวลาที่เปิดให้จอง', intro: 'เวลาทั้งหมดเป็นตัวอย่าง เมื่อช่วงเวลาเต็มจะเลือกจองไม่ได้', fields: ['title', 'date', 'time'], newestFirst: false, tone: 'tint' },
-        { type: 'steps', heading: 'วิธีจอง', items: [{ title: 'เลือกเวลา', text: 'เลือกช่วงเวลาที่ยังว่าง' }, { title: 'ส่งคำขอ', text: 'ใส่ชื่อและอีเมล ไม่ต้องสมัครสมาชิก' }, { title: 'รอการยืนยัน', text: 'ร้านจะตรวจคำขอแล้วติดต่อกลับ' }] },
-        { type: 'cta', heading: 'พร้อมจองแล้วใช่ไหม', buttonLabel: 'จองคิว', buttonHref: '/book' },
-      ] },
-      { slug: 'book', title: 'จองคิว', description: 'หน้าจองตัวอย่าง เลือกเวลาที่ว่างและส่งคำขอจองคิว ร้านจะตรวจคำขอและติดต่อกลับเพื่อยืนยันเวลานัดหมาย', blocks: [
-        { type: 'hero', heading: 'จองคิว', text: 'เลือกเวลาที่ยังว่าง ร้านจะติดต่อกลับเพื่อยืนยันคำขอ' },
-        { type: 'record-form', table: 'appointment_bookings', heading: 'ข้อมูลการจอง', intro: 'ช่วงเวลาที่เต็มแล้วจะเลือกไม่ได้', fields: ['slot', 'name', 'email', 'phone', 'note'], buttonLabel: 'ส่งคำขอจอง', sentMessage: 'บันทึกคำขอจองแล้ว ร้านจะติดต่อกลับเพื่อยืนยัน', tone: 'tint' },
-      ] },
-    ],
+    includes: ['หน้าแรกแสดงเวลาตัวอย่างที่ว่าง ขั้นตอน รูป และคำถาม', 'หน้าจองโดยไม่ต้องสมัครสมาชิก', 'ช่วงเวลาตัวอย่าง 3 ช่วงและรายการจองสำหรับเจ้าของ', 'ก่อนเผยแพร่ ให้เปลี่ยนช่วงเวลาตัวอย่างที่ ข้อมูล → เวลาที่เปิดให้จอง'],
+    ...appointmentPages('th'),
     items: [], tables: appointmentTables('th'), records: { appointment_slots: () => appointmentSamples('th') },
     automations: [{ name: 'เลขที่การจองคิว', trigger: { on: 'record_added', table: 'appointment_bookings' }, actions: [{ do: 'set_fields', values: { ref: 'AP-{{number}}' } }] }],
-  },
-}
-
-const tradeTable = (language: StarterLanguage): StarterTable => {
-  const en = language === 'en'
-  const statuses = en ? ['New', 'Scheduled', 'In progress', 'Done', 'Cancelled'] : ['ใหม่', 'นัดแล้ว', 'กำลังทำ', 'เสร็จแล้ว', 'ยกเลิก']
-  return {
-    name: 'work_requests', label: en ? 'Work requests' : 'คำขอรับงาน', readAccess: 'owner', writeAccess: 'public',
-    fields: [
-      { name: 'service', label: en ? 'What needs help?' : 'ต้องการให้ช่วยเรื่องอะไร', type: 'select', required: true, options: en ? ['Electrical', 'Plumbing', 'Repair', 'Other'] : ['ไฟฟ้า', 'ประปา', 'ซ่อมแซม', 'อื่น ๆ'] },
-      { name: 'name', label: en ? 'Your name' : 'ชื่อของคุณ', type: 'text', required: true },
-      { name: 'email', label: en ? 'Email' : 'อีเมล', type: 'email', required: true },
-      { name: 'phone', label: en ? 'Phone (optional)' : 'เบอร์โทร (ไม่บังคับ)', type: 'phone' },
-      { name: 'details', label: en ? 'Describe the job' : 'เล่ารายละเอียดงาน', type: 'textarea', required: true },
-      { name: 'location', label: en ? 'Area or location (optional)' : 'พื้นที่หรือสถานที่ (ไม่บังคับ)', type: 'text' },
-      { name: 'preferred_date', label: en ? 'Preferred date (optional)' : 'วันที่สะดวก (ไม่บังคับ)', type: 'date' },
-      { name: 'status', label: en ? 'Work status' : 'สถานะงาน', type: 'select', options: statuses, default: statuses[0], readOnly: true },
-      { name: 'scheduled_date', label: en ? 'Agreed date' : 'วันที่นัดจริง', type: 'date', readOnly: true },
-      { name: 'scheduled_time', label: en ? 'Agreed time' : 'เวลานัดจริง', type: 'time', readOnly: true },
-      { name: 'assigned_to', label: en ? 'Assigned to' : 'ผู้รับผิดชอบ', type: 'text', readOnly: true },
-      { name: 'ref', label: en ? 'Job number' : 'เลขที่งาน', type: 'text', readOnly: true },
-    ],
-  }
-}
-
-const trades: Record<StarterLanguage, StarterContent> = {
-  en: {
-    label: 'Repair job requests',
-    description: 'Customers describe a repair job. The owner reviews requests, agrees a time and tracks each job.',
-    includes: ['Service page and private request form', 'Owner-only work requests with status, agreed date and assigned person', 'Automatic job numbers', 'This starter does not create quotes, invoices or a technician calendar'],
-    settings: { name: 'Sample Repair Service', tagline: 'Tell us what needs fixing', style: 'bold', accent: '#31576b', cart: false, nav: [{ label: 'Services', href: '/#services' }, { label: 'Request a visit', href: '/request' }], headerButtonLabel: 'Request a visit', headerButtonHref: '/request', footerText: footer.en },
-    pages: [
-      { slug: 'home', title: 'Sample Repair Service', description: 'A sample repair service website where customers can request a visit and the owner tracks jobs privately.', blocks: [
-        { type: 'hero', layout: 'centered', eyebrow: 'Sample repair service', heading: 'Tell us what needs fixing', text: 'Send a short request. We review it and contact you to agree a visit. These service descriptions are samples.', buttonLabel: 'Request a visit', buttonHref: '/request' },
-        { type: 'features', id: 'services', heading: 'How we can help', items: [{ title: 'Electrical', text: 'Describe the electrical issue and where it happens. Sample service.' }, { title: 'Plumbing', text: 'Tell us about a leak or a fitting that needs attention. Sample service.' }, { title: 'Repairs', text: 'Explain what is broken and when you are available. Sample service.' }] },
-        { type: 'steps', heading: 'What happens next', items: [{ title: 'Send a request', text: 'Tell us what needs doing. No account is needed.' }, { title: 'Agree a time', text: 'We contact you before scheduling a visit.' }, { title: 'Follow the job', text: 'Our team tracks the work in its private back office.' }] },
-        { type: 'cta', heading: 'Need help with a job?', buttonLabel: 'Send a request', buttonHref: '/request' },
-      ] },
-      { slug: 'request', title: 'Request a visit', description: 'Sample repair service request page. Describe the job and the owner will contact you about the next step.', blocks: [
-        { type: 'hero', heading: 'Request a visit', text: 'Tell us what needs doing. This is a request, not a confirmed appointment or price quote.' },
-        { type: 'record-form', table: 'work_requests', heading: 'Your work request', fields: ['service', 'name', 'email', 'phone', 'details', 'location', 'preferred_date'], buttonLabel: 'Send request', sentMessage: 'Your request was saved. The business will contact you about the next step.', tone: 'tint' },
-      ] },
-    ],
-    items: [], tables: [tradeTable('en')], records: {},
-    automations: [{ name: 'Job number', trigger: { on: 'record_added', table: 'work_requests' }, actions: [{ do: 'set_fields', values: { ref: 'WR-{{number}}' } }] }],
-  },
-  th: {
-    label: 'รับงานช่าง',
-    description: 'ลูกค้าเล่าเรื่องที่ต้องซ่อม เจ้าของตรวจคำขอ นัดหมาย และติดตามสถานะของแต่ละงาน',
-    includes: ['หน้าบริการและแบบฟอร์มรับงานส่วนตัว', 'รายการงานในหลังบ้านพร้อมสถานะ วันนัด และผู้รับผิดชอบ', 'เลขที่งานอัตโนมัติ', 'ยังไม่มีใบเสนอราคา ใบแจ้งหนี้ หรือปฏิทินช่าง'],
-    settings: { name: 'ร้านซ่อมตัวอย่าง', tagline: 'บอกเราว่าต้องซ่อมอะไร', style: 'bold', accent: '#31576b', cart: false, nav: [{ label: 'บริการ', href: '/#services' }, { label: 'แจ้งงาน', href: '/request' }], headerButtonLabel: 'แจ้งงาน', headerButtonHref: '/request', footerText: footer.th },
-    pages: [
-      { slug: 'home', title: 'ร้านซ่อมตัวอย่าง', description: 'เว็บร้านซ่อมตัวอย่างที่ลูกค้าส่งคำขอและเจ้าของติดตามงานในหลังบ้านได้', blocks: [
-        { type: 'hero', layout: 'centered', eyebrow: 'ร้านซ่อมตัวอย่าง', heading: 'บอกเราว่าต้องซ่อมอะไร', text: 'ส่งคำขอสั้น ๆ ร้านจะตรวจแล้วติดต่อกลับเพื่อนัดหมาย รายการบริการในหน้านี้เป็นตัวอย่าง', buttonLabel: 'แจ้งงาน', buttonHref: '/request' },
-        { type: 'features', id: 'services', heading: 'บริการที่ช่วยได้', items: [{ title: 'งานไฟฟ้า', text: 'เล่าปัญหาไฟฟ้าและจุดที่เกิดปัญหา บริการตัวอย่าง' }, { title: 'งานประปา', text: 'บอกเรื่องรั่วหรืออุปกรณ์ที่ต้องซ่อม บริการตัวอย่าง' }, { title: 'งานซ่อม', text: 'เล่าว่าอะไรเสียและคุณสะดวกเมื่อไร บริการตัวอย่าง' }] },
-        { type: 'steps', heading: 'หลังจากส่งคำขอ', items: [{ title: 'แจ้งงาน', text: 'บอกปัญหาโดยไม่ต้องสมัครสมาชิก' }, { title: 'ตกลงเวลา', text: 'ร้านติดต่อกลับก่อนนัดไปทำงาน' }, { title: 'ติดตามงาน', text: 'ทีมงานดูสถานะในหลังบ้านส่วนตัว' }] },
-        { type: 'cta', heading: 'มีงานให้ช่วยไหม', buttonLabel: 'ส่งคำขอ', buttonHref: '/request' },
-      ] },
-      { slug: 'request', title: 'แจ้งงาน', description: 'หน้าแจ้งงานซ่อมตัวอย่าง เล่าปัญหาที่พบและวันที่สะดวก ร้านจะติดต่อกลับเพื่อคุยขั้นตอนถัดไป', blocks: [
-        { type: 'hero', heading: 'แจ้งงาน', text: 'เล่าเรื่องที่ต้องซ่อม คำขอนี้ยังไม่ใช่การยืนยันวันนัดหรือราคา' },
-        { type: 'record-form', table: 'work_requests', heading: 'รายละเอียดคำขอ', fields: ['service', 'name', 'email', 'phone', 'details', 'location', 'preferred_date'], buttonLabel: 'ส่งคำขอ', sentMessage: 'บันทึกคำขอแล้ว ร้านจะติดต่อกลับเพื่อคุยขั้นตอนถัดไป', tone: 'tint' },
-      ] },
-    ],
-    items: [], tables: [tradeTable('th')], records: {},
-    automations: [{ name: 'เลขที่งาน', trigger: { on: 'record_added', table: 'work_requests' }, actions: [{ do: 'set_fields', values: { ref: 'WR-{{number}}' } }] }],
   },
 }
 
@@ -543,173 +379,6 @@ const clubs: Record<StarterLanguage, StarterContent> = {
       ] },
     ],
     items: [], tables: clubTables('th'), records: { club_events: () => clubEvents('th') }, automations: [],
-  },
-}
-
-const propertyTables = (language: StarterLanguage): StarterTable[] => {
-  const en = language === 'en'
-  const status = en ? ['New', 'Contacted', 'Viewing agreed', 'Closed'] : ['ใหม่', 'ติดต่อแล้ว', 'ตกลงนัดชม', 'ปิดเรื่อง']
-  return [
-    { name: 'properties', label: en ? 'Properties' : 'อสังหาริมทรัพย์', readAccess: 'public', writeAccess: 'owner', fields: [
-      { name: 'title', label: en ? 'Listing' : 'ประกาศ', type: 'text', required: true },
-      { name: 'kind', label: en ? 'Type' : 'ประเภท', type: 'select', options: en ? ['Apartment', 'House', 'Other'] : ['อพาร์ตเมนต์', 'บ้าน', 'อื่น ๆ'], required: true },
-      { name: 'area', label: en ? 'Area' : 'พื้นที่', type: 'text' },
-      { name: 'details', label: en ? 'Details' : 'รายละเอียด', type: 'textarea' },
-      { name: 'availability', label: en ? 'Availability' : 'สถานะประกาศ', type: 'select', options: en ? ['Available', 'Unavailable'] : ['ว่าง', 'ไม่ว่าง'], default: en ? 'Available' : 'ว่าง' },
-    ] },
-    { name: 'viewing_requests', label: en ? 'Viewing requests' : 'คำขอนัดชม', readAccess: 'owner', writeAccess: 'public', fields: [
-      { name: 'property', label: en ? 'Property' : 'อสังหาริมทรัพย์', type: 'reference', table: 'properties', required: true },
-      { name: 'name', label: en ? 'Your name' : 'ชื่อของคุณ', type: 'text', required: true },
-      { name: 'email', label: en ? 'Email' : 'อีเมล', type: 'email', required: true },
-      { name: 'phone', label: en ? 'Phone (optional)' : 'เบอร์โทร (ไม่บังคับ)', type: 'phone' },
-      { name: 'preferred_date', label: en ? 'Preferred viewing date (optional)' : 'วันที่อยากเข้าชม (ไม่บังคับ)', type: 'date' },
-      { name: 'message', label: en ? 'Message' : 'ข้อความ', type: 'textarea' },
-      { name: 'status', label: en ? 'Request status' : 'สถานะคำขอ', type: 'select', options: status, default: status[0], readOnly: true },
-      { name: 'agreed_date', label: en ? 'Agreed viewing date' : 'วันที่นัดชมจริง', type: 'date', readOnly: true },
-      { name: 'ref', label: en ? 'Request number' : 'เลขที่คำขอ', type: 'text', readOnly: true },
-    ] },
-  ]
-}
-
-const propertyListings = (language: StarterLanguage) => language === 'en' ? [
-  { title: 'Sample apartment listing', kind: 'Apartment', area: 'Add your real area', details: 'Sample listing. Add the real location, photos, size and terms before publishing.', availability: 'Available' },
-  { title: 'Sample house listing', kind: 'House', area: 'Add your real area', details: 'Sample listing. Check availability and add accurate details before publishing.', availability: 'Available' },
-] : [
-  { title: 'อพาร์ตเมนต์ตัวอย่าง', kind: 'อพาร์ตเมนต์', area: 'ใส่พื้นที่จริง', details: 'ประกาศตัวอย่าง ใส่ที่ตั้ง รูป ขนาด และเงื่อนไขจริงก่อนเผยแพร่', availability: 'ว่าง' },
-  { title: 'บ้านตัวอย่าง', kind: 'บ้าน', area: 'ใส่พื้นที่จริง', details: 'ประกาศตัวอย่าง ตรวจสถานะและใส่รายละเอียดที่ถูกต้องก่อนเผยแพร่', availability: 'ว่าง' },
-]
-
-const property: Record<StarterLanguage, StarterContent> = {
-  en: {
-    label: 'Property inquiries',
-    description: 'Show property listings, receive viewing requests, and follow each lead in the private back office.',
-    includes: ['Public property list and request form', 'Private lead status and agreed viewing date', 'Automatic request numbers', 'No automatic appointment confirmation, lease or document collection'],
-    settings: { name: 'Sample Property Desk', tagline: 'Find a place and ask to view it', style: 'calm', accent: '#45655c', cart: false, nav: [{ label: 'Properties', href: '/properties' }, { label: 'Ask to view', href: '/properties#request' }], headerButtonLabel: 'See properties', headerButtonHref: '/properties', footerText: footer.en },
-    pages: [
-      { slug: 'home', title: 'Sample Property Desk', description: 'A sample property site showing listings and collecting private viewing requests.', blocks: [
-        { type: 'hero', layout: 'centered', eyebrow: 'Sample property desk', heading: 'Explore places at your own pace', text: 'Browse sample listings and ask to view a place. Replace every sample detail before publishing.', buttonLabel: 'See properties', buttonHref: '/properties' },
-        { type: 'steps', heading: 'How it works', items: [{ title: 'Browse', text: 'Look through the sample property list.' }, { title: 'Ask', text: 'Send a viewing request without an account.' }, { title: 'Agree a time', text: 'The owner contacts you to arrange a visit.' }] },
-        { type: 'cta', heading: 'Have a place in mind?', buttonLabel: 'Ask to view', buttonHref: '/properties#request' },
-      ] },
-      { slug: 'properties', title: 'Properties', description: 'Sample property listings and a private viewing request form.', blocks: [
-        { type: 'hero', heading: 'Properties', text: 'These are sample listings. Ask about a real property after the owner replaces them.' },
-        { type: 'records', table: 'properties', heading: 'Places', fields: ['title', 'kind', 'area', 'details', 'availability'], tone: 'tint' },
-        { type: 'record-form', id: 'request', table: 'viewing_requests', heading: 'Ask to view', intro: 'A request is not a confirmed viewing. We contact you to agree a time.', fields: ['property', 'name', 'email', 'phone', 'preferred_date', 'message'], buttonLabel: 'Send request', sentMessage: 'Request saved. The owner will contact you about a viewing.', tone: 'plain' },
-      ] },
-    ],
-    items: [], tables: propertyTables('en'), records: { properties: () => propertyListings('en') },
-    automations: [{ name: 'Viewing request number', trigger: { on: 'record_added', table: 'viewing_requests' }, actions: [{ do: 'set_fields', values: { ref: 'PV-{{number}}' } }] }],
-  },
-  th: {
-    label: 'รับคำขอนัดชมอสังหาฯ',
-    description: 'แสดงประกาศ รับคำขอนัดชม และติดตามผู้สนใจในหลังบ้านส่วนตัว',
-    includes: ['หน้าประกาศและแบบฟอร์มขอนัดชม', 'สถานะผู้สนใจและวันนัดจริงในหลังบ้านส่วนตัว', 'เลขคำขออัตโนมัติ', 'ยังไม่ยืนยันนัดอัตโนมัติหรือจัดการสัญญาและเอกสาร'],
-    settings: { name: 'อสังหาฯ ตัวอย่าง', tagline: 'เลือกที่ที่ชอบ แล้วขอเข้าชม', style: 'calm', accent: '#45655c', cart: false, nav: [{ label: 'ประกาศ', href: '/properties' }, { label: 'ขอนัดชม', href: '/properties#request' }], headerButtonLabel: 'ดูประกาศ', headerButtonHref: '/properties', footerText: footer.th },
-    pages: [
-      { slug: 'home', title: 'อสังหาฯ ตัวอย่าง', description: 'เว็บอสังหาฯ ตัวอย่างที่แสดงประกาศและรับคำขอนัดชมแบบส่วนตัว', blocks: [
-        { type: 'hero', layout: 'centered', eyebrow: 'อสังหาฯ ตัวอย่าง', heading: 'ค่อย ๆ เลือกที่ที่ชอบ', text: 'ดูประกาศตัวอย่างและส่งคำขอนัดชม เปลี่ยนรายละเอียดตัวอย่างทั้งหมดก่อนเผยแพร่', buttonLabel: 'ดูประกาศ', buttonHref: '/properties' },
-        { type: 'steps', heading: 'ขั้นตอน', items: [{ title: 'ดูประกาศ', text: 'ดูรายการอสังหาฯ ตัวอย่าง' }, { title: 'ส่งคำขอ', text: 'ขอนัดชมได้โดยไม่ต้องสมัครบัญชี' }, { title: 'ตกลงเวลา', text: 'เจ้าของติดต่อกลับเพื่อตกลงวันเข้าชม' }] },
-        { type: 'cta', heading: 'มีที่ที่สนใจไหม', buttonLabel: 'ขอนัดชม', buttonHref: '/properties#request' },
-      ] },
-      { slug: 'properties', title: 'ประกาศอสังหาฯ', description: 'ประกาศอสังหาฯ ตัวอย่างและแบบฟอร์มขอนัดชมที่เก็บข้อมูลส่วนตัว', blocks: [
-        { type: 'hero', heading: 'ประกาศ', text: 'รายการนี้เป็นตัวอย่าง เจ้าของต้องใส่ข้อมูลทรัพย์จริงก่อนรับคำขอ' },
-        { type: 'records', table: 'properties', heading: 'รายการ', fields: ['title', 'kind', 'area', 'details', 'availability'], tone: 'tint' },
-        { type: 'record-form', id: 'request', table: 'viewing_requests', heading: 'ขอนัดชม', intro: 'นี่เป็นเพียงคำขอ ไม่ใช่การยืนยันนัด เจ้าของจะติดต่อเพื่อตกลงเวลา', fields: ['property', 'name', 'email', 'phone', 'preferred_date', 'message'], buttonLabel: 'ส่งคำขอ', sentMessage: 'บันทึกคำขอแล้ว เจ้าของจะติดต่อเรื่องการเข้าชม', tone: 'plain' },
-      ] },
-    ],
-    items: [], tables: propertyTables('th'), records: { properties: () => propertyListings('th') },
-    automations: [{ name: 'เลขที่คำขอนัดชม', trigger: { on: 'record_added', table: 'viewing_requests' }, actions: [{ do: 'set_fields', values: { ref: 'PV-{{number}}' } }] }],
-  },
-}
-
-const services: Record<StarterLanguage, StarterContent> = {
-  en: {
-    label: 'Services or coaching',
-    description: 'Your services, sample prices, how it works, an about page and a contact form.',
-    includes: ['Home page with services, prices and steps', 'About page', 'Contact page with a working form'],
-    settings: { name: 'Sample Coaching', tagline: 'Clear advice for your next step', style: 'calm', accent: '#2f5d50', cart: false, nav: [{ label: 'Home', href: '/' }, { label: 'About', href: '/about' }, { label: 'Contact', href: '/contact' }], headerButtonLabel: 'Get in touch', headerButtonHref: '/contact', footerText: footer.en },
-    pages: [
-      {
-        slug: 'home',
-        title: 'Sample Coaching',
-        description: 'A sample website for a coach or service business, with services, prices, how it works and a contact form.',
-        blocks: [
-          { type: 'hero', layout: 'centered', eyebrow: 'Sample coaching', heading: 'Make your next step a clear one', text: 'One-to-one sessions for people who want a plan they can follow. The services and prices here are samples.', buttonLabel: 'Get in touch', buttonHref: '/contact' },
-          { type: 'features', heading: 'How I can help', tone: 'tint', items: [{ title: 'One-to-one sessions', text: 'Focused time on the question that matters most to you right now.' }, { title: 'Plans you can follow', text: 'Leave each session with clear next steps, written down.' }, { title: 'Online or in person', text: 'Meet where it suits you.' }] },
-          { type: 'pricing', heading: 'Prices', intro: 'These prices are samples.', plans: [{ name: 'Single session', price: '60', note: 'Sample price', features: '60 minutes\nWritten next steps', buttonLabel: 'Ask about it', buttonHref: '/contact' }, { name: 'Four sessions', price: '220', note: 'Sample price', features: 'Four sessions of 60 minutes\nNotes after each session', buttonLabel: 'Ask about it', buttonHref: '/contact', highlighted: true }, { name: 'Team workshop', price: 'Ask us', note: 'For small groups', features: 'Half a day\nPlanned around your team', buttonLabel: 'Ask about it', buttonHref: '/contact' }] },
-          { type: 'steps', heading: 'How it works', tone: 'tint', items: [{ title: 'Get in touch', text: 'Tell me a little about what you need.' }, { title: 'A first conversation', text: 'We agree on what a good result looks like for you.' }, { title: 'Sessions', text: 'We meet, and you leave with clear next steps.' }] },
-          { type: 'cta', heading: 'Not sure where to start?', text: 'Send a short message, and I will suggest the option that fits.', buttonLabel: 'Get in touch', buttonHref: '/contact' },
-        ],
-      },
-      {
-        slug: 'about',
-        title: 'About',
-        description: 'About the sample coaching business: who it is for, how sessions work, and answers to common questions.',
-        blocks: [
-          { type: 'hero', heading: 'About', text: 'A few words about who I am, who I help and how I work.' },
-          { type: 'text', heading: 'Who I work with', body: 'This is sample text. Write two or three short paragraphs about the people you help and what changes for them.\n\nKeep it simple and specific, in your own words.' },
-          { type: 'faq', heading: 'Questions', tone: 'tint', items: [{ question: 'Where do sessions take place?', answer: 'Online by video call, or in person when we agree on a place.' }, { question: 'How do I book?', answer: 'Send a message from the contact page, and we find a time that suits you.' }] },
-          { type: 'cta', heading: 'Ready to talk?', buttonLabel: 'Get in touch', buttonHref: '/contact' },
-        ],
-      },
-      {
-        slug: 'contact',
-        title: 'Contact',
-        description: 'Send a message to ask a question or to book a session with the sample coaching business. Replies come by email.',
-        blocks: [
-          { type: 'hero', heading: 'Get in touch', text: 'Tell me a little about what you need, and I will reply by email.' },
-          { type: 'form', name: 'contact', heading: 'Send a message', buttonLabel: 'Send message', sentMessage: 'Thank you. Your message has been sent.', tone: 'tint', fields: [{ name: 'name', label: 'Your name', type: 'text', required: true }, { name: 'email', label: 'Email', type: 'email', required: true }, { name: 'phone', label: 'Phone (optional)', type: 'phone' }, { name: 'topic', label: 'What is it about?', type: 'select', options: ['A single session', 'Four sessions', 'A team workshop', 'Something else'] }, { name: 'message', label: 'Message', type: 'textarea', required: true }] },
-        ],
-      },
-    ],
-    items: [],
-    tables: [],
-    records: {},
-    automations: [],
-  },
-  th: {
-    label: 'บริการหรือโค้ช',
-    description: 'บริการของคุณ ราคาตัวอย่าง ขั้นตอนการทำงาน หน้าเกี่ยวกับ และแบบฟอร์มติดต่อ',
-    includes: ['หน้าแรกพร้อมบริการ ราคา และขั้นตอน', 'หน้าเกี่ยวกับ', 'หน้าติดต่อพร้อมแบบฟอร์มที่ใช้งานได้จริง'],
-    settings: { name: 'โค้ชตัวอย่าง', tagline: 'คำแนะนำที่ชัดเจนสำหรับก้าวต่อไป', style: 'calm', accent: '#2f5d50', cart: false, nav: [{ label: 'หน้าแรก', href: '/' }, { label: 'เกี่ยวกับ', href: '/about' }, { label: 'ติดต่อ', href: '/contact' }], headerButtonLabel: 'ติดต่อ', headerButtonHref: '/contact', footerText: footer.th },
-    pages: [
-      {
-        slug: 'home',
-        title: 'โค้ชตัวอย่าง',
-        description: 'เว็บไซต์ตัวอย่างสำหรับโค้ชหรือธุรกิจบริการ มีบริการ ราคา ขั้นตอนการทำงาน และแบบฟอร์มติดต่อ',
-        blocks: [
-          { type: 'hero', layout: 'centered', eyebrow: 'โค้ชตัวอย่าง', heading: 'ให้ก้าวต่อไปของคุณชัดเจน', text: 'โค้ชแบบตัวต่อตัว สำหรับคนที่อยากได้แผนที่ทำตามได้จริง บริการและราคาในเว็บนี้เป็นตัวอย่าง', buttonLabel: 'ติดต่อ', buttonHref: '/contact' },
-          { type: 'features', heading: 'ช่วยอะไรคุณได้บ้าง', tone: 'tint', items: [{ title: 'โค้ชตัวต่อตัว', text: 'ใช้เวลาเต็มที่กับเรื่องที่สำคัญที่สุดของคุณตอนนี้' }, { title: 'แผนที่ทำตามได้', text: 'ทุกครั้งจบด้วยขั้นตอนถัดไปที่ชัดเจน เป็นลายลักษณ์อักษร' }, { title: 'ออนไลน์หรือพบกัน', text: 'เลือกแบบที่สะดวกสำหรับคุณ' }] },
-          { type: 'pricing', heading: 'ราคา', intro: 'ราคาเหล่านี้เป็นตัวอย่าง', plans: [{ name: 'ครั้งเดียว', price: '฿1,500', note: 'ราคาตัวอย่าง', features: '60 นาที\nสรุปขั้นตอนถัดไป', buttonLabel: 'สอบถาม', buttonHref: '/contact' }, { name: 'สี่ครั้ง', price: '฿5,500', note: 'ราคาตัวอย่าง', features: 'สี่ครั้ง ครั้งละ 60 นาที\nบันทึกสรุปหลังทุกครั้ง', buttonLabel: 'สอบถาม', buttonHref: '/contact', highlighted: true }, { name: 'เวิร์กช็อปสำหรับทีม', price: 'สอบถาม', note: 'สำหรับกลุ่มเล็ก', features: 'ครึ่งวัน\nวางแผนตามทีมของคุณ', buttonLabel: 'สอบถาม', buttonHref: '/contact' }] },
-          { type: 'steps', heading: 'ขั้นตอนการทำงาน', tone: 'tint', items: [{ title: 'ติดต่อมา', text: 'เล่าสั้น ๆ ว่าคุณต้องการอะไร' }, { title: 'คุยกันครั้งแรก', text: 'ตกลงกันว่าผลลัพธ์ที่ดีของคุณคืออะไร' }, { title: 'เริ่มโค้ช', text: 'พบกัน แล้วกลับไปพร้อมขั้นตอนถัดไปที่ชัดเจน' }] },
-          { type: 'cta', heading: 'ยังไม่แน่ใจว่าจะเริ่มตรงไหน', text: 'ส่งข้อความสั้น ๆ มา แล้วจะแนะนำแบบที่เหมาะกับคุณ', buttonLabel: 'ติดต่อ', buttonHref: '/contact' },
-        ],
-      },
-      {
-        slug: 'about',
-        title: 'เกี่ยวกับ',
-        description: 'เกี่ยวกับโค้ชตัวอย่าง เหมาะกับใคร การโค้ชเป็นอย่างไร และคำตอบของคำถามที่พบบ่อย',
-        blocks: [
-          { type: 'hero', heading: 'เกี่ยวกับ', text: 'เล่าสั้น ๆ ว่าคุณเป็นใคร ช่วยใคร และทำงานอย่างไร' },
-          { type: 'text', heading: 'ทำงานกับใคร', body: 'นี่คือข้อความตัวอย่าง เขียนสองถึงสามย่อหน้าสั้น ๆ ว่าคุณช่วยใคร และเขาได้อะไรจากการทำงานกับคุณ\n\nเขียนให้เรียบง่าย ชัดเจน ด้วยคำพูดของคุณเอง' },
-          { type: 'faq', heading: 'คำถามที่พบบ่อย', tone: 'tint', items: [{ question: 'พบกันที่ไหน', answer: 'ออนไลน์ผ่านวิดีโอคอล หรือพบกันในสถานที่ที่ตกลงกัน' }, { question: 'จองอย่างไร', answer: 'ส่งข้อความจากหน้าติดต่อ แล้วเราจะนัดเวลาที่สะดวกสำหรับคุณ' }] },
-          { type: 'cta', heading: 'พร้อมคุยกันแล้วใช่ไหม', buttonLabel: 'ติดต่อ', buttonHref: '/contact' },
-        ],
-      },
-      {
-        slug: 'contact',
-        title: 'ติดต่อ',
-        description: 'ส่งข้อความถึงโค้ชตัวอย่าง เพื่อสอบถามหรือนัดเวลาโค้ช แล้วเราจะตอบกลับทางอีเมล',
-        blocks: [
-          { type: 'hero', heading: 'ติดต่อ', text: 'เล่าสั้น ๆ ว่าคุณต้องการอะไร แล้วเราจะตอบกลับทางอีเมล' },
-          { type: 'form', name: 'contact', heading: 'ส่งข้อความ', buttonLabel: 'ส่งข้อความ', sentMessage: 'ขอบคุณ ส่งข้อความเรียบร้อยแล้ว', tone: 'tint', fields: [{ name: 'name', label: 'ชื่อของคุณ', type: 'text', required: true }, { name: 'email', label: 'อีเมล', type: 'email', required: true }, { name: 'phone', label: 'เบอร์โทร (ไม่บังคับ)', type: 'phone' }, { name: 'topic', label: 'เรื่องอะไร', type: 'select', options: ['ครั้งเดียว', 'สี่ครั้ง', 'เวิร์กช็อปสำหรับทีม', 'เรื่องอื่น'] }, { name: 'message', label: 'ข้อความ', type: 'textarea', required: true }] },
-        ],
-      },
-    ],
-    items: [],
-    tables: [],
-    records: {},
-    automations: [],
   },
 }
 
@@ -816,4 +485,23 @@ const portfolio: Record<StarterLanguage, StarterContent> = {
   },
 }
 
-export const starterSites: Record<StarterId, Record<StarterLanguage, StarterContent>> = { cafe, shop, classes, appointments, trades, clubs, property, services, portfolio }
+/** A starter with a new look: its tables, records, items and automations stay, its pages and look change. */
+const restyle = (base: Record<StarterLanguage, StarterContent>, look: Look) =>
+  Object.fromEntries(starterLanguages.map((language) => {
+    const was = base[language]
+    const next = look[language]
+    return [language, { ...was, ...next, settings: { ...was.settings, ...next.settings } }]
+  })) as Record<StarterLanguage, StarterContent>
+
+export const starterSites: Record<StarterId, Record<StarterLanguage, StarterContent>> = {
+  services,
+  landing,
+  appointments,
+  shop: restyle(shop, shopLook),
+  clubs: restyle(clubs, clubsLook),
+  creator,
+  classes: restyle(classes, classesLook),
+  agency,
+  portfolio: restyle(portfolio, portfolioLook),
+  magazine,
+}

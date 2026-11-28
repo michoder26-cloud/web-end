@@ -46,9 +46,12 @@ export async function applyStarter(env: Env, site: SiteRow, id: StarterId, langu
   // Keep a name the owner chose. Only the default name or another starter's sample name gives way.
   const sampleNames = new Set([...defaultSiteNames, ...starterIds.flatMap((other) => starterLanguages.map((lang) => starterSites[other][lang].settings.name))])
   if (current.name && !sampleNames.has(current.name)) next.name = current.name
-  // The starter brings its own look, so colours chosen for another design would only clash.
-  delete next.background
-  delete next.text
+  // The starter brings its own look, so colours chosen for another design would only clash: its own background and
+  // text colours are used, or the style's when it has none.
+  if (!content.settings.background) delete next.background
+  if (!content.settings.text) delete next.text
+  if (!content.settings.headingFont) delete next.headingFont
+  if (!content.settings.bodyFont) delete next.bodyFont
   // All writes share a ticket, granted only for unchanged settings and, for an
   // unconfirmed request, a still-empty site. The D1 batch is atomic.
   const token = newToken()

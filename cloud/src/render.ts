@@ -88,7 +88,8 @@ const button = (label: unknown, href: unknown, base: string) => {
 
 // "https://" alone is the empty photo a new section starts with, so it shows nothing.
 const picture = (url: unknown, alt: unknown, eager = false) =>
-  typeof url === 'string' && ((url.startsWith('https://') && url.length > 8) || /^\/media\/\d+$/.test(url))
+  // Starter photos ship with web-end under /templates.
+  typeof url === 'string' && ((url.startsWith('https://') && url.length > 8) || /^\/media\/\d+$/.test(url) || /^\/templates\/[a-z0-9-]+\.jpg$/.test(url))
     ? `<img alt="${escapeHtml(alt)}" decoding="async" loading="${eager ? 'eager' : 'lazy'}"${eager ? ' fetchpriority="high"' : ''} referrerpolicy="no-referrer" src="${escapeHtml(url)}">`
     : ''
 
@@ -575,8 +576,10 @@ export function renderPage(
   const blocks = page.blocks
     .map((block, index) => {
       const shown = renderers[block.type]?.(block, { base: '', blockIndex: index, cart: Boolean(settings.cart), customer: options.customer, error: options.error, isMainHeading: index === firstHero, items: options.items, language: settings.language, pageSlug: page.slug, query: options.query, records: options.records, sent: options.sent }) ?? ''
+      // A section's anchor, for menu links such as /#services. Blocks that write their own id keep it.
+      const anchored = typeof block.id === 'string' && /^[a-z0-9-]{1,40}$/.test(block.id) && !/^<section[^>]*\sid=/.test(shown) ? shown.replace('<section ', `<section id="${block.id}" `) : shown
       // Only the owner's preview passes these, to mark sections still in the main language.
-      return options.untranslated?.blocks.has(index) ? shown.replace('<section ', `<section data-untranslated="${escapeHtml(options.untranslated.label)}" `) : shown
+      return options.untranslated?.blocks.has(index) ? anchored.replace('<section ', `<section data-untranslated="${escapeHtml(options.untranslated.label)}" `) : anchored
     })
     .join('')
   const title = firstHero === -1 ? `<section class="block block--title tone-plain"><div class="wrap"><h1>${escapeHtml(page.title)}</h1></div></section>` : ''
