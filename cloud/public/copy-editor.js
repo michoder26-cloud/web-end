@@ -27,7 +27,7 @@
 
   Object.assign(say, th
     ? { phoneLabel: 'จัดหน้ามือถือ', phoneTitle: 'จัดหน้าสำหรับมือถือ', phoneHint: 'ตรวจหน้านี้ที่ความกว้างมือถือ แล้วเลือกได้ว่าจะจัดแค่ไหน ดูผลจริงในจอมือถือทางซ้ายก่อนใช้', phoneLoading: 'กำลังตรวจหน้านี้บนจอมือถือ…', phoneUse: 'ใช้แบบนี้', phoneCancel: 'ยกเลิก', phoneFits: 'พอดีจอ ไม่ต้องเลื่อนซ้ายขวา', phoneStill: 'ยังมีบางส่วนล้นจอ', phoneChanges: 'แก้ {n} จุด', phoneNone: 'ไม่ต้องแก้อะไร', phoneDone: 'จัดหน้ามือถือแล้ว ไม่ชอบกด Ctrl+Z ได้', phoneOnly: 'มีผลเฉพาะบนมือถือ หน้าบนคอมไม่เปลี่ยน', phoneOptions: { original: ['แบบที่ย้ายมา', 'ไม่จัดอะไรเพิ่ม'], light: ['จัดเบาๆ', 'แก้เฉพาะส่วนที่ล้นจอ'], tidy: ['จัดให้เรียบร้อย', 'ล้นจอ + คอลัมน์ที่เบียดกันเรียงลงมา + หัวข้อใหญ่เกินไป'], easy: ['อ่านง่ายที่สุด', 'ทั้งหมด + ตัวหนังสือใหญ่ขึ้น + ปุ่มกดง่ายขึ้น + มีระยะห่าง'] }, recommended: 'แนะนำ' }
-    : { phoneLabel: 'Phone layout', phoneTitle: 'Lay this page out for phones', phoneHint: 'This page is checked at phone width. Choose how much to change, and see it on the phone screen before you use it.', phoneLoading: 'Checking this page on a phone screen…', phoneUse: 'Use this layout', phoneCancel: 'Cancel', phoneFits: 'Fits the screen, no sideways scrolling', phoneStill: 'Some parts still stick out', phoneChanges: '{n} changes', phoneNone: 'Nothing to change', phoneDone: 'Laid out for phones. Not right? Press Ctrl+Z.', phoneOnly: 'Only phones see this. The page on computers stays the same.', phoneOptions: { original: ['As moved', 'No extra changes'], light: ['Light', 'Only parts that stick out'], tidy: ['Tidy', 'Parts that stick out, cramped columns stacked, headings that are too big'], easy: ['Easiest to read', 'All of that, plus larger text, easier buttons and more space'] }, recommended: 'Recommended' })
+    : { phoneLabel: 'Phone layout', phoneTitle: 'Lay this page out for phones', phoneHint: 'This page is checked at phone width. Choose how much to change, and see it on the phone screen before you use it.', phoneLoading: 'Checking this page on a phone screen…', phoneUse: 'Use this layout', phoneCancel: 'Cancel', phoneFits: 'Fits the screen, no sideways scrolling', phoneStill: 'Some parts still stick out', phoneChanges: '{n} changes', phoneChange: '1 change', phoneNone: 'Nothing to change', phoneDone: 'Laid out for phones. Not right? Press Ctrl+Z.', phoneOnly: 'Only phones see this. The page on computers stays the same.', phoneOptions: { original: ['As moved', 'No extra changes'], light: ['Light', 'Only parts that stick out'], tidy: ['Tidy', 'Parts that stick out, cramped columns stacked, headings that are too big'], easy: ['Easiest to read', 'All of that, plus larger text, easier buttons and more space'] }, recommended: 'Recommended' })
   Object.assign(say, th
     ? { stateSaved: 'บันทึกแล้ว', stateUnsaved: 'ยังไม่บันทึก', stateSaving: 'กำลังบันทึก…', howTo: 'วิธีใช้', tipTitle: 'เริ่มแก้ได้เลย', gotIt: 'เข้าใจแล้ว' }
     : { stateSaved: 'Saved', stateUnsaved: 'Not saved', stateSaving: 'Saving…', howTo: 'How it works', tipTitle: 'Start editing', gotIt: 'Got it' })
@@ -1188,6 +1188,7 @@
         const out = []
         // Parts placed freely in the editor that end up past the screen's edge, even where the site cuts them off.
         for (const node of doc.body.querySelectorAll('[style*="translate"]')) {
+          if (!node.style?.translate) continue
           const box = node.getBoundingClientRect()
           if (box.width && (box.right > width || box.left < -2)) out.push(pathTo(node, doc))
         }
@@ -1390,31 +1391,56 @@
     const found = { fit: [], stack: [], text: [], tap: [], head: [] }
     const skip = '.preview-banner, .we-copy-menu, script, style, noscript, template'
     const sticksOut = (box) => box.width > 0 && (box.right > width + 2 || box.left < -2)
-    for (const node of doc.body.querySelectorAll('*')) {
-      if (node.closest(skip) || node instanceof win.SVGElement && node.tagName.toLowerCase() !== 'svg') continue
+    // A walk that skips whole hidden parts, drawings and the preview's own notes, and stops after enough parts,
+    // so even a very large page is checked in a moment.
+    const walk = doc.createTreeWalker(doc.body, win.NodeFilter.SHOW_ELEMENT, { acceptNode: (node) => {
+      if (node.matches(skip) || node.parentElement?.closest('svg')) return win.NodeFilter.FILTER_REJECT
+      const look = win.getComputedStyle(node)
+      if (look.display === 'none' || look.position === 'fixed') return win.NodeFilter.FILTER_REJECT
+      return win.NodeFilter.FILTER_ACCEPT
+    } })
+    let checked = 0
+    for (let node = walk.nextNode(); node && checked < 6000; node = walk.nextNode(), checked++) {
       const box = node.getBoundingClientRect()
       if (!box.width || !box.height) continue
       const look = win.getComputedStyle(node)
-      if (look.position === 'fixed' || look.visibility === 'hidden' || look.display === 'none') continue
-      // Only the outermost part that sticks out.
-      if (sticksOut(box) && !(node.parentElement && node.parentElement !== doc.body && sticksOut(node.parentElement.getBoundingClientRect()))) found.fit.push(node)
+      if (look.visibility === 'hidden') continue
+      // Only the outermost part that sticks out. Inside a strip that slides or scrolls on purpose, or a box that
+      // crops a picture or a decoration, it is meant to; there only words that are cut off are fixed.
+      if (sticksOut(box) && !(node.parentElement && node.parentElement !== doc.body && sticksOut(node.parentElement.getBoundingClientRect()))) {
+        let crop = ''
+        for (let up = node.parentElement; up && up !== doc.body && up !== doc.documentElement && !crop; up = up.parentElement) {
+          const overflow = win.getComputedStyle(up).overflowX
+          if (overflow !== 'visible') crop = overflow
+        }
+        // Parts the owner moved in the editor always come back on screen. Parts the site placed on their own
+        // (collages, moving strips) or put wholly off screen are its design, and stay as they are.
+        // Moved in the editor: it sets the translate property (a site's own transform is something else).
+        const placed = Boolean(node.style?.translate)
+        const ownPlace = look.position === 'absolute' || box.right <= 0 || box.left >= width
+        if (placed || (!ownPlace && (!crop || ((crop === 'hidden' || crop === 'clip') && hasWords(node))))) found.fit.push(node)
+      }
       // Columns side by side that are too narrow for their words or photos.
-      const kids = [...node.children].filter((kid) => { const b = kid.getBoundingClientRect(); return b.width > 0 && b.height > 0 })
       const rowish = (look.display.includes('flex') && !look.flexDirection.startsWith('column')) || look.display.includes('grid')
-      if (kids.length >= 2 && rowish) {
+      const kids = rowish && node.children.length >= 2 ? [...node.children].filter((kid) => { const b = kid.getBoundingClientRect(); return b.width > 0 && b.height > 0 }) : []
+      // Stacked only where long words are squeezed into a narrow column. The top bar and menus keep their row,
+      // and so do rows of logos or a few short words.
+      if (kids.length >= 2 && !node.closest('header, nav, [role="banner"], [role="navigation"]')) {
         const boxes = kids.map((kid) => kid.getBoundingClientRect())
         const sideBySide = boxes.some((b, index) => index && Math.abs(b.top - boxes[0].top) < 6 && b.left >= boxes[0].right - 4)
-        const narrow = boxes.some((b) => b.width < width * 0.48)
-        const wordy = kids.some((kid) => flat(kid.textContent || '').length > 40 || kid.querySelector('img, picture, video'))
-        if (sideBySide && narrow && wordy) found.stack.push(node)
+        // Squeezed: narrow, and tall from words wrapping line after line (a logo or an icon is short).
+        const squeezed = kids.some((kid, index) => boxes[index].width < width * 0.48 && boxes[index].height > 90 && flat(kid.innerText || '').length > 60)
+        if (sideBySide && squeezed) found.stack.push(node)
       }
       if (hasWords(node)) {
         const size = parseFloat(look.fontSize)
-        if (size > 44) found.head.push(node)
+        // A heading is made smaller only when it is huge, or its words run past its own edge.
+        if (size > 56 || (size > 28 && node.scrollWidth > node.clientWidth + 2)) found.head.push(node)
         else if (size < 13 && flat(node.textContent || '').length > 12) found.text.push(node)
       }
       const tag = node.tagName.toLowerCase()
-      if ((tag === 'a' || tag === 'button') && box.height < 36 && !node.closest('p') && flat(node.textContent || '')) found.tap.push(node)
+      // A link inside a sentence stays part of it; buttons and links standing on their own get room for a finger.
+      if ((tag === 'a' || tag === 'button') && box.height < 36 && !node.closest('p') && !(node.parentElement && hasWords(node.parentElement)) && flat(node.textContent || '')) found.tap.push(node)
     }
     return found
   }
@@ -1459,7 +1485,7 @@
           return make('button', { type: 'button', class: 'we-phone-option', 'data-plan': key, onclick: () => { chosen = key; show() } },
             make('span', { class: 'we-phone-option__top' }, make('b', { text: say.phoneOptions[key][0] }), key === 'tidy' ? make('span', { class: 'we-tag live', text: say.recommended }) : null),
             make('small', { text: say.phoneOptions[key][1] }),
-            key === 'original' ? null : make('small', { class: 'we-phone-count', text: size ? fmt(say.phoneChanges, { n: size }) : say.phoneNone }))
+            key === 'original' ? null : make('small', { class: 'we-phone-count', text: !size ? say.phoneNone : size === 1 && say.phoneChange ? say.phoneChange : fmt(say.phoneChanges, { n: size }) }))
         })),
         fits,
         make('p', { class: 'we-phone-hint', text: say.phoneOnly }),
